@@ -1,0 +1,338 @@
+# Hermes Canopy — Task Board
+
+> **Status:** Phase 1 — Architecture & Research
+> **Foreman:** deepseek-v4-pro @ deepseek-foreman
+> **DuckBrain:** hermes-canopy namespace (10 concept + 4 architecture + 5 new entries)
+> **Scheduler:** coding-hermes namespace, 900s cooldown
+
+---
+
+## Phase 1: Architecture & Research Validation
+
+**Goal:** Validate stack decisions, research existing solutions, confirm no showstoppers. Output: confirmed architecture document with rationale.
+
+- [x] **T1.1 — Transport Research: SSE vs WebSocket vs NATS** ✅ COMPLETE 2026-07-19
+  Research SSE reconnection behavior, browser support, polyfills. Compare with WebSocket sticky session requirements. Research NATS as message queue transport option. Document: max SSE connections per browser, reconnection backoff strategies, Last-Event-ID behavior across browsers. Output: specs/T1.1-transport-research.md.
+  **Decision: SSE (HTTP/2) primary + NATS backend + WebSocket as future bidirectional fallback.**
+
+- [ ] **T1.2 — CRDT Library Evaluation: Yjs vs Automerge**
+  Compare Yjs and Automerge for tree-structured data: Y.Map vs Automerge's JSON CRDT. Measure: bundle size, WASM requirement, memory usage with 10K nodes, conflict resolution on concurrent branch creation. Output: recommendation with measured data.
+
+- [ ] **T1.3 — Tree Visualization Research**
+  Survey tree/outliner libraries: React Flow, D3.js tree layout, custom Canvas renderer. Evaluate: rendering 500+ nodes, zoom/pan performance, accessibility (keyboard nav), mobile touch support. Output: library comparison matrix.
+
+- [ ] **T1.4 — Offline-Stack Research**
+  Research: Service Worker caching strategies (CacheFirst vs NetworkFirst for tree data), IndexedDB vs sql.js WASM for local persistence, CRDT sync over HTTP/SSE patterns. Test: Delta Chat protocol as transport fallback. Output: offline architecture doc.
+
+- [ ] **T1.5 — Approval UX Research**
+  Research existing approval/review UX patterns: GitHub PR review, Linear/Notion comment threads, Google Docs suggesting mode. Design: approval side panel mockups (pending count badge, message preview, approve/deny/reply-first, audit trail). Output: UX design doc with wireframes.
+
+- [ ] **T1.6 — WebUI Native App Evaluation**
+  Evaluate WebUI library (webui.me, github.com/webui-dev/webui) for native desktop packaging. Test: Go backend + React frontend in single binary, system WebView integration on Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). Measure: binary size vs Electron, startup time, memory usage, WebView compatibility matrix. Output: recommendation for native app packaging.
+
+- [ ] **T1.7 — Security Protocol Research: MLS vs Signal Hybrid**
+  Research MLS (RFC 9420) vs Signal Protocol for Canopy's tree-and-topic model. Evaluate: group key management efficiency for variable-participant threads, implementation maturity (mls-rs, OpenMLS), Go binding feasibility (CGo to mls-rs). Design hybrid approach: MLS for group/tree encryption, Signal for 1:1 direct messages. Output: security protocol architecture decision.
+
+- [ ] **T1.8 — Multi-Transport Architecture Design**
+  Design protocol-agnostic sync layer that abstracts over: SSE (HTTP/2), WebRTC P2P (STUN/TURN), NATS/Redis Streams (message queues), custom relay (self-hosted). Define transport adapter interface: Connect, Send, Receive, Disconnect. Design relay protocol: tree sync opcodes over any reliable channel. Output: transport architecture doc.
+
+- [ ] **T1.9 — Confirmed Architecture Document**
+  Synthesize T1.1–T1.8 into a single architecture document. Must include: exact stack (language versions, library versions), data flow diagrams (Mermaid), deployment architecture (app/web/P2P/relay modes), security model (MLS+Signal hybrid), cost estimates. Output: `specs/ARCHITECTURE.md`.
+
+**Blocks:** Nothing. All research tasks independent.
+
+---
+
+## Phase 2: Data Model Specs
+
+**Goal:** Exact DDL, Go structs, TypeScript types, CRDT schema. Worker reading these specs produces correct data layer with zero questions.
+
+**Dependencies:** Phase 1 complete (architecture decisions confirmed).
+
+- [ ] **SPEC-DM-01 — Tree Node & Edge DDL**
+  PostgreSQL DDL for nodes and edges tables. Include: UUIDv7 generation function, indexes (tree_id, parent_id, created_at), constraints (FKs, single-parent except merge nodes), soft-delete column, created_at/edited_at triggers. Go structs with sql tags, TypeScript interfaces with Zod validation. CRDT schema: Yjs Y.Map shape for nodes and edges.
+
+- [ ] **SPEC-DM-02 — Tree Snapshot & Delta Model**
+  DDL for tree_snapshots table. SHA256 hash generation. Delta structure: added/removed/changed node lists, edge changes. Go: TreeSnapshot struct, ComputeDelta(from, to) signature. TypeScript: Snapshot type, applyDelta(snapshot, delta) function.
+
+- [ ] **SPEC-DM-03 — Approval & Audit Trail DDL**
+  DDL for approvals and approval_rules tables. Approval states: pending, approved, denied, expired. Auto-approval rules: per-user, per-thread, per-profile. Audit trail: immutable log of all approval actions with full context. Go structs, TypeScript types.
+
+- [ ] **SPEC-DM-04 — User & Profile Model**
+  DDL for users, profiles, tree_members, profile_invites. Profile types: human, hermes-profile. Permissions: owner, admin, member, viewer. Profile visibility: per-tree toggle. Go structs with auth integration points.
+
+**Blocks:** Phase 1 (architecture decisions inform exact DDL types).
+
+---
+
+## Phase 3: API Specs
+
+**Goal:** Exact REST + SSE endpoints, request/response schemas, error catalog, authentication. Worker reads these specs and produces correct handlers.
+
+**Dependencies:** Phase 2 complete (data model types inform API shapes).
+
+- [ ] **SPEC-API-01 — SSE Event Stream Spec**
+  GET /trees/{tree_id}/events endpoint. Query params: ?since=<hash>, ?profiles=<csv>. Event types: node_added, node_updated, node_removed, edge_added, edge_removed, approval_changed, user_joined, user_left, tree_merged. Exact JSON shape per event. Reconnection: Last-Event-ID header behavior. Heartbeat interval. Max events per connection. Authentication: Bearer token validation at connection time.
+
+- [ ] **SPEC-API-02 — Tree CRUD Endpoints**
+  GET/POST /trees, GET /trees/{tree_id}, DELETE /trees/{tree_id}. Request/response schemas. Pagination for GET /trees. Tree creation: initial root node auto-created. Tree deletion: soft-delete with retention period.
+
+- [ ] **SPEC-API-03 — Node CRUD Endpoints**
+  POST /trees/{tree_id}/nodes, PATCH /nodes/{node_id}, DELETE /nodes/{node_id}, POST /nodes/{node_id}/reply, POST /nodes/{node_id}/fork. Request validation: content length limits, parent must exist, can't reply to deleted node. Response includes full node with computed fields (depth, child_count).
+
+- [ ] **SPEC-API-04 — Merge & Navigation Endpoints**
+  POST /trees/{tree_id}/merge (creates synthetic merge node). GET /trees/{tree_id}/path?from=X&to=Y (returns node path between two nodes). GET /trees/{tree_id}/subtree?root=X&depth=N (returns subtree). GET /trees/{tree_id}/compare?branch_a=X&branch_b=Y (returns node diff between branches).
+
+- [ ] **SPEC-API-05 — Approval Endpoints**
+  GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, POST /approvals/rules, GET /approvals/history. Business logic: approval expiration after N days, auto-approval rule matching, conflict resolution (two rules match — most specific wins).
+
+- [ ] **SPEC-API-06 — Multi-User & Profile Endpoints**
+  POST /trees/{tree_id}/invite, GET /trees/{tree_id}/members, DELETE /trees/{tree_id}/members/{user_id}, GET /profiles, POST /trees/{tree_id}/profiles/{profile_id}/invite, PATCH /trees/{tree_id}/profiles/{profile_id}/visibility. Invite flow: generate invite link, accept via token, assign permissions.
+
+- [ ] **SPEC-API-07 — Error Catalog**
+  Every error across all endpoints. HTTP status codes, error body format: {error: string, code: string, details?: object}. Error codes: TREE_NOT_FOUND, NODE_NOT_FOUND, INVALID_PARENT, NODE_DELETED, NOT_TREE_OWNER, NOT_TREE_MEMBER, APPROVAL_EXPIRED, PROFILE_OFFLINE, RATE_LIMITED, TREE_SIZE_EXCEEDED. Exact conditions that trigger each error.
+
+**Blocks:** Phase 2 (data model types inform request/response shapes).
+
+---
+
+## Phase 3b: Topic Management Specs
+
+**Goal:** Exact topic system specs — auto-detection, #references, search, sidebar, one-button context. Worker reads these specs and produces correct topic management layer.
+
+**Dependencies:** Phase 2 complete (tree data model — topics are tree branches).
+
+- [ ] **SPEC-TM-01 — Topic Data Model**
+  A topic IS a tree branch with metadata. Each topic: {id: UUIDv7, tree_id: UUID, root_node_id: UUID, title: string, description: string, parent_topic_id: UUID|null, status: active|archived|deleted, created_at, archived_at, topic_tags: string[]}. #Reference format: `#topic-slug` becomes clickable link with tooltip showing topic preview. Cross-topic references: nodes can reference nodes in other topics.
+
+- [ ] **SPEC-TM-02 — Auto-Topic Detection**
+  Agent-side logic: as user converses, agent detects topic shifts. Signals: explicit ("make this a topic"), implicit (semantic shift over N messages), structural (user opens new subject). Agent proposes: "I think this is a new topic about X — create?" User can accept, reject, or name differently. Detection model: prompt engineering, not ML (initially). Contiguous messages with shared subject → same topic. Sharp semantic break → new topic proposal.
+
+- [ ] **SPEC-TM-03 — Topic Search & One-Button Context**
+  Full-text search over topic titles, descriptions, and content. Index: PostgreSQL FTS (tsvector) or Meilisearch embedded. Search result: title + snippet + status + "Add to Context" button. One click → topic's tree is injected into agent's context window. Agent reads and parses the topic automatically — user doesn't need to open and read it. Search sidebar: persistent or toggleable, shows recent topics + search box.
+
+- [ ] **SPEC-TM-04 — #Reference Resolution**
+  Parsing: `#topic-name` in any message. Auto-complete while typing: as user types `#dat`, show `#database-schema`, `#data-model`, `#data-flow`. Click or tab to insert. At send time: replace with internal reference link. Agent-side: when it encounters a #reference in context, fetch that topic's tree and include it in the current turn's context window. Multiple references: each adds to context. Escalation: if too many references, agent warns "I can see 5 referenced topics — should I focus on specific ones?"
+
+- [ ] **SPEC-TM-05 — Topic Lifecycle & Sidebar**
+  Sidebar shows: active topics (sortable by recent activity, created, alphabetical). Archived topics (collapsible section). Search bar at top. Context menu per topic: rename, archive, delete, merge-with, split-from. Topic preview on hover: first N messages, participant count, last active time. Drag-and-drop reordering. Keyboard shortcuts: Ctrl+K to search topics, Ctrl+Shift+N new topic.
+
+**Blocks:** Phase 2 (topics ARE tree branches).
+
+---
+
+## Phase 4: Backend (Go Gateway)
+
+**Goal:** Working SSE + REST gateway. Tests pass. Wired to CLI with serve command. Dockerfile.
+
+**Dependencies:** Phase 3 complete (API specs).
+
+- [ ] **BE-01 — Project Scaffold**
+  Go module init, directory layout (cmd/canopyd, internal/{tree,sync,auth,approval,profile}, pkg/crdt), Makefile, Dockerfile, go.mod with pinned dependency versions. Conforms to project-layouts skill.
+
+- [ ] **BE-02 — Database Layer**
+  Implement DDL from SPEC-DM-01 through SPEC-DM-04. Migration system (golang-migrate). Repository pattern: TreeRepo, NodeRepo, ApprovalRepo, ProfileRepo interfaces. PostgreSQL connection pool config. sqlc or raw SQL per architecture decision.
+
+- [ ] **BE-03 — Tree Service**
+  Implements tree CRUD per SPEC-API-02. Tree creation with initial root node. Tree validation (max nodes, max depth). Tree snapshot computation with SHA256 hash. Delta computation between two snapshots.
+
+- [ ] **BE-04 — Node Service**
+  Implements node CRUD per SPEC-API-03. Node creation with parent validation. Reply vs fork edge type. Soft-delete with tombstone. Subtree queries. Path computation between nodes.
+
+- [ ] **BE-05 — SSE Hub**
+  Implements SSE event stream per SPEC-API-01. Connection manager: register/unregister clients per tree. Event broadcasting to subscribed clients. Reconnection: Last-Event-ID tracking, replay missed events. Heartbeat goroutine. Graceful shutdown: drain connections on SIGTERM.
+
+- [ ] **BE-06 — Sync Engine**
+  Delta sync: client sends last-known hash, server computes delta, streams only changes. Full tree sync on hash mismatch. Batch event delivery (coalesce rapid changes). Connection quality detection: reduce event detail on slow connections.
+
+- [ ] **BE-07 — Auth & Approval Engine**
+  JWT validation for existing Hermes auth tokens. Tree membership check middleware. Approval logic: pending queue, approve/deny, auto-approval rule evaluation, conflict resolution (most-specific wins). Audit trail: every approval action logged immutably.
+
+- [ ] **BE-08 — Profile Routing**
+  Profile registry: which Hermes profiles are available. Per-tree profile subscriptions. Profile-to-LLM routing: when a profile is @mentioned, route the context window to that profile's Hermes instance. Profile cost tracking.
+
+- [ ] **BE-09 — Transport Adapter Layer**
+  Implement transport adapter interface: Connect, Send, Receive, Disconnect. Adapters: SSE (HTTP/2), WebRTC (P2P via pion/webrtc), NATS (message queue). Relay protocol: tree sync opcodes over any adapter. Connection manager: track which members are on which transport. Graceful degradation: if SSE fails, try WebRTC, etc.
+
+- [ ] **BE-10 — Encryption Layer (MLS + Signal Hybrid)**
+  Implement encryption layer via CGo binding to mls-rs (Rust MLS library). Group encryption: MLS for tree-level and topic-level encryption. 1:1 encryption: Signal Double Ratchet via libsignal C binding. Key rotation: automatic on member join/leave. Forward secrecy: enforced per MLS and Signal specifications.
+
+- [ ] **BE-11 — HTTP Router & Middleware**
+  Chi or stdlib router. Middleware chain: auth, tree membership, rate limiting, request logging, CORS, recovery. Wire all handlers from BE-03 through BE-10. CLI: `canopyd serve --port 8080 --db postgres://...`
+
+- [ ] **BE-12 — Backend Integration Tests**
+  Test against real PostgreSQL (testcontainers or docker-compose). SSE tests: connect, send event, verify received, reconnect with Last-Event-ID. Approval flow tests: pending→approve→audit log. Concurrent tests: two clients creating branches from same node.
+
+**Blocks:** Phase 3 (API specs define exact handler signatures and error behavior).
+
+---
+
+## Phase 5: Frontend (TypeScript/React)
+
+**Goal:** Working tree UI with CRDT local-first, SSE sync, three-level navigation, approval panel.
+
+**Dependencies:** Phase 4 backend running (needs live SSE endpoint for integration).
+
+- [ ] **FE-01 — Project Scaffold**
+  Vite + React + TypeScript. Directory layout (src/{components, hooks, stores, lib, types}). CRDT integration: Yjs + y-websocket provider (or custom SSE provider). PWA setup: service worker, manifest, offline fallback.
+
+- [ ] **FE-02 — Tree Data Store**
+  Yjs Y.Doc integration. Y.Map for nodes, Y.Map for edges. Local persistence: IndexedDB via y-indexeddb. Sync provider: SSE-backed Yjs provider that maps SSE events to Yjs updates. Offline queue: pending operations stored locally, synced on reconnect.
+
+- [ ] **FE-03 — Tree Rendering Engine**
+  Tree layout algorithm: spacing, depth-based indentation, branch visual connectors. Three rendering modes: macro (collapsed nodes, expandable), branch (full thread with ancestors), merge (side-by-side panels). Performance: virtualize nodes for large trees (1000+ nodes). Canvas or DOM per T1.3 decision.
+
+- [ ] **FE-04 — Navigation System**
+  Three-level navigation: keyboard shortcuts (j/k navigate siblings, h/l drill in/out, m merge selected), click to select node, double-click to drill in, breadcrumb trail showing path from root, back button pops up one level. Zoom: pinch-to-zoom on mobile, scroll wheel + modifier on desktop.
+
+- [ ] **FE-05 — Message Composer**
+  Rich text input with @mentions (users and profiles), code blocks, file attachments. Reply mode: composer anchored to selected node. Branch preview: shows context chain above composer. Send: creates new node via Yjs (local-first), SSE syncs to server.
+
+- [ ] **FE-06 — Approval Panel**
+  Side panel with: pending count badge, scrollable list of pending approvals, each shows sender + full message context + approve/deny/reply-first buttons. Approved/denied history with search. Auto-approval rule editor: "Always approve X in thread Y."
+
+- [ ] **FE-07 — Multi-User Features**
+  User presence: who's viewing which branch (colored dots). Invite flow: generate link, copy to clipboard, accept flow. Permissions UI: member list with role dropdowns, remove member confirmation. Profile integration: invite Hermes profile, set visibility.
+
+- [ ] **FE-08 — Agent Context Visualization**
+  Visual overlay showing which nodes are in the agent's current context window. Highlight on the tree: green = in context, yellow = will be dropped next turn, red = already dropped. Context window size indicator. Manual pinning: right-click → "pin to context."
+
+- [ ] **FE-09 — Offline Mode**
+  Offline indicator banner. Pending sync count. Conflict resolution UI: if server tree diverged, show diff with accept/reject per conflict. Bandwidth detection: neterror.js or Network Information API, reduce features on slow connections (no avatars, compressed images, fewer metadata fields).
+
+- [ ] **FE-10 — Accessibility**
+  Keyboard-first navigation (already in FE-04). Screen reader: aria-live regions for new messages, tree structure via aria-tree roles, approval alerts via assertive announcements. High-contrast theme. Reduced motion: disable branch animations. Focus management: don't lose focus on new message arrival.
+
+- [ ] **FE-11 — Frontend Integration Tests**
+  Cypress or Playwright tests: full user flows (create tree, write messages, branch, merge, approve, offline→online sync). Accessibility audit with axe-core. Performance: Lighthouse score > 90. Bundle size: < 500KB gzipped (initial load).
+
+**Blocks:** Phase 4 (needs backend running for SSE sync integration tests).
+
+---
+
+## Phase 6: Integration & Wiring
+
+**Goal:** End-to-end flows working. Frontend connects to backend. All features wired, no stubs.
+
+**Dependencies:** Phase 4 + Phase 5.
+
+- [ ] **INT-01 — End-to-End Tree Flow**
+  Create account → create tree → write messages → branch → merge → approve → offline → reconnect → sync. Test with real browser against real backend.
+
+- [ ] **INT-02 — Multi-User Integration**
+  Owner creates tree. Invites friend. Friend sends message. Owner approves. Agent acts. Full flow with two browser instances + real SSE connections.
+
+- [ ] **INT-03 — Multi-Profile Integration**
+  Human writes message. @mentions coding-hermes. coding-hermes responds in branch. Human approves. Verify: profile context window isolation confirmed.
+
+- [ ] **INT-04 — Offline Sync Integration**
+  Client goes offline (devtools offline). Write 50 messages. Come back online. SSE reconnects. Verify: all 50 messages synced, tree structure preserved, no duplicates.
+
+- [ ] **INT-05 — Performance Baseline**
+  Load test: 100 concurrent SSE connections. 10,000 node tree. Delta sync latency < 100ms. Tree render: 500 visible nodes < 16ms frame. Memory: < 200MB for 10K node tree.
+
+- [ ] **INT-06 — CLI Wiring**
+  Backend: `canopyd serve` starts HTTP + SSE. Frontend: `npm run dev` serves Vite dev server. Docker Compose: backend + PostgreSQL + frontend one command. Health check endpoints.
+
+**Blocks:** Phase 4 + Phase 5 complete.
+
+---
+
+## Phase 7: Testing & Hardening
+
+**Goal:** Production-grade test coverage. Chaos engineering. Security audit.
+
+**Dependencies:** Phase 6 complete (all features wired).
+
+- [ ] **TEST-01 — Unit Test Coverage**
+  Backend: 80%+ coverage (exclude generated code). Frontend: 80%+ coverage (Vitest). CRDT operations: property-based tests (fast-check) for Yjs operations.
+
+- [ ] **TEST-02 — Integration Test Suite**
+  All API endpoints tested against real PostgreSQL. SSE event stream: connect/disconnect/reconnect/event ordering. Approval flow: create→pending→approve→audit→deny→re-approve.
+
+- [ ] **TEST-03 — Chaos & Resilience**
+  Kill PostgreSQL mid-sync. Kill SSE connection mid-stream. Network partition: client and server can't reach each other for 5 minutes, then reconnect. Disk full: graceful degradation.
+
+- [ ] **TEST-04 — Security Audit**
+  SQL injection: all query paths. XSS: message content rendering. CSRF: state-changing endpoints. Auth bypass: direct API calls without tokens. Rate limiting: brute force protection. Tree isolation: user A can't access user B's trees.
+
+- [ ] **TEST-05 — Accessibility Audit**
+  Full WCAG 2.1 AA audit. Screen reader walkthrough (NVDA/VoiceOver). Keyboard-only operation: all features accessible without mouse. Color contrast compliance. Focus management audit.
+
+**Blocks:** Phase 6 (need full integration to test real scenarios).
+
+---
+
+## Phase 8: Production Deployment
+
+**Goal:** Deployable artifact. Observability. Documentation.
+
+**Dependencies:** Phase 7 complete (hardened).
+
+- [ ] **DEPLOY-01 — Docker + Compose + WebUI Native Binary**
+  Production Dockerfile (multi-stage, distroless). Docker Compose: canopyd + PostgreSQL + frontend nginx. WebUI native packaging: Go binary bundles React frontend assets, uses system WebView. Build targets: Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). Health checks. Resource limits. Log rotation.
+
+- [ ] **DEPLOY-02 — Observability**
+  Prometheus metrics: SSE connections, sync latency, approval queue depth, tree sizes. Structured logging (JSON). Distributed tracing (trace IDs through SSE→REST→DB). Grafana dashboard.
+
+- [ ] **DEPLOY-03 — CI/CD**
+  GitHub Actions: lint → test → build → docker → deploy. PR checks: conventional commits, test coverage gate, bundle size gate.
+
+- [ ] **DEPLOY-04 — Documentation**
+  API docs (OpenAPI 3.0). Architecture docs (C4 model). User guide (first tree, first branch, first approval, first profile). Developer guide (local setup, contributing).
+
+- [ ] **DEPLOY-05 — Migration Plan**
+  From Telegram bot to Canopy: how existing Hermes users transition. Tree import from chat history. Coexistence: Canopy + Telegram during transition. Gradual cutover per project.
+
+**Blocks:** Phase 7 (don't deploy unhardened software).
+
+---
+
+## Phase 9: Distribution & Multi-Tenant
+
+**Goal:** Hermes Canopy as a platform. Other users can deploy their own.
+
+**Dependencies:** Phase 8 complete (proven in production).
+
+- [ ] **DIST-01 — Multi-Tenant + Multi-Transport Isolation**
+  Database-per-tenant or schema-per-tenant. SSE connection routing per tenant. P2P relay routing. Resource limits per tenant. Billing integration points per transport mode. STUN/TURN server provisioning for P2P users.
+
+- [ ] **DIST-02 — Self-Host Guide**
+  One-command deploy: docker compose up. Configuration reference. Custom theming. Plugin system for extensions. Health check dash.
+
+- [ ] **DIST-03 — Open Source Readiness**
+  LICENSE (AGPLv3 or MIT per Bane). CONTRIBUTING.md. Code of conduct. Issue templates. Release process. Changelog automation.
+
+**Blocks:** Phase 8.
+
+---
+
+## Phase 10: Continuous Improvement
+
+**Goal:** Never done. After Phase 9, foreman runs never-done 11-point audit and creates new tasks.
+
+- [ ] **IMPROVE-01 — 11-Point Audit**
+  Specs, docs, tests, deps, pitfalls, perf, endpoints, CI, DuckBrain, quality, middle-out wiring. Every finding → new task.
+
+- [ ] **IMPROVE-02 — User Feedback Loop**
+  Feedback widget in Canopy UI. Crash reporting. Usage analytics (opt-in). Prioritize based on real usage data.
+
+**Blocks:** Phase 9 complete.
+
+---
+
+## Legend
+
+| Marker | Meaning |
+|--------|---------|
+| `[ ]` | Not started |
+| `[x]` | Complete (verified — test passes + wired) |
+| **T1.x** | Phase 1 task |
+| **SPEC-DM-xx** | Spec task (produces spec files) |
+| **BE-xx** | Backend implementation |
+| **FE-xx** | Frontend implementation |
+| **INT-xx** | Integration |
+| **TEST-xx** | Testing |
+| **DEPLOY-xx** | Deployment |
+| **DIST-xx** | Distribution |
+| **IMPROVE-xx** | Continuous improvement |
