@@ -31,8 +31,9 @@
   Research existing approval/review UX patterns: GitHub PR review, Linear/Notion comment threads, Google Docs suggesting mode. Design: approval side panel mockups (pending count badge, message preview, approve/deny/reply-first, audit trail). Output: UX design doc with wireframes.
   **Decision: GitHub triage panel + Linear notification discipline + Google Docs per-item granularity. Output: specs/T1.5-approval-ux-research.md (24KB, 8 sections, wireframes, keyboard nav, mobile adaptation, data model impact).**
 
-- [ ] **T1.6 — WebUI Native App Evaluation**
+- [x] **T1.6 — WebUI Native App Evaluation** ✅ COMPLETE 2026-07-20
   Evaluate WebUI library (webui.me, github.com/webui-dev/webui) for native desktop packaging. Test: Go backend + React frontend in single binary, system WebView integration on Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). Measure: binary size vs Electron, startup time, memory usage, WebView compatibility matrix. Output: recommendation for native app packaging.
+  **Decision: Wails v3 (post-MVP) + Go embed (MVP). WebUI rejected — browser-chrome approach conflicts with Canopy's native collaboration surface requirements. Output: specs/T1.6-webui-evaluation.md (281 lines, 18 sections, 5 candidates evaluated, WebView compatibility matrix, architecture impact diagram).**
 
 - [ ] **T1.7 — Security Protocol: MLS-Only Architecture** ✅ RESOLVED
   DECISION: MLS-only. No Signal Protocol. Rationale: every Canopy conversation is inherently multi-participant (user + agent + profiles + friends). MLS handles groups of 2 with minimal overhead. Single dependency (mls-rs via CGo) halves attack surface. Industry trajectory: MLS is RFC 9420, WhatsApp adopting. Signal is the gold standard for phone-to-phone messaging — Canopy is an agent collaboration OS, not a messaging app. Go implementation: CGo binding to mls-rs. Groups per tree and per topic. No protocol negotiation layer. Output: `specs/T1.7-mls-encryption.md`.
