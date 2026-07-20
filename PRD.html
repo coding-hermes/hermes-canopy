@@ -636,7 +636,7 @@
         <tr><td>Card Database</td><td>DuckDB + JSONL files</td><td>Git-friendly, OLAP queries directly on files, no import step</td></tr>
         <tr><td>CRDT Layer</td><td>Yjs (Y.Map)</td><td>Local-first collaborative tree editing, IndexedDB persistence</td></tr>
         <tr><td>Primary Transport</td><td>Server-Sent Events (SSE)</td><td>HTTP/2 native, auto-reconnect, no sticky sessions, resilient on bad connections</td></tr>
-        <tr><td>Encryption</td><td>MLS (groups) + Signal (1:1)</td><td>MLS for O(log n) group key management, Signal Double Ratchet for direct messages</td></tr>
+        <tr><td>Encryption</td><td>MLS (RFC 9420)</td><td>MLS-only — every Canopy conversation is a group by design. O(log n) key rotation. Single dependency (mls-rs via CGo). No Signal Protocol.</td></tr>
         <tr><td>Native App</td><td>WebUI library</td><td>System WebView, single Go binary, no Electron bloat</td></tr>
         <tr><td>Card UI</td><td>Web Components + shadow DOM</td><td>Isolated per-card HTML/JS/CSS, sandboxed, auth-gated</td></tr>
         <tr><td>Plugin System</td><td>JavaScript files</td><td>Agent-installable, hot-reload to all devices, sandboxed with permissions</td></tr>
