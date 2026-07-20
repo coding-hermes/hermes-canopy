@@ -64,8 +64,9 @@
   DDL for tree_snapshots table. SHA256 hash generation. Delta structure: added/removed/changed node lists, edge changes. Go: TreeSnapshot struct, ComputeDelta(from, to) signature. TypeScript: Snapshot type, applyDelta(snapshot, delta) function.
   **Commit: f7d3f6f — specs/SPEC-DM-02-tree-snapshot-delta-model.md (903 lines, 12 sections, full DDL, Go interfaces, TS types, SHA256 algorithm, delta computation, error catalog, test scenarios)**
 
-- [ ] **SPEC-DM-03 — Approval & Audit Trail DDL**
+- [x] **SPEC-DM-03 — Approval & Audit Trail DDL** ✅ COMPLETE 2026-07-20
   DDL for approvals and approval_rules tables. Approval states: pending, approved, denied, expired. Auto-approval rules: per-user, per-thread, per-profile. Audit trail: immutable log of all approval actions with full context. Go structs, TypeScript types.
+  **Commit: <pending> — specs/SPEC-DM-03-approval-audit-trail-ddl.md (1042 lines, 12 sections, full DDL, Go interfaces, TS types + Zod, approval FSM, auto-approval rule engine, audit trail architecture, error catalog, test scenarios)**
 
 - [ ] **SPEC-DM-04 — User & Profile Model**
   DDL for users, profiles, tree_members, profile_invites. Profile types: human, hermes-profile. Permissions: owner, admin, member, viewer. Profile visibility: per-tree toggle. Go structs with auth integration points.
