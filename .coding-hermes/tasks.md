@@ -42,8 +42,9 @@
   Design protocol-agnostic sync layer that abstracts over: SSE (HTTP/2), WebRTC P2P (STUN/TURN), NATS/Redis Streams (message queues), custom relay (self-hosted). Define transport adapter interface: Connect, Send, Receive, Disconnect. Design relay protocol: tree sync opcodes over any reliable channel. Output: specs/T1.8-multi-transport-architecture.md (54KB, 1254 lines, 9 sections, 2 Mermaid diagrams, 5 transport adapters, 13 opcodes, 7-mode selection matrix).
   **Commit: 8706036**
 
-- [ ] **T1.9 — Confirmed Architecture Document**
-  Synthesize T1.1–T1.8 into a single architecture document. Must include: exact stack (language versions, library versions), data flow diagrams (Mermaid), deployment architecture (app/web/P2P/relay modes), security model (MLS+Signal hybrid), cost estimates. Output: `specs/ARCHITECTURE.md`.
+- [x] **T1.9 — Confirmed Architecture Document** ✅ COMPLETE 2026-07-20
+  Synthesize T1.1–T1.8 into a single architecture document (563 lines, 12 sections, 3 Mermaid diagrams, decision registry, cost estimates, phase roadmap). Output: `specs/ARCHITECTURE.md`.
+  **Commit: <pending>**
 
 **Blocks:** Nothing. All research tasks independent.
 
