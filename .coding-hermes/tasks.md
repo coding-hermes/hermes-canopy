@@ -23,8 +23,9 @@
   Survey tree/outliner libraries: React Flow, D3.js tree layout, custom Canvas renderer. Evaluate: rendering 500+ nodes, zoom/pan performance, accessibility (keyboard nav), mobile touch support. Output: library comparison matrix.
   **Decision: React Flow (@xyflow/react v12) primary + d3-hierarchy layout engine + Canvas fallback for >2000 nodes.**
 
-- [ ] **T1.4 — Offline-Stack Research**
+- [x] **T1.4 — Offline-Stack Research** ✅ COMPLETE 2026-07-20
   Research: Service Worker caching strategies (CacheFirst vs NetworkFirst for tree data), IndexedDB vs sql.js WASM for local persistence, CRDT sync over HTTP/SSE patterns. Test: Delta Chat protocol as transport fallback. Output: offline architecture doc.
+  **Decision: Service Worker (Workbox v7) + y-indexeddb + Custom SSE Provider + Background Sync queue. No SQLite WASM in MVP. Delta Chat as optional post-MVP relay.**
 
 - [ ] **T1.5 — Approval UX Research**
   Research existing approval/review UX patterns: GitHub PR review, Linear/Notion comment threads, Google Docs suggesting mode. Design: approval side panel mockups (pending count badge, message preview, approve/deny/reply-first, audit trail). Output: UX design doc with wireframes.
