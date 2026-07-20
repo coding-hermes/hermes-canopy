@@ -38,8 +38,9 @@
 - [x] **T1.7 — Security Protocol: MLS-Only Architecture** ✅ COMPLETE 2026-07-20
   DECISION: MLS-only. No Signal Protocol. Rationale: every Canopy conversation is inherently multi-participant (user + agent + profiles + friends). MLS handles groups of 2 with minimal overhead. Single dependency (mls-rs via CGo) halves attack surface. Industry trajectory: MLS is RFC 9420, WhatsApp adopting. Signal is the gold standard for phone-to-phone messaging — Canopy is an agent collaboration OS, not a messaging app. Go implementation: CGo binding to mls-rs. Groups per tree and per topic. No protocol negotiation layer. Output: `specs/T1.7-mls-encryption.md` (14.6KB, 8 sections, Go interface, CGo binding diagram, threat model, alternatives analysis).
 
-- [ ] **T1.8 — Multi-Transport Architecture Design**
-  Design protocol-agnostic sync layer that abstracts over: SSE (HTTP/2), WebRTC P2P (STUN/TURN), NATS/Redis Streams (message queues), custom relay (self-hosted). Define transport adapter interface: Connect, Send, Receive, Disconnect. Design relay protocol: tree sync opcodes over any reliable channel. Output: transport architecture doc.
+- [x] **T1.8 — Multi-Transport Architecture Design** ✅ COMPLETE 2026-07-20
+  Design protocol-agnostic sync layer that abstracts over: SSE (HTTP/2), WebRTC P2P (STUN/TURN), NATS/Redis Streams (message queues), custom relay (self-hosted). Define transport adapter interface: Connect, Send, Receive, Disconnect. Design relay protocol: tree sync opcodes over any reliable channel. Output: specs/T1.8-multi-transport-architecture.md (54KB, 1254 lines, 9 sections, 2 Mermaid diagrams, 5 transport adapters, 13 opcodes, 7-mode selection matrix).
+  **Commit: 8706036**
 
 - [ ] **T1.9 — Confirmed Architecture Document**
   Synthesize T1.1–T1.8 into a single architecture document. Must include: exact stack (language versions, library versions), data flow diagrams (Mermaid), deployment architecture (app/web/P2P/relay modes), security model (MLS+Signal hybrid), cost estimates. Output: `specs/ARCHITECTURE.md`.
