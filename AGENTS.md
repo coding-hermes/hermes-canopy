@@ -36,6 +36,11 @@ Multi-user collaboration, approval gates, arbitrary JS plugins, multi-agent fede
 - **Synthesis node** — not "merge"
 - **Sandboxed iframes + CSP** — not "shadow DOM" for security
 
+## Commit Rules
+- Every commit MUST include `Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>`
+- A `.gitmessage` template is configured in the repo — `git commit` auto-includes the co-author
+- Never commit secrets, tokens, or passwords
+
 ## Specs
 See `specs/` directory.
 
