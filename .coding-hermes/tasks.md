@@ -2,7 +2,7 @@
 
 > **Status:** Phase 1 — Architecture & Research
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
-> **DuckBrain:** hermes-canopy namespace (10 concept + 4 architecture + 5 new entries)
+> **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
 
 ---
@@ -118,6 +118,36 @@
   Sidebar shows: active topics (sortable by recent activity, created, alphabetical). Archived topics (collapsible section). Search bar at top. Context menu per topic: rename, archive, delete, merge-with, split-from. Topic preview on hover: first N messages, participant count, last active time. Drag-and-drop reordering. Keyboard shortcuts: Ctrl+K to search topics, Ctrl+Shift+N new topic.
 
 **Blocks:** Phase 2 (topics ARE tree branches).
+
+---
+
+## Phase 3c: Plugin & App Card Specs
+
+**Goal:** Exact specs for JS plugin system, embedded app cards, calendar integration, file viewers. Worker reads these specs and produces correct plugin/card layer.
+
+**Dependencies:** Phase 2 complete (files, apps, and plugins are all tree-addressable).
+
+- [ ] **SPEC-PL-01 — JS Plugin System**
+  Plugin format: single JS file with manifest (name, version, description, permissions, render_type). Registration: agent sends JS file as message, user clicks "Install", plugin loaded into renderer. Hot-reload: plugin updates instantly propagate to all connected devices (desktop, web, mobile). Sandbox: plugins run in isolated iframe/WebWorker with limited API surface. Permissions: file_access, network, notifications, calendar_read, calendar_write. Plugin registry: namespace to prevent conflicts.
+
+- [ ] **SPEC-PL-02 — Built-in File Viewers**
+  Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
+
+- [ ] **SPEC-PL-03 — App Card System + Database-per-Card**
+  Card model: {id, app_id, card_type: 'compact'|'expanded'|'iteration', data: JSON, actions: [{label, handler}], created_at, context_hash}. Agent renders cards based on context — calendar events, weather, deployment status, task lists, monitoring dashboards, live searches, code execution, thinking steps. Cards are #referenceable like topics. Context parse: clicking a card injects its data into the agent's context. Card lifecycle: created by agent → displayed inline → collapsed to compact → dismissed.
+  
+  **Database-per-Card Architecture:** Each card type gets its own SQLite database at `~/.hermes/canopy/cards/{type}.db`. Standardized schema: `cards` table (id, card_type, title, data_json, status) + `events` table (id, card_id, event_type, payload_json, user_feedback, created_at). REST API: GET/POST/PATCH `/api/cards/{type}/{id}` — pgREST-like pattern over SQLite. Agent writes events as it works, UI reads via SSE, user interactions write back as `user_feedback`. Local-first: all card data lives in SQLite locally, syncs to server for multi-device.
+
+- [ ] **SPEC-PL-04 — Dynamic Thinking Interface (Iteration Cards)**
+  While agent is working, the interface is dynamic. User opens side panel → "show me the searches" → card pops up with live search results. Card shows: URLs searched, data retrieved, progress (3/5 complete). User can HIGHLIGHT specific results and give FEEDBACK: "this link is wrong" or "focus on this result." Feedback goes BACK to the model — like Hermes iterations but interactive. Iteration card types: search card (live results), code exec card (stdout/stderr streaming, cancel), file read card (contents with highlight), thinking card (chain-of-thought steps, collapsible), tool call card (what tool, params, result, approve/deny). Event flow: Agent process → events → card renderer + SQLite → user interaction → feedback events → back to agent. Each card is a bidirectional channel between human and agent thinking.
+
+- [ ] **SPEC-PL-05 — Calendar Integration**
+  Calendar viewer card: month/week/day views, event cards with title/time/description/location. Multiple calendar sources: Google Calendar (OAuth), iCloud (CalDAV), local (.ics files in Hermes knowledge base). Agent can: create events, modify events, check availability, propose times. Calendar ↔ auto-responder: agent knows when you're busy and tells others. Calendar ↔ status: "I'm in a meeting until 3" → agent auto-sets busy status.
+
+- [ ] **SPEC-PL-06 — Multi-Message Reference Model**
+  Data model extension: a node can have MULTIPLE parent edges (not just one). Multi-reference reply: select N messages → reply → new node with N parent edges of type 'reference'. Visual: colored edges from each source converge into reply. Context: agent sees all referenced messages as unified input. Conflict: if referenced messages are in different branches, the reply node is a synthetic merge point showing which context contributed what.
+
+**Blocks:** Phase 2 (cards and plugins are nodes in the tree).
 
 ---
 
