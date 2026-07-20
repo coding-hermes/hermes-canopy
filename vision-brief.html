@@ -525,6 +525,28 @@
     <div class="section-intro">9 — Architecture</div>
     <h2>How It's Built</h2>
     
+    <h3>Powered by Hermes</h3>
+    
+    <p>Canopy does not reimplement the agent — it wraps it. <strong>All model calls, tool execution, auth, profiles, skills, file access, calendar, and messaging flow through the Hermes Agent Gateway API.</strong> Canopy is the UI/OS layer — the graph, the cards, the context compiler, the topic system. Hermes is the engine underneath.</p>
+    
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🖥️</div>
+        <h4>Canopy (UI/OS)</h4>
+        <p>Graph rendering, context compiler, Card system, topic management, multi-user surface, offline PWA, plugin sandbox.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">⚙️</div>
+        <h4>Hermes (Engine)</h4>
+        <p>Model routing, tool execution, auth/identity, profile system, file system, calendar, skills, message routing, provider management.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔌</div>
+        <h4>canopyd (Gateway)</h4>
+        <p>Thin Go binary. Serves PWA frontend. Routes graph queries to DuckDB. Forwards all agent/model calls to Hermes API. Translates Hermes tool outputs into Card events.</p>
+      </div>
+    </div>
+    
     <h3>Canonical Data Flow</h3>
     <p>In the MVP, the local Go server — with DuckDB embedded in-process — is the <strong>single source of truth.</strong> DuckDB stores the authoritative graph (nodes, edges, snapshots) and Card data (JSONL files queried directly). The local browser's IndexedDB holds a Yjs CRDT replica for responsive offline editing and reading past messages on bad connections. On reconnect, the server reconciles — the server wins conflicts. SSE is the server→client channel. Client writes use HTTP POST. Background Sync queues outgoing messages when offline — they auto-send when connectivity returns.</p>
     
@@ -532,7 +554,7 @@
     <table>
       <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
       <tbody>
-        <tr><td>Backend</td><td>Go (canopyd)</td><td>Single binary, built-in HTTP server, WebUI native packaging path</td></tr>
+        <tr><td>Backend</td><td>Go (canopyd) + Hermes Gateway</td><td>Thin gateway binary. Serves PWA, queries DuckDB. Forwards all agent/model/tool calls to Hermes Agent Gateway API. Hermes handles the heavy lifting.</td></tr>
         <tr><td>Frontend</td><td>Preact + Web Components</td><td>3KB React-compatible API. Cards ARE Web Components — same component model as the framework. PWA with Service Worker for caching + Background Sync for offline queue.</td></tr>
         <tr><td>Graph Database</td><td>DuckDB (embedded)</td><td>Authoritative graph state, Card data, topic FTS — all in one embedded database. No separate DB process. Yjs/IndexedDB is a local browser replica for offline reads.</td></tr>
         <tr><td>Card Database</td><td>DuckDB in-process via Go</td><td>Same embedded DuckDB instance. Graph and Cards share one database. JSONL files are the durable format — DuckDB queries them directly.</td></tr>
