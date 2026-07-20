@@ -68,7 +68,7 @@
   DDL for approvals and approval_rules tables. Approval states: pending, approved, denied, expired. Auto-approval rules: per-user, per-thread, per-profile. Audit trail: immutable log of all approval actions with full context. Go structs, TypeScript types.
   **Commit: 6caafc6 — specs/SPEC-DM-03-approval-audit-trail-ddl.md (1042 lines, 12 sections, full DDL, Go interfaces, TS types + Zod, approval FSM, auto-approval rule engine, audit trail architecture, error catalog, test scenarios)**
 
-- [ ] **SPEC-DM-04 — User & Profile Model**
+- [x] **SPEC-DM-04 — User & Profile Model** ✅ COMPLETE 2026-07-20
   DDL for users, profiles, tree_members, profile_invites. Profile types: human, hermes-profile. Permissions: owner, admin, member, viewer. Profile visibility: per-tree toggle. Go structs with auth integration points.
 
 **Blocks:** Phase 1 (architecture decisions inform exact DDL types).
