@@ -1,36 +1,46 @@
-# Hermes Canopy
+# Hermes Canopy — Canopy OS
 
-Tree-native Hermes frontend — a chat/collaboration surface built for human-agent collaboration, not human-to-human chat.
+Graph-native collaboration surface for human-agent work. Every message is a node in a DAG. Every model call has a visible context manifest. Every Card is a graph node with structured data.
 
-## Problem
+## First Customer
+Technical power users working with AI agents across multi-session projects who need to resume work in <30 seconds without manually reconstructing context.
 
-Existing chat apps (ChatGPT, Claude, etc.) are linear scroll logs built for human-to-human conversation. They fail at:
-- Multi-session projects with context connection
-- Deep exploration without polluting the main thread
-- Multi-user collaboration with shared context
-- Visible context management
-- Approval workflows ("I'm thinking out loud" vs "execute this")
+## Core Concepts
+1. **Conversation DAG** — Messages are nodes. Edges are reply, fork, or synthesis. Multi-parent nodes synthesize from multiple sources.
+2. **Context Compiler** — Transparently assembles a budgeted, auditable context for every model call. Visible manifest shows exactly what was sent.
+3. **View Modes** — Graph Overview, Thread Focus, Synthesis View. Fluid transitions, not hierarchy levels.
+4. **Cards** — Graph nodes with structured data and interactive behavior. Three built-in in MVP: File, Task, Code.
+5. **Topics** — Named, searchable subgraphs with #references. Context compiler resolves references per budget rules.
 
-## Solution
+## Architecture
+- **Backend:** Go (canopyd) — single binary, built-in HTTP server
+- **Frontend:** React + TypeScript + Vite — PWA with Service Worker
+- **Graph DB:** PostgreSQL (authoritative) + Yjs/IndexedDB (local replica)
+- **Card DB:** DuckDB in-process + JSONL files (git-friendly)
+- **Transport:** SSE (server→client) + HTTP POST (client→server)
+- **Encryption:** None in MVP (local data). MLS post-MVP for multi-user.
+- **Plugin Sandbox:** Sandboxed iframes + CSP + capability-scoped APIs
+- **Deployment:** `canopyd serve` + local PostgreSQL + PWA in browser
 
-A spatial, tree-native interface where the agent's memory IS the tree. Messages branch. Context is visible, navigable, shareable, and gated.
+## MVP Scope
+Single-user, desktop-first PWA + local server. Branch from any message. Multi-node synthesis. Searchable topics with #references. Visible context manifest + token budget. Three Cards (File, Task, Code). Import/export. Basic plugin sandbox.
 
-### Core Concepts
-1. **Tree Memory** — conversation is a navigable tree, not linear log. Every message can branch.
-2. **Three-Level Navigation** — Macro (full tree), Branch (drill into thread), Merge (side-by-side branches)
-3. **Multi-User with Approval Gates** — friends join threads, agent listens but only acts on owner-approved input
-4. **Multi-Profile** — different Hermes profiles (coding, creative, research) participate in same tree
-5. **Offline-First** — delta sync, SSE transport, progressive loading, bandwidth-aware
+## Deferred (Post-MVP)
+Multi-user collaboration, approval gates, arbitrary JS plugins, multi-agent federation, MLS encryption, multi-user CRDTs, all deployment modes beyond local server.
 
-## Architecture Decisions (DuckBrain)
-- Namespace: `hermes-canopy`
-- Language/framework: TBD (research phase)
-- Transport: SSE over WebSockets (offline resilience)
-- Storage: Local-first with CRDTs (Yjs/Automerge)
-- Visual paradigm: Outliner/mind-map, not chat log
+## Terminology (Post-Review)
+- **DAG** (data model), **tree** (UI metaphor) — not interchangeable
+- **View modes** — not "levels"
+- **Context compiler** — not "tree IS memory"
+- **Activity trace** — not "chain-of-thought"
+- **Synthesis node** — not "merge"
+- **Sandboxed iframes + CSP** — not "shadow DOM" for security
 
 ## Specs
-See `specs/` directory. Each spec follows coding-hermes-specs format (exact interfaces, DDL, error paths, wiring).
+See `specs/` directory.
 
 ## Tasks
-See `.coding-hermes/tasks.md` for the autonomous development board.
+See `.coding-hermes/tasks.md`.
+
+## Vision
+See `vision-brief.html` — Product Vision & Architecture Brief v2.0 with 4 embedded mockups.
