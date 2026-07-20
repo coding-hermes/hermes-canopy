@@ -27,8 +27,9 @@
   Research: Service Worker caching strategies (CacheFirst vs NetworkFirst for tree data), IndexedDB vs sql.js WASM for local persistence, CRDT sync over HTTP/SSE patterns. Test: Delta Chat protocol as transport fallback. Output: offline architecture doc.
   **Decision: Service Worker (Workbox v7) + y-indexeddb + Custom SSE Provider + Background Sync queue. No SQLite WASM in MVP. Delta Chat as optional post-MVP relay.**
 
-- [ ] **T1.5 — Approval UX Research**
+- [x] **T1.5 — Approval UX Research** ✅ COMPLETE 2026-07-20
   Research existing approval/review UX patterns: GitHub PR review, Linear/Notion comment threads, Google Docs suggesting mode. Design: approval side panel mockups (pending count badge, message preview, approve/deny/reply-first, audit trail). Output: UX design doc with wireframes.
+  **Decision: GitHub triage panel + Linear notification discipline + Google Docs per-item granularity. Output: specs/T1.5-approval-ux-research.md (24KB, 8 sections, wireframes, keyboard nav, mobile adaptation, data model impact).**
 
 - [ ] **T1.6 — WebUI Native App Evaluation**
   Evaluate WebUI library (webui.me, github.com/webui-dev/webui) for native desktop packaging. Test: Go backend + React frontend in single binary, system WebView integration on Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). Measure: binary size vs Electron, startup time, memory usage, WebView compatibility matrix. Output: recommendation for native app packaging.
