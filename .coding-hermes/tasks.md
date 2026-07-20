@@ -60,8 +60,9 @@
   PostgreSQL DDL for nodes and edges tables. Include: UUIDv7 generation function, indexes (tree_id, parent_id, created_at), constraints (FKs, single-parent except merge nodes), soft-delete column, created_at/edited_at triggers. Go structs with sql tags, TypeScript interfaces with Zod validation. CRDT schema: Yjs Y.Map shape for nodes and edges.
   **Commit: 09fa6d1 — specs/SPEC-DM-01-tree-node-edge-ddl.md (762 lines, 12 sections, full DDL, Go interfaces, TS types + Zod, Yjs schema, error catalog, test scenarios)**
 
-- [ ] **SPEC-DM-02 — Tree Snapshot & Delta Model**
+- [x] **SPEC-DM-02 — Tree Snapshot & Delta Model** ✅ COMPLETE 2026-07-20
   DDL for tree_snapshots table. SHA256 hash generation. Delta structure: added/removed/changed node lists, edge changes. Go: TreeSnapshot struct, ComputeDelta(from, to) signature. TypeScript: Snapshot type, applyDelta(snapshot, delta) function.
+  **Commit: f7d3f6f — specs/SPEC-DM-02-tree-snapshot-delta-model.md (903 lines, 12 sections, full DDL, Go interfaces, TS types, SHA256 algorithm, delta computation, error catalog, test scenarios)**
 
 - [ ] **SPEC-DM-03 — Approval & Audit Trail DDL**
   DDL for approvals and approval_rules tables. Approval states: pending, approved, denied, expired. Auto-approval rules: per-user, per-thread, per-profile. Audit trail: immutable log of all approval actions with full context. Go structs, TypeScript types.
