@@ -56,8 +56,9 @@
 
 **Dependencies:** Phase 1 complete (architecture decisions confirmed).
 
-- [ ] **SPEC-DM-01 — Tree Node & Edge DDL**
+- [x] **SPEC-DM-01 — Tree Node & Edge DDL** ✅ COMPLETE 2026-07-20
   PostgreSQL DDL for nodes and edges tables. Include: UUIDv7 generation function, indexes (tree_id, parent_id, created_at), constraints (FKs, single-parent except merge nodes), soft-delete column, created_at/edited_at triggers. Go structs with sql tags, TypeScript interfaces with Zod validation. CRDT schema: Yjs Y.Map shape for nodes and edges.
+  **Commit: <pending> — specs/SPEC-DM-01-tree-node-edge-ddl.md (762 lines, 12 sections, full DDL, Go interfaces, TS types + Zod, Yjs schema, error catalog, test scenarios)**
 
 - [ ] **SPEC-DM-02 — Tree Snapshot & Delta Model**
   DDL for tree_snapshots table. SHA256 hash generation. Delta structure: added/removed/changed node lists, edge changes. Go: TreeSnapshot struct, ComputeDelta(from, to) signature. TypeScript: Snapshot type, applyDelta(snapshot, delta) function.
