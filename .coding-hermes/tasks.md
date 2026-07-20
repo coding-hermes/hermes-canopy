@@ -19,8 +19,9 @@
   Compare Yjs and Automerge for tree-structured data: Y.Map vs Automerge's JSON CRDT. Measure: bundle size, WASM requirement, memory usage with 10K nodes, conflict resolution on concurrent branch creation. Output: specs/T1.2-crdt-evaluation.md.
   **Decision: Yjs — 18KB gzipped, pure JS, no WASM, granular observe() for tree re-rendering, 920K/wk downloads.**
 
-- [ ] **T1.3 — Tree Visualization Research**
+- [x] **T1.3 — Tree Visualization Research** ✅ COMPLETE 2026-07-20
   Survey tree/outliner libraries: React Flow, D3.js tree layout, custom Canvas renderer. Evaluate: rendering 500+ nodes, zoom/pan performance, accessibility (keyboard nav), mobile touch support. Output: library comparison matrix.
+  **Decision: React Flow (@xyflow/react v12) primary + d3-hierarchy layout engine + Canvas fallback for >2000 nodes.**
 
 - [ ] **T1.4 — Offline-Stack Research**
   Research: Service Worker caching strategies (CacheFirst vs NetworkFirst for tree data), IndexedDB vs sql.js WASM for local persistence, CRDT sync over HTTP/SSE patterns. Test: Delta Chat protocol as transport fallback. Output: offline architecture doc.
