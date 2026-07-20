@@ -153,6 +153,37 @@
 
 ---
 
+## Phase 3d: Post-MVP Architecture Specs
+
+**Goal:** Design the full architecture now — multi-user, federation, encryption, multi-transport — so the MVP is built with these extensions in mind. The model understands the complete design. No refactoring walls later.
+
+**Dependencies:** Phase 2 complete. These are design specs only — implementation deferred.
+
+- [ ] **SPEC-FTR-01 — Multi-User Collaboration & Approval Model**
+  Exact data model extensions for multi-user: user roles (owner/admin/member/viewer), per-node permissions, approval state machine (pending→approved→denied→expired), operation-level approvals (not message-level). Federation model: cross-server identity via Hermes profile tokens, shared tree access control, invite/accept flow. Public vs private reply determinism: permission-based, not model-chosen. Audit trail DDL for immutable approval log. This spec ensures the single-user MVP data model can extend to multi-user without migration pain.
+
+- [ ] **SPEC-FTR-02 — Federated Multi-Agent Architecture**
+  Cross-server agent participation: different Hermes instances federate into shared trees. Per-agent context isolation: each agent sees the shared graph through its own context compiler. Agent reply modes: public (tree-visible) and direct (owner-only channel). Profile routing: @mention routes context window to specific Hermes profile. Cost tracking per profile. Presence and availability per agent. Gateway routing: canopyd forwards to local Hermes OR remote Hermes gateway depending on profile ownership. This spec defines how Canopy becomes multi-agent without becoming a messaging app.
+
+- [ ] **SPEC-FTR-03 — MLS Encryption Model**
+  Complete MLS integration spec: per-tree MLS group creation, per-topic subgroup derivation, key rotation on member join/leave, forward secrecy guarantees. Server-side agent as authorized decrypting participant (visible to all group members). Search over encrypted data: agent decrypts → indexes → re-encrypts. Conflict with server-side topic detection resolved: agent is the authorized indexer. Key backup and recovery. This is designed upfront so the graph data model and API don't need retrofitting when encryption is added.
+
+- [ ] **SPEC-FTR-04 — Multi-Transport Architecture**
+  Transport adapter interface: Connect, Send, Receive, Disconnect, Health. Adapters: SSE (HTTP/2 server→client, POST client→server), WebRTC (P2P via pion/webrtc, STUN/TURN), NATS (message queue for reliable delivery). Relay protocol: tree sync opcodes over any transport. Connection manager: per-member transport tracking, graceful degradation (SSE fails → try WebRTC). Bandwidth detection and adaptive payload sizing. Offline queue: Background Sync for PWA, NATS persistence for server-side. This spec defines the transport abstraction that makes 7 deployment modes possible.
+
+- [ ] **SPEC-FTR-05 — Self-Hosted & SaaS Relay Architecture**
+  Relay deployment model: single canopyd binary as relay server. Multi-tenant isolation: database-per-tenant or DuckDB schema-per-tenant. Relay routing: clients connect to relay, relay routes messages between tree members. SaaS billing integration points. Resource limits per tenant. STUN/TURN server provisioning. Health check and monitoring endpoints. This spec defines how Canopy scales from single-user local to hosted multi-tenant.
+
+- [ ] **SPEC-FTR-06 — WebUI Native Packaging & Distribution**
+  WebUI integration: `webui.Show(window, "http://localhost:8080")` — one line of Go. Build targets: Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). App signing and distribution: code signing, app store submission prep. Auto-update mechanism. This spec is short because WebUI is trivial — document the build pipeline and platform specifics.
+
+- [ ] **SPEC-FTR-07 — Hermes Agent Gateway Integration**
+  Exact API contract between canopyd and Hermes: model call request/response format, tool execution request/response, context assembly format, auth token forwarding, profile resolution, skill→card translation. Error handling: Hermes downtime, rate limiting, model unavailability. The canopyd→Hermes boundary is the most critical interface — this spec defines it precisely so both sides can be built independently.
+
+**Blocks:** Phase 2. All post-MVP feature specs are design-only — implementation deferred but architecture is coherent from day one.
+
+---
+
 ## Phase 4: Backend (Go Gateway)
 
 **Goal:** Working SSE + REST gateway. Tests pass. Wired to CLI with serve command. Dockerfile.
