@@ -15,8 +15,9 @@
   Research SSE reconnection behavior, browser support, polyfills. Compare with WebSocket sticky session requirements. Research NATS as message queue transport option. Document: max SSE connections per browser, reconnection backoff strategies, Last-Event-ID behavior across browsers. Output: specs/T1.1-transport-research.md.
   **Decision: SSE (HTTP/2) primary + NATS backend + WebSocket as future bidirectional fallback.**
 
-- [ ] **T1.2 — CRDT Library Evaluation: Yjs vs Automerge**
-  Compare Yjs and Automerge for tree-structured data: Y.Map vs Automerge's JSON CRDT. Measure: bundle size, WASM requirement, memory usage with 10K nodes, conflict resolution on concurrent branch creation. Output: recommendation with measured data.
+- [x] **T1.2 — CRDT Library Evaluation: Yjs vs Automerge** ✅ COMPLETE 2026-07-20
+  Compare Yjs and Automerge for tree-structured data: Y.Map vs Automerge's JSON CRDT. Measure: bundle size, WASM requirement, memory usage with 10K nodes, conflict resolution on concurrent branch creation. Output: specs/T1.2-crdt-evaluation.md.
+  **Decision: Yjs — 18KB gzipped, pure JS, no WASM, granular observe() for tree re-rendering, 920K/wk downloads.**
 
 - [ ] **T1.3 — Tree Visualization Research**
   Survey tree/outliner libraries: React Flow, D3.js tree layout, custom Canvas renderer. Evaluate: rendering 500+ nodes, zoom/pan performance, accessibility (keyboard nav), mobile touch support. Output: library comparison matrix.
