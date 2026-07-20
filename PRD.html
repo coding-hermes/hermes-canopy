@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canopy OS — PRD</title>
+<style>
+  :root {
+    --bg: #08080f;
+    --card: #111122;
+    --border: #1e1e3a;
+    --text: #c8c8d8;
+    --muted: #8888a0;
+    --green: #4ade80;
+    --blue: #60a5fa;
+    --amber: #f59e0b;
+    --pink: #f472b6;
+    --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; padding: 12px;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    background: linear-gradient(135deg, #a78bfa, #60a5fa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+  h2 {
+    font-size: clamp(1.2rem, 4vw, 1.5rem);
+    color: #c8c8e8; margin: 28px 0 12px;
+    border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+  h3 {
+    font-size: clamp(1.0rem, 3vw, 1.2rem);
+    color: var(--blue); margin: 16px 0 8px;
+  }
+  .section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 12px; margin: 12px 0;
+  }
+  .tagline {
+    font-size: clamp(1.1rem, 3.5vw, 1.4rem);
+    color: var(--purple); font-style: italic; margin-bottom: 12px;
+  }
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+    margin: 12px 0;
+  }
+  .stat {
+    background: #0a0a1a; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; text-align: center;
+  }
+  .stat-val { font-size: 1.4rem; font-weight: 700; color: var(--green); }
+  .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { background: #0a0a1a; color: var(--blue); padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(96,165,250,0.04); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .badge-core { background: #1e3a5f; color: var(--blue); }
+  .badge-done { background: #166534; color: var(--green); }
+  .badge-next { background: #3b1e08; color: var(--amber); }
+  .badge-future { background: #3b0820; color: var(--pink); }
+  .feature-card {
+    background: #0a0a1a; border-left: 3px solid var(--purple);
+    border-radius: 0 8px 8px 0; padding: 12px; margin: 8px 0;
+  }
+  .feature-card h4 { color: var(--purple); margin-bottom: 4px; }
+  .feature-card p { color: var(--muted); font-size: 0.85rem; }
+  blockquote {
+    border-left: 3px solid var(--amber); padding: 8px 12px;
+    margin: 12px 0; background: rgba(245,158,11,0.06); border-radius: 0 8px 8px 0;
+    color: var(--amber); font-style: italic;
+  }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; font-size: 0.9rem; }
+  .phase-bar { display: flex; gap: 4px; margin: 8px 0; flex-wrap: wrap; }
+  .phase-seg { height: 6px; border-radius: 3px; flex: 1; min-width: 40px; }
+  .phase-done { background: var(--green); }
+  .phase-active { background: var(--amber); }
+  .phase-pending { background: var(--border); }
+  .arch-diagram {
+    background: #0a0a1a; border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; margin: 12px 0;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem;
+    line-height: 1.8; overflow-x: auto; white-space: pre; color: var(--muted);
+  }
+  .hl-blue { color: var(--blue); }
+  .hl-green { color: var(--green); }
+  .hl-purple { color: var(--purple); }
+  .hl-amber { color: var(--amber); }
+  @media (min-width: 600px) {
+    body { padding: 20px; max-width: 800px; margin: 0 auto; }
+    .stat-grid { grid-template-columns: repeat(4, 1fr); }
+    .section { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Canopy OS</h1>
+<div class="tagline">"An interface that has interfaces."</div>
+
+<div class="stat-grid">
+  <div class="stat"><div class="stat-val">30</div><div class="stat-label">Design Entries</div></div>
+  <div class="stat"><div class="stat-val">10</div><div class="stat-label">Dev Phases</div></div>
+  <div class="stat"><div class="stat-val">7</div><div class="stat-label">Transport Modes</div></div>
+  <div class="stat"><div class="stat-val">2/9</div><div class="stat-label">Research Done</div></div>
+</div>
+
+<div class="section">
+  <h2>Executive Summary</h2>
+  <p><strong>Canopy OS</strong> is a tree-native collaboration surface for humans and AI agents. It replaces the linear chat log with a spatial, navigable conversation tree where every message can branch, merge, and be referenced across contexts.</p>
+  <p>Think <strong>Hermes + Obsidian had a baby, and it was your chat app.</strong> The files ARE the knowledge base. The agent's memory IS the tree. The interface IS the memory — they're the same thing.</p>
+  <p>Canopy is not another chat app. It's a <strong>web OS with a chat window</strong> — dynamic micro-apps (cards) surface as you work, each with its own database, UI, and state machine. The agent designs the interface it wants to use to communicate with you.</p>
+</div>
+
+<div class="section">
+  <h2>Problem</h2>
+  <p>Every existing AI chat interface — ChatGPT, Claude, Copilot, Gemini — is built on the same foundation: <strong>a linear scroll log designed for human-to-human conversation.</strong></p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>Problem</th><th>Why Linear Chat Fails</th></tr>
+    <tr><td>Multi-session projects</td><td>50 separate chat threads, zero connection between them</td></tr>
+    <tr><td>Deep exploration</td><td>Tangents pollute the main thread — you lose the original context</td></tr>
+    <tr><td>Collaboration</td><td>No way to share specific context with specific people</td></tr>
+    <tr><td>Context management</td><td>The agent's context window is invisible — you don't know what it remembers</td></tr>
+    <tr><td>Approval workflow</td><td>No distinction between "I'm thinking out loud" and "execute this"</td></tr>
+    <tr><td>Tool integration</td><td>Switching between chat, calendar, files, and tools breaks flow</td></tr>
+    <tr><td>Offline</td><td>Useless on planes, spotty connections — no local-first architecture</td></tr>
+  </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Solution: The Tree-Native Interface</h2>
+  <p>Canopy replaces the scroll log with a <strong>spatial conversation tree</strong>. Every message is a node. Nodes can branch, merge, be referenced, and carry state. The tree IS the agent's memory — visible, navigable, and shareable.</p>
+
+  <div class="feature-card">
+    <h4>🌳 Three-Level Navigation</h4>
+    <p><strong>Macro View</strong> — full conversation forest at a glance. <strong>Branch View</strong> — drill into any thread, see full context chain. <strong>Merge View</strong> — side-by-side comparison of alternative paths. Fluid transitions between all three levels. Keyboard-driven: j/k navigate, h/l drill in/out, m merge selected.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🔀 Branch, Don't Derail</h4>
+    <p>Reply to ANY message in the tree — not just the last one. Replying to the latest extends the current branch. Replying to an older message creates a fork. The main thread stays clean. The agent understands branch context — it knows which path you're on and what led here.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>📎 Multi-Message Reference</h4>
+    <p>Reply to multiple messages at once. Select N messages → reply → new node with N parent edges. Colored edges show which context came from where. "Based on your database schema work from Monday AND the API concerns from Tuesday, here's the plan..."</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🧵 Topics with #References</h4>
+    <p>Auto-topic detection: the agent notices topic shifts and offers to create new topics. Slack-style #references between topics. Search sidebar: type, see 3 matches, one click injects that topic's entire tree into context — no need to open and read it. Topics have lifecycle: active → archived → deleted. Merge, split, cross-reference at will.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Card Ecosystem — "A Web OS with a Chat Window"</h2>
+
+  <blockquote>Canopy is an interface that has interfaces. It's its own OS. Cards are micro-apps that ship with their own HTML/JS/CSS, their own DuckDB-backed JSONL database, their own REST API, and their own state machine.</blockquote>
+
+  <div class="feature-card">
+    <h4>🗄️ Database-per-Card</h4>
+    <p>Each card type gets its own storage: <code>~/.hermes/canopy/cards/{type}/events.jsonl</code>. Git-friendly, diffable, append-only JSONL files. DuckDB queries them directly — no import step, no binary blob. pgREST-style fixed API: <code>GET /api/cards/{type}/{id}</code> — neither the model nor the card JS ever writes raw SQL.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🧩 Cards as Micro-Frontends</h4>
+    <p>Each card ships HTML/JS/CSS (Web Components with shadow DOM). Sandboxed, auth-gated. Queries its own database via REST. Runs its own application logic. Has a state machine: sending → pending → bench → active → archived. Cards can be replied to — they're first-class nodes in the conversation tree.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🔄 Dynamic Thinking Interface (Iteration Cards)</h4>
+    <p>While the agent is working — searching the web, executing code, reading files — the interface is dynamic. Open a sidebar, say "show me the searches," and a card pops up with live results. <strong>Highlight</strong> specific results, give <strong>feedback</strong> ("focus on this one"), and it goes BACK to the model mid-process. Each card is a bidirectional channel between you and the agent's thinking.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>💬 Message-to-Card</h4>
+    <p>Take any conversation and say "turn this into a card." The agent extracts structured data and renders a persistent, interactive view. 15 messages about a database schema → a Database Schema card with tables, columns, and relationships. Talk TO the card to modify it. Cards reference other cards via #links.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🧠 Skills Are Cards</h4>
+    <p>Canopy cards ARE Hermes skills — rendered as UI. A skill that was a text instruction becomes an interactive app with its own database, API, and state. The skill system and the card system are the same thing. This is "a wild extension bolted onto Hermes."</p>
+  </div>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>Card Type</th><th>Database</th><th>Example</th></tr>
+    <tr><td>Calendar</td><td>events.jsonl</td><td>Month/week/day view, multi-source (Google/iCloud/CalDAV)</td></tr>
+    <tr><td>Search Session</td><td>searches.jsonl</td><td>Live results with highlight + feedback</td></tr>
+    <tr><td>Code Execution</td><td>executions.jsonl</td><td>Streaming stdout/stderr, cancel, output inspection</td></tr>
+    <tr><td>File Viewer</td><td>views.jsonl</td><td>PDF, images, code, CSV, Markdown, JSON, media</td></tr>
+    <tr><td>Thinking</td><td>steps.jsonl</td><td>Chain-of-thought, collapsible, feedback per step</td></tr>
+    <tr><td>Deployment</td><td>deploys.jsonl</td><td>Status, logs, rollback, monitoring</td></tr>
+  </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Multi-User & Federation</h2>
+
+  <div class="feature-card">
+    <h4>👥 Approval Gates</h4>
+    <p>Friends join threads. The agent <strong>listens</strong> to everyone but only <strong>acts</strong> on owner-approved input. "Delete the production database" → agent tags it "unapproved — waiting for owner." Approval granularity: per-message, per-thread, per-user. Side panel preserves full context — you always see what you approved and why. Immutable audit trail.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🤖 Multi-Profile</h4>
+    <p>Different Hermes profiles participate in the same tree: coding-hermes, creative-hermes, research-hermes. Each has independent context windows. @mention a profile to route context. Per-profile visibility toggles. Cost-aware profile selection.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>🌐 Cross-Server Federation</h4>
+    <p>Other people bring their agents into group chats. Different Hermes instances federate — not everyone needs the same server. Each agent runs on its owner's infrastructure, knows their preferences, calendar, and knowledge base — participates in shared context. Two reply modes: <strong>public</strong> (visible to all) or <strong>direct</strong> (private to owner).</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>📴 Auto-Responder</h4>
+    <p>Set status: "busy for 3 hours." Agent tells people who message you, pings you for important things, handles routine questions. Calendar-integrated: agent knows when your meetings are. Configurable interrupt thresholds.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Architecture</h2>
+
+  <div class="arch-diagram">
+┌─────────────────────────────────────────────────────┐
+│ <span class="hl-purple">Canopy OS</span> — Tree-Native Agent Collaboration Surface   │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
+│  │ <span class="hl-blue">Web PWA</span>   │  │ <span class="hl-blue">Native App</span>│  │ <span class="hl-blue">P2P (WebRTC)</span>    │  │
+│  │ React+TS │  │ WebUI+Go │  │ STUN/TURN+NATS  │  │
+│  └────┬─────┘  └────┬─────┘  └────────┬─────────┘  │
+│       │             │                 │             │
+│       └─────────────┼─────────────────┘             │
+│                     │                               │
+│          ┌──────────▼──────────┐                    │
+│          │  <span class="hl-amber">Protocol-Agnostic</span>    │                    │
+│          │  <span class="hl-amber">Transport Layer</span>       │                    │
+│          │  SSE│WebRTC│NATS│Relay│                   │
+│          └──────────┬──────────┘                    │
+│                     │                               │
+│  ┌──────────────────▼────────────────────┐          │
+│  │         <span class="hl-green">Go Backend (canopyd)</span>         │          │
+│  │  ┌──────────┐ ┌────────┐ ┌─────────┐ │          │
+│  │  │ Tree     │ │ Auth   │ │ Card    │ │          │
+│  │  │ Service  │ │ MLS+   │ │ REST    │ │          │
+│  │  │ (PG)     │ │ Signal │ │ pgREST  │ │          │
+│  │  └──────────┘ └────────┘ └────┬────┘ │          │
+│  └────────────────────────────────┼──────┘          │
+│                                   │                  │
+│  ┌────────────────────┬───────────▼──────┐          │
+│  │  <span class="hl-blue">PostgreSQL</span>          │  <span class="hl-blue">DuckDB</span> (in-proc) │          │
+│  │  Tree state        │  Card data       │          │
+│  │  Approval log      │  JSONL files     │          │
+│  │  User/profiles     │  Git-friendly    │          │
+│  └────────────────────┴──────────────────┘          │
+│                                                     │
+│  <span class="hl-blue">CRDTs:</span> Yjs (Y.Map for nodes/edges)             │
+│  <span class="hl-blue">Sync:</span> Delta sync (SHA256 snapshots)             │
+│  <span class="hl-blue">Auth:</span> Hermes JWT + OAuth2 friend invites        │
+│  <span class="hl-blue">Encryption:</span> MLS (groups) + Signal (1:1)         │
+└─────────────────────────────────────────────────────┘
+  </div>
+
+  <h3>Stack Decisions</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Layer</th><th>Decision</th><th>Rationale</th></tr>
+    <tr><td>Backend</td><td>Go</td><td>Single binary, low memory, fast SSE, WebUI integration</td></tr>
+    <tr><td>Frontend</td><td>React + TypeScript + Vite</td><td>PWA, Service Worker, Yjs integration</td></tr>
+    <tr><td>Tree DB</td><td>PostgreSQL</td><td>Relational tree state, audit log, FTS for topics</td></tr>
+    <tr><td>Card DB</td><td>DuckDB + JSONL</td><td>Git-friendly, OLAP queries directly on files, pgREST API</td></tr>
+    <tr><td>CRDT</td><td>Yjs</td><td>Y.Map for tree nodes/edges, IndexedDB persistence, SSE provider</td></tr>
+    <tr><td>Transport</td><td>SSE primary</td><td>HTTP/2 native, auto-reconnect, no sticky sessions, works on bad connections</td></tr>
+    <tr><td>Encryption</td><td>MLS + Signal</td><td>MLS for group/tree, Signal for 1:1. O(log n) group key management</td></tr>
+    <tr><td>Native App</td><td>WebUI library</td><td>System WebView, tiny binary, no Electron bloat</td></tr>
+    <tr><td>Card UI</td><td>Web Components</td><td>Shadow DOM isolation, per-card HTML/JS/CSS, sandboxed</td></tr>
+    <tr><td>Plugins</td><td>JS files</td><td>Agent-installable, hot-reload to all devices, sandboxed</td></tr>
+  </table>
+  </div>
+
+  <h3>Deployment Modes</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Mode</th><th>How</th><th>For</th></tr>
+    <tr><td>Native App</td><td>WebUI Go binary + system WebView</td><td>Desktop daily driver</td></tr>
+    <tr><td>Web PWA</td><td>Browser + Service Worker</td><td>Any device, quick access</td></tr>
+    <tr><td>Tunnel</td><td>Cloudflare/ngrok</td><td>Demos, quick shares, no server</td></tr>
+    <tr><td>P2P</td><td>WebRTC + STUN/TURN</td><td>Security-conscious, decentralized</td></tr>
+    <tr><td>Message Queue</td><td>NATS/Redis Streams</td><td>Reliable delivery, offline queueing</td></tr>
+    <tr><td>Self-Hosted Relay</td><td>Custom relay server</td><td>Full control, privacy maximalist</td></tr>
+    <tr><td>SaaS Relay</td><td>Hosted relay (we run)</td><td>Zero ops, plug and play</td></tr>
+  </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Competitive Landscape</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Product</th><th>Tree Memory</th><th>Cards/Apps</th><th>Multi-Agent</th><th>Offline</th><th>Self-Host</th><th>Git-native Data</th></tr>
+    <tr>
+      <td><strong>Canopy OS</strong></td>
+      <td><span class="badge badge-core">✅ Native</span></td>
+      <td><span class="badge badge-core">✅ DB-per-card</span></td>
+      <td><span class="badge badge-core">✅ Federation</span></td>
+      <td><span class="badge badge-core">✅ First-class</span></td>
+      <td><span class="badge badge-core">✅ 7 modes</span></td>
+      <td><span class="badge badge-core">✅ JSONL+DuckDB</span></td>
+    </tr>
+    <tr><td>ChatGPT</td><td>❌ Linear only</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Claude</td><td>❌ Linear only</td><td>❌ Artifacts</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Matrix/Element</td><td>❌ Threads</td><td>⚠️ Widgets</td><td>⚠️ Bridges</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Obsidian</td><td>⚠️ Graph view</td><td>⚠️ Plugins</td><td>❌</td><td>⚠️ Local</td><td>⚠️ Vault sync</td><td>✅ Markdown</td></tr>
+    <tr><td>Discord</td><td>⚠️ Threads</td><td>⚠️ Bots</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Notion</td><td>❌ Pages</td><td>⚠️ Databases</td><td>❌</td><td>⚠️</td><td>❌</td><td>❌</td></tr>
+  </table>
+  </div>
+  <p style="margin-top:12px"><strong>Canopy is unique:</strong> no existing product combines tree-native conversation memory, embedded micro-apps with independent databases, cross-server agent federation, offline-first architecture, and git-friendly data storage. It occupies a new category: <strong>agent collaboration OS.</strong></p>
+</div>
+
+<div class="section">
+  <h2>Development Roadmap</h2>
+
+  <div class="phase-bar">
+    <div class="phase-seg phase-done" title="Phase 1: Research"></div>
+    <div class="phase-seg phase-done" title="Phase 1: Research"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+    <div class="phase-seg phase-pending"></div>
+  </div>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>#</th><th>Phase</th><th>Tasks</th><th>Status</th></tr>
+    <tr>
+      <td>1</td><td>Architecture &amp; Research</td><td>9</td>
+      <td><span class="badge badge-next">IN PROGRESS</span> — T1.1–T1.2 done, T1.3 next</td>
+    </tr>
+    <tr><td>2</td><td>Data Model Specs</td><td>4</td><td><span class="badge badge-future">BLOCKED</span> — waits for Phase 1</td></tr>
+    <tr><td>3a</td><td>API Specs</td><td>7</td><td><span class="badge badge-future">BLOCKED</span> — waits for Phase 2</td></tr>
+    <tr><td>3b</td><td>Topic Management Specs</td><td>5</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>3c</td><td>Plugin &amp; App Card Specs</td><td>6</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>4</td><td>Backend (Go Gateway)</td><td>12</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>5</td><td>Frontend (React)</td><td>11</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>6</td><td>Integration &amp; Wiring</td><td>6</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>7</td><td>Testing &amp; Hardening</td><td>5</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>8</td><td>Production Deployment</td><td>4</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>9</td><td>Distribution</td><td>3</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+    <tr><td>10</td><td>Continuous Improvement</td><td>2</td><td><span class="badge badge-future">BLOCKED</span></td></tr>
+  </table>
+  </div>
+
+  <h3>Current Research Progress</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Task</th><th>Output</th><th>Status</th></tr>
+    <tr><td>T1.1 — Transport: SSE vs WebSocket vs NATS</td><td>SSE wins — HTTP/2 native, auto-reconnect, no sticky sessions</td><td><span class="badge badge-done">✅ DONE</span></td></tr>
+    <tr><td>T1.2 — CRDT: Yjs vs Automerge</td><td>Yjs wins — smaller bundle, better Y.Map perf, mature ecosystem</td><td><span class="badge badge-done">✅ DONE</span></td></tr>
+    <tr><td>T1.3 — Tree Visualization</td><td>Pending — next tick</td><td><span class="badge badge-next">NEXT</span></td></tr>
+  </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Design Principles</h2>
+  <ol>
+    <li><strong>The agent's memory IS the tree.</strong> No invisible context window. What the agent sees is visible, navigable, and shareable.</li>
+    <li><strong>Files ARE the knowledge base.</strong> Don't re-upload. Files live on your Hermes instance. The chat app is the file browser.</li>
+    <li><strong>Cards are apps, Canopy is the OS.</strong> Each card has its own database, UI, state, and REST API. Skills rendered as interactive UI.</li>
+    <li><strong>The agent designs its own interface.</strong> The agent surfaces what's relevant — calendar, search results, code output — as cards. You customize per thread.</li>
+    <li><strong>Offline-first, not offline-afterthought.</strong> Local-first with CRDTs. Delta sync. Works on planes, spotty connections, anywhere.</li>
+    <li><strong>Seven deployment modes, one experience.</strong> Native app, web PWA, tunnel, P2P, message queue, self-hosted relay, SaaS relay. Same UI, same data.</li>
+    <li><strong>Git-native data.</strong> Card data is JSONL files. Diffable. Version-controlled. No binary blob databases.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2>Non-Goals (Explicit)</h2>
+  <ul>
+    <li>❌ Not replacing Obsidian, Hermes, or your existing chat apps — it's the chat app FOR that stuff</li>
+    <li>❌ Not Electron — WebUI uses system WebView, tiny binary</li>
+    <li>❌ Not WebSockets primary — SSE for resilience</li>
+    <li>❌ Not raw SQL from cards — pgREST fixed API only</li>
+    <li>❌ Not SQLite for cards — DuckDB + JSONL</li>
+    <li>❌ Not replacing human-to-human chat — this is for human-agent collaboration</li>
+  </ul>
+</div>
+
+<div style="text-align:center; color:var(--muted); font-size:0.75rem; margin-top:24px; padding:12px;">
+  Canopy OS PRD · v0.1 · July 2026 · 30 design entries · Hermes Canopy namespace
+</div>
+
+</body>
+</html>
