@@ -485,7 +485,7 @@
       <div class="scope-in">
         <h4>✓ First Release (MVP)</h4>
         <ul>
-          <li>Single-user, desktop-first PWA + local server</li>
+          <li>Single-user PWA (desktop + mobile) + local Go server</li>
           <li>Branch from any message in the graph</li>
           <li>Select multiple nodes → create synthesis node</li>
           <li>Searchable topics with #references</li>
@@ -526,20 +526,20 @@
     <h2>How It's Built</h2>
     
     <h3>Canonical Data Flow</h3>
-    <p>In the MVP, the local server is the <strong>single source of truth.</strong> PostgreSQL stores the authoritative graph. The local browser's IndexedDB holds a Yjs CRDT replica for responsive offline editing. On reconnect, the server reconciles — the server wins conflicts. SSE is the primary server→client channel. Client writes use standard HTTP POST.</p>
+    <p>In the MVP, the local Go server — with DuckDB embedded in-process — is the <strong>single source of truth.</strong> DuckDB stores the authoritative graph (nodes, edges, snapshots) and Card data (JSONL files queried directly). The local browser's IndexedDB holds a Yjs CRDT replica for responsive offline editing and reading past messages on bad connections. On reconnect, the server reconciles — the server wins conflicts. SSE is the server→client channel. Client writes use HTTP POST. Background Sync queues outgoing messages when offline — they auto-send when connectivity returns.</p>
     
     <div class="table-wrap">
     <table>
       <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
       <tbody>
         <tr><td>Backend</td><td>Go (canopyd)</td><td>Single binary, built-in HTTP server, WebUI native packaging path</td></tr>
-        <tr><td>Frontend</td><td>React + TypeScript + Vite</td><td>PWA with Service Worker, Yjs integration</td></tr>
-        <tr><td>Graph Database</td><td>PostgreSQL</td><td>Authoritative graph state, topic FTS. Yjs/IndexedDB is a local replica — server reconciles.</td></tr>
-        <tr><td>Card Database</td><td>DuckDB in-process via Go</td><td>Queries JSONL files directly. pgREST-style fixed API. No raw SQL from Cards.</td></tr>
+        <tr><td>Frontend</td><td>Preact + Web Components</td><td>3KB React-compatible API. Cards ARE Web Components — same component model as the framework. PWA with Service Worker for caching + Background Sync for offline queue.</td></tr>
+        <tr><td>Graph Database</td><td>DuckDB (embedded)</td><td>Authoritative graph state, Card data, topic FTS — all in one embedded database. No separate DB process. Yjs/IndexedDB is a local browser replica for offline reads.</td></tr>
+        <tr><td>Card Database</td><td>DuckDB in-process via Go</td><td>Same embedded DuckDB instance. Graph and Cards share one database. JSONL files are the durable format — DuckDB queries them directly.</td></tr>
         <tr><td>Transport</td><td>SSE (server→client) + HTTP POST (client→server)</td><td>SSE for real-time updates, POST for writes. One channel per direction — no half-duplex confusion.</td></tr>
         <tr><td>Encryption</td><td>None in MVP / MLS post-MVP</td><td>All data local to user's machine in MVP. MLS for multi-user post-MVP. No Signal — MLS handles any group size.</td></tr>
         <tr><td>Plugin Sandbox</td><td>Sandboxed iframes + CSP + permissions</td><td>Shadow DOM is encapsulation, not a security boundary. Cards run in isolated iframes with capability-scoped APIs.</td></tr>
-        <tr><td>Deployment</td><td>Local Go binary + PWA</td><td>Start canopyd, open browser. PostgreSQL runs locally or via Docker. Single command: `canopyd serve`.</td></tr>
+        <tr><td>Deployment</td><td>Single Go binary + PWA</td><td><code>canopyd serve</code> — starts HTTP server with DuckDB embedded. Open browser. Works on desktop and mobile. No Docker, no PostgreSQL, no external dependencies.</td></tr>
       </tbody>
     </table>
     </div>
@@ -549,7 +549,7 @@
     <table>
       <thead><tr><th>Mode</th><th>What It Is</th><th>MVP?</th></tr></thead>
       <tbody>
-        <tr><td>Local Server + PWA</td><td>canopyd binary running locally. Browser connects to localhost. PostgreSQL is local.</td><td><span class="check">✓ MVP</span></td></tr>
+        <tr><td>Local Server + PWA</td><td>canopyd binary running locally. DuckDB embedded — no external DB. Browser connects to localhost. PWA installs to home screen on mobile.</td><td><span class="check">✓ MVP</span></td></tr>
         <tr><td>Cloud Tunnel</td><td>Exposure mechanism: Cloudflare/ngrok maps a public URL to your local server. You still run the server.</td><td><span class="cross">Post-MVP</span></td></tr>
         <tr><td>P2P (WebRTC)</td><td>Transport mechanism: direct browser-to-browser for multi-user. Requires STUN/TURN infrastructure.</td><td><span class="cross">Post-MVP</span></td></tr>
         <tr><td>Message Queue</td><td>Reliability mechanism: NATS/Redis for guaranteed delivery in multi-user mode.</td><td><span class="cross">Post-MVP</span></td></tr>
@@ -566,8 +566,8 @@
       <p>SSE is server→client only. The initial document implied bidirectional SSE. The architecture now explicitly uses SSE for real-time server→client updates and standard HTTP POST for all client→server writes. No ambiguity.</p>
     </div>
     <div class="card blue">
-      <h4>Server-Side Search + Encryption</h4>
-      <p>Full-text topic search requires the server to read message content. This conflicts with E2EE where the server is blind. In the MVP (single-user, local server), this is not a conflict — all data is local. Post-MVP, the server-side agent is an authorized decrypting participant in the MLS group, enabling search as an explicit capability.</p>
+      <h4>Server-Side Search (Post-MVP)</h4>
+      <p>Full-text topic search requires the server to read message content. In the MVP (single-user, local server, no encryption), this is a non-issue — all data is local. Post-MVP with MLS encryption, the server-side agent is an authorized decrypting participant in the MLS group, enabling search as an explicit, auditable capability. No backdoor — the agent's participation in the group is visible to all members.</p>
     </div>
     <div class="card blue">
       <h4>Git-Friendly + Permanent Deletion</h4>
@@ -603,7 +603,7 @@
     </div>
     
     <div class="principle">
-      <p>"Data lives in formats you can read: JSONL for Cards, PostgreSQL for the graph. git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
+      <p>"Data lives in formats you can read: JSONL for Cards, DuckDB for the graph. One embedded database, no separate processes. git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
     </div>
   </div>
 </section>
