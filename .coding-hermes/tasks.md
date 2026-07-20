@@ -31,8 +31,8 @@
 - [ ] **T1.6 — WebUI Native App Evaluation**
   Evaluate WebUI library (webui.me, github.com/webui-dev/webui) for native desktop packaging. Test: Go backend + React frontend in single binary, system WebView integration on Linux (GTK WebKit), macOS (WKWebView), Windows (Edge WebView2). Measure: binary size vs Electron, startup time, memory usage, WebView compatibility matrix. Output: recommendation for native app packaging.
 
-- [ ] **T1.7 — Security Protocol Research: MLS vs Signal Hybrid**
-  Research MLS (RFC 9420) vs Signal Protocol for Canopy's tree-and-topic model. Evaluate: group key management efficiency for variable-participant threads, implementation maturity (mls-rs, OpenMLS), Go binding feasibility (CGo to mls-rs). Design hybrid approach: MLS for group/tree encryption, Signal for 1:1 direct messages. Output: security protocol architecture decision.
+- [ ] **T1.7 — Security Protocol: MLS-Only Architecture** ✅ RESOLVED
+  DECISION: MLS-only. No Signal Protocol. Rationale: every Canopy conversation is inherently multi-participant (user + agent + profiles + friends). MLS handles groups of 2 with minimal overhead. Single dependency (mls-rs via CGo) halves attack surface. Industry trajectory: MLS is RFC 9420, WhatsApp adopting. Signal is the gold standard for phone-to-phone messaging — Canopy is an agent collaboration OS, not a messaging app. Go implementation: CGo binding to mls-rs. Groups per tree and per topic. No protocol negotiation layer. Output: `specs/T1.7-mls-encryption.md`.
 
 - [ ] **T1.8 — Multi-Transport Architecture Design**
   Design protocol-agnostic sync layer that abstracts over: SSE (HTTP/2), WebRTC P2P (STUN/TURN), NATS/Redis Streams (message queues), custom relay (self-hosted). Define transport adapter interface: Connect, Send, Receive, Disconnect. Design relay protocol: tree sync opcodes over any reliable channel. Output: transport architecture doc.
@@ -185,8 +185,8 @@
 - [ ] **BE-09 — Transport Adapter Layer**
   Implement transport adapter interface: Connect, Send, Receive, Disconnect. Adapters: SSE (HTTP/2), WebRTC (P2P via pion/webrtc), NATS (message queue). Relay protocol: tree sync opcodes over any adapter. Connection manager: track which members are on which transport. Graceful degradation: if SSE fails, try WebRTC, etc.
 
-- [ ] **BE-10 — Encryption Layer (MLS + Signal Hybrid)**
-  Implement encryption layer via CGo binding to mls-rs (Rust MLS library). Group encryption: MLS for tree-level and topic-level encryption. 1:1 encryption: Signal Double Ratchet via libsignal C binding. Key rotation: automatic on member join/leave. Forward secrecy: enforced per MLS and Signal specifications.
+- [ ] **BE-10 — Encryption Layer (MLS-Only)**
+  Implement MLS encryption via CGo binding to mls-rs (Rust). Per-tree MLS group: all members in a tree share one group. Per-topic subgroup: topics with restricted membership get their own MLS group. Key rotation on member join/leave. Forward secrecy enforced per MLS specification. Single dependency, single code path — no protocol negotiation. No Signal Protocol. 1:1 conversations are MLS groups of 2.
 
 - [ ] **BE-11 — HTTP Router & Middleware**
   Chi or stdlib router. Middleware chain: auth, tree membership, rate limiting, request logging, CORS, recovery. Wire all handlers from BE-03 through BE-10. CLI: `canopyd serve --port 8080 --db postgres://...`
