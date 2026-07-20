@@ -44,7 +44,7 @@
 
 - [x] **T1.9 — Confirmed Architecture Document** ✅ COMPLETE 2026-07-20
   Synthesize T1.1–T1.8 into a single architecture document (563 lines, 12 sections, 3 Mermaid diagrams, decision registry, cost estimates, phase roadmap). Output: `specs/ARCHITECTURE.md`.
-  **Commit: <pending>**
+  **Commit: b8e170d**
 
 **Blocks:** Nothing. All research tasks independent.
 
