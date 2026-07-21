@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 — Architecture & Research ✅ **COMPLETE** (9/9 tasks) | Next: Phase 2 — Data Model Specs
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (0/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -81,7 +81,7 @@
 
 **Dependencies:** Phase 2 complete (data model types inform API shapes).
 
-- [ ] **SPEC-API-01 — SSE Event Stream Spec**
+- [x] **SPEC-API-01 — SSE Event Stream Spec** ✅ COMPLETE 2026-07-20
   GET /trees/{tree_id}/events endpoint. Query params: ?since=<hash>, ?profiles=<csv>. Event types: node_added, node_updated, node_removed, edge_added, edge_removed, approval_changed, user_joined, user_left, tree_merged. Exact JSON shape per event. Reconnection: Last-Event-ID header behavior. Heartbeat interval. Max events per connection. Authentication: Bearer token validation at connection time.
 
 - [ ] **SPEC-API-02 — Tree CRUD Endpoints**
