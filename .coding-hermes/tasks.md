@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (4/7)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (5/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -97,8 +97,9 @@
   POST /trees/{tree_id}/merge (creates synthetic merge node). GET /trees/{tree_id}/path?from=X&to=Y (returns node path between two nodes). GET /trees/{tree_id}/subtree?root=X&depth=N (returns subtree). GET /trees/{tree_id}/compare?branch_a=X&branch_b=Y (returns node diff between branches).
   **Commit: cb18965 — specs/SPEC-API-04-merge-navigation-endpoints.md (1778 lines, 19 sections, 4 endpoints with full Go interfaces, TS types + Zod, 45 test scenarios, 4 Mermaid diagrams, 30+ error codes)**
 
-- [ ] **SPEC-API-05 — Approval Endpoints**
+- [x] **SPEC-API-05 — Approval Endpoints** ✅ COMPLETE 2026-07-20
   GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, POST /approvals/rules, GET /approvals/history. Business logic: approval expiration after N days, auto-approval rule matching, conflict resolution (two rules match — most specific wins).
+  **Commit: 0e15a03 — specs/SPEC-API-05-approval-endpoints.md (1760 lines, 23 sections, Go interfaces, TS types + Zod, 60 backend + 15 frontend test scenarios, 3 Mermaid diagrams, 30 edge cases, SSE event spec, rate limits)**
 
 - [ ] **SPEC-API-06 — Multi-User & Profile Endpoints**
   POST /trees/{tree_id}/invite, GET /trees/{tree_id}/members, DELETE /trees/{tree_id}/members/{user_id}, GET /profiles, POST /trees/{tree_id}/profiles/{profile_id}/invite, PATCH /trees/{tree_id}/profiles/{profile_id}/visibility. Invite flow: generate invite link, accept via token, assign permissions.
