@@ -101,8 +101,9 @@
   GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, POST /approvals/rules, GET /approvals/history. Business logic: approval expiration after N days, auto-approval rule matching, conflict resolution (two rules match — most specific wins).
   **Commit: 0e15a03 — specs/SPEC-API-05-approval-endpoints.md (1760 lines, 23 sections, Go interfaces, TS types + Zod, 60 backend + 15 frontend test scenarios, 3 Mermaid diagrams, 30 edge cases, SSE event spec, rate limits)**
 
-- [ ] **SPEC-API-06 — Multi-User & Profile Endpoints**
+- [x] **SPEC-API-06 — Multi-User & Profile Endpoints** ✅ COMPLETE 2026-07-20
   POST /trees/{tree_id}/invite, GET /trees/{tree_id}/members, DELETE /trees/{tree_id}/members/{user_id}, GET /profiles, POST /trees/{tree_id}/profiles/{profile_id}/invite, PATCH /trees/{tree_id}/profiles/{profile_id}/visibility. Invite flow: generate invite link, accept via token, assign permissions.
+  **Commit: <pending> — specs/SPEC-API-06-multi-user-profile-endpoints.md (1493 lines, 24 sections, 13 endpoints, Go interfaces, TS types + Zod, 40 backend + 15 integration + 10 frontend test scenarios, 3 Mermaid diagrams, 35+ error codes, invite token lifecycle)**
 
 - [ ] **SPEC-API-07 — Error Catalog**
   Every error across all endpoints. HTTP status codes, error body format: {error: string, code: string, details?: object}. Error codes: TREE_NOT_FOUND, NODE_NOT_FOUND, INVALID_PARENT, NODE_DELETED, NOT_TREE_OWNER, NOT_TREE_MEMBER, APPROVAL_EXPIRED, PROFILE_OFFLINE, RATE_LIMITED, TREE_SIZE_EXCEEDED. Exact conditions that trigger each error.
