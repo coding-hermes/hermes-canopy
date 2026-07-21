@@ -91,7 +91,7 @@
 
 - [x] **SPEC-API-03 — Node CRUD Endpoints** ✅ COMPLETE 2026-07-20
   POST /trees/{tree_id}/nodes, PATCH /nodes/{node_id}, DELETE /nodes/{node_id}, POST /nodes/{node_id}/reply, POST /nodes/{node_id}/fork. Request validation: content length limits, parent must exist, can't reply to deleted node. Response includes full node with computed fields (depth, child_count).
-  **Commit: PENDING — specs/SPEC-API-03-node-crud-endpoints.md (1140 lines, 20 sections, Go interfaces, TS types + Zod, 23 error codes, 15 edge cases, 60 test scenarios, Mermaid sequence diagram)**
+  **Commit: 5e65fc6 — specs/SPEC-API-03-node-crud-endpoints.md (1140 lines, 20 sections, Go interfaces, TS types + Zod, 23 error codes, 15 edge cases, 60 test scenarios, Mermaid sequence diagram)**
 
 - [ ] **SPEC-API-04 — Merge & Navigation Endpoints**
   POST /trees/{tree_id}/merge (creates synthetic merge node). GET /trees/{tree_id}/path?from=X&to=Y (returns node path between two nodes). GET /trees/{tree_id}/subtree?root=X&depth=N (returns subtree). GET /trees/{tree_id}/compare?branch_a=X&branch_b=Y (returns node diff between branches).
