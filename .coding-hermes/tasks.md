@@ -107,7 +107,7 @@
 
 - [x] **SPEC-API-07 — Error Catalog** ✅ COMPLETE 2026-07-21
   Every error across all endpoints. HTTP status codes, error body format: {error: string, code: string, details?: object}. Error codes: TREE_NOT_FOUND, NODE_NOT_FOUND, INVALID_PARENT, NODE_DELETED, NOT_TREE_OWNER, NOT_TREE_MEMBER, APPROVAL_EXPIRED, PROFILE_OFFLINE, RATE_LIMITED, TREE_SIZE_EXCEEDED. Exact conditions that trigger each error.
-  **Commit: <TBD> — specs/SPEC-API-07-error-catalog.md (782 lines, 12 sections, 112+ error codes, Go interfaces, TS types + Zod, taxonomy by domain/status, 14 test scenarios, Mermaid diagram, error precedence rules, Phase 3b-3d forward compatibility)**
+  **Commit: 4074b71 — specs/SPEC-API-07-error-catalog.md (782 lines, 12 sections, 112+ error codes, Go interfaces, TS types + Zod, taxonomy by domain/status, 14 test scenarios, Mermaid diagram, error precedence rules, Phase 3b-3d forward compatibility)**
 
 **Blocks:** Phase 2 (data model types inform request/response shapes).
 
