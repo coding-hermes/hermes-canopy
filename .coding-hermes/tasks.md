@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (3/7)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (4/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -93,8 +93,9 @@
   POST /trees/{tree_id}/nodes, PATCH /nodes/{node_id}, DELETE /nodes/{node_id}, POST /nodes/{node_id}/reply, POST /nodes/{node_id}/fork. Request validation: content length limits, parent must exist, can't reply to deleted node. Response includes full node with computed fields (depth, child_count).
   **Commit: 5e65fc6 — specs/SPEC-API-03-node-crud-endpoints.md (1140 lines, 20 sections, Go interfaces, TS types + Zod, 23 error codes, 15 edge cases, 60 test scenarios, Mermaid sequence diagram)**
 
-- [ ] **SPEC-API-04 — Merge & Navigation Endpoints**
+- [x] **SPEC-API-04 — Merge & Navigation Endpoints** ✅ COMPLETE 2026-07-20
   POST /trees/{tree_id}/merge (creates synthetic merge node). GET /trees/{tree_id}/path?from=X&to=Y (returns node path between two nodes). GET /trees/{tree_id}/subtree?root=X&depth=N (returns subtree). GET /trees/{tree_id}/compare?branch_a=X&branch_b=Y (returns node diff between branches).
+  **Commit: cb18965 — specs/SPEC-API-04-merge-navigation-endpoints.md (1778 lines, 19 sections, 4 endpoints with full Go interfaces, TS types + Zod, 45 test scenarios, 4 Mermaid diagrams, 30+ error codes)**
 
 - [ ] **SPEC-API-05 — Approval Endpoints**
   GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, POST /approvals/rules, GET /approvals/history. Business logic: approval expiration after N days, auto-approval rule matching, conflict resolution (two rules match — most specific wins).
