@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (1/7)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (2/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -85,8 +85,9 @@
   GET /trees/{tree_id}/events endpoint. Query params: ?since=<hash>, ?profiles=<csv>. Event types: node_added, node_updated, node_removed, edge_added, edge_removed, approval_changed, user_joined, user_left, tree_merged. Exact JSON shape per event. Reconnection: Last-Event-ID header behavior. Heartbeat interval. Max events per connection. Authentication: Bearer token validation at connection time.
   **Commit: 6d6c8b4 — specs/SPEC-API-01-sse-event-stream.md (1014 lines, 18 sections, 12 event types, Go SSEHub/SSEClient/SSEEventLog interfaces, 20 edge cases, 46 test scenarios, Mermaid sequence diagram)**
 
-- [ ] **SPEC-API-02 — Tree CRUD Endpoints**
+- [x] **SPEC-API-02 — Tree CRUD Endpoints** ✅ COMPLETE 2026-07-20
   GET/POST /trees, GET /trees/{tree_id}, DELETE /trees/{tree_id}. Request/response schemas. Pagination for GET /trees. Tree creation: initial root node auto-created. Tree deletion: soft-delete with retention period.
+  **Commit: (pending) — specs/SPEC-API-02-tree-crud-endpoints.md (1251 lines, 17 sections, Go interfaces, TS types + Zod, 53 backend test scenarios, 10 frontend test scenarios, error catalog, Mermaid diagrams)**
 
 - [ ] **SPEC-API-03 — Node CRUD Endpoints**
   POST /trees/{tree_id}/nodes, PATCH /nodes/{node_id}, DELETE /nodes/{node_id}, POST /nodes/{node_id}/reply, POST /nodes/{node_id}/fork. Request validation: content length limits, parent must exist, can't reply to deleted node. Response includes full node with computed fields (depth, child_count).
