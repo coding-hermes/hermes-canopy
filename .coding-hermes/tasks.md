@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (0/7)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (1/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -83,6 +83,7 @@
 
 - [x] **SPEC-API-01 — SSE Event Stream Spec** ✅ COMPLETE 2026-07-20
   GET /trees/{tree_id}/events endpoint. Query params: ?since=<hash>, ?profiles=<csv>. Event types: node_added, node_updated, node_removed, edge_added, edge_removed, approval_changed, user_joined, user_left, tree_merged. Exact JSON shape per event. Reconnection: Last-Event-ID header behavior. Heartbeat interval. Max events per connection. Authentication: Bearer token validation at connection time.
+  **Commit: 6d6c8b4 — specs/SPEC-API-01-sse-event-stream.md (1014 lines, 18 sections, 12 event types, Go SSEHub/SSEClient/SSEEventLog interfaces, 20 edge cases, 46 test scenarios, Mermaid sequence diagram)**
 
 - [ ] **SPEC-API-02 — Tree CRUD Endpoints**
   GET/POST /trees, GET /trees/{tree_id}, DELETE /trees/{tree_id}. Request/response schemas. Pagination for GET /trees. Tree creation: initial root node auto-created. Tree deletion: soft-delete with retention period.
