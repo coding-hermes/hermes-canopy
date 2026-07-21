@@ -87,7 +87,7 @@
 
 - [x] **SPEC-API-02 — Tree CRUD Endpoints** ✅ COMPLETE 2026-07-20
   GET/POST /trees, GET /trees/{tree_id}, DELETE /trees/{tree_id}. Request/response schemas. Pagination for GET /trees. Tree creation: initial root node auto-created. Tree deletion: soft-delete with retention period.
-  **Commit: (pending) — specs/SPEC-API-02-tree-crud-endpoints.md (1251 lines, 17 sections, Go interfaces, TS types + Zod, 53 backend test scenarios, 10 frontend test scenarios, error catalog, Mermaid diagrams)**
+  **Commit: 4f24622 — specs/SPEC-API-02-tree-crud-endpoints.md (1251 lines, 17 sections, Go interfaces, TS types + Zod, 53 backend test scenarios, 10 frontend test scenarios, error catalog, Mermaid diagrams)**
 
 - [ ] **SPEC-API-03 — Node CRUD Endpoints**
   POST /trees/{tree_id}/nodes, PATCH /nodes/{node_id}, DELETE /nodes/{node_id}, POST /nodes/{node_id}/reply, POST /nodes/{node_id}/fork. Request validation: content length limits, parent must exist, can't reply to deleted node. Response includes full node with computed fields (depth, child_count).
