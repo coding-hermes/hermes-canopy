@@ -123,7 +123,7 @@
   A topic IS a tree branch with metadata. Each topic: {id: UUIDv7, tree_id: UUID, root_node_id: UUID, title: string, description: string, parent_topic_id: UUID|null, status: active|archived|deleted, created_at, archived_at, topic_tags: string[]}. #Reference format: `#topic-slug` becomes clickable link with tooltip showing topic preview. Cross-topic references: nodes can reference nodes in other topics.
   **Commit: d2a8168**
 
-- [ ] **SPEC-TM-02 — Auto-Topic Detection**
+- [x] **SPEC-TM-02 — Auto-Topic Detection** ✅ **2026-07-21 (8bce2c0)**
   Agent-side logic: as user converses, agent detects topic shifts. Signals: explicit ("make this a topic"), implicit (semantic shift over N messages), structural (user opens new subject). Agent proposes: "I think this is a new topic about X — create?" User can accept, reject, or name differently. Detection model: prompt engineering, not ML (initially). Contiguous messages with shared subject → same topic. Sharp semantic break → new topic proposal.
 
 - [ ] **SPEC-TM-03 — Topic Search & One-Button Context**
