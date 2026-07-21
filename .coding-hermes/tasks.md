@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (5/7)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Active: Phase 3 — API Specs** (6/7)
 > **Foreman:** deepseek-v4-pro @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (25 entries — 10 concept + 4 arch + 11 features)
 > **Scheduler:** coding-hermes namespace, 900s cooldown
@@ -103,7 +103,7 @@
 
 - [x] **SPEC-API-06 — Multi-User & Profile Endpoints** ✅ COMPLETE 2026-07-20
   POST /trees/{tree_id}/invite, GET /trees/{tree_id}/members, DELETE /trees/{tree_id}/members/{user_id}, GET /profiles, POST /trees/{tree_id}/profiles/{profile_id}/invite, PATCH /trees/{tree_id}/profiles/{profile_id}/visibility. Invite flow: generate invite link, accept via token, assign permissions.
-  **Commit: <pending> — specs/SPEC-API-06-multi-user-profile-endpoints.md (1493 lines, 24 sections, 13 endpoints, Go interfaces, TS types + Zod, 40 backend + 15 integration + 10 frontend test scenarios, 3 Mermaid diagrams, 35+ error codes, invite token lifecycle)**
+  **Commit: 45e3fab — specs/SPEC-API-06-multi-user-profile-endpoints.md (1493 lines, 24 sections, 13 endpoints, Go interfaces, TS types + Zod, 40 backend + 15 integration + 10 frontend test scenarios, 3 Mermaid diagrams, 35+ error codes, invite token lifecycle)**
 
 - [ ] **SPEC-API-07 — Error Catalog**
   Every error across all endpoints. HTTP status codes, error body format: {error: string, code: string, details?: object}. Error codes: TREE_NOT_FOUND, NODE_NOT_FOUND, INVALID_PARENT, NODE_DELETED, NOT_TREE_OWNER, NOT_TREE_MEMBER, APPROVAL_EXPIRED, PROFILE_OFFLINE, RATE_LIMITED, TREE_SIZE_EXCEEDED. Exact conditions that trigger each error.
