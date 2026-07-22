@@ -129,7 +129,7 @@
 - [x] **SPEC-TM-03 — Topic Search & One-Button Context** ✅ **2026-07-21 (f866d0d)**
   Full-text search over topic titles, descriptions, and content. Index: PostgreSQL FTS (tsvector) or Meilisearch embedded. Search result: title + snippet + status + "Add to Context" button. One click → topic's tree is injected into agent's context window. Agent reads and parses the topic automatically — user doesn't need to open and read it. Search sidebar: persistent or toggleable, shows recent topics + search box.
 
-- [ ] **SPEC-TM-04 — #Reference Resolution**
+- [x] **SPEC-TM-04 — #Reference Resolution** ✅ **2026-07-21 (e8a14d3)**
   Parsing: `#topic-name` in any message. Auto-complete while typing: as user types `#dat`, show `#database-schema`, `#data-model`, `#data-flow`. Click or tab to insert. At send time: replace with internal reference link. Agent-side: when it encounters a #reference in context, fetch that topic's tree and include it in the current turn's context window. Multiple references: each adds to context. Escalation: if too many references, agent warns "I can see 5 referenced topics — should I focus on specific ones?"
 
 - [ ] **SPEC-TM-05 — Topic Lifecycle & Sidebar**
