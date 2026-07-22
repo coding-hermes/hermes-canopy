@@ -117,7 +117,7 @@
 |  **Commit: 10ab311** — 1,530 lines, 43 design decisions, 38 test scenarios, 3 Mermaid diagrams.
 |  Five iteration card subtypes: Search (live results + user relevance feedback), Code Exec (stdout/stderr streaming + cancel), File Read (highlight regions), Thinking (collapsible reasoning steps), Tool Call (gated approve/deny). Event flow: agent → SSE → card renderer → user feedback → agent. Feedback bridge with 30s ack timeout. Cancel with SIGTERM/SIGKILL escalation. Agent crash recovery preserved via SQLite durability.
 
-- [ ] **SPEC-PL-05 — Calendar Integration**
+- [x] **SPEC-PL-05 — Calendar Integration** ✅ COMPLETE 2026-07-22
   Calendar viewer card: month/week/day views, event cards with title/time/description/location. Multiple calendar sources: Google Calendar (OAuth), iCloud (CalDAV), local (.ics files in Hermes knowledge base). Agent can: create events, modify events, check availability, propose times. Calendar ↔ auto-responder: agent knows when you're busy and tells others. Calendar ↔ status: "I'm in a meeting until 3" → agent auto-sets busy status.
 
 - [ ] **SPEC-PL-06 — Multi-Message Reference Model**
