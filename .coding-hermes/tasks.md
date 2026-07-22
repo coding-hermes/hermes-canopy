@@ -1,10 +1,9 @@
 # Hermes Canopy — Task Board
 
-|> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (5/6)** | Active: SPEC-PL-06 (Multi-Message Reference Model)
-|> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-|> **Last tick:** SPEC-PL-05 complete — Calendar Integration spec (36KB, 16 sections, 43 decisions, 21ac9a6)
-> **DuckBrain:** hermes-canopy namespace (23+ entries)
-| **Last tick:** SPEC-PL-03 complete — App Card System (65KB, 1,121 lines, 16 sections, cc41acf)
+||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP (7 pending)** | **Phase 4+ — Implementation (blocked until Phase 3d review)**
+||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
+||> **Last tick:** SPEC-PL-06 complete — Multi-Message Reference Model (67KB, 1,155 lines, 35 decisions, d72ccbe)
+|> **DuckBrain:** hermes-canopy namespace (23+ entries)
 
 ---
 
@@ -120,7 +119,8 @@
 - [x] **SPEC-PL-05 — Calendar Integration** ✅ COMPLETE 2026-07-22
   Calendar viewer card: month/week/day views, event cards with title/time/description/location. Multiple calendar sources: Google Calendar (OAuth), iCloud (CalDAV), local (.ics files in Hermes knowledge base). Agent can: create events, modify events, check availability, propose times. Calendar ↔ auto-responder: agent knows when you're busy and tells others. Calendar ↔ status: "I'm in a meeting until 3" → agent auto-sets busy status.
 
-- [ ] **SPEC-PL-06 — Multi-Message Reference Model**
+- [x] **SPEC-PL-06 — Multi-Message Reference Model** ✅ COMPLETE 2026-07-22
+  **Commit: d72ccbe** — 67KB, 1,155 lines, 35 design decisions, 35 edge cases, 40 test scenarios.
   Data model extension: a node can have MULTIPLE parent edges (not just one). Multi-reference reply: select N messages → reply → new node with N parent edges of type 'reference'. Visual: colored edges from each source converge into reply. Context: agent sees all referenced messages as unified input. Conflict: if referenced messages are in different branches, the reply node is a synthetic merge point showing which context contributed what.
 
 ---
