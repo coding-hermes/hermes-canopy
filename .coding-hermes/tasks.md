@@ -3,7 +3,7 @@
 > **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | Active: Phase 3c (Plugins & Cards)
 > **Foreman:** deepseek-v4-flash @ deepseek-foreman
 > **DuckBrain:** hermes-canopy namespace (1 entry)
-> **Last tick:** SPEC-TM-05 complete — Topic Lifecycle & Sidebar (46KB, 17 sections)
+> **Last tick:** SPEC-TM-05 complete — Topic Lifecycle & Sidebar (46KB, 17 sections, 66beab0)
 
 ---
 
@@ -90,7 +90,7 @@
 
 - [x] **SPEC-TM-04 — #Reference Resolution** ✅ 2026-07-21 (e8a14d3)
 
-- [x] **SPEC-TM-05 — Topic Lifecycle & Sidebar** ✅ 2026-07-21 (pending commit)
+- [x] **SPEC-TM-05 — Topic Lifecycle & Sidebar** ✅ 2026-07-21 (66beab0)
 
 ---
 
