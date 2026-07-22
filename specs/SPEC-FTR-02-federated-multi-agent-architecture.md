@@ -2,7 +2,7 @@
 
 > **Status:** Spec | **Phase:** Post-MVP (FTR-02) | **Blocks:** BE-08 (Profile Routing), BE-09 (Transport Adapter Layer), BE-10 (Encryption Layer), FE-07 (Multi-User Features)
 > **References:** SPEC-API-06, SPEC-DM-04, SPEC-API-01, T1.8-Multi-Transport-Architecture, ARCHITECTURE.md §5.5, ARCHITECTURE.md §9.3
-> **Commit:** 0433ff3
+> **Commit:** 29b61a6
 
 ---
 

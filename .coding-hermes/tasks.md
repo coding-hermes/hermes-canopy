@@ -133,7 +133,7 @@
 - [x] **SPEC-FTR-01 — Multi-User Collaboration & Approval Model** ✅ COMPLETE 2026-07-22
   **Commit: 37fe758** — 620 lines, 11 sections, 20 design decisions, Go interfaces, SSE events, API endpoints, security model.
 - [x] **SPEC-FTR-02 — Federated Multi-Agent Architecture** ✅ COMPLETE 2026-07-22
-  **Commit: 0433ff3** — 482 lines, 11 sections, 20 design decisions, FTL transport protocol, ECDH encryption, profile routing, SSE relay, API endpoints, 3 Go interfaces, 3 DDL tables, 12 edge cases, 14 test scenarios, 7-phase implementation plan.
+  **Commit: 29b61a6** — 482 lines, 11 sections, 20 design decisions, FTL transport protocol, ECDH encryption, profile routing, SSE relay, API endpoints, 3 Go interfaces, 3 DDL tables, 12 edge cases, 14 test scenarios, 7-phase implementation plan.
 - [ ] **SPEC-FTR-03 — MLS Encryption Model**
 - [ ] **SPEC-FTR-04 — Multi-Transport Architecture**
 - [ ] **SPEC-FTR-05 — Self-Hosted & SaaS Relay Architecture**
