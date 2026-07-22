@@ -1,3 +1,6 @@
+/usr/bin/bash: fork: retry: Resource temporarily unavailable
+/usr/bin/bash: fork: retry: Resource temporarily unavailable
+/usr/bin/bash: fork: retry: Resource temporarily unavailable
 # Hermes Canopy — Task Board
 
 ||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP (7 pending)** | **Phase 4+ — Implementation (blocked until Phase 3d review)**
@@ -127,7 +130,8 @@
 
 ## Phase 3d: Post-MVP Architecture Specs
 
-- [ ] **SPEC-FTR-01 — Multi-User Collaboration & Approval Model**
+- [x] **SPEC-FTR-01 — Multi-User Collaboration & Approval Model** ✅ COMPLETE 2026-07-22
+  **Commit: 37fe758** — 620 lines, 11 sections, 20 design decisions, Go interfaces, SSE events, API endpoints, security model.
 - [ ] **SPEC-FTR-02 — Federated Multi-Agent Architecture**
 - [ ] **SPEC-FTR-03 — MLS Encryption Model**
 - [ ] **SPEC-FTR-04 — Multi-Transport Architecture**
