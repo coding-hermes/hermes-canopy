@@ -1,9 +1,9 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | Active: Phase 3b (Topic Management Specs)
-> **Foreman:** deepseek-v4-pro @ deepseek-foreman
-> **DuckBrain:** hermes-canopy namespace (25 entries)
-> **Last tick:** SPEC-API-07 complete — error catalog committed
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | Phase 3b — Topic Specs ✅ (4/5) | Active: SPEC-TM-05
+> **Foreman:** deepseek-v4-flash @ deepseek-foreman
+> **DuckBrain:** hermes-canopy namespace (1 entry)
+> **Last tick:** SPEC-TM-04 complete — #Reference Resolution (1,503 lines, 66KB)
 
 ---
 
