@@ -1,9 +1,9 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | Active: Phase 3c (Plugins & Cards)
+> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (3/6)** | Active: SPEC-PL-04 (Iteration Cards)
 > **Foreman:** deepseek-v4-flash @ deepseek-foreman
-> **DuckBrain:** hermes-canopy namespace (21+ entries)
-> **Last tick:** SPEC-PL-02 complete — Built-in File Viewers (71KB, 16 sections, 18 error codes, 40 test scenarios, 2 diagrams, 9751fe2)
+> **DuckBrain:** hermes-canopy namespace (23+ entries)
+> **Last tick:** SPEC-PL-03 complete — App Card System (62KB, 16 sections, 35 design decisions, 39 error codes, 45 test scenarios, 2 diagrams, d896b43)
 
 ---
 
@@ -108,7 +108,7 @@
 |  **Commit: c7bfa8b**
   Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
 
-- [ ] **SPEC-PL-03 — App Card System + Database-per-Card**
+- [x] **SPEC-PL-03 — App Card System + Database-per-Card** ✅ COMPLETE 2026-07-22 (d896b43)
   Card model: {id, app_id, card_type: 'compact'|'expanded'|'iteration', data: JSON, actions: [{label, handler}], created_at, context_hash}. Agent renders cards based on context — calendar events, weather, deployment status, task lists, monitoring dashboards, live searches, code execution, thinking steps. Cards are #referenceable like topics. Context parse: clicking a card injects its data into the agent's context. Card lifecycle: created by agent → displayed inline → collapsed to compact → dismissed.
   
   **Database-per-Card Architecture:** Each card type gets its own SQLite database at `~/.hermes/canopy/cards/{type}.db`. Standardized schema: `cards` table (id, card_type, title, data_json, status) + `events` table (id, card_id, event_type, payload_json, user_feedback, created_at). REST API: GET/POST/PATCH `/api/cards/{type}/{id}` — pgREST-like pattern over SQLite. Agent writes events as it works, UI reads via SSE, user interactions write back as `user_feedback`. Local-first: all card data lives in SQLite locally, syncs to server for multi-device.
