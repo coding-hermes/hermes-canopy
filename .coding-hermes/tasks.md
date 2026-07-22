@@ -1,9 +1,10 @@
 # Hermes Canopy — Task Board
 
-> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (3/6)** | Active: SPEC-PL-04 (Iteration Cards)
-> **Foreman:** deepseek-v4-flash @ deepseek-foreman
+|> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (4/6)** | Active: SPEC-PL-05 (Calendar Integration)
+|> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
+|> **Last tick:** SPEC-PL-04 complete — Dynamic Thinking Interface (1,530 lines, 43 decisions, 38 tests, 10ab311)
 > **DuckBrain:** hermes-canopy namespace (23+ entries)
-> **Last tick:** SPEC-PL-03 complete — App Card System (65KB, 1,121 lines, 16 sections, 3 Mermaid diagrams, cc41acf)
+| **Last tick:** SPEC-PL-03 complete — App Card System (65KB, 1,121 lines, 16 sections, cc41acf)
 
 ---
 
@@ -112,8 +113,9 @@
   **Commit: cc41acf** — 65KB, 1,121 lines, 16 sections, 3 Mermaid diagrams.
   Card model: {id, app_id, card_type: 'compact'|'expanded'|'iteration', data: JSON, actions: [{label, handler}], created_at, context_hash}. Agent renders cards based on context. Database-per-Card: each type gets own SQLite at `~/.hermes/canopy/cards/{type}.db`. Cards table + events table. REST API: GET/POST/PATCH `/api/cards/{type}/{id}`. Local-first with server sync.
 
-- [ ] **SPEC-PL-04 — Dynamic Thinking Interface (Iteration Cards)**
-  While agent is working, the interface is dynamic. User opens side panel → "show me the searches" → card pops up with live search results. Card shows: URLs searched, data retrieved, progress (3/5 complete). User can HIGHLIGHT specific results and give FEEDBACK: "this link is wrong" or "focus on this result." Feedback goes BACK to the model — like Hermes iterations but interactive. Iteration card types: search card (live results), code exec card (stdout/stderr streaming, cancel), file read card (contents with highlight), thinking card (chain-of-thought steps, collapsible), tool call card (what tool, params, result, approve/deny). Event flow: Agent process → events → card renderer + SQLite → user interaction → feedback events → back to agent. Each card is a bidirectional channel between human and agent thinking.
+|- [x] **SPEC-PL-04 — Dynamic Thinking Interface (Iteration Cards)** ✅ COMPLETE 2026-07-22
+|  **Commit: 10ab311** — 1,530 lines, 43 design decisions, 38 test scenarios, 3 Mermaid diagrams.
+|  Five iteration card subtypes: Search (live results + user relevance feedback), Code Exec (stdout/stderr streaming + cancel), File Read (highlight regions), Thinking (collapsible reasoning steps), Tool Call (gated approve/deny). Event flow: agent → SSE → card renderer → user feedback → agent. Feedback bridge with 30s ack timeout. Cancel with SIGTERM/SIGKILL escalation. Agent crash recovery preserved via SQLite durability.
 
 - [ ] **SPEC-PL-05 — Calendar Integration**
   Calendar viewer card: month/week/day views, event cards with title/time/description/location. Multiple calendar sources: Google Calendar (OAuth), iCloud (CalDAV), local (.ics files in Hermes knowledge base). Agent can: create events, modify events, check availability, propose times. Calendar ↔ auto-responder: agent knows when you're busy and tells others. Calendar ↔ status: "I'm in a meeting until 3" → agent auto-sets busy status.
