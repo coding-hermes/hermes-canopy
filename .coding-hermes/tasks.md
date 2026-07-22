@@ -126,7 +126,7 @@
 - [x] **SPEC-TM-02 — Auto-Topic Detection** ✅ **2026-07-21 (8bce2c0)**
   Agent-side logic: as user converses, agent detects topic shifts. Signals: explicit ("make this a topic"), implicit (semantic shift over N messages), structural (user opens new subject). Agent proposes: "I think this is a new topic about X — create?" User can accept, reject, or name differently. Detection model: prompt engineering, not ML (initially). Contiguous messages with shared subject → same topic. Sharp semantic break → new topic proposal.
 
-- [ ] **SPEC-TM-03 — Topic Search & One-Button Context**
+- [x] **SPEC-TM-03 — Topic Search & One-Button Context** ✅ **2026-07-21 (f866d0d)**
   Full-text search over topic titles, descriptions, and content. Index: PostgreSQL FTS (tsvector) or Meilisearch embedded. Search result: title + snippet + status + "Add to Context" button. One click → topic's tree is injected into agent's context window. Agent reads and parses the topic automatically — user doesn't need to open and read it. Search sidebar: persistent or toggleable, shows recent topics + search box.
 
 - [ ] **SPEC-TM-04 — #Reference Resolution**
