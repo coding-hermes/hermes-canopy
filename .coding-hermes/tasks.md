@@ -105,7 +105,7 @@
   **Commit: caff298**
 
 |- [x] **SPEC-PL-02 — Built-in File Viewers**
-  **Commit: 9751fe2**
+|  **Commit: c7bfa8b**
   Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
 
 - [ ] **SPEC-PL-03 — App Card System + Database-per-Card**
