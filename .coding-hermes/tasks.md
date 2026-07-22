@@ -1,8 +1,8 @@
 # Hermes Canopy — Task Board
 
-|> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (4/6)** | Active: SPEC-PL-05 (Calendar Integration)
+|> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (5/6)** | Active: SPEC-PL-06 (Multi-Message Reference Model)
 |> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-|> **Last tick:** SPEC-PL-04 complete — Dynamic Thinking Interface (1,530 lines, 43 decisions, 38 tests, 10ab311)
+|> **Last tick:** SPEC-PL-05 complete — Calendar Integration spec (36KB, 16 sections, 43 decisions, 21ac9a6)
 > **DuckBrain:** hermes-canopy namespace (23+ entries)
 | **Last tick:** SPEC-PL-03 complete — App Card System (65KB, 1,121 lines, 16 sections, cc41acf)
 
