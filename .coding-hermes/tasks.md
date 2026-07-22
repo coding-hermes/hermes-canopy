@@ -2,8 +2,8 @@
 
 > **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | Active: Phase 3c (Plugins & Cards)
 > **Foreman:** deepseek-v4-flash @ deepseek-foreman
-> **DuckBrain:** hermes-canopy namespace (5 entries)
-> **Last tick:** SPEC-PL-01 complete — JS Plugin System (93KB, 16 sections, 37 error codes, 48 test scenarios, caff298)
+> **DuckBrain:** hermes-canopy namespace (21+ entries)
+> **Last tick:** SPEC-PL-02 complete — Built-in File Viewers (71KB, 16 sections, 18 error codes, 40 test scenarios, 2 diagrams, 9751fe2)
 
 ---
 
