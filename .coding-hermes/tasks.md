@@ -104,7 +104,8 @@
   Plugin format: single JS file with manifest (name, version, description, permissions, render_type). Registration: agent sends JS file as message, user clicks "Install", plugin loaded into renderer. Hot-reload: plugin updates instantly propagate to all connected devices (desktop, web, mobile). Sandbox: plugins run in isolated iframe/WebWorker with limited API surface. Permissions: file_access, network, notifications, calendar_read, calendar_write. Plugin registry: namespace to prevent conflicts.
   **Commit: caff298**
 
-- [ ] **SPEC-PL-02 — Built-in File Viewers**
+|- [x] **SPEC-PL-02 — Built-in File Viewers**
+  **Commit: 9751fe2**
   Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
 
 - [ ] **SPEC-PL-03 — App Card System + Database-per-Card**
