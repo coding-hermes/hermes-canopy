@@ -2,8 +2,8 @@
 
 > **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | Active: Phase 3c (Plugins & Cards)
 > **Foreman:** deepseek-v4-flash @ deepseek-foreman
-> **DuckBrain:** hermes-canopy namespace (1 entry)
-> **Last tick:** SPEC-TM-05 complete — Topic Lifecycle & Sidebar (46KB, 17 sections, 66beab0)
+> **DuckBrain:** hermes-canopy namespace (5 entries)
+> **Last tick:** SPEC-PL-01 complete — JS Plugin System (93KB, 16 sections, 37 error codes, 48 test scenarios, caff298)
 
 ---
 
@@ -100,8 +100,9 @@
 
 **Dependencies:** Phase 2 complete (files, apps, and plugins are all tree-addressable).
 
-- [ ] **SPEC-PL-01 — JS Plugin System**
+- [x] **SPEC-PL-01 — JS Plugin System**
   Plugin format: single JS file with manifest (name, version, description, permissions, render_type). Registration: agent sends JS file as message, user clicks "Install", plugin loaded into renderer. Hot-reload: plugin updates instantly propagate to all connected devices (desktop, web, mobile). Sandbox: plugins run in isolated iframe/WebWorker with limited API surface. Permissions: file_access, network, notifications, calendar_read, calendar_write. Plugin registry: namespace to prevent conflicts.
+  **Commit: caff298**
 
 - [ ] **SPEC-PL-02 — Built-in File Viewers**
   Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
