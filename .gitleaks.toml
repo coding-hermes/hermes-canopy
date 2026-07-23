@@ -1,0 +1,8 @@
+# Gitleaks config for Hermes Canopy
+# Spec files contain placeholder tokens and crypto algorithm names — not real secrets
+
+[allowlist]
+paths = [
+    '''specs/.*\.md$''',
+    '''docs/.*\.md$''',
+]
