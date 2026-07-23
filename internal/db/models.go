@@ -82,6 +82,35 @@ type Tree struct {
 	DeletedAt   *time.Time `db:"deleted_at"    json:"deletedAt"`
 }
 
+// TreeSnapshot represents a point-in-time hash-verified state of a tree.
+// Maps to the tree_snapshots table (migration 000005) and is defined in
+// SPEC-DM-02 §4.2.
+type TreeSnapshot struct {
+	ID           uuid.UUID `db:"id"            json:"id"`
+	TreeID       uuid.UUID `db:"tree_id"       json:"treeId"`
+	ParentHash   *string   `db:"parent_hash"   json:"parentHash"`
+	Hash         string    `db:"hash"          json:"hash"`
+	NodeCount    int       `db:"node_count"    json:"nodeCount"`
+	EdgeCount    int       `db:"edge_count"    json:"edgeCount"`
+	SnapshotData []byte    `db:"snapshot_data" json:"snapshotData"`
+	CreatedAt    time.Time `db:"created_at"    json:"createdAt"`
+}
+
+// TreeEvent represents a single change event in a tree.
+// Maps to the tree_events table (migration 000007) and is defined in
+// SPEC-DM-02 §4.2.
+type TreeEvent struct {
+	ID          uuid.UUID  `db:"id"            json:"id"`
+	TreeID      uuid.UUID  `db:"tree_id"       json:"treeId"`
+	SnapshotID  *uuid.UUID `db:"snapshot_id"   json:"snapshotId"`
+	EventType   string     `db:"event_type"    json:"eventType"`
+	NodeID      *uuid.UUID `db:"node_id"       json:"nodeId"`
+	EdgeID      *uuid.UUID `db:"edge_id"       json:"edgeId"`
+	Payload     []byte     `db:"payload"       json:"payload"`
+	SequenceNum int64      `db:"sequence_num"  json:"sequenceNum"`
+	CreatedAt   time.Time  `db:"created_at"    json:"createdAt"`
+}
+
 // NodeCounts provides aggregate counts for a tree, returned by
 // NodeRepo.GetCounts. All counts are pure SQL aggregates; nothing
 // here is application-derived.

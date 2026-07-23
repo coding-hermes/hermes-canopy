@@ -19,6 +19,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
 )
 
 // version is injected at build time via -ldflags.
@@ -82,7 +83,13 @@ func main() {
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
 	// 1000-event ring per tree.
 	sseHub := sse.NewHub()
-	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub)
+
+	// Sync engine — coordinates event logging, snapshot creation, and
+	// SSE broadcast after every mutation. Per SPEC-DM-02 §8.3.
+	syncEngine := sync.NewEngine(database.Events, database.Snapshots, sseHub,
+		sync.DefaultEngineConfig())
+
+	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine)
 
 	srv.Router().Get("/version", versionHandler)
 

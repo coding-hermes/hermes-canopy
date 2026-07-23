@@ -13,16 +13,19 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
 )
 
-// TreeHandler wires the tree CRUD HTTP routes to the TreeService interface.
+// TreeHandler wires the tree CRUD HTTP routes to the TreeService interface
+// and broadcasts mutations through the SyncEngine.
 type TreeHandler struct {
-	svc service.TreeService
+	svc  service.TreeService
+	sync sync.SyncEngine
 }
 
-// NewTreeHandler returns a handler wired to the given TreeService.
-func NewTreeHandler(svc service.TreeService) *TreeHandler {
-	return &TreeHandler{svc: svc}
+// NewTreeHandler returns a handler wired to the given TreeService and SyncEngine.
+func NewTreeHandler(svc service.TreeService, se sync.SyncEngine) *TreeHandler {
+	return &TreeHandler{svc: svc, sync: se}
 }
 
 // Routes mounts the tree endpoints under /trees.
@@ -96,6 +99,13 @@ func (h *TreeHandler) CreateTree(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
+	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil {
+		_ = h.sync.OnTreeMutation(r.Context(), sync.TreeMutation{
+			Type: sync.MutTreeCreated, TreeID: out.ID,
+		})
 	}
 	w.Header().Set("Location", "/trees/"+out.ID.String())
 	writeJSON(w, http.StatusCreated, out)
