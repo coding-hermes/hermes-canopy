@@ -3,9 +3,9 @@
 /usr/bin/bash: fork: retry: Resource temporarily unavailable
 # Hermes Canopy — Task Board
 
-|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP (6/7 complete, 1 pending)** | **Phase 4+ — Implementation (blocked until Phase 3d review)**
+|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4+ — Implementation (awaiting Bane review)**
 ||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||> **Last tick:** SPEC-FTR-06 complete — WebUI Native Packaging & Distribution (758 lines, 45KB, 12 sections)
+||> **Last tick:** SPEC-FTR-07 complete — Hermes Agent Gateway Integration (828 lines, 49KB, 20 design decisions, 6 Go interfaces)
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
 
 ---
@@ -142,7 +142,8 @@
   **Commit: 206944f** — 852 lines, 59KB, 12 sections, 20 design decisions, 3 Mermaid diagrams, 4 Go interfaces, 4 DDL tables, 6 API endpoints, 12 edge cases, 14 test scenarios.
 |- [x] **SPEC-FTR-06 — WebUI Native Packaging & Distribution** ✅ COMPLETE 2026-07-22
 |  **Commit: 1a2a8f6** — 758 lines, 45KB, 12 sections, 20 design decisions, 3 Go interfaces (PackageManager, Updater, InstallerBuilder), JSON Schema (latest.json), full CI/CD workflow YAML, 14 edge cases, 20 test scenarios, 6 security considerations, 5-phase implementation plan.
-|- [ ] **SPEC-FTR-07 — Hermes Agent Gateway Integration**
+||- [x] **SPEC-FTR-07 — Hermes Agent Gateway Integration** ✅ COMPLETE 2026-07-23
+|  **Commit: _(tick commit)_** — 828 lines, 49KB, 8 sections, 20 design decisions, 6 Go interfaces, 13 API endpoints, 17 edge cases, 3 DDL tables. HermesClient, EventTranslator, ProfileRouter, SkillBridge, AgentSessionManager interfaces. canopyd↔Hermes API contract with SSE relay, profile routing, tool→Card translation, session continuity, and degraded-mode fallback.
 
 ---
 
