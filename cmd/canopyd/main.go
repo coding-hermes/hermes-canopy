@@ -15,7 +15,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 )
 
 // version is injected at build time via -ldflags.
@@ -50,13 +52,24 @@ func main() {
 		Str("db_host", cfg.DBHost).
 		Msg("canopyd starting")
 
-	// Create HTTP server
-	srv := server.New(cfg.HTTPAddr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize the database and inject the tree service into HTTP routes.
+	database, err := db.New(ctx, db.PoolConfig{DSN: cfg.DSN()})
+	if err != nil {
+		log.Fatal().Err(err).Msg("database initialization failed")
+	}
+	defer database.Close()
+	if err := database.Migrate(ctx); err != nil {
+		log.Fatal().Err(err).Msg("database migration failed")
+	}
+
+	treeService := service.NewTreeService(database)
+	srv := server.New(cfg.HTTPAddr, treeService)
 	srv.Router().Get("/version", versionHandler)
 
 	// Start server in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go func() {
 		log.Info().Str("addr", cfg.HTTPAddr).Msg("HTTP server listening")
@@ -79,7 +92,6 @@ func main() {
 		log.Error().Err(err).Msg("shutdown error")
 	}
 
-	// TODO: close DB connection when database layer is wired
 	cancel()
 	log.Info().Msg("canopyd stopped")
 }

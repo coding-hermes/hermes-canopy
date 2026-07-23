@@ -9,6 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/hlog"
+
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 )
 
 // Server is the Canopy HTTP server.
@@ -18,7 +21,7 @@ type Server struct {
 }
 
 // New creates a new Server with middleware and routes wired.
-func New(addr string) *Server {
+func New(addr string, services *service.TreeService) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -33,6 +36,9 @@ func New(addr string) *Server {
 	// Health endpoint
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
+	if services != nil {
+		r.Mount("/trees", handler.NewTreeHandler(services).Routes())
+	}
 
 	return &Server{
 		router: r,
