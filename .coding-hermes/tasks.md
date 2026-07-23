@@ -139,7 +139,7 @@
 - [x] **SPEC-FTR-04 — Multi-Transport Architecture** ✅ COMPLETE 2026-07-22
   **Commit: 3669bef** — 647 lines, 46KB, 10 sections
 - [x] **SPEC-FTR-05 — Self-Hosted & SaaS Relay Architecture** ✅ COMPLETE 2026-07-22
-  **Commit:** _(to be filled after commit)_ — 852 lines, 59KB, 12 sections, 20 design decisions, 3 Mermaid diagrams, 4 Go interfaces, 4 DDL tables, 6 API endpoints, 12 edge cases, 14 test scenarios.
+  **Commit: 206944f** — 852 lines, 59KB, 12 sections, 20 design decisions, 3 Mermaid diagrams, 4 Go interfaces, 4 DDL tables, 6 API endpoints, 12 edge cases, 14 test scenarios.
 - [ ] **SPEC-FTR-06 — WebUI Native Packaging & Distribution**
 - [ ] **SPEC-FTR-07 — Hermes Agent Gateway Integration**
 
