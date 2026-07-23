@@ -6,22 +6,26 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
 )
 
-// NodeHandler wires the node CRUD HTTP routes to the NodeService interface.
+// NodeHandler wires the node CRUD HTTP routes to the NodeService interface
+// and broadcasts mutations through the SyncEngine.
 type NodeHandler struct {
-	svc service.NodeService
+	svc  service.NodeService
+	sync sync.SyncEngine
 }
 
-// NewNodeHandler returns a handler wired to the given NodeService.
-func NewNodeHandler(svc service.NodeService) *NodeHandler {
-	return &NodeHandler{svc: svc}
+// NewNodeHandler returns a handler wired to the given NodeService and SyncEngine.
+func NewNodeHandler(svc service.NodeService, se sync.SyncEngine) *NodeHandler {
+	return &NodeHandler{svc: svc, sync: se}
 }
 
 // Routes mounts the node endpoints.
@@ -92,6 +96,21 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil && out != nil {
+		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
+			Type:          sync.MutNodeAdded,
+			TreeID:        treeID,
+			NodeID:        out.Node.ID,
+			ActorID:       authorID,
+			Content:       out.Node.Content,
+			ContentFormat: out.Node.ContentFormat,
+			NodeType:      out.Node.NodeType,
+			SequenceNum:   out.Node.SequenceNum,
+			Timestamp:     time.Now().UTC(),
+		})
+	}
 	w.Header().Set("Location", "/trees/"+treeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -136,6 +155,18 @@ func (h *NodeHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
+	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil {
+		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
+			Type:    sync.MutNodeUpdated,
+			TreeID:  out.TreeID,
+			NodeID:  out.ID,
+			ActorID: out.AuthorID,
+			Content: out.Content,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 	writeJSON(w, 200, out)
 }

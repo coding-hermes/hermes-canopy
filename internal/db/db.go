@@ -36,7 +36,9 @@ type DB struct {
 	Nodes    NodeRepo
 	Edges    EdgeRepo
 	Trees    TreeRepo
-	migrated bool
+	Snapshots SnapshotRepo
+	Events    EventRepo
+	migrated  bool
 }
 
 // PoolConfig is the minimal pgxpool configuration. Fields are populated
@@ -78,10 +80,12 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 	}
 
 	return &DB{
-		Pool:  pool,
-		Nodes: NewPGNodeRepo(pool),
-		Edges: NewPGEdgeRepo(pool),
-		Trees: NewPGTreeRepo(pool),
+		Pool:      pool,
+		Nodes:     NewPGNodeRepo(pool),
+		Edges:     NewPGEdgeRepo(pool),
+		Trees:     NewPGTreeRepo(pool),
+		Snapshots: NewSnapshotRepo(pool),
+		Events:    NewEventRepo(pool),
 	}, nil
 }
 

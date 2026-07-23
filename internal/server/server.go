@@ -13,6 +13,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
 )
 
 // Server is the Canopy HTTP server.
@@ -27,7 +28,9 @@ type Server struct {
 // The sseHub must be non-nil — if you don't need SSE, pass a hub created
 // with sse.NewHub(); the hub is cheap to construct and can be ignored
 // from the outside if no route ever subscribes a client.
-func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub) *Server {
+//
+// syncEngine may be nil; handlers check for nil before broadcasting.
+func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub, syncEngine sync.SyncEngine) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -42,12 +45,17 @@ func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, 
 	// Health endpoint
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
-	r.Mount("/trees", handler.NewTreeHandler(treeSvc).Routes())
-	r.Mount("/", handler.NewNodeHandler(nodeSvc).Routes())
+
+	// REST endpoints — handlers broadcast mutations through syncEngine.
+	r.Mount("/trees", handler.NewTreeHandler(treeSvc, syncEngine).Routes())
+	r.Mount("/", handler.NewNodeHandler(nodeSvc, syncEngine).Routes())
 
 	// SSE endpoint per SPEC-API-01.
 	sseHandler := sse.NewHandler(sseHub)
 	r.Get("/trees/{tree_id}/events", sseHandler.HandleTreeEvents)
+
+	// Sync endpoint per SPEC-DM-02 §7.
+	r.Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
 
 	return &Server{
 		router: r,
