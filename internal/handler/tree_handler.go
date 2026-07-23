@@ -191,6 +191,13 @@ func (h *TreeHandler) UpdateTree(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil {
+		_ = h.sync.OnTreeMutation(r.Context(), sync.TreeMutation{
+			Type: sync.MutTreeUpdated, TreeID: id,
+		})
+	}
 	writeJSON(w, 200, out)
 }
 
