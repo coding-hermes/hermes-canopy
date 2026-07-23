@@ -153,7 +153,8 @@
   **Commit: d04f0c3** — 1,245 lines across 21 files: Go module (chi/pgx/migrate/uuid/zerolog), 4 DDL migrations (extensions→trees→nodes→edges), cmd/canopyd/main.go with -ldflags version injection, Makefile (build/test/vet/lint/build-embed×5), CI workflow, Dockerfile, .gitignore, full data layer (models, NodeRepo, TreeRepo, EdgeRepo) per SPEC-DM-01 interfaces. EdgeRepo: 327 lines (408f5c6). Total: 1,572 lines scaffold.
 |- [x] **BE-02 — Database Layer** ✅ COMPLETE 2026-07-23
   **Commits: 408f5c6 (EdgeRepo: 327 lines), c4d4ce9 (DB struct + pool), 26f450b (Migrate, PoolConfig, migrations pkg). Models, NodeRepo (376 lines), TreeRepo (220 lines), EdgeRepo (327 lines), db.go with pool/migration runner, 4 DDL migrations, standalone migrations/ Go package. Full pgx impl per SPEC-DM-01 §4.**
-- [ ] **BE-03 — Tree Service**
+- [x] **BE-03 — Tree Service** ✅ COMPLETE 2026-07-23
+  **Commit: aa0c31a** — 1,155 lines added. Full TreeService with CreateTree (atomic tree+root-node tx), ListTrees (pagination/sort/search), GetTree, UpdateTree (partial), DeleteTree (soft). HTTP handlers with camelCase JSON, UUID validation, limit clamping, structured error responses. Wired via chi router at /trees, DB init in main.go.
 - [ ] **BE-04 — Node Service**
 - [ ] **BE-05 — SSE Hub**
 - [ ] **BE-06 — Sync Engine**
