@@ -182,6 +182,17 @@ func (h *NodeHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil {
+		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
+			Type:    sync.MutNodeRemoved,
+			TreeID:  out.TreeID,
+			NodeID:  out.ID,
+			ActorID: uuid.Nil,
+			Timestamp: out.DeletedAt,
+		})
+	}
 	writeJSON(w, 200, out)
 }
 
@@ -217,6 +228,21 @@ func (h *NodeHandler) handleReply(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
+	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil && out != nil && out.Node != nil {
+		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
+			Type:          sync.MutNodeAdded,
+			TreeID:        out.Node.TreeID,
+			NodeID:        out.Node.ID,
+			ActorID:       out.Node.AuthorID,
+			Content:       out.Node.Content,
+			ContentFormat: out.Node.ContentFormat,
+			NodeType:      out.Node.NodeType,
+			SequenceNum:   out.Node.SequenceNum,
+			Timestamp:     time.Now().UTC(),
+		})
 	}
 	w.Header().Set("Location", "/trees/"+out.Node.TreeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)
@@ -254,6 +280,21 @@ func (h *NodeHandler) handleFork(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
+	}
+
+	// Broadcast mutation through sync engine (best-effort).
+	if h.sync != nil && out != nil && out.Node != nil {
+		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
+			Type:          sync.MutNodeAdded,
+			TreeID:        out.Node.TreeID,
+			NodeID:        out.Node.ID,
+			ActorID:       out.Node.AuthorID,
+			Content:       out.Node.Content,
+			ContentFormat: out.Node.ContentFormat,
+			NodeType:      out.Node.NodeType,
+			SequenceNum:   out.Node.SequenceNum,
+			Timestamp:     time.Now().UTC(),
+		})
 	}
 	w.Header().Set("Location", "/trees/"+out.Node.TreeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)
