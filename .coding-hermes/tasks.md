@@ -149,7 +149,8 @@
 
 ## Phase 4: Backend (Go Gateway)
 
-- [ ] **BE-01 — Project Scaffold**
+- [x] **BE-01 — Project Scaffold** ✅ COMPLETE 2026-07-23
+  **Commit: d04f0c3** — 1,245 lines across 21 files: Go module (chi/pgx/migrate/uuid/zerolog), 4 DDL migrations (extensions→trees→nodes→edges), cmd/canopyd/main.go with -ldflags version injection, Makefile (build/test/vet/lint/build-embed×5), CI workflow, Dockerfile, .gitignore, full data layer (models, NodeRepo, TreeRepo, EdgeRepo) per SPEC-DM-01 interfaces. EdgeRepo: 327 lines (408f5c6). Total: 1,572 lines scaffold.
 - [ ] **BE-02 — Database Layer**
 - [ ] **BE-03 — Tree Service**
 - [ ] **BE-04 — Node Service**
