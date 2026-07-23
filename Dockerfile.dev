@@ -1,0 +1,21 @@
+# Canopy Development Container
+#
+# Hot-reload development server using cosmtrek/air.
+# Start with: docker compose -f docker-compose.dev.yml up
+
+FROM golang:1.25-alpine AS base
+
+RUN apk add --no-cache git ca-certificates tzdata curl
+
+# Install air for hot-reload
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["air", "-c", ".air.toml"]
