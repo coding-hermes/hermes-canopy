@@ -3,9 +3,9 @@
 /usr/bin/bash: fork: retry: Resource temporarily unavailable
 # Hermes Canopy — Task Board
 
-||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP (3/7 complete, 4 pending)** | **Phase 4+ — Implementation (blocked until Phase 3d review)**
+||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP (4/7 complete, 3 pending)** | **Phase 4+ — Implementation (blocked until Phase 3d review)**
 ||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||> **Last tick:** SPEC-FTR-03 complete — MLS Encryption Model (589 lines, 42KB, 11 sections, 4aad8b5)
+||> **Last tick:** SPEC-FTR-04 complete — Multi-Transport Architecture (647 lines, 46KB, 10 sections)
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
 
 ---
@@ -136,7 +136,8 @@
   **Commit: 29b61a6** — 482 lines, 11 sections, 20 design decisions, FTL transport protocol, ECDH encryption, profile routing, SSE relay, API endpoints, 3 Go interfaces, 3 DDL tables, 12 edge cases, 14 test scenarios, 7-phase implementation plan.
 - [x] **SPEC-FTR-03 — MLS Encryption Model** ✅ COMPLETE 2026-07-22
   **Commit: 4aad8b5** — 589 lines, 42KB, 11 sections, 20 design decisions, 2 Mermaid diagrams, 16 edge cases, 16 test scenarios, 13 security considerations.
-- [ ] **SPEC-FTR-04 — Multi-Transport Architecture**
+- [x] **SPEC-FTR-04 — Multi-Transport Architecture**
+  **Commit:** _(to be filled)_
 - [ ] **SPEC-FTR-05 — Self-Hosted & SaaS Relay Architecture**
 - [ ] **SPEC-FTR-06 — WebUI Native Packaging & Distribution**
 - [ ] **SPEC-FTR-07 — Hermes Agent Gateway Integration**
