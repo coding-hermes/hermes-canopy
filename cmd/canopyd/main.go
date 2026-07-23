@@ -18,6 +18,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 )
 
 // version is injected at build time via -ldflags.
@@ -76,7 +77,13 @@ func main() {
 		database.Edges,
 		database.Pool,
 	)
-	srv := server.New(cfg.HTTPAddr, treeService, nodeService)
+
+	// SSE hub — in-memory ring buffer + per-tree subscriber map per
+	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
+	// 1000-event ring per tree.
+	sseHub := sse.NewHub()
+	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub)
+
 	srv.Router().Get("/version", versionHandler)
 
 	// Start server in background
@@ -97,6 +104,11 @@ func main() {
 	// Graceful shutdown with 30s timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer shutdownCancel()
+
+	// Drain SSE first so connected clients receive a "done" event.
+	if err := sseHub.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("sse hub shutdown error")
+	}
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("shutdown error")
