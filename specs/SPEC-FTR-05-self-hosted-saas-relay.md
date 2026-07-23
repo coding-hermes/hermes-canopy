@@ -2,7 +2,7 @@
 
 > **Status:** Spec | **Phase:** Post-MVP (FTR-05) | **Blocks:** BE-09 (Transport Adapter Layer — Relay), BE-01 (Project Scaffold — deployment configs), DEPLOY-01 (Docker + Compose + WebUI), DIST-01 (Multi-Tenant + Multi-Transport Isolation)
 > **References:** T1.8-Multi-Transport-Architecture (§3.5 Relay Adapter, §4 Relay Protocol, §6 Deployment-Mode Priority Matrix), SPEC-FTR-04 (§5 TransportEvents, §6 API Endpoints, §9 Phase 5 Relay Adapter), SPEC-FTR-02 (§3 FTL Go Interfaces, §5 SSE Events), SPEC-API-01 (§3 SSE Wire Format), SPEC-DM-03 (Audit Trail), ARCHITECTURE.md (§10 SaaS, §11 Self-Host Guide), AGENTS.md (§Architecture, §Deployment)
-> **Commit:** _(to be filled)_
+> **Commit:** 206944f
 
 ---
 
