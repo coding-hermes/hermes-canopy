@@ -21,7 +21,7 @@ type Server struct {
 }
 
 // New creates a new Server with middleware and routes wired.
-func New(addr string, svc service.TreeService) *Server {
+func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -36,7 +36,8 @@ func New(addr string, svc service.TreeService) *Server {
 	// Health endpoint
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
-	r.Mount("/trees", handler.NewTreeHandler(svc).Routes())
+	r.Mount("/trees", handler.NewTreeHandler(treeSvc).Routes())
+	r.Mount("/", handler.NewNodeHandler(nodeSvc).Routes())
 
 	return &Server{
 		router: r,
