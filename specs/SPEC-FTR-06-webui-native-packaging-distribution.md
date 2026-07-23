@@ -2,7 +2,7 @@
 
 > **Status:** Spec | **Phase:** Post-MVP (FTR-06) | **Blocks:** BE-01 (Project Scaffold — build pipeline), DEPLOY-01 (Docker + Compose + WebUI Binary), DEPLOY-03 (CI/CD), DEPLOY-04 (Documentation)
 > **References:** T1.6-WebUI-Native-App-Evaluation (full research), ARCHITECTURE.md §9 (Native App Strategy), ARCHITECTURE.md §10.1-10.3 (Cost Estimates), SPEC-FTR-05 (§3 Go Interface pattern), AGENTS.md (§Architecture, §Deployment)
-> **Commit:** _(to be filled)_
+> **Commit:** 1a2a8f6
 
 ---
 
