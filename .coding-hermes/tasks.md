@@ -153,8 +153,9 @@
 - [x] **BE-03 — Tree Service** ✅ COMPLETE 2026-07-23
   **Commit: aa0c31a** — 968-line TreeService with spec-compliant interface, 16 types, 16 error sentinels, atomic CreateTree tx, ListTrees pagination, GetTree with stats, DeleteTree. Wired to HTTP server via TreeHandler.
   **Details:** 1,155 lines added. Full TreeService with CreateTree (atomic tree+root-node tx), ListTrees (pagination/sort/search), GetTree, UpdateTree (partial), DeleteTree (soft). HTTP handlers with camelCase JSON, UUID validation, limit clamping, structured error responses. Wired via chi router at /trees, DB init in main.go.
-- [ ] **BE-04 — Node Service**
-- [ ] **BE-05 — SSE Hub**
+|- [x] **BE-04 — Node Service** ✅ COMPLETE 2026-07-23
+|  **Commit: db1ab42** — 1,327 lines across 5 files. NodeService with Create, GetByID, Update, SoftDelete, Reply, Fork. Full validation (content length, formats, node/edge types, metadata size). Depth/child_count computed via CTE. 6 HTTP routes via NodeHandler. 11 unit tests. MiniMax-M3 worker produced node_service.go (partial — fixed compile error); foreman wrote handler, wiring, and tests directly.
+|- [ ] **BE-05 — SSE Hub**
 - [ ] **BE-06 — Sync Engine**
 - [ ] **BE-07 — Auth & Approval Engine**
 - [ ] **BE-08 — Profile Routing**
