@@ -3,7 +3,7 @@
 /usr/bin/bash: fork: retry: Resource temporarily unavailable
 # Hermes Canopy — Task Board
 
-|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4+ — Implementation (awaiting Bane review)**
+|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4 — Backend: BE-01 ✅ BE-02 ✅ → BE-03 next**
 ||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
 ||> **Last tick:** SPEC-FTR-07 complete — Hermes Agent Gateway Integration (828 lines, 49KB, 20 design decisions, 6 Go interfaces)
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
