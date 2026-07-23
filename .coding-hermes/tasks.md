@@ -143,7 +143,7 @@
 |- [x] **SPEC-FTR-06 — WebUI Native Packaging & Distribution** ✅ COMPLETE 2026-07-22
 |  **Commit: 1a2a8f6** — 758 lines, 45KB, 12 sections, 20 design decisions, 3 Go interfaces (PackageManager, Updater, InstallerBuilder), JSON Schema (latest.json), full CI/CD workflow YAML, 14 edge cases, 20 test scenarios, 6 security considerations, 5-phase implementation plan.
 ||- [x] **SPEC-FTR-07 — Hermes Agent Gateway Integration** ✅ COMPLETE 2026-07-23
-|  **Commit: _(tick commit)_** — 828 lines, 49KB, 8 sections, 20 design decisions, 6 Go interfaces, 13 API endpoints, 17 edge cases, 3 DDL tables. HermesClient, EventTranslator, ProfileRouter, SkillBridge, AgentSessionManager interfaces. canopyd↔Hermes API contract with SSE relay, profile routing, tool→Card translation, session continuity, and degraded-mode fallback.
+|  **Commit: c9d489c** — 828 lines, 49KB, 8 sections, 20 design decisions, 6 Go interfaces, 13 API endpoints, 17 edge cases, 3 DDL tables. HermesClient, EventTranslator, ProfileRouter, SkillBridge, AgentSessionManager interfaces. canopyd↔Hermes API contract with SSE relay, profile routing, tool→Card translation, session continuity, and degraded-mode fallback.
 
 ---
 
