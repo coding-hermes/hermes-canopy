@@ -65,7 +65,12 @@ func main() {
 		log.Fatal().Err(err).Msg("database migration failed")
 	}
 
-	treeService := service.NewTreeService(database)
+	treeService := service.NewTreeService(
+		database.Trees,
+		database.Nodes,
+		database.Edges,
+		database.Pool,
+	)
 	srv := server.New(cfg.HTTPAddr, treeService)
 	srv.Router().Get("/version", versionHandler)
 
