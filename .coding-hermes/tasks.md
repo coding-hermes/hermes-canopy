@@ -151,7 +151,8 @@
 
 - [x] **BE-01 — Project Scaffold** ✅ COMPLETE 2026-07-23
   **Commit: d04f0c3** — 1,245 lines across 21 files: Go module (chi/pgx/migrate/uuid/zerolog), 4 DDL migrations (extensions→trees→nodes→edges), cmd/canopyd/main.go with -ldflags version injection, Makefile (build/test/vet/lint/build-embed×5), CI workflow, Dockerfile, .gitignore, full data layer (models, NodeRepo, TreeRepo, EdgeRepo) per SPEC-DM-01 interfaces. EdgeRepo: 327 lines (408f5c6). Total: 1,572 lines scaffold.
-- [ ] **BE-02 — Database Layer**
+|- [x] **BE-02 — Database Layer** ✅ COMPLETE 2026-07-23
+  **Commits: 408f5c6 (EdgeRepo: 327 lines), c4d4ce9 (DB struct + pool), 26f450b (Migrate, PoolConfig, migrations pkg). Models, NodeRepo (376 lines), TreeRepo (220 lines), EdgeRepo (327 lines), db.go with pool/migration runner, 4 DDL migrations, standalone migrations/ Go package. Full pgx impl per SPEC-DM-01 §4.**
 - [ ] **BE-03 — Tree Service**
 - [ ] **BE-04 — Node Service**
 - [ ] **BE-05 — SSE Hub**
