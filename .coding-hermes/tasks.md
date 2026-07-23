@@ -1,9 +1,6 @@
-/usr/bin/bash: fork: retry: Resource temporarily unavailable
-/usr/bin/bash: fork: retry: Resource temporarily unavailable
-/usr/bin/bash: fork: retry: Resource temporarily unavailable
 # Hermes Canopy — Task Board
 
-|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4 — Backend: BE-01 ✅ BE-02 ✅ → BE-03 next**
+|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4 — Backend: BE-01 ✅ BE-02 ✅ BE-03 ✅ → BE-04 next**
 ||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
 ||> **Last tick:** SPEC-FTR-07 complete — Hermes Agent Gateway Integration (828 lines, 49KB, 20 design decisions, 6 Go interfaces)
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
@@ -154,7 +151,8 @@
 |- [x] **BE-02 — Database Layer** ✅ COMPLETE 2026-07-23
   **Commits: 408f5c6 (EdgeRepo: 327 lines), c4d4ce9 (DB struct + pool), 26f450b (Migrate, PoolConfig, migrations pkg). Models, NodeRepo (376 lines), TreeRepo (220 lines), EdgeRepo (327 lines), db.go with pool/migration runner, 4 DDL migrations, standalone migrations/ Go package. Full pgx impl per SPEC-DM-01 §4.**
 - [x] **BE-03 — Tree Service** ✅ COMPLETE 2026-07-23
-  **Commit: aa0c31a** — 1,155 lines added. Full TreeService with CreateTree (atomic tree+root-node tx), ListTrees (pagination/sort/search), GetTree, UpdateTree (partial), DeleteTree (soft). HTTP handlers with camelCase JSON, UUID validation, limit clamping, structured error responses. Wired via chi router at /trees, DB init in main.go.
+  **Commit: aa0c31a** — 968-line TreeService with spec-compliant interface, 16 types, 16 error sentinels, atomic CreateTree tx, ListTrees pagination, GetTree with stats, DeleteTree. Wired to HTTP server via TreeHandler.
+  **Details:** 1,155 lines added. Full TreeService with CreateTree (atomic tree+root-node tx), ListTrees (pagination/sort/search), GetTree, UpdateTree (partial), DeleteTree (soft). HTTP handlers with camelCase JSON, UUID validation, limit clamping, structured error responses. Wired via chi router at /trees, DB init in main.go.
 - [ ] **BE-04 — Node Service**
 - [ ] **BE-05 — SSE Hub**
 - [ ] **BE-06 — Sync Engine**
