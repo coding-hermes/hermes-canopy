@@ -12,16 +12,22 @@ import (
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 )
 
 // Server is the Canopy HTTP server.
 type Server struct {
 	httpServer *http.Server
 	router     *chi.Mux
+	sseHub     sse.SSEHub
 }
 
 // New creates a new Server with middleware and routes wired.
-func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService) *Server {
+//
+// The sseHub must be non-nil — if you don't need SSE, pass a hub created
+// with sse.NewHub(); the hub is cheap to construct and can be ignored
+// from the outside if no route ever subscribes a client.
+func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -39,8 +45,13 @@ func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService) 
 	r.Mount("/trees", handler.NewTreeHandler(treeSvc).Routes())
 	r.Mount("/", handler.NewNodeHandler(nodeSvc).Routes())
 
+	// SSE endpoint per SPEC-API-01.
+	sseHandler := sse.NewHandler(sseHub)
+	r.Get("/trees/{tree_id}/events", sseHandler.HandleTreeEvents)
+
 	return &Server{
 		router: r,
+		sseHub: sseHub,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
@@ -56,12 +67,20 @@ func (s *Server) Router() *chi.Mux {
 	return s.router
 }
 
+// SSEHub returns the server's SSE hub. Useful for tests that need to
+// broadcast from service handlers.
+func (s *Server) SSEHub() sse.SSEHub {
+	return s.sseHub
+}
+
 // Start begins listening and serving HTTP.
 func (s *Server) Start() error {
 	return s.httpServer.ListenAndServe()
 }
 
-// Shutdown gracefully stops the server with a timeout.
+// Shutdown gracefully stops the HTTP server. SSE clients receive a
+// "done" event first; cancel via the hub directly if you need to drain
+// before HTTP shutdown completes.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
