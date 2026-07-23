@@ -71,7 +71,12 @@ func main() {
 		database.Edges,
 		database.Pool,
 	)
-	srv := server.New(cfg.HTTPAddr, treeService)
+	nodeService := service.NewNodeService(
+		database.Nodes,
+		database.Edges,
+		database.Pool,
+	)
+	srv := server.New(cfg.HTTPAddr, treeService, nodeService)
 	srv.Router().Get("/version", versionHandler)
 
 	// Start server in background
