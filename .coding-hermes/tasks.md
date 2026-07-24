@@ -1,3 +1,11 @@
+<!--
+  ⚠️  BOARD FORMAT — coding-hermes-model-router v1.3 (2026-07-24)
+  All tasks MUST use matrix format: | ID | Task | Pri | Cpx | Deps | Tags | Model | Reasoning | Fallback |
+  Before editing this file, load the skill: skill_view(name='coding-hermes-model-router')
+  Validate: python3 ~/.hermes/scripts/validate-board-format.py .coding-hermes/tasks.md
+  NEVER remove the matrix header row or NEVER-DONE / E2E-001 fixtures.
+-->
+
 # Hermes Canopy — Model Router Task Matrix
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.

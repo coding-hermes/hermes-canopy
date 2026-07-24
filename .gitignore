@@ -18,6 +18,11 @@ bin/
 
 # IDE
 .idea/
+
+# Editor temp files
+*.swp
+*.swo
+*~
 .vscode/
 *.swp
 *.swo
