@@ -10,6 +10,7 @@
 __pycache__/
 
 # Go build artifacts
+canopyd
 bin/
 *.exe
 *.test

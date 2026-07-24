@@ -101,6 +101,15 @@ func New(
 		// Profile routing (SPEC-FTR-07 §3.3).
 		r.Mount("/workspaces/{workspace_id}/profiles",
 			handler.NewProfileHandler(profileRouter).Routes()) // ProfileRouter passed via main.go wiring
+
+		// Topic endpoints (BE-14 — stub, returns 501). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
+		r.Mount("/topics", handler.NewTopicHandler(nil).Routes())
+
+		// Card endpoints (BE-15 — stub, returns 501). Spec: SPEC-PL-03.
+		r.Mount("/cards", handler.NewCardHandler(nil).Routes())
+
+		// Graph endpoints (BE-16 — stub, returns 501). Spec: ARCHITECTURE.md §3.
+		r.Mount("/graph", handler.NewGraphHandler(nil).Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).

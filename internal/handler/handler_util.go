@@ -45,6 +45,12 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 // --- URL parameter helpers --------------------------------------------------
 
+// writeNotImplemented returns a 501 JSON response with the operation name.
+// Used as a stub handler for endpoints not yet implemented (BE-14/15/16).
+func writeNotImplemented(w http.ResponseWriter, op string) {
+	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", op+" is not yet implemented")
+}
+
 // parseTreeID reads and validates the {tree_id} chi URL parameter.
 func parseTreeID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, "tree_id"))
