@@ -4,33 +4,44 @@ package server
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/hlog"
 
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/transport"
 )
 
 // Server is the Canopy HTTP server.
 type Server struct {
-	httpServer *http.Server
-	router     *chi.Mux
-	sseHub     sse.SSEHub
+	httpServer      *http.Server
+	router          *chi.Mux
+	sseHub          sse.SSEHub
+	transportMgr    *transport.ConnectionManager
+	transportAdaper transport.TransportAdapter
 }
 
 // New creates a new Server with middleware and routes wired.
-//
-// The sseHub must be non-nil — if you don't need SSE, pass a hub created
-// with sse.NewHub(); the hub is cheap to construct and can be ignored
-// from the outside if no route ever subscribes a client.
-//
-// syncEngine may be nil; handlers check for nil before broadcasting.
-func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub, syncEngine sync.SyncEngine, approvalSvc service.ApprovalService) *Server {
+func New(
+	addr string,
+	treeSvc service.TreeService,
+	nodeSvc service.NodeService,
+	sseHub sse.SSEHub,
+	syncEngine sync.SyncEngine,
+	approvalSvc service.ApprovalService,
+	transportAdaper transport.TransportAdapter,
+	connMgr *transport.ConnectionManager,
+	sel *transport.TransportSelector,
+	configRepo db.TransportConfigRepo,
+	eventRepo db.TransportEventRepo,
+) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -46,7 +57,7 @@ func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, 
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
 
-	// REST endpoints — handlers broadcast mutations through syncEngine.
+	// REST endpoints
 	r.Mount("/trees", handler.NewTreeHandler(treeSvc, syncEngine).Routes())
 	r.Mount("/", handler.NewNodeHandler(nodeSvc, syncEngine).Routes())
 
@@ -60,9 +71,24 @@ func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, 
 	// Approval endpoints per SPEC-API-05.
 	r.Mount("/approvals", handler.NewApprovalHandler(approvalSvc).Routes())
 
+	// Transport adapter endpoints per SPEC-FTR-04 §6.
+	nodeID, _ := os.Hostname()
+	if nodeID == "" {
+		nodeID = "canopyd-" + time.Now().Format("20060102150405")
+	}
+	transHandler := handler.NewTransportHandler(transportAdaper, connMgr, configRepo, eventRepo, nodeID)
+	r.Mount("/api/v1/transports", transHandler.Routes())
+
+	// Transport health probes (unauthenticated).
+	for _, tt := range transport.AllTransportTypes() {
+		r.Get("/health/transports/"+string(tt), transHandler.HealthProbe(string(tt)))
+	}
+
 	return &Server{
-		router: r,
-		sseHub: sseHub,
+		router:          r,
+		sseHub:          sseHub,
+		transportMgr:    connMgr,
+		transportAdaper: transportAdaper,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
@@ -78,10 +104,14 @@ func (s *Server) Router() *chi.Mux {
 	return s.router
 }
 
-// SSEHub returns the server's SSE hub. Useful for tests that need to
-// broadcast from service handlers.
+// SSEHub returns the server's SSE hub.
 func (s *Server) SSEHub() sse.SSEHub {
 	return s.sseHub
+}
+
+// TransportManager returns the connection manager for transport adapters.
+func (s *Server) TransportManager() *transport.ConnectionManager {
+	return s.transportMgr
 }
 
 // Start begins listening and serving HTTP.
@@ -89,9 +119,7 @@ func (s *Server) Start() error {
 	return s.httpServer.ListenAndServe()
 }
 
-// Shutdown gracefully stops the HTTP server. SSE clients receive a
-// "done" event first; cancel via the hub directly if you need to drain
-// before HTTP shutdown completes.
+// Shutdown gracefully stops the HTTP server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }

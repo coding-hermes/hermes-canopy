@@ -22,6 +22,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/transport"
 )
 
 // version is injected at build time via -ldflags.
@@ -106,7 +107,14 @@ func main() {
 		[]byte("dev-secret-change-me-production!"),
 	)
 
-	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc)
+	// Transport adapter layer per SPEC-FTR-04.
+	ss := transport.NewTransportSelector(transport.ModeLocal, transport.TopologyLoopback)
+	connMgr := transport.NewConnectionManager(ss)
+	tptAdapter := transport.NewSSEAdapter(sseHub)
+
+	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc,
+		tptAdapter, connMgr, ss,
+		database.TransportConfigs, database.TransportEvents)
 
 	srv.Router().Get("/version", versionHandler)
 	srv.Router().Mount(
