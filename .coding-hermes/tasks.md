@@ -1,8 +1,8 @@
 # Hermes Canopy — Task Board
 
-|||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10d ✅ (11.5/12)**
+|||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-11d ✅ (12.5/12)**
 |||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||||> **Last tick:** BE-10d — MLS unit + integration tests committed (35 tests, 1,391 lines across 3 files). All 10 MLSService methods covered.
+||||> **Last tick:** BE-11d — middleware tests (BodySizeLimit, RateLimit, TreeMembershipMiddleware — 13 new tests, 18 total handler tests pass). INFRA-001: Cooldown increased 900→3600s via scheduler API PUT CooldownS=3600. Tick storm mitigated.
 ||> **DuckBrain:** hermes-canopy namespace (25+ entries)
 
 ---
@@ -189,7 +189,8 @@
 |  - [x] **BE-11a** — Extract shared handler utilities (writeError, writeJSON, decodeJSON) to handler_util.go ✅ COMPLETE 2026-07-24
 |  - [x] **BE-11b** — BodySizeLimit middleware (1MB, SPEC-API-02 §10.1) + RateLimit middleware (per-IP token bucket) ✅ COMPLETE 2026-07-24
 |  - [x] **BE-11c** — TreeMembershipMiddleware + wire AuthMiddleware into route groups ✅ COMPLETE 2026-07-24
-|  - [ ] **BE-11d** — Tests for all middleware (auth, membership, body size, rate limit)
+|  - [x] **BE-11d** — Tests for all middleware (auth, membership, body size, rate limit) ✅ COMPLETE 2026-07-24
+    **Commit: pending**
 |- [ ] **BE-12 — Backend Integration Tests**
 
 ---
@@ -250,6 +251,11 @@
 ---
 
 ## Phase 10: Continuous Improvement
+
+- [x] **INFRA-001 — Fix Tick Storm: cooldown < tick_timeout** 🔴 CRITICAL
+  **Problem:** Cooldown=900s < tick_timeout=600s → 5 duplicate timeout dispatches in 2h → $0.83 burned.
+  **Fix applied 2026-07-24:** Scheduler API `PUT CooldownS=3600` (1h cooldown, 6× previous). Cooldown now exceeds worst-case tick duration by 3000s.
+  **Remaining risk:** Root cause (scheduler spawns new tick while previous is active) still exists — only mitigated, not eliminated. Long-term fix: scheduler-level guard (skip if active tick exists for project).
 
 - [ ] **NEVER-DONE — Run coding-hermes-never-done 11-point audit**
   Load coding-hermes-never-done skill. Run ALL 11 checks: spec alignment, doc coverage, test gaps, package upgrades, pitfall hunt, performance audit, endpoint verification, CI/CD health, DuckBrain sync, code quality, middle-out wiring. Create a task for EVERY gap found. This task is never complete — the audit always finds something.
