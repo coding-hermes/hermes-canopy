@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -18,6 +23,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/mls"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
@@ -101,6 +107,16 @@ func main() {
 		sseHub,
 	)
 
+	mlsSvc := mls.NewMLSService(
+		database.Pool,
+		database.MLSGroups,
+		database.MLSMembers,
+		database.MLSKeyPackages,
+		database.MLSPendingProposals,
+	)
+	kpMgr := newPGMLSKeyPackageManager(database.MLSKeyPackages)
+	mlsHandler := handler.NewMLSHandler(mlsSvc, kpMgr)
+
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(
 		database.Pool,
@@ -114,7 +130,7 @@ func main() {
 
 	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents)
+		database.TransportConfigs, database.TransportEvents, mlsHandler)
 
 	srv.Router().Get("/version", versionHandler)
 	srv.Router().Mount(
@@ -152,6 +168,84 @@ func main() {
 
 	cancel()
 	log.Info().Msg("canopyd stopped")
+}
+
+type pgMLSKeyPackageManager struct {
+	db.MLSKeyPackageRepo
+}
+
+func newPGMLSKeyPackageManager(repo db.MLSKeyPackageRepo) *pgMLSKeyPackageManager {
+	return &pgMLSKeyPackageManager{MLSKeyPackageRepo: repo}
+}
+
+func (m *pgMLSKeyPackageManager) GenerateKeyPackage(
+	ctx context.Context,
+	profileID uuid.UUID,
+	credential mls.MLSCredential,
+	keyPair mls.Ed25519KeyPair,
+) (mls.MLSKeyPackage, error) {
+	if credential.ProfileID == uuid.Nil || credential.ProfileID != profileID {
+		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
+	}
+	if len(credential.Identity) == 0 || credential.CredentialType == "" ||
+		len(credential.SignaturePublicKey) != ed25519.PublicKeySize ||
+		len(keyPair.PublicKey) != ed25519.PublicKeySize ||
+		len(keyPair.PrivateKey) != ed25519.PrivateKeySize ||
+		!bytes.Equal(credential.SignaturePublicKey, keyPair.PublicKey) ||
+		!bytes.Equal(keyPair.PrivateKey.Public().(ed25519.PublicKey), keyPair.PublicKey) {
+		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
+	}
+
+	packageBytes := make([]byte, 64)
+	if _, err := rand.Read(packageBytes); err != nil {
+		return mls.MLSKeyPackage{}, err
+	}
+	digest := sha256.Sum256(packageBytes)
+	now := time.Now().UTC()
+	keyPackage := mls.MLSKeyPackage{
+		ID:              uuid.New(),
+		ProfileID:       profileID,
+		KeyPackageBytes: packageBytes,
+		Hash:            digest[:],
+		CipherSuite:     "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(24 * time.Hour),
+	}
+	if err := m.Create(ctx, &db.MLSKeyPackage{
+		ID:              keyPackage.ID,
+		ProfileID:       keyPackage.ProfileID,
+		KeyPackageBytes: keyPackage.KeyPackageBytes,
+		Hash:            keyPackage.Hash,
+		CipherSuite:     keyPackage.CipherSuite,
+		CreatedAt:       keyPackage.CreatedAt,
+		ExpiresAt:       keyPackage.ExpiresAt,
+	}); err != nil {
+		return mls.MLSKeyPackage{}, err
+	}
+	return keyPackage, nil
+}
+
+func (m *pgMLSKeyPackageManager) GetKeyPackage(ctx context.Context, profileID uuid.UUID) (mls.MLSKeyPackage, error) {
+	keyPackage, err := m.GetLatest(ctx, profileID)
+	if err != nil {
+		return mls.MLSKeyPackage{}, err
+	}
+	if !keyPackage.ExpiresAt.After(time.Now().UTC()) {
+		return mls.MLSKeyPackage{}, mls.ErrKeyPackageExpired
+	}
+	return mls.MLSKeyPackage{
+		ID:              keyPackage.ID,
+		ProfileID:       keyPackage.ProfileID,
+		KeyPackageBytes: keyPackage.KeyPackageBytes,
+		Hash:            keyPackage.Hash,
+		CipherSuite:     keyPackage.CipherSuite,
+		CreatedAt:       keyPackage.CreatedAt,
+		ExpiresAt:       keyPackage.ExpiresAt,
+	}, nil
+}
+
+func (m *pgMLSKeyPackageManager) ExpireKeyPackage(ctx context.Context, keyPackageID uuid.UUID) error {
+	return m.Expire(ctx, keyPackageID)
 }
 
 func versionHandler(w http.ResponseWriter, r *http.Request) {
