@@ -3,7 +3,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -40,15 +39,6 @@ func (h *TreeHandler) Routes() chi.Router {
 }
 
 // --- Request / response helpers ---------------------------------------------
-
-type apiError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-type apiErrorBody struct {
-	Error apiError `json:"error"`
-}
 
 type paginationBody struct {
 	NextCursor *uuid.UUID `json:"nextCursor"`
@@ -214,31 +204,6 @@ func (h *TreeHandler) DeleteTree(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Internal helpers -------------------------------------------------------
-
-func parseTreeID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "tree_id"))
-	if err != nil {
-		writeError(w, 400, "INVALID_TREE_ID", "tree_id must be a valid UUID")
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
-func decodeJSON(r *http.Request, v any) error {
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	return d.Decode(v)
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, apiErrorBody{Error: apiError{Code: code, Message: message}})
-}
 
 func (h *TreeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {

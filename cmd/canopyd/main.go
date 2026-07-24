@@ -129,15 +129,9 @@ func main() {
 	connMgr := transport.NewConnectionManager(ss)
 	tptAdapter := transport.NewSSEAdapter(sseHub)
 
-	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc,
+	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, mlsHandler)
-
-	srv.Router().Get("/version", versionHandler)
-	srv.Router().Mount(
-		"/api/v1/workspaces/{workspace_id}/profiles",
-		handler.NewProfileHandler(profileRouter).Routes(),
-	)
+		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler)
 
 	// Start server in background
 

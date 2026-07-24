@@ -332,11 +332,4 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 
 // --- Helpers ----------------------------------------------------------------
 
-func parseNodeID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "node_id"))
-	if err != nil {
-		writeError(w, 400, "INVALID_NODE_ID", "node_id must be a valid UUID")
-		return uuid.Nil, false
-	}
-	return id, true
-}
+// End of node_handler.go — parseNodeID is in handler_util.go
