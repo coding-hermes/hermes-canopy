@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -12,17 +16,21 @@ import (
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/mls"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 )
 
 // MLSHandler wires workspace MLS (Messaging Layer Security, RFC 9420)
-// routes to the MLSService and KeyPackageManager interfaces per SPEC-FTR-03.
+// routes to the MLSEventBridge (which decorates MLSService with SSE
+// broadcasting) and KeyPackageManager interfaces per SPEC-FTR-03.
 type MLSHandler struct {
-	svc   mls.MLSService
+	svc   *mls.MLSEventBridge
 	kpMgr mls.KeyPackageManager
 }
 
-// NewMLSHandler returns a handler wired to the given MLSService and KeyPackageManager.
-func NewMLSHandler(svc mls.MLSService, kpMgr mls.KeyPackageManager) *MLSHandler {
+// NewMLSHandler returns a handler wired to the given MLSEventBridge and
+// KeyPackageManager. The bridge wraps the concrete MLSServiceImpl and
+// auto-broadcasts MLS events through the SSE hub after mutating operations.
+func NewMLSHandler(svc *mls.MLSEventBridge, kpMgr mls.KeyPackageManager) *MLSHandler {
 	return &MLSHandler{svc: svc, kpMgr: kpMgr}
 }
 
@@ -39,6 +47,7 @@ func (h *MLSHandler) Routes() chi.Router {
 	r.Post("/key-packages", h.GenerateKeyPackage)
 	r.Get("/key-packages", h.GetKeyPackage)
 	r.Post("/commit-proposals", h.CommitProposals)
+	r.Get("/events", h.MLSEvents)
 	return r
 }
 
@@ -324,6 +333,145 @@ func (h *MLSHandler) CommitProposals(w http.ResponseWriter, r *http.Request) {
 
 func matchesMLSWorkspace(routeID, bodyID uuid.UUID) bool {
 	return bodyID == uuid.Nil || bodyID == routeID
+}
+
+// --- SSE events handler -----------------------------------------------------
+
+// MLSEvents streams workspace MLS events via SSE. On connect it sends a
+// welcome_message event containing the current MLS group state, then
+// subscribes the client to the SSE hub for subsequent live events.
+//
+// The workspace UUID is used as the SSE broadcast TreeID — the bridge
+// broadcasts MLS events using this same key.
+func (h *MLSHandler) MLSEvents(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := parseWorkspaceID(w, r)
+	if !ok {
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "STREAMING_NOT_SUPPORTED", "streaming responses are not supported on this transport")
+		return
+	}
+
+	// SSE headers.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	userID := uuid.Nil // MVP: sentinel userID; auth middleware (BE-07) replaces this.
+
+	hub := h.svc.Hub()
+
+	// Connection-limit checks.
+	if hub.SubscriberCount(workspaceID) >= sse.MaxConnectionsPerTree {
+		writeSSEError(w, "TOO_MANY_CONNECTIONS_TREE", "too many SSE connections for this workspace")
+		return
+	}
+	if hub.TotalConnections() >= sse.MaxConnectionsTotal {
+		writeSSEError(w, "TOO_MANY_CONNECTIONS", "server is at maximum SSE capacity")
+		return
+	}
+
+	client := sse.NewClient(
+		fmt.Sprintf("mls-%d-%s", time.Now().UnixNano(), uuid.NewString()[:8]),
+		userID, workspaceID, w, flusher,
+	)
+
+	if err := hub.Subscribe(r.Context(), workspaceID, client); err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("mls sse subscribe failed")
+		_ = client.SendRaw("event: mls:error\ndata: {\"error\":\"subscription failed\"}\n\n")
+		_ = client.Close()
+		return
+	}
+	defer hub.Unsubscribe(workspaceID, client.ID())
+
+	// Welcome delivery: send current group state as a welcome_message event.
+	h.sendWelcome(r.Context(), workspaceID, client)
+
+	if err := client.Flush(); err != nil {
+		return
+	}
+
+	// Replay missed events via Last-Event-ID if present.
+	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
+		if err := hub.ReplaySince(r.Context(), workspaceID, client.ID(), lastID); err != nil {
+			log.Ctx(r.Context()).Warn().Err(err).Str("last_event_id", lastID).Msg("mls sse replay failed")
+		}
+	}
+	if err := client.Flush(); err != nil {
+		return
+	}
+
+	// Heartbeat ticker.
+	ticker := time.NewTicker(sse.HeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if err := client.SendRaw(": heartbeat\n\n"); err != nil {
+				return
+			}
+		default:
+			if err := client.Flush(); err != nil {
+				return
+			}
+			// Brief sleep to avoid busy-loop.
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	}
+}
+
+// sendWelcome fetches the current MLS group state for the workspace and
+// sends it as a welcome_message SSE event. If the group does not exist
+// yet, a minimal welcome with an empty payload is sent.
+func (h *MLSHandler) sendWelcome(ctx context.Context, workspaceID uuid.UUID, client *sse.Client) {
+	state, err := h.svc.GetGroupState(ctx, workspaceID)
+	if err != nil {
+		// No group yet — send a welcome with nil payload so the client
+		// knows the SSE stream is alive.
+		evt := mls.MLSEvent{
+			Type:        mls.EventWelcomeMessage,
+			WorkspaceID: workspaceID,
+			Timestamp:   time.Now().UTC(),
+			Payload:      nil,
+		}
+		_ = client.Send(mls.MLSEventToSSE(evt))
+		return
+	}
+
+	payload, _ := json.Marshal(state)
+	evt := mls.MLSEvent{
+		Type:        mls.EventWelcomeMessage,
+		WorkspaceID: workspaceID,
+		Timestamp:   time.Now().UTC(),
+		Payload:      payload,
+	}
+	_ = client.Send(mls.MLSEventToSSE(evt))
+}
+
+// writeSSEError sends an in-stream error event after SSE headers are already
+// committed. The client receives it as a normal SSE event.
+func writeSSEError(w http.ResponseWriter, code, message string) {
+	body, _ := json.Marshal(map[string]string{"error": message, "code": code})
+	_, _ = w.Write([]byte("event: mls:error\ndata: "))
+	_, _ = w.Write(body)
+	_, _ = w.Write([]byte("\n\n"))
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // --- Error helpers ----------------------------------------------------------
