@@ -28,4 +28,7 @@ var (
 	ErrSequenceGap = errors.New("transport: gap detected in message sequence")
 	// ErrRateLimited is returned when the rate limit is exceeded.
 	ErrRateLimited = errors.New("transport: rate limit exceeded")
+	// ErrNoTransportAvailable is returned when all transports in the fallback
+	// chain are exhausted or unavailable, including an offline queue overflow.
+	ErrNoTransportAvailable = errors.New("transport: no transport available in fallback chain")
 )
