@@ -16,6 +16,8 @@ import (
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
@@ -98,9 +100,19 @@ func main() {
 		sseHub,
 	)
 
+	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
+	profileRouter := hermes.NewPGProfileRouter(
+		database.Pool,
+		[]byte("dev-secret-change-me-production!"),
+	)
+
 	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc)
 
 	srv.Router().Get("/version", versionHandler)
+	srv.Router().Mount(
+		"/api/v1/workspaces/{workspace_id}/profiles",
+		handler.NewProfileHandler(profileRouter).Routes(),
+	)
 
 	// Start server in background
 
