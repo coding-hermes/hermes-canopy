@@ -159,7 +159,13 @@
   **Commit: d84c0a4** — 2,349 lines across 5 files. SSEHub interface with Subscribe, Unsubscribe, Broadcast, ReplaySince, SubscriberCount, TotalConnections, Shutdown. In-memory ring buffer (1000 events, 1h retention). Per-tree/user/server connection limits. HTTP handler with query validation (since hash, profiles filter), heartbeat, replay-by-Last-Event-ID, slow-client disconnect, graceful shutdown with done-event drain. 17 tests. Wired into server.go + main.go. MiniMax-M3 worker produced core implementation; foreman fixed test/handler issues.
 |- [x] **BE-06 — Sync Engine** ✅ COMPLETE 2026-07-23
 |  **Commit: 2461eb2** — 20 files, +1,737 lines. SnapshotRepo, EventRepo, SyncEngine interface with OnNodeMutation/TreeMutation, ComputeDeltaForClient, SSE broadcast. DDL: 3 migrations (tree_snapshots, node_content_hash, tree_events). 5 API + delta types. 6 unit tests. MiniMax-M3 worker produced migrations, repos, sync engine (858 lines); foreman wrote handler, service facade, tests, wiring.
-|- [ ] **BE-07 — Auth & Approval Engine**
+|- [ ] **BE-07 — Auth & Approval Engine** (specs: SPEC-FTR-01, SPEC-API-05, SPEC-DM-03, SPEC-DM-04)
+  - [ ] **BE-07a** — DDL migrations: approvals, users, profiles, tree_members tables (1230+ lines DDL across 3 specs)
+  - [ ] **BE-07b** — Go models + pgx repos: approval types, ApprovalRepo, UserRepo, ProfileRepo, audit logging
+  - [ ] **BE-07c** — ApprovalService: CreateApproval, GetPending, Approve, Deny (with audit + SSE broadcast)
+  - [ ] **BE-07d** — HTTP handlers: GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, GET /approvals/history
+  - [ ] **BE-07e** — Wiring: register routes in server.go, init repos/services in main.go, SSE integration
+  - [ ] **BE-07f** — Unit tests: approval service + handler tests
 - [ ] **BE-08 — Profile Routing**
 - [ ] **BE-09 — Transport Adapter Layer**
 - [ ] **BE-10 — Encryption Layer (MLS-Only)**
