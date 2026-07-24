@@ -1,288 +1,119 @@
-# Hermes Canopy — Task Board
-
-||||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-11d ✅ (13/13)**
-|||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||||||> **Last tick:** BE-11d committed. gofmt fixes across 20+ files. Board: BE-10 parent + BE-11d ✅. BE-12 scoped (6 subtasks). INFRA-001 cooldown stable.
-||> **DuckBrain:** hermes-canopy namespace (25+ entries)
-
----
-
-## Phase 1: Architecture & Research Validation
-
-**Goal:** Validate stack decisions, research existing solutions, confirm no showstoppers. Output: confirmed architecture document with rationale.
-
-- [x] **T1.1 — Transport Research: SSE vs WebSocket vs NATS** ✅ COMPLETE 2026-07-19
-  **Decision: SSE (HTTP/2) primary + NATS backend + WebSocket as future bidirectional fallback.**
-
-- [x] **T1.2 — CRDT Library Evaluation: Yjs vs Automerge** ✅ COMPLETE 2026-07-20
-  **Decision: Yjs — 18KB gzipped, pure JS, no WASM, granular observe() for tree re-rendering, 920K/wk downloads.**
-
-- [x] **T1.3 — Tree Visualization Research** ✅ COMPLETE 2026-07-20
-  **Decision: React Flow (@xyflow/react v12) primary + d3-hierarchy layout engine + Canvas fallback for >2000 nodes.**
-
-- [x] **T1.4 — Offline-Stack Research** ✅ COMPLETE 2026-07-20
-  **Decision: Service Worker (Workbox v7) + y-indexeddb + Custom SSE Provider + Background Sync queue. No SQLite WASM in MVP. Delta Chat as optional post-MVP relay.**
-
-- [x] **T1.5 — Approval UX Research** ✅ COMPLETE 2026-07-20
-  **Decision: GitHub triage panel + Linear notification discipline + Google Docs per-item granularity.**
-
-- [x] **T1.6 — WebUI Native App Evaluation** ✅ COMPLETE 2026-07-20
-  **Decision: Wails v3 (post-MVP) + Go embed (MVP).**
-
-- [x] **T1.7 — Security Protocol: MLS-Only Architecture** ✅ COMPLETE 2026-07-20
-
-- [x] **T1.8 — Multi-Transport Architecture Design** ✅ COMPLETE 2026-07-20
-  **Commit: 8706036**
-
-- [x] **T1.9 — Confirmed Architecture Document** ✅ COMPLETE 2026-07-20
-  **Commit: b8e170d**
-
----
-
-## Phase 2: Data Model Specs
-
-- [x] **SPEC-DM-01 — Tree Node & Edge DDL** ✅ COMPLETE 2026-07-20
-  **Commit: 09fa6d1**
-
-- [x] **SPEC-DM-02 — Tree Snapshot & Delta Model** ✅ COMPLETE 2026-07-20
-  **Commit: f7d3f6f**
-
-- [x] **SPEC-DM-03 — Approval & Audit Trail DDL** ✅ COMPLETE 2026-07-20
-  **Commit: 6caafc6**
-
-- [x] **SPEC-DM-04 — User & Profile Model** ✅ COMPLETE 2026-07-20
-
----
-
-## Phase 3: API Specs
-
-- [x] **SPEC-API-01 — SSE Event Stream Spec** ✅ COMPLETE 2026-07-20
-  **Commit: 6d6c8b4**
-
-- [x] **SPEC-API-02 — Tree CRUD Endpoints** ✅ COMPLETE 2026-07-20
-  **Commit: 4f24622**
-
-- [x] **SPEC-API-03 — Node CRUD Endpoints** ✅ COMPLETE 2026-07-20
-  **Commit: 5e65fc6**
-
-- [x] **SPEC-API-04 — Merge & Navigation Endpoints** ✅ COMPLETE 2026-07-20
-  **Commit: cb18965**
-
-- [x] **SPEC-API-05 — Approval Endpoints** ✅ COMPLETE 2026-07-20
-  **Commit: 0e15a03**
-
-- [x] **SPEC-API-06 — Multi-User & Profile Endpoints** ✅ COMPLETE 2026-07-20
-  **Commit: 45e3fab**
-
-- [x] **SPEC-API-07 — Error Catalog** ✅ COMPLETE 2026-07-21
-  **Commit: 4074b71**
-
----
-
-## Phase 3b: Topic Management Specs
-
-- [x] **SPEC-TM-01 — Topic Data Model** ✅ COMPLETE 2026-07-21
-  **Commit: d2a8168**
-
-- [x] **SPEC-TM-02 — Auto-Topic Detection** ✅ 2026-07-21 (8bce2c0)
-
-- [x] **SPEC-TM-03 — Topic Search & One-Button Context** ✅ 2026-07-21 (f866d0d)
-
-- [x] **SPEC-TM-04 — #Reference Resolution** ✅ 2026-07-21 (e8a14d3)
-
-- [x] **SPEC-TM-05 — Topic Lifecycle & Sidebar** ✅ 2026-07-21 (66beab0)
-
----
-
-## Phase 3c: Plugin & App Card Specs
-
-**Goal:** Exact specs for JS plugin system, embedded app cards, calendar integration, file viewers. Worker reads these specs and produces correct plugin/card layer.
-
-**Dependencies:** Phase 2 complete (files, apps, and plugins are all tree-addressable).
-
-- [x] **SPEC-PL-01 — JS Plugin System**
-  Plugin format: single JS file with manifest (name, version, description, permissions, render_type). Registration: agent sends JS file as message, user clicks "Install", plugin loaded into renderer. Hot-reload: plugin updates instantly propagate to all connected devices (desktop, web, mobile). Sandbox: plugins run in isolated iframe/WebWorker with limited API surface. Permissions: file_access, network, notifications, calendar_read, calendar_write. Plugin registry: namespace to prevent conflicts.
-  **Commit: caff298**
-
-|- [x] **SPEC-PL-02 — Built-in File Viewers**
-|  **Commit: c7bfa8b**
-  Native viewers for: PDF (pdf.js), images (lightbox + zoom), code (Monaco Editor with syntax highlighting), CSV/spreadsheet (handsontable or similar), Markdown (rendered with GFM), JSON (collapsible tree view), audio/video (HTML5 player). File attachment model: attach by reference (already in Hermes filesystem → single canonical copy) or by upload (new file → stored in Hermes). Agent can open/view any file in the knowledge base.
-
-- [x] **SPEC-PL-03 — App Card System + Database-per-Card** ✅ COMPLETE 2026-07-22
-  **Commit: cc41acf** — 65KB, 1,121 lines, 16 sections, 3 Mermaid diagrams.
-  Card model: {id, app_id, card_type: 'compact'|'expanded'|'iteration', data: JSON, actions: [{label, handler}], created_at, context_hash}. Agent renders cards based on context. Database-per-Card: each type gets own SQLite at `~/.hermes/canopy/cards/{type}.db`. Cards table + events table. REST API: GET/POST/PATCH `/api/cards/{type}/{id}`. Local-first with server sync.
-
-|- [x] **SPEC-PL-04 — Dynamic Thinking Interface (Iteration Cards)** ✅ COMPLETE 2026-07-22
-|  **Commit: 10ab311** — 1,530 lines, 43 design decisions, 38 test scenarios, 3 Mermaid diagrams.
-|  Five iteration card subtypes: Search (live results + user relevance feedback), Code Exec (stdout/stderr streaming + cancel), File Read (highlight regions), Thinking (collapsible reasoning steps), Tool Call (gated approve/deny). Event flow: agent → SSE → card renderer → user feedback → agent. Feedback bridge with 30s ack timeout. Cancel with SIGTERM/SIGKILL escalation. Agent crash recovery preserved via SQLite durability.
-
-- [x] **SPEC-PL-05 — Calendar Integration** ✅ COMPLETE 2026-07-22
-  Calendar viewer card: month/week/day views, event cards with title/time/description/location. Multiple calendar sources: Google Calendar (OAuth), iCloud (CalDAV), local (.ics files in Hermes knowledge base). Agent can: create events, modify events, check availability, propose times. Calendar ↔ auto-responder: agent knows when you're busy and tells others. Calendar ↔ status: "I'm in a meeting until 3" → agent auto-sets busy status.
-
-- [x] **SPEC-PL-06 — Multi-Message Reference Model** ✅ COMPLETE 2026-07-22
-  **Commit: d72ccbe** — 67KB, 1,155 lines, 35 design decisions, 35 edge cases, 40 test scenarios.
-  Data model extension: a node can have MULTIPLE parent edges (not just one). Multi-reference reply: select N messages → reply → new node with N parent edges of type 'reference'. Visual: colored edges from each source converge into reply. Context: agent sees all referenced messages as unified input. Conflict: if referenced messages are in different branches, the reply node is a synthetic merge point showing which context contributed what.
-
----
-
-## Phase 3d: Post-MVP Architecture Specs
-
-- [x] **SPEC-FTR-01 — Multi-User Collaboration & Approval Model** ✅ COMPLETE 2026-07-22
-  **Commit: 37fe758** — 620 lines, 11 sections, 20 design decisions, Go interfaces, SSE events, API endpoints, security model.
-- [x] **SPEC-FTR-02 — Federated Multi-Agent Architecture** ✅ COMPLETE 2026-07-22
-  **Commit: 29b61a6** — 482 lines, 11 sections, 20 design decisions, FTL transport protocol, ECDH encryption, profile routing, SSE relay, API endpoints, 3 Go interfaces, 3 DDL tables, 12 edge cases, 14 test scenarios, 7-phase implementation plan.
-- [x] **SPEC-FTR-03 — MLS Encryption Model** ✅ COMPLETE 2026-07-22
-  **Commit: 4aad8b5** — 589 lines, 42KB, 11 sections, 20 design decisions, 2 Mermaid diagrams, 16 edge cases, 16 test scenarios, 13 security considerations.
-- [x] **SPEC-FTR-04 — Multi-Transport Architecture** ✅ COMPLETE 2026-07-22
-  **Commit: 3669bef** — 647 lines, 46KB, 10 sections
-- [x] **SPEC-FTR-05 — Self-Hosted & SaaS Relay Architecture** ✅ COMPLETE 2026-07-22
-  **Commit: 206944f** — 852 lines, 59KB, 12 sections, 20 design decisions, 3 Mermaid diagrams, 4 Go interfaces, 4 DDL tables, 6 API endpoints, 12 edge cases, 14 test scenarios.
-|- [x] **SPEC-FTR-06 — WebUI Native Packaging & Distribution** ✅ COMPLETE 2026-07-22
-|  **Commit: 1a2a8f6** — 758 lines, 45KB, 12 sections, 20 design decisions, 3 Go interfaces (PackageManager, Updater, InstallerBuilder), JSON Schema (latest.json), full CI/CD workflow YAML, 14 edge cases, 20 test scenarios, 6 security considerations, 5-phase implementation plan.
-||- [x] **SPEC-FTR-07 — Hermes Agent Gateway Integration** ✅ COMPLETE 2026-07-23
-|  **Commit: c9d489c** — 828 lines, 49KB, 8 sections, 20 design decisions, 6 Go interfaces, 13 API endpoints, 17 edge cases, 3 DDL tables. HermesClient, EventTranslator, ProfileRouter, SkillBridge, AgentSessionManager interfaces. canopyd↔Hermes API contract with SSE relay, profile routing, tool→Card translation, session continuity, and degraded-mode fallback.
-
----
-
-## Phase 4: Backend (Go Gateway)
-
-- [x] **BE-01 — Project Scaffold** ✅ COMPLETE 2026-07-23
-  **Commit: d04f0c3** — 1,245 lines across 21 files: Go module (chi/pgx/migrate/uuid/zerolog), 4 DDL migrations (extensions→trees→nodes→edges), cmd/canopyd/main.go with -ldflags version injection, Makefile (build/test/vet/lint/build-embed×5), CI workflow, Dockerfile, .gitignore, full data layer (models, NodeRepo, TreeRepo, EdgeRepo) per SPEC-DM-01 interfaces. EdgeRepo: 327 lines (408f5c6). Total: 1,572 lines scaffold.
-|- [x] **BE-02 — Database Layer** ✅ COMPLETE 2026-07-23
-  **Commits: 408f5c6 (EdgeRepo: 327 lines), c4d4ce9 (DB struct + pool), 26f450b (Migrate, PoolConfig, migrations pkg). Models, NodeRepo (376 lines), TreeRepo (220 lines), EdgeRepo (327 lines), db.go with pool/migration runner, 4 DDL migrations, standalone migrations/ Go package. Full pgx impl per SPEC-DM-01 §4.**
-- [x] **BE-03 — Tree Service** ✅ COMPLETE 2026-07-23
-  **Commit: aa0c31a** — 968-line TreeService with spec-compliant interface, 16 types, 16 error sentinels, atomic CreateTree tx, ListTrees pagination, GetTree with stats, DeleteTree. Wired to HTTP server via TreeHandler.
-  **Details:** 1,155 lines added. Full TreeService with CreateTree (atomic tree+root-node tx), ListTrees (pagination/sort/search), GetTree, UpdateTree (partial), DeleteTree (soft). HTTP handlers with camelCase JSON, UUID validation, limit clamping, structured error responses. Wired via chi router at /trees, DB init in main.go.
-- [x] **BE-04 — Node Service** ✅ COMPLETE 2026-07-23
-  **Commit: db1ab42** — 1,327 lines across 5 files. NodeService with Create, GetByID, Update, SoftDelete, Reply, Fork. Full validation (content length, formats, node/edge types, metadata size). Depth/child_count computed via CTE. 6 HTTP routes via NodeHandler. 11 unit tests. MiniMax-M3 worker produced node_service.go (partial — fixed compile error); foreman wrote handler, wiring, and tests directly.
-- [x] **BE-05 — SSE Hub** ✅ COMPLETE 2026-07-23
-  **Commit: d84c0a4** — 2,349 lines across 5 files. SSEHub interface with Subscribe, Unsubscribe, Broadcast, ReplaySince, SubscriberCount, TotalConnections, Shutdown. In-memory ring buffer (1000 events, 1h retention). Per-tree/user/server connection limits. HTTP handler with query validation (since hash, profiles filter), heartbeat, replay-by-Last-Event-ID, slow-client disconnect, graceful shutdown with done-event drain. 17 tests. Wired into server.go + main.go. MiniMax-M3 worker produced core implementation; foreman fixed test/handler issues.
-|- [x] **BE-06 — Sync Engine** ✅ COMPLETE 2026-07-23
-|  **Commit: 2461eb2** — 20 files, +1,737 lines. SnapshotRepo, EventRepo, SyncEngine interface with OnNodeMutation/TreeMutation, ComputeDeltaForClient, SSE broadcast. DDL: 3 migrations (tree_snapshots, node_content_hash, tree_events). 5 API + delta types. 6 unit tests. MiniMax-M3 worker produced migrations, repos, sync engine (858 lines); foreman wrote handler, service facade, tests, wiring.
-|- [x] **BE-07 — Auth & Approval Engine** ✅ COMPLETE 2026-07-23 (specs: SPEC-FTR-01, SPEC-API-05, SPEC-DM-03, SPEC-DM-04)
-|  **Commits: 69debcf** (BE-07a+b), **555856e** (BE-07c+d+e), **cad525f** (BE-07f). Total: +2,400 lines across 16 files.
-|  - [x] **BE-07a** — DDL migrations: approvals, users, profiles, tree_members tables
-|  - [x] **BE-07b** — Go models + pgx repos: approval types, ApprovalRepo, UserRepo, ProfileRepo, audit logging
-|  - [x] **BE-07c** — ApprovalService: CreateApproval, GetPending, Approve, Deny (with audit + SSE broadcast)
-|  - [x] **BE-07d** — HTTP handlers: GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, GET /approvals/history
-|  - [x] **BE-07e** — Wiring: register routes in server.go, init repos/services in main.go, SSE integration
-|  - [x] **BE-07f** — Unit tests: auth middleware + approval service + config tests (cad525f)
-- [x] **BE-08 — Profile Routing** ✅ COMPLETE 2026-07-23
-  **Commit: 65a35d8** — 8 files, +718 lines. PGProfileRouter with AES-256-GCM token encryption, profile management HTTP handlers, DDL migration (profile_route table), 4 handler tests, 5 crypto tests. Wired at `/api/v1/workspaces/{workspace_id}/profiles`.
-|- [x] **BE-09a — Core Types + Interface (SPEC-FTR-04 §3)** ✅ COMPLETE 2026-07-24
-  **Commit: 3961566** — transport.go (TransportAdapter, ConnectOptions, Connection, ConnectionState, TransportType, AuthMaterial, capabilities). message.go (Message, Opcode 0x01-0x0D, 13 payload types). errors.go (10 sentinel errors). adapter.go (package doc).
-|- [x] **BE-09b — ConnectionManager + MessageQueue + RateLimiter** ✅ COMPLETE 2026-07-24
-  **Commit: 3961566** — connection_manager.go (385 lines): ConnectionManager with RouteMessage, OnConnect, OnDisconnect, DegradeTransport, MeasureBandwidth, EnforceRateLimit. MessageQueue ring buffer (10K cap). RateLimiter token-bucket. BandwidthProfile. events.go: SSE transport_status/error/degradation helpers.
-|- [x] **BE-09c — TransportSelector + Deployment Detection** ✅ COMPLETE 2026-07-24
-  **Commit: 3961566** — selector.go (251 lines): TransportSelector with SelectPrimary, SelectFallback, DetectTopology. DeploymentMode (7 modes). NetworkTopology (5 topologies). Capability negotiation. stub_adapters.go: NATS/WebRTC/Redis/Relay stubs. sse_adapter.go: full TransportAdapter impl for MVP.
-||- [x] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring** ✅ COMPLETE 2026-07-24
-  **Commit: 6190210** — +719 lines across 5 files. transport_repo.go (387 lines, 3 repo interfaces + PG impls), transport_handler.go (264 lines, 4 REST routes + health probe), db.go (transport repos wired into DB struct), server.go (transport params in New()), main.go (SSEAdapter/Selector/ConnectionManager/repos init). Build+vet+test all pass (11/11 packages).
-||- [x] **BE-10 — Encryption Layer (MLS-Only)** (see sub-tasks below)
-|- [x] **BE-10a** — Core types, interfaces, DDL, stub service, repos ✅ COMPLETE 2026-07-24
-|  **Commit: 094947b** — 809 lines across 12 files. internal/mls/types.go (149 lines, exact spec types/interfaces/errors/events), internal/mls/service.go (MSLServiceImpl — 10 methods, PG-backed), internal/db/mls_repo.go (4 repo interfaces + PG impls, 387 lines), db.go (4 MLS repos wired), DDL migrations (000014-000017, up+down). MiniMax-M3 worker generated types.go; foreman completed service/repos/migrations/wiring.
-||- [x] **BE-10b** — HTTP handlers + wiring (10 endpoints) ✅ COMPLETE 2026-07-24
-|  - [x] **BE-10c** — SSE events + welcome delivery ✅ COMPLETE 2026-07-24
-  **Commit: 1227133** — 116 lines across 2 files. MLS service now broadcasts 6 SSE event types (group_created, member_added, welcome_message, member_removed, group_epoch_advanced) via SSE hub on all mutations. Welcome delivery per SPEC-FTR-03 Design Decision 16.
-|  - [x] **BE-10d** — Tests: unit + integration ✅ COMPLETE 2026-07-24
-  **Commits: 510e453 (32 tests), 9996b23 (+3 tests: AddExternalProposal no-broadcast, GetEpochSecret/GetGroupState no-broadcast, Encrypt not-group-member). 35 tests total covering all 10 MLSService methods + event bridge decorator.**
-|- [x] **BE-11 — HTTP Router & Middleware**
-|  - [x] **BE-11a** — Extract shared handler utilities (writeError, writeJSON, decodeJSON) to handler_util.go ✅ COMPLETE 2026-07-24
-|  - [x] **BE-11b** — BodySizeLimit middleware (1MB, SPEC-API-02 §10.1) + RateLimit middleware (per-IP token bucket) ✅ COMPLETE 2026-07-24
-|  - [x] **BE-11c** — TreeMembershipMiddleware + wire AuthMiddleware into route groups ✅ COMPLETE 2026-07-24
-|  - [x] **BE-11d** — Tests for all middleware (auth, membership, body size, rate limit) ✅ COMPLETE 2026-07-24
-|    **Commit: 3483cd5** — 13 new middleware tests. 18 total handler tests pass.
-|- [ ] **BE-12 — Backend Integration Tests**
-|  - [ ] **BE-12a** — Integration test framework (docker-compose PostgreSQL + migration runner)
-|  - [ ] **BE-12b** — API-level integration: tree CRUD, node CRUD, edge CRUD via real HTTP + DB
-|  - [ ] **BE-12c** — Auth & approval integration: JWT flow, user creation, approval lifecycle
-|  - [ ] **BE-12d** — MLS integration: group creation, membership, encryption via real DB
-|  - [ ] **BE-12e** — Transport integration: SSE hub, connection lifecycle, rate limiting
-|  - [ ] **BE-12f** — GitHub Actions CI workflow with PostgreSQL service container
-
-|---
-
-## Phase 5: Frontend (TypeScript/React)
-
-- [ ] **FE-01 — Project Scaffold**
-- [ ] **FE-02 — Tree Data Store**
-- [ ] **FE-03 — Tree Rendering Engine**
-- [ ] **FE-04 — Navigation System**
-- [ ] **FE-05 — Message Composer**
-- [ ] **FE-06 — Approval Panel**
-- [ ] **FE-07 — Multi-User Features**
-- [ ] **FE-08 — Agent Context Visualization**
-- [ ] **FE-09 — Offline Mode**
-- [ ] **FE-10 — Accessibility**
-- [ ] **FE-11 — Frontend Integration Tests**
-
----
-
-## Phase 6: Integration & Wiring
-
-- [ ] **INT-01 — End-to-End Tree Flow**
-- [ ] **INT-02 — Multi-User Integration**
-- [ ] **INT-03 — Multi-Profile Integration**
-- [ ] **INT-04 — Offline Sync Integration**
-- [ ] **INT-05 — Performance Baseline**
-- [ ] **INT-06 — CLI Wiring**
-
----
-
-## Phase 7: Testing & Hardening
-
-- [ ] **TEST-01 — Unit Test Coverage**
-- [ ] **TEST-02 — Integration Test Suite**
-- [ ] **TEST-03 — Chaos & Resilience**
-- [ ] **TEST-04 — Security Audit**
-- [ ] **TEST-05 — Accessibility Audit**
-
----
-
-## Phase 8: Production Deployment
-
-- [ ] **DEPLOY-01 — Docker + Compose + WebUI Native Binary**
-- [ ] **DEPLOY-02 — Observability**
-- [ ] **DEPLOY-03 — CI/CD**
-- [ ] **DEPLOY-04 — Documentation**
-- [ ] **DEPLOY-05 — Migration Plan**
-
----
-
-## Phase 9: Distribution & Multi-Tenant
-
-- [ ] **DIST-01 — Multi-Tenant + Multi-Transport Isolation**
-- [ ] **DIST-02 — Self-Host Guide**
-- [ ] **DIST-03 — Open Source Readiness**
-
----
-
-## Phase 10: Continuous Improvement
-
-- [x] **INFRA-001 — Fix Tick Storm: cooldown < tick_timeout** 🔴 CRITICAL
-  **Problem:** Cooldown=900s < tick_timeout=600s → 5 duplicate timeout dispatches in 2h → $0.83 burned.
-  **Fix applied 2026-07-24:** Scheduler API `PUT CooldownS=3600` (1h cooldown, 6× previous). Cooldown now exceeds worst-case tick duration by 3000s.
-  **Remaining risk:** Root cause (scheduler spawns new tick while previous is active) still exists — only mitigated, not eliminated. Long-term fix: scheduler-level guard (skip if active tick exists for project).
-
-- [ ] **NEVER-DONE — Run coding-hermes-never-done 11-point audit**
-  Load coding-hermes-never-done skill. Run ALL 11 checks: spec alignment, doc coverage, test gaps, package upgrades, pitfall hunt, performance audit, endpoint verification, CI/CD health, DuckBrain sync, code quality, middle-out wiring. Create a task for EVERY gap found. This task is never complete — the audit always finds something.
-
----
-
-## Legend
-
-| Marker | Meaning |
-|--------|---------|
-| `[ ]` | Not started |
-| `[x]` | Complete (verified — spec written and committed) |
-| **T1.x** | Phase 1 task |
-| **SPEC-DM-xx** | Spec task (produces spec files) |
-| **SPEC-API-xx** | API spec task |
-| **SPEC-TM-xx** | Topic management spec task |
-| **SPEC-PL-xx** | Plugin/card spec task |
-| **SPEC-FTR-xx** | Post-MVP feature spec task |
-| **BE-xx** | Backend implementation |
-| **FE-xx** | Frontend implementation |
-| **INT-xx** | Integration |
-| **TEST-xx** | Testing |
-| **DEPLOY-xx** | Deployment |
-| **DIST-xx** | Distribution |
+# Hermes Canopy — Model Router Task Matrix
+
+> **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
+> **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
+> **Status:** Phase 4 backend complete (BE-01→BE-11d + BE-13a/b/c + BE-17). P0 blockers resolved. Next: BE-14/15/16/18, then Phase 5 frontend.
+> **DuckBrain:** hermes-canopy namespace (25+ entries)
+
+## Active Tasks
+
+| ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
+|----|------|-----|-----|------|------|-------|-----|----------|
+| **Phase 4: Backend** | | | | | | | | |
+| BE-12a | Integration test framework (docker-compose PG + migration runner) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+| BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
+| BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
+| BE-12f | GitHub Actions CI workflow with PostgreSQL service container | Medium | 2 | BE-12a | ++infra, ++ci | DeepSeek V4 Flash | Low | Step 3.7 Flash |
+| ✅ BE-13a | Fix missing workspaces table migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| ✅ BE-13b | Fix canopy_app role migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| ✅ BE-13c | Fix now() in index predicate (PATCHED — verified) | Medium | 1 | — | ++sql, ++testing | DeepSeek V4 Flash | Minimal | Step 3.7 Flash |
+| BE-14 | Implement /api/topics endpoints (0% done, specs exist, routes return 501) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | DeepSeek V4 Pro | High | GLM-5.2 |
+| BE-15 | Implement /api/cards endpoints (0% done, routes return 501) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | DeepSeek V4 Pro | High | GLM-5.2 |
+| BE-16 | Implement /api/graph endpoints (0% done, routes return 501) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | GLM-5.2 | High | DeepSeek V4 Pro |
+| ✅ BE-17 | Wire extractActorID to JWT claims (returns uuid.Nil — auth blocked) | Critical | 3 | BE-07 | ++security, ++auth, ++backend | DeepSeek V4 Pro | High | GPT-5.6 Sol |
+| BE-18 | Wire SSE broadcast in node_service.go (TODO at line 266) | Medium | 2 | BE-05 | ++backend, ++sse | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+| **Phase 5: Frontend** | | | | | | | | |
+| FE-01 | Project scaffold (Vite + React + TypeScript + Tailwind) | High | 2 | — | ++frontend, ++typescript, ++scaffold | DeepSeek V4 Flash | Medium | Hy3 |
+| FE-02 | Tree data store (Yjs CRDT + React Flow integration) | High | 5 | FE-01 | ++frontend, ++crdt, ++typescript | DeepSeek V4 Pro | High | GLM-5.2 |
+| FE-03 | Tree rendering engine (React Flow + d3-hierarchy layout + Canvas fallback) | High | 5 | FE-02 | ++frontend, ++visualization, ++react | DeepSeek V4 Pro | High | GLM-5.2 |
+| FE-04 | Navigation system (pan, zoom, search, breadcrumbs, minimap) | Medium | 3 | FE-03 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Flash |
+| FE-05 | Message composer (rich text, file attachments, agent context pinning) | High | 3 | FE-01 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
+| FE-06 | Approval panel (pending items, approve/deny, diff view, audit trail) | Medium | 3 | FE-01, BE-07 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
+| FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
+| FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
+| FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader) | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
+| FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
+| **Phase 6: Integration** | | | | | | | | |
+| INT-01 | End-to-end tree flow (create → edit → merge → approve) | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
+| INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge) | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
+| INT-03 | Multi-profile integration (switch profiles, isolated trees, routing) | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
+| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
+| INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate) | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
+| **Phase 7: Testing** | | | | | | | | |
+| TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
+| TEST-02 | Integration test suite (docker-compose, full API surface) | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
+| TEST-03 | Chaos & resilience (kill backend, network partition, DB outage) | Low | 4 | INT-01 | ++testing, ++chaos, ++resilience | DeepSeek V4 Pro | High | GLM-5.2 |
+| TEST-04 | Security audit (MLS key rotation, JWT expiry, auth bypass attempts) | Medium | 4 | BE-10d, BE-07 | ++testing, ++security, ++audit | GLM-5.2 | High | GPT-5.6 Sol |
+| TEST-05 | Accessibility audit (axe-core, manual screen reader, keyboard-only) | Low | 3 | FE-10 | ++testing, ++accessibility | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
+| **Phase 8: Deployment** | | | | | | | | |
+| DEPLOY-01 | Docker + Compose + WebUI Native Binary | High | 3 | BE-12f, FE-03 | ++infra, ++docker, ++deploy | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+| DEPLOY-02 | Observability (Prometheus + Grafana + structured logging + traces) | Medium | 3 | BE-05 | ++observability, ++monitoring | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| DEPLOY-03 | CI/CD (GitHub Actions: test → build → deploy → smoke test) | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+| DEPLOY-04 | Documentation (README, API docs, deploy guide, architecture overview) | Low | 2 | — | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
+| DEPLOY-05 | Migration plan (existing Hermes data → canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| **Phase 9: Distribution** | | | | | | | | |
+| DIST-01 | Multi-tenant + Multi-transport isolation | Low | 4 | BE-09d | ++multi-tenant, ++transport | DeepSeek V4 Pro | High | GLM-5.2 |
+| DIST-02 | Self-host guide (single binary, env vars, TLS, backup) | Low | 2 | DEPLOY-01 | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
+| DIST-03 | Open source readiness (LICENSE, CONTRIBUTING, CoC, issue templates) | Low | 1 | — | ++documentation | DeepSeek V4 Flash | Minimal | GPT-5.6 Terra |
+| **Continuous** | | | | | | | | |
+| INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
+| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash |
+| NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
+
+## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
+
+All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + BE-13a/b/c + BE-17), 29 specs across Phases 1-3d.
+
+| Phase | Purpose | Key outcomes |
+|-------|---------|--------------|
+| P1: Architecture | Research & validation (SSE, Yjs, React Flow, MLS, offline stack) | 9 specs, confirmed architecture |
+| P2: Data Model | Tree node/edge DDL, snapshot/delta model, approval & audit trail | 4 spec files |
+| P3: API Specs | SSE event stream, tree/node/edge CRUD, merge, approval, profile, errors | 7 spec files |
+| P3b: Topics | Topic data model, auto-detection, search, #reference, lifecycle | 5 spec files |
+| P3c: Plugins/Cards | JS plugin system, file viewers, app cards, iteration cards, calendar, multi-ref | 6 spec files |
+| P3d: Post-MVP | Multi-user collaboration, federated agents, MLS encryption, multi-transport, SaaS relay, native packaging, gateway integration | 7 spec files |
+| P4: Backend | Go gateway — scaffold, DB layer, tree/node/edge services, SSE hub, sync engine, auth/approval, profile routing, multi-transport, MLS encryption, middleware | 15 tasks (BE-01→BE-11d, BE-13a/b/c), ~15K lines |
+| P0 Fixes | Migration gaps & JWT wiring: workspaces table, canopy_app role, now() predicate, extractActorID -> UserIDFromContext | 4 migration files, 1 handler fix |
+
+## Assumptions
+
+- Go 1.23+ backend, TypeScript/React frontend (not yet scaffolded)
+- PostgreSQL via docker-compose for integration tests
+- Yjs CRDT with SSE transport for real-time sync
+- MLS encryption (mls-rs) for group messaging
+- React Flow + d3-hierarchy for tree rendering
+- BE-13a/b/c and BE-17 resolved (migration fixes + JWT wiring deployed)
+- INFRA-001 (tick storm) mitigated but root cause not fixed
+
+## Routing Notes
+
+- **Go backend tasks (BE-*):** DeepSeek V4 Pro primary for moderate complexity ($0.44/1M), GLM-5.2 for autonomous/SWE-bench tasks ($0.30/1M), V4 Flash for mechanical ($0.10/1M)
+- **TypeScript/React frontend (FE-*):** Hy3 primary for UI/HTML/CSS (flat-rate), V4 Pro for complex state management, Step 3.7 Flash for tests ($0.09/1M)
+- **Security-critical tasks (BE-13a/b, BE-17):** V4 Pro primary, escalate to GPT-5.6 Sol if auth architecture changes needed
+- **Testing tasks (TEST-*, INT-*, E2E):** Step 3.7 Flash primary ($0.09/1M), Luna for browser/screenshots ($100/mo flat)
+- **Spec/doc tasks (DEPLOY-04, DIST-02/03):** V4 Flash for mechanical docs, Terra for structured documentation
+
+## Execution Order
+
+1. ✅ **P0 blockers resolved:** BE-13a → BE-13b → BE-13c → BE-17 ✅
+2. **BE remaining:** BE-14 + BE-15 + BE-16 (parallel — stub endpoints) → BE-18
+3. **BE integration:** BE-12a → BE-12b/BE-12c/BE-12d/BE-12e (parallel) → BE-12f
+4. **FE scaffold:** FE-01 → FE-02 → FE-03 (sequential — CRDT then rendering)
+5. **FE parallel:** FE-04/FE-05/FE-06/FE-07 (after FE-02)
+6. **Integration:** INT-01 (after BE-12b + FE-03) → INT-02/INT-03/INT-04/INT-05 (parallel)
+7. **Testing/Hardening:** TEST-01/TEST-02/TEST-03/TEST-04/TEST-05 (after INT-01)
+8. **Deploy:** DEPLOY-01 → DEPLOY-02/DEPLOY-03 (parallel) → DEPLOY-04/DEPLOY-05
+9. **Distribution:** DIST-01 → DIST-02/DIST-03
+
+## Escalation Conditions
+
+- BE-13a/13b migration fixes break existing data → CRITICAL, escalate to GPT-5.6 Sol
+- BE-17 JWT extraction reveals auth architecture gap → escalate to GPT-5.6 Sol
+- FE-02 CRDT integration fails with React Flow → escalate to V4 Pro High
+- FE-09 offline mode complexity exceeds scope → reassess vs. post-MVP
+- INFRA-001 tick storm reoccurs → escalate to Bane (scheduler root fix)
+- Any security task (BE-17, TEST-04) reveals architectural vulnerability → CRITICAL, escalate to GPT-5.6 Sol Max

@@ -9,5 +9,5 @@ CREATE TABLE mls_key_packages (
     CONSTRAINT ck_mls_key_packages_expiry CHECK (expires_at > created_at)
 );
 
-CREATE INDEX idx_mls_key_packages_available ON mls_key_packages(profile_id, expires_at)
-    WHERE expires_at > now();
+CREATE INDEX idx_mls_key_packages_available ON mls_key_packages(profile_id, expires_at);
+-- NOTE: WHERE expires_at > now() removed —now() is STABLE, not IMMUTABLE (PostgreSQL restriction)

@@ -217,13 +217,11 @@ func (h *ApprovalHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
 
 // --- Helpers ---------------------------------------------------------------
 
-// extractActorID is a stub. In production the authenticated user's ID
-// comes from JWT claims stored in the request context.
+// extractActorID extracts the authenticated user ID from the request
+// context. AuthMiddleware stores the JWT "sub" claim under
+// userIDContextKey; this helper reads it via UserIDFromContext.
 func extractActorID(r *http.Request) uuid.UUID {
-	if uid, ok := r.Context().Value("actor_id").(uuid.UUID); ok {
-		return uid
-	}
-	return uuid.Nil
+	return UserIDFromContext(r.Context())
 }
 
 // parsePagination extracts limit/offset from query params with defaults.
