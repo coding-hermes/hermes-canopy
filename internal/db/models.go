@@ -300,3 +300,60 @@ type ProfileInvite struct {
 	AcceptedAt   *time.Time `db:"accepted_at"   json:"acceptedAt"`
 	DeclinedAt   *time.Time `db:"declined_at"   json:"declinedAt"`
 }
+
+// Topic represents a named branch (topic) in a conversation tree.
+// Maps to the topics table (migration 000020). Spec: SPEC-TM-01 §3.
+type Topic struct {
+	ID            uuid.UUID  `db:"id"              json:"id"`
+	TreeID        uuid.UUID  `db:"tree_id"         json:"treeId"`
+	RootNodeID    uuid.UUID  `db:"root_node_id"    json:"rootNodeId"`
+	Title         string     `db:"title"           json:"title"`
+	Description   string     `db:"description"     json:"description"`
+	Slug          string     `db:"slug"            json:"slug"`
+	ParentTopicID *uuid.UUID `db:"parent_topic_id" json:"parentTopicId"`
+	Status        string     `db:"status"          json:"status"`
+	TopicTags     []string   `db:"topic_tags"      json:"topicTags"`
+	NodeCount     int32      `db:"node_count"      json:"nodeCount"`
+	CreatedAt     time.Time  `db:"created_at"      json:"createdAt"`
+	ArchivedAt    *time.Time `db:"archived_at"     json:"archivedAt"`
+	DeletedAt     *time.Time `db:"deleted_at"      json:"-"`
+}
+
+// TopicMember represents a profile's membership in a topic.
+type TopicMember struct {
+	TopicID   uuid.UUID `db:"topic_id"   json:"topicId"`
+	ProfileID uuid.UUID `db:"profile_id" json:"profileId"`
+	Role      string    `db:"role"       json:"role"`
+	JoinedAt  time.Time `db:"joined_at"  json:"joinedAt"`
+}
+
+// TopicSummary is a lightweight view of a topic for list responses.
+type TopicSummary struct {
+	ID          uuid.UUID  `json:"id"`
+	TreeID      uuid.UUID  `json:"treeId"`
+	Title       string     `json:"title"`
+	Slug        string     `json:"slug"`
+	Description string     `json:"description"`
+	Status      string     `json:"status"`
+	NodeCount   int32      `json:"nodeCount"`
+	TopicTags   []string   `json:"topicTags"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
+}
+
+// TopicCreateInput is the request payload for creating a topic.
+type TopicCreateInput struct {
+	TreeID        uuid.UUID  `json:"treeId" validate:"required"`
+	RootNodeID    uuid.UUID  `json:"rootNodeId" validate:"required"`
+	Title         string     `json:"title" validate:"required,min=1,max=200"`
+	Description   string     `json:"description,omitempty"`
+	ParentTopicID *uuid.UUID `json:"parentTopicId,omitempty"`
+	TopicTags     []string   `json:"topicTags,omitempty"`
+}
+
+// TopicUpdateInput is the request payload for updating a topic.
+type TopicUpdateInput struct {
+	Title       *string   `json:"title,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	TopicTags   *[]string `json:"topicTags,omitempty"`
+}

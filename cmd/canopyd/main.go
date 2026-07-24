@@ -118,6 +118,14 @@ func main() {
 	kpMgr := newPGMLSKeyPackageManager(database.MLSKeyPackages)
 	mlsHandler := handler.NewMLSHandler(mlsBridge, kpMgr)
 
+	// Topic service — BE-14 implementation (SPEC-TM-01 §4.4).
+	topicSvc := service.NewTopicServiceImpl(
+		database.Topics,
+		database.TopicMembers,
+		database.Trees,
+		database.Nodes,
+	)
+
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(
 		database.Pool,
@@ -131,7 +139,7 @@ func main() {
 
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler)
+		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc)
 
 	// Start server in background
 

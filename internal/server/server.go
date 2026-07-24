@@ -47,6 +47,7 @@ func New(
 	membersRepo db.TreeMemberRepo,
 	profileRouter *hermes.PGProfileRouter,
 	mlsHandler *handler.MLSHandler,
+	topicSvc service.TopicService,
 ) *Server {
 	r := chi.NewRouter()
 
@@ -102,8 +103,8 @@ func New(
 		r.Mount("/workspaces/{workspace_id}/profiles",
 			handler.NewProfileHandler(profileRouter).Routes()) // ProfileRouter passed via main.go wiring
 
-		// Topic endpoints (BE-14 — stub, returns 501). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
-		r.Mount("/topics", handler.NewTopicHandler(nil).Routes())
+		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
+		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
 
 		// Card endpoints (BE-15 — stub, returns 501). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(nil).Routes())
