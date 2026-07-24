@@ -372,7 +372,7 @@ func scanCardFromRows(rows *sql.Rows) (*Card, error) {
 
 func scanEventFromRows(rows *sql.Rows) (*CardEvent, error) {
 	var (
-		seq                                     int64
+		seq                                                                    int64
 		eventID, cardID, eventType, actorKind, actorID, payloadJSON, createdAt string
 	)
 

@@ -12,12 +12,12 @@ import (
 
 // GraphNodeSummary is a lightweight node view suitable for graph queries.
 type GraphNodeSummary struct {
-	ID        uuid.UUID `json:"id"`
-	TreeID    uuid.UUID `json:"tree_id"`
+	ID        uuid.UUID  `json:"id"`
+	TreeID    uuid.UUID  `json:"tree_id"`
 	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
-	Type      string    `json:"type"`
-	Depth     int       `json:"depth"`
-	CreatedAt time.Time `json:"created_at"`
+	Type      string     `json:"type"`
+	Depth     int        `json:"depth"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // GraphEdgeSummary represents a directed edge between two graph nodes.

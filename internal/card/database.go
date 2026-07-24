@@ -22,9 +22,9 @@ func DataDir() string {
 // CardDBManager manages per-card-type SQLite databases.
 // Each card type gets its own database file under DataDir().
 type CardDBManager struct {
-	dir  string
-	mu   sync.Mutex
-	dbs  map[CardType]*sql.DB
+	dir   string
+	mu    sync.Mutex
+	dbs   map[CardType]*sql.DB
 	repos map[CardType]CardRepository
 }
 

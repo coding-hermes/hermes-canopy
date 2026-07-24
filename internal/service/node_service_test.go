@@ -18,6 +18,7 @@ func newNodeService() *NodeServiceImpl {
 		edgeRepo: &edgeRepoStub{},
 		pool:     nil, // depth/child-count return 0 gracefully when pool is nil
 		now:      fakeNow,
+		sseHub:   nil, // BE-18: nil hub is safe — broadcast silently skipped
 	}
 }
 

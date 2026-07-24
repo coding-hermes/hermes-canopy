@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 )
 
 // nodeColumns mirrors db.nodeColumns so the service can query the
@@ -244,16 +245,19 @@ type NodeServiceImpl struct {
 	edgeRepo db.EdgeRepo
 	pool     *pgxpool.Pool
 	now      func() time.Time // injectable for testing
+	sseHub   sse.SSEHub       // BE-18 — SSE broadcast after mutations
 }
 
-// NewNodeService wires the repositories + pool into a NodeServiceImpl.
-// now defaults to time.Now when nil — callers can override for tests.
-func NewNodeService(nodeRepo db.NodeRepo, edgeRepo db.EdgeRepo, pool *pgxpool.Pool) *NodeServiceImpl {
+// NewNodeService wires the repositories, pool, and SSE hub into a
+// NodeServiceImpl. now defaults to time.Now when nil — callers can
+// override for tests.
+func NewNodeService(nodeRepo db.NodeRepo, edgeRepo db.EdgeRepo, pool *pgxpool.Pool, sseHub sse.SSEHub) *NodeServiceImpl {
 	return &NodeServiceImpl{
 		nodeRepo: nodeRepo,
 		edgeRepo: edgeRepo,
 		pool:     pool,
 		now:      time.Now,
+		sseHub:   sseHub,
 	}
 }
 
@@ -263,8 +267,9 @@ func NewNodeService(nodeRepo db.NodeRepo, edgeRepo db.EdgeRepo, pool *pgxpool.Po
 // same tree and not soft-deleted, opens a transaction, inserts the
 // node and edge, and returns the assembled NodeDetail + EdgeDetail.
 //
-// TODO(sse): BE-05 will wire SSE broadcast after a successful commit.
-// Until then, mutations are silent — no events are emitted.
+// BE-18: After a successful commit, broadcasts a node_added SSE event
+// to all subscribers of the tree so connected clients see the new node
+// appear in real time.
 func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input CreateNodeInput) (*CreateNodeResult, error) {
 	if err := validateCreateInput(input); err != nil {
 		return nil, err
@@ -412,6 +417,9 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		return nil, fmt.Errorf("%w: commit: %v", ErrDatabaseUnavailable, err)
 	}
 
+	// BE-18: Broadcast node_added to tree subscribers.
+	s.broadcastNodeEvent(ctx, treeID, "node_added", created.ID, created.AuthorID)
+
 	// Build NodeDetail. Depth = parentDepth + 1 (root parentDepth = 0).
 	detail := nodeToDetail(created)
 	detail.Depth = parentDepth + 1
@@ -515,6 +523,10 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 	detail := nodeToDetail(*updated)
 	detail.Depth = s.computeDepth(ctx, nodeID, updated.ParentID)
 	detail.ChildCount = s.computeChildCount(ctx, nodeID)
+
+	// BE-18: Broadcast node_updated to tree subscribers.
+	s.broadcastNodeEvent(ctx, detail.TreeID, "node_updated", nodeID, detail.AuthorID)
+
 	return detail, nil
 }
 
@@ -605,6 +617,9 @@ func (s *NodeServiceImpl) SoftDelete(ctx context.Context, nodeID uuid.UUID) (*De
 		Str("node_id", nodeID.String()).
 		Str("tree_id", outTreeID.String()).
 		Msg("node soft-deleted")
+
+	// BE-18: Broadcast node_deleted to tree subscribers.
+	s.broadcastNodeEvent(ctx, outTreeID, "node_deleted", outID, uuid.Nil)
 
 	return &DeleteNodeResult{
 		ID:        outID,
@@ -853,6 +868,7 @@ func nodeToDetail(n db.Node) *NodeDetail {
 	}
 }
 
+// edgeToDetail converts a db.Edge to the public EdgeDetail shape.
 func edgeToDetail(e db.Edge) *EdgeDetail {
 	return &EdgeDetail{
 		ID:           e.ID,
@@ -862,6 +878,28 @@ func edgeToDetail(e db.Edge) *EdgeDetail {
 		EdgeType:     e.EdgeType,
 		CreatedAt:    e.CreatedAt,
 	}
+}
+
+// broadcastNodeEvent sends an SSE event for a node mutation (BE-18).
+// The hub is optional — nil hub silently skips the broadcast (safe for
+// unit tests that construct NodeServiceImpl directly).
+func (s *NodeServiceImpl) broadcastNodeEvent(ctx context.Context, treeID uuid.UUID, eventType string, nodeID uuid.UUID, actorID uuid.UUID) {
+	if s.sseHub == nil {
+		return
+	}
+	data, _ := json.Marshal(map[string]interface{}{
+		"node_id":  nodeID.String(),
+		"tree_id":  treeID.String(),
+		"actor_id": actorID.String(),
+		"event":    eventType,
+	})
+	s.sseHub.Broadcast(treeID, sse.SSEEvent{
+		TreeID:    treeID,
+		Type:      eventType,
+		Data:      data,
+		Timestamp: time.Now().UTC(),
+		ActorID:   actorID,
+	})
 }
 
 // nullableUUID returns nil when the UUID is uuid.Nil so the DB sees

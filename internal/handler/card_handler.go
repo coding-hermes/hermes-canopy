@@ -44,11 +44,11 @@ func (h *CardHandler) Routes() chi.Router {
 
 // cardCreateRequest is the JSON body for creating a card.
 type cardCreateRequest struct {
-	TreeID   uuid.UUID       `json:"treeId"`
-	NodeID   uuid.UUID       `json:"nodeId"`
-	AppID    string          `json:"appId"`
+	TreeID   uuid.UUID        `json:"treeId"`
+	NodeID   uuid.UUID        `json:"nodeId"`
+	AppID    string           `json:"appId"`
 	CardType service.CardType `json:"cardType"`
-	Data     any             `json:"data"`
+	Data     any              `json:"data"`
 }
 
 // cardUpdateRequest is the JSON body for updating a card.

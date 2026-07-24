@@ -54,9 +54,9 @@ type DB struct {
 	MLSKeyPackages      MLSKeyPackageRepo
 	MLSPendingProposals MLSPendingProposalRepo
 	// Topic system repos (SPEC-TM-01 §4, migration 000020).
-	Topics        TopicRepo
-	TopicMembers  TopicMemberRepo
-	migrated            bool
+	Topics       TopicRepo
+	TopicMembers TopicMemberRepo
+	migrated     bool
 }
 
 // PoolConfig is the minimal pgxpool configuration. Fields are populated
@@ -112,12 +112,12 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 		TransportConnections: NewPGTransportConnectionRepo(pool),
 		TransportConfigs:     NewPGTransportConfigRepo(pool),
 		TransportEvents:      NewPGTransportEventRepo(pool),
-		MLSGroups:           NewPGMLSGroupRepo(pool),
-		MLSMembers:          NewPGMLSMemberRepo(pool),
-		MLSKeyPackages:      NewPGMLSKeyPackageRepo(pool),
-		MLSPendingProposals: NewPGMLSPendingProposalRepo(pool),
-		Topics:              NewPGTopicRepo(pool),
-		TopicMembers:        NewPGTopicMemberRepo(pool),
+		MLSGroups:            NewPGMLSGroupRepo(pool),
+		MLSMembers:           NewPGMLSMemberRepo(pool),
+		MLSKeyPackages:       NewPGMLSKeyPackageRepo(pool),
+		MLSPendingProposals:  NewPGMLSPendingProposalRepo(pool),
+		Topics:               NewPGTopicRepo(pool),
+		TopicMembers:         NewPGTopicMemberRepo(pool),
 	}, nil
 }
 

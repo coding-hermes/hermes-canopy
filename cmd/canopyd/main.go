@@ -83,16 +83,17 @@ func main() {
 		database.Edges,
 		database.Pool,
 	)
-	nodeService := service.NewNodeService(
-		database.Nodes,
-		database.Edges,
-		database.Pool,
-	)
-
 	// SSE hub — in-memory ring buffer + per-tree subscriber map per
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
 	// 1000-event ring per tree.
 	sseHub := sse.NewHub()
+
+	nodeService := service.NewNodeService(
+		database.Nodes,
+		database.Edges,
+		database.Pool,
+		sseHub,
+	)
 
 	// Sync engine — coordinates event logging, snapshot creation, and
 	// SSE broadcast after every mutation. Per SPEC-DM-02 §8.3.

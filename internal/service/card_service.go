@@ -26,10 +26,10 @@ type CardSummary struct {
 	NodeID       uuid.UUID `json:"node_id"`
 	AppID        string    `json:"app_id"`
 	Type         CardType  `json:"type"`
-	Status       string    `json:"status"`       // active | dismissed | archived
+	Status       string    `json:"status"` // active | dismissed | archived
 	ContextHash  string    `json:"context_hash"`
-	Data         any       `json:"data"`          // type-specific JSON payload
-	Actions      []any     `json:"actions"`       // declared action descriptors
+	Data         any       `json:"data"`    // type-specific JSON payload
+	Actions      []any     `json:"actions"` // declared action descriptors
 	LastEventSeq int64     `json:"last_event_seq"`
 	CreatedAt    time.Time `json:"created_at"`
 }
