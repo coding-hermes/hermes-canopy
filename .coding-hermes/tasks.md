@@ -167,7 +167,8 @@
 |  - [x] **BE-07d** — HTTP handlers: GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, GET /approvals/history
 |  - [x] **BE-07e** — Wiring: register routes in server.go, init repos/services in main.go, SSE integration
 |  - [x] **BE-07f** — Unit tests: auth middleware + approval service + config tests (cad525f)
-- [ ] **BE-08 — Profile Routing**
+- [x] **BE-08 — Profile Routing** ✅ COMPLETE 2026-07-23
+  **Commit: 65a35d8** — 8 files, +718 lines. PGProfileRouter with AES-256-GCM token encryption, profile management HTTP handlers, DDL migration (profile_route table), 4 handler tests, 5 crypto tests. Wired at `/api/v1/workspaces/{workspace_id}/profiles`.
 - [ ] **BE-09 — Transport Adapter Layer**
 - [ ] **BE-10 — Encryption Layer (MLS-Only)**
 - [ ] **BE-11 — HTTP Router & Middleware**
