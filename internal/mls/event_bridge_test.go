@@ -463,3 +463,45 @@ func TestMLSEventToSSE_MarshalError(t *testing.T) {
 		}
 	}
 }
+
+func TestBridgeAddExternalProposal_NoBroadcast(t *testing.T) {
+	hub := newMockSSEHub()
+	bridge := NewMLSEventBridge(&mockMLSService{}, hub)
+
+	err := bridge.AddExternalProposal(context.Background(), uuid.New(), uuid.New(), []byte("proposal"))
+	if err != nil {
+		t.Fatalf("AddExternalProposal() error = %v", err)
+	}
+
+	if hub.broadcastCount() != 0 {
+		t.Fatal("AddExternalProposal must not broadcast")
+	}
+}
+
+func TestBridgeGetEpochSecret_NoBroadcast(t *testing.T) {
+	hub := newMockSSEHub()
+	bridge := NewMLSEventBridge(&mockMLSService{}, hub)
+
+	_, err := bridge.GetEpochSecret(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("GetEpochSecret() error = %v", err)
+	}
+
+	if hub.broadcastCount() != 0 {
+		t.Fatal("GetEpochSecret must not broadcast")
+	}
+}
+
+func TestBridgeGetGroupState_NoBroadcast(t *testing.T) {
+	hub := newMockSSEHub()
+	bridge := NewMLSEventBridge(&mockMLSService{}, hub)
+
+	_, err := bridge.GetGroupState(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("GetGroupState() error = %v", err)
+	}
+
+	if hub.broadcastCount() != 0 {
+		t.Fatal("GetGroupState must not broadcast")
+	}
+}
