@@ -1,10 +1,12 @@
 // Package handler provides HTTP handlers for Canopy REST endpoints.
-// GraphHandler implements BE-16 (Graph Endpoints) as stub 501 responses
-// until the full implementation is wired in a dedicated worker tick.
+// GraphHandler implements BE-16 (Graph Endpoints) with real CRUD against
+// the existing NodeRepo and EdgeRepo backing the conversation DAG.
+// Spec: ARCHITECTURE.md §3, SPEC-DM-01.
 package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -14,7 +16,6 @@ import (
 // GraphHandler wires the graph-level query HTTP routes to the GraphService
 // interface. These endpoints handle aggregate graph operations beyond
 // single-node CRUD — subtree traversal, ancestry, and stats.
-// Spec: ARCHITECTURE.md §3, SPEC-DM-01.
 type GraphHandler struct {
 	svc service.GraphService
 }
@@ -38,16 +39,71 @@ func (h *GraphHandler) Routes() chi.Router {
 }
 
 // GetSubtree returns the subtree rooted at the given node.
+// Query params: ?max_depth=N (default 0 = unbounded).
 func (h *GraphHandler) GetSubtree(w http.ResponseWriter, r *http.Request) {
-	writeNotImplemented(w, "GetSubtree")
+	_, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+	nodeID, ok := parseNodeID(w, r)
+	if !ok {
+		return
+	}
+
+	maxDepth := 0
+	if d := r.URL.Query().Get("max_depth"); d != "" {
+		if parsed, err := strconv.Atoi(d); err == nil && parsed >= 0 {
+			maxDepth = parsed
+		}
+	}
+
+	result, err := h.svc.GetSubtree(r.Context(), nodeID, maxDepth)
+	if err != nil {
+		if err == service.ErrNodeNotFound {
+			writeError(w, http.StatusNotFound, "NODE_NOT_FOUND", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "SUBTREE_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // GetAncestors returns the path from the given node to the tree root.
 func (h *GraphHandler) GetAncestors(w http.ResponseWriter, r *http.Request) {
-	writeNotImplemented(w, "GetAncestors")
+	_, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+
+	nodeID, ok := parseNodeID(w, r)
+	if !ok {
+		return
+	}
+
+	result, err := h.svc.GetAncestors(r.Context(), nodeID)
+	if err != nil {
+		if err == service.ErrNodeNotFound {
+			writeError(w, http.StatusNotFound, "NODE_NOT_FOUND", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "ANCESTORS_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // GetGraphStats returns aggregate graph statistics for a tree.
 func (h *GraphHandler) GetGraphStats(w http.ResponseWriter, r *http.Request) {
-	writeNotImplemented(w, "GetGraphStats")
+	treeID, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+
+	stats, err := h.svc.GetGraphStats(r.Context(), treeID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "GRAPH_STATS_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }

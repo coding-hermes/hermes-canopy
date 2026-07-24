@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/card"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
@@ -126,6 +127,17 @@ func main() {
 		database.Nodes,
 	)
 
+	// Graph service — BE-16 implementation (ARCHITECTURE.md §3).
+	graphSvc := service.NewGraphServiceImpl(
+		database.Nodes,
+		database.Edges,
+	)
+
+	// Card service — BE-15 implementation (SPEC-PL-03).
+	// Uses SQLite per-type databases under ~/.hermes/canopy/cards/.
+	cardDBMgr := card.NewCardDBManager(card.DataDir())
+	cardSvc := card.NewCardServiceImpl(cardDBMgr)
+
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(
 		database.Pool,
@@ -139,7 +151,7 @@ func main() {
 
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc)
+		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc)
 
 	// Start server in background
 

@@ -48,6 +48,8 @@ func New(
 	profileRouter *hermes.PGProfileRouter,
 	mlsHandler *handler.MLSHandler,
 	topicSvc service.TopicService,
+	cardSvc service.CardService,
+	graphSvc service.GraphService,
 ) *Server {
 	r := chi.NewRouter()
 
@@ -106,11 +108,11 @@ func New(
 		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
 		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
 
-		// Card endpoints (BE-15 — stub, returns 501). Spec: SPEC-PL-03.
-		r.Mount("/cards", handler.NewCardHandler(nil).Routes())
+		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
+		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
 
-		// Graph endpoints (BE-16 — stub, returns 501). Spec: ARCHITECTURE.md §3.
-		r.Mount("/graph", handler.NewGraphHandler(nil).Routes())
+		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
+		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
