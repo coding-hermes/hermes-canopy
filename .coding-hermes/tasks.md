@@ -181,7 +181,8 @@
 |- [x] **BE-10a** — Core types, interfaces, DDL, stub service, repos ✅ COMPLETE 2026-07-24
 |  **Commit: 094947b** — 809 lines across 12 files. internal/mls/types.go (149 lines, exact spec types/interfaces/errors/events), internal/mls/service.go (MSLServiceImpl — 10 methods, PG-backed), internal/db/mls_repo.go (4 repo interfaces + PG impls, 387 lines), db.go (4 MLS repos wired), DDL migrations (000014-000017, up+down). MiniMax-M3 worker generated types.go; foreman completed service/repos/migrations/wiring.
 ||- [x] **BE-10b** — HTTP handlers + wiring (10 endpoints) ✅ COMPLETE 2026-07-24
-|  - [ ] **BE-10c** — SSE events + welcome delivery
+|  - [x] **BE-10c** — SSE events + welcome delivery ✅ COMPLETE 2026-07-24
+  **Commit: 1227133** — 116 lines across 2 files. MLS service now broadcasts 6 SSE event types (group_created, member_added, welcome_message, member_removed, group_epoch_advanced) via SSE hub on all mutations. Welcome delivery per SPEC-FTR-03 Design Decision 16.
 |  - [ ] **BE-10d** — Tests: unit + integration
 - [ ] **BE-11 — HTTP Router & Middleware**
 - [ ] **BE-12 — Backend Integration Tests**
