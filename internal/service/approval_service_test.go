@@ -108,10 +108,10 @@ func (*sseHubStub) Shutdown(context.Context) error                              
 func TestRequestApprovalCreatesPendingApprovalAndAudit(t *testing.T) {
 	repo := &approvalRepoStub{}
 	audit := &auditRepoStub{}
-	svc := NewApprovalService(repo, audit, nil, nil)
+	svc := NewApprovalService(repo, audit, nil, nil, nil, nil)
 	treeID, nodeID, requester := uuid.New(), uuid.New(), uuid.New()
 
-	got, err := svc.RequestApproval(context.Background(), treeID, nodeID, requester)
+	got, err := svc.RequestApproval(context.Background(), treeID, nodeID, requester, requester)
 	if err != nil {
 		t.Fatalf("RequestApproval() error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestApproveRequiresOwnerAndBroadcastsChange(t *testing.T) {
 		Status: db.ApprovalStatusPending, ExpiresAt: time.Now().Add(time.Hour),
 	}}
 	hub := &sseHubStub{}
-	svc := NewApprovalService(repo, &auditRepoStub{}, nil, hub)
+	svc := NewApprovalService(repo, &auditRepoStub{}, nil, nil, nil, hub)
 
 	if _, err := svc.Approve(context.Background(), repo.approval.ID, uuid.New()); !errors.Is(err, ErrNotApprovalOwner) {
 		t.Fatalf("Approve(non-owner) error = %v, want ErrNotApprovalOwner", err)
@@ -163,7 +163,7 @@ func TestDenyValidatesReason(t *testing.T) {
 		ID: uuid.New(), TreeID: uuid.New(), NodeID: uuid.New(), OwnerID: owner,
 		Status: db.ApprovalStatusPending, ExpiresAt: time.Now().Add(time.Hour),
 	}}
-	svc := NewApprovalService(repo, &auditRepoStub{}, nil, &sseHubStub{})
+	svc := NewApprovalService(repo, &auditRepoStub{}, nil, nil, nil, &sseHubStub{})
 
 	if _, err := svc.Deny(context.Background(), repo.approval.ID, owner, "   "); !errors.Is(err, ErrDenyReasonRequired) {
 		t.Fatalf("Deny(blank) error = %v, want ErrDenyReasonRequired", err)

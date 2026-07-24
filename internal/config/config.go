@@ -21,6 +21,9 @@ type Config struct {
 
 	// Logging
 	LogLevel string
+
+	// JWT
+	JWTSecret string
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -45,6 +48,7 @@ func Default() *Config {
 		DBSSLMode:  "disable",
 		HTTPAddr:   ":8080",
 		LogLevel:   "info",
+		JWTSecret:  "dev-secret-change-me",
 	}
 }
 
@@ -77,6 +81,9 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.LogLevel = v
+	}
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		c.JWTSecret = v
 	}
 	return c
 }
