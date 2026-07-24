@@ -48,6 +48,11 @@ type DB struct {
 	TransportConnections TransportConnectionRepo
 	TransportConfigs     TransportConfigRepo
 	TransportEvents      TransportEventRepo
+	// MLS encryption layer repos (SPE-FTR-03 §4).
+	MLSGroups            MLSGroupRepo
+	MLSMembers           MLSMemberRepo
+	MLSKeyPackages       MLSKeyPackageRepo
+	MLSPendingProposals  MLSPendingProposalRepo
 	migrated             bool
 }
 
@@ -104,6 +109,10 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 		TransportConnections:  NewPGTransportConnectionRepo(pool),
 		TransportConfigs:      NewPGTransportConfigRepo(pool),
 		TransportEvents:       NewPGTransportEventRepo(pool),
+		MLSGroups:             NewPGMLSGroupRepo(pool),
+		MLSMembers:            NewPGMLSMemberRepo(pool),
+		MLSKeyPackages:        NewPGMLSKeyPackageRepo(pool),
+		MLSPendingProposals:   NewPGMLSPendingProposalRepo(pool),
 	}, nil
 }
 
