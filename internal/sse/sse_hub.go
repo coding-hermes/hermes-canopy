@@ -9,10 +9,11 @@
 // replayed (Last-Event-ID) without depending on PostgreSQL.
 //
 // References:
-//   SPEC-API-01 §9 — Go interfaces
-//   SPEC-API-01 §11 — connection limits (10/user, 100/tree, 10000/server)
-//   SPEC-API-01 §12 — middleware chain (auth/membership handled upstream)
-//   SPEC-API-01 §16 — test scenarios
+//
+//	SPEC-API-01 §9 — Go interfaces
+//	SPEC-API-01 §11 — connection limits (10/user, 100/tree, 10000/server)
+//	SPEC-API-01 §12 — middleware chain (auth/membership handled upstream)
+//	SPEC-API-01 §16 — test scenarios
 package sse
 
 import (

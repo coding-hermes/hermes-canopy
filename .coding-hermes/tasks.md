@@ -1,8 +1,8 @@
 # Hermes Canopy — Task Board
 
-|||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-11d ✅ (12.5/12)**
+||||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-11d ✅ (13/13)**
 |||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||||> **Last tick:** BE-11d — middleware tests (BodySizeLimit, RateLimit, TreeMembershipMiddleware — 13 new tests, 18 total handler tests pass). INFRA-001: Cooldown increased 900→3600s via scheduler API PUT CooldownS=3600. Tick storm mitigated.
+||||||> **Last tick:** BE-11d committed. gofmt fixes across 20+ files. Board: BE-10 parent + BE-11d ✅. BE-12 scoped (6 subtasks). INFRA-001 cooldown stable.
 ||> **DuckBrain:** hermes-canopy namespace (25+ entries)
 
 ---
@@ -177,7 +177,7 @@
   **Commit: 3961566** — selector.go (251 lines): TransportSelector with SelectPrimary, SelectFallback, DetectTopology. DeploymentMode (7 modes). NetworkTopology (5 topologies). Capability negotiation. stub_adapters.go: NATS/WebRTC/Redis/Relay stubs. sse_adapter.go: full TransportAdapter impl for MVP.
 ||- [x] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring** ✅ COMPLETE 2026-07-24
   **Commit: 6190210** — +719 lines across 5 files. transport_repo.go (387 lines, 3 repo interfaces + PG impls), transport_handler.go (264 lines, 4 REST routes + health probe), db.go (transport repos wired into DB struct), server.go (transport params in New()), main.go (SSEAdapter/Selector/ConnectionManager/repos init). Build+vet+test all pass (11/11 packages).
-|- [ ] **BE-10 — Encryption Layer (MLS-Only)** (see sub-tasks below)
+||- [x] **BE-10 — Encryption Layer (MLS-Only)** (see sub-tasks below)
 |- [x] **BE-10a** — Core types, interfaces, DDL, stub service, repos ✅ COMPLETE 2026-07-24
 |  **Commit: 094947b** — 809 lines across 12 files. internal/mls/types.go (149 lines, exact spec types/interfaces/errors/events), internal/mls/service.go (MSLServiceImpl — 10 methods, PG-backed), internal/db/mls_repo.go (4 repo interfaces + PG impls, 387 lines), db.go (4 MLS repos wired), DDL migrations (000014-000017, up+down). MiniMax-M3 worker generated types.go; foreman completed service/repos/migrations/wiring.
 ||- [x] **BE-10b** — HTTP handlers + wiring (10 endpoints) ✅ COMPLETE 2026-07-24
@@ -190,10 +190,16 @@
 |  - [x] **BE-11b** — BodySizeLimit middleware (1MB, SPEC-API-02 §10.1) + RateLimit middleware (per-IP token bucket) ✅ COMPLETE 2026-07-24
 |  - [x] **BE-11c** — TreeMembershipMiddleware + wire AuthMiddleware into route groups ✅ COMPLETE 2026-07-24
 |  - [x] **BE-11d** — Tests for all middleware (auth, membership, body size, rate limit) ✅ COMPLETE 2026-07-24
-    **Commit: pending**
+|    **Commit: 3483cd5** — 13 new middleware tests. 18 total handler tests pass.
 |- [ ] **BE-12 — Backend Integration Tests**
+|  - [ ] **BE-12a** — Integration test framework (docker-compose PostgreSQL + migration runner)
+|  - [ ] **BE-12b** — API-level integration: tree CRUD, node CRUD, edge CRUD via real HTTP + DB
+|  - [ ] **BE-12c** — Auth & approval integration: JWT flow, user creation, approval lifecycle
+|  - [ ] **BE-12d** — MLS integration: group creation, membership, encryption via real DB
+|  - [ ] **BE-12e** — Transport integration: SSE hub, connection lifecycle, rate limiting
+|  - [ ] **BE-12f** — GitHub Actions CI workflow with PostgreSQL service container
 
----
+|---
 
 ## Phase 5: Frontend (TypeScript/React)
 

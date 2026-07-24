@@ -53,24 +53,24 @@ func collectTreeRows(rows pgx.Rows) ([]db.Tree, error) {
 // HTTP layer is responsible for translating them into status codes.
 
 var (
-	ErrTreeNotFound        = errors.New("tree service: tree not found")
-	ErrTreeDeleted         = errors.New("tree service: tree is soft-deleted")
-	ErrTreeAlreadyDeleted  = errors.New("tree service: tree already deleted")
-	ErrNotTreeOwner        = errors.New("tree service: not the tree owner")
-	ErrNotTreeMember       = errors.New("tree service: not a tree member")
-	ErrTitleRequired       = errors.New("tree service: title is required")
-	ErrTitleTooLong        = errors.New("tree service: title exceeds 200 characters")
-	ErrDescriptionTooLong  = errors.New("tree service: description exceeds 2000 characters")
-	ErrRootContentRequired = errors.New("tree service: root message content is required")
-	ErrRootContentTooLarge = errors.New("tree service: root message content exceeds 100000 characters")
+	ErrTreeNotFound         = errors.New("tree service: tree not found")
+	ErrTreeDeleted          = errors.New("tree service: tree is soft-deleted")
+	ErrTreeAlreadyDeleted   = errors.New("tree service: tree already deleted")
+	ErrNotTreeOwner         = errors.New("tree service: not the tree owner")
+	ErrNotTreeMember        = errors.New("tree service: not a tree member")
+	ErrTitleRequired        = errors.New("tree service: title is required")
+	ErrTitleTooLong         = errors.New("tree service: title exceeds 200 characters")
+	ErrDescriptionTooLong   = errors.New("tree service: description exceeds 2000 characters")
+	ErrRootContentRequired  = errors.New("tree service: root message content is required")
+	ErrRootContentTooLarge  = errors.New("tree service: root message content exceeds 100000 characters")
 	ErrInvalidContentFormat = errors.New("tree service: invalid content format")
-	ErrInvalidNodeType     = errors.New("tree service: invalid node type")
-	ErrInvalidCursor       = errors.New("tree service: invalid cursor UUID")
-	ErrInvalidSort         = errors.New("tree service: invalid sort order")
-	ErrInvalidStatus       = errors.New("tree service: invalid status filter")
-	ErrInvalidRole         = errors.New("tree service: invalid role filter")
-	ErrSearchTooShort      = errors.New("tree service: search query must be at least 3 characters")
-	ErrDatabaseUnavailable = errors.New("tree service: database unavailable")
+	ErrInvalidNodeType      = errors.New("tree service: invalid node type")
+	ErrInvalidCursor        = errors.New("tree service: invalid cursor UUID")
+	ErrInvalidSort          = errors.New("tree service: invalid sort order")
+	ErrInvalidStatus        = errors.New("tree service: invalid status filter")
+	ErrInvalidRole          = errors.New("tree service: invalid role filter")
+	ErrSearchTooShort       = errors.New("tree service: search query must be at least 3 characters")
+	ErrDatabaseUnavailable  = errors.New("tree service: database unavailable")
 )
 
 // --- Validation limits (SPEC-API-02 §3-6) -----------------------------------
@@ -201,13 +201,13 @@ func (n NodeType) Valid() bool {
 
 // ListTreesParams encapsulates all query parameters for listing trees.
 type ListTreesParams struct {
-	UserID uuid.UUID       // authenticated user (from JWT context)
-	Cursor *uuid.UUID      // pagination cursor (nil on first page)
-	Limit  int             // 1–100, clamped
-	Sort   TreeSortOrder   // created_desc (default), created_asc, etc.
+	UserID uuid.UUID        // authenticated user (from JWT context)
+	Cursor *uuid.UUID       // pagination cursor (nil on first page)
+	Limit  int              // 1–100, clamped
+	Sort   TreeSortOrder    // created_desc (default), created_asc, etc.
 	Status TreeStatusFilter // active, deleted, all
-	Role   *MemberRole     // optional role filter
-	Search string          // full-text search, optional
+	Role   *MemberRole      // optional role filter
+	Search string           // full-text search, optional
 }
 
 // ListTreesResult contains the page of trees and pagination metadata.
@@ -852,15 +852,15 @@ func (s *TreeServiceImpl) listDeletedOnly(ctx context.Context, limit, offset int
 
 func treeToSummary(t db.Tree) TreeSummary {
 	sum := TreeSummary{
-		ID:               t.ID,
-		Title:            t.Title,
-		Description:      t.Description,
-		OwnerID:          t.OwnerID,
-		NodeCount:        1, // root only; full count requires GetCounts
-		MemberCount:      1, // owner only
-		CreatedAt:        t.CreatedAt,
-		UpdatedAt:        coalesceTime(t.EditedAt, t.CreatedAt),
-		Role:             RoleOwner,
+		ID:          t.ID,
+		Title:       t.Title,
+		Description: t.Description,
+		OwnerID:     t.OwnerID,
+		NodeCount:   1, // root only; full count requires GetCounts
+		MemberCount: 1, // owner only
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   coalesceTime(t.EditedAt, t.CreatedAt),
+		Role:        RoleOwner,
 	}
 	if t.RootNodeID != nil {
 		sum.RootNodeID = *t.RootNodeID

@@ -16,15 +16,15 @@ import (
 // TreeDelta represents the difference between two tree snapshots.
 // Spec: SPEC-DM-02 §7.
 type TreeDelta struct {
-	FromHash       string                   `json:"fromHash"`
-	ToHash         string                   `json:"toHash"`
+	FromHash       string                    `json:"fromHash"`
+	ToHash         string                    `json:"toHash"`
 	AddedNodes     map[uuid.UUID]CompactNode `json:"addedNodes"`
-	RemovedNodeIDs []uuid.UUID              `json:"removedNodeIds"`
+	RemovedNodeIDs []uuid.UUID               `json:"removedNodeIds"`
 	ChangedNodes   map[uuid.UUID]CompactNode `json:"changedNodes"`
 	AddedEdges     map[uuid.UUID]CompactEdge `json:"addedEdges"`
-	RemovedEdgeIDs []uuid.UUID              `json:"removedEdgeIds"`
-	NodeCount      int                      `json:"nodeCount"`
-	EdgeCount      int                      `json:"edgeCount"`
+	RemovedEdgeIDs []uuid.UUID               `json:"removedEdgeIds"`
+	NodeCount      int                       `json:"nodeCount"`
+	EdgeCount      int                       `json:"edgeCount"`
 }
 
 // CompactNode is the compact node representation used in deltas.

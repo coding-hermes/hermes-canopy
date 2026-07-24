@@ -22,26 +22,26 @@ import (
 // --- In-memory test client ------------------------------------------------
 
 type testClient struct {
-	id       string
-	uid      uuid.UUID
-	tid      uuid.UUID
-	mu       sync.Mutex
-	events   []sse.SSEEvent
-	raws     []string
-	closed   atomic.Bool
-	doneCh   chan struct{}
-	sendErr  error
+	id      string
+	uid     uuid.UUID
+	tid     uuid.UUID
+	mu      sync.Mutex
+	events  []sse.SSEEvent
+	raws    []string
+	closed  atomic.Bool
+	doneCh  chan struct{}
+	sendErr error
 }
 
 func newTC(id string, uid, tid uuid.UUID) *testClient {
 	return &testClient{id: id, uid: uid, tid: tid, doneCh: make(chan struct{})}
 }
 
-func (c *testClient) ID() string              { return c.id }
-func (c *testClient) UserID() uuid.UUID        { return c.uid }
-func (c *testClient) TreeID() uuid.UUID        { return c.tid }
-func (c *testClient) Done() <-chan struct{}    { return c.doneCh }
-func (c *testClient) LastEventID() string      { return "" }
+func (c *testClient) ID() string            { return c.id }
+func (c *testClient) UserID() uuid.UUID     { return c.uid }
+func (c *testClient) TreeID() uuid.UUID     { return c.tid }
+func (c *testClient) Done() <-chan struct{} { return c.doneCh }
+func (c *testClient) LastEventID() string   { return "" }
 
 func (c *testClient) Send(ev sse.SSEEvent) error {
 	if c.closed.Load() {

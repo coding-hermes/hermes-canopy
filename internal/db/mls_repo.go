@@ -48,14 +48,14 @@ type MLSPendingProposalRepo interface {
 
 // MLSGroup mirrors internal/mls.MLSGroup for the data layer.
 type MLSGroup struct {
-	ID          []byte    `db:"group_id"`
-	WorkspaceID uuid.UUID `db:"workspace_id"`
-	CipherSuite string    `db:"cipher_suite"`
-	Epoch       uint64    `db:"epoch"`
-	TreeHash    []byte    `db:"tree_hash_bytes"`
-	EncryptedState []byte `db:"encrypted_state"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+	ID             []byte    `db:"group_id"`
+	WorkspaceID    uuid.UUID `db:"workspace_id"`
+	CipherSuite    string    `db:"cipher_suite"`
+	Epoch          uint64    `db:"epoch"`
+	TreeHash       []byte    `db:"tree_hash_bytes"`
+	EncryptedState []byte    `db:"encrypted_state"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
 }
 
 // MLSGroupMember mirrors internal/mls.MLSGroupMember for the data layer.

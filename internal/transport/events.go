@@ -53,12 +53,12 @@ func BuildTransportStatusEvent(
 
 // TransportErrorData is the data payload for the transport_error SSE event.
 type TransportErrorData struct {
-	TransportType    TransportType `json:"transport_type"`
-	ErrorCode        string        `json:"error_code"`
-	ErrorMessage     string        `json:"error_message"`
-	PeerID           string        `json:"peer_id"`
-	FallbackAvailable bool         `json:"fallback_available"`
-	NextTransport    *string       `json:"next_transport,omitempty"`
+	TransportType     TransportType `json:"transport_type"`
+	ErrorCode         string        `json:"error_code"`
+	ErrorMessage      string        `json:"error_message"`
+	PeerID            string        `json:"peer_id"`
+	FallbackAvailable bool          `json:"fallback_available"`
+	NextTransport     *string       `json:"next_transport,omitempty"`
 }
 
 // BuildTransportErrorEvent builds a transport_error SSE event payload.
@@ -87,16 +87,16 @@ func BuildTransportErrorEvent(
 // TransportDegradationData is the data payload for the
 // transport_degradation SSE event.
 type TransportDegradationData struct {
-	TransportType   TransportType `json:"transport_type"`
-	ConnectionID    string        `json:"connection_id"`
-	PeerID          string        `json:"peer_id"`
-	Degraded        bool          `json:"degraded"`
-	Reason          string        `json:"reason"`
-	BandwidthTier   string        `json:"bandwidth_tier,omitempty"`
-	BytesPerSecond  int64         `json:"bytes_per_second,omitempty"`
-	LatencyMs       int64         `json:"latency_ms,omitempty"`
-	PacketLoss      float64       `json:"packet_loss,omitempty"`
-	FallbackChain   []string      `json:"fallback_chain"`
+	TransportType  TransportType `json:"transport_type"`
+	ConnectionID   string        `json:"connection_id"`
+	PeerID         string        `json:"peer_id"`
+	Degraded       bool          `json:"degraded"`
+	Reason         string        `json:"reason"`
+	BandwidthTier  string        `json:"bandwidth_tier,omitempty"`
+	BytesPerSecond int64         `json:"bytes_per_second,omitempty"`
+	LatencyMs      int64         `json:"latency_ms,omitempty"`
+	PacketLoss     float64       `json:"packet_loss,omitempty"`
+	FallbackChain  []string      `json:"fallback_chain"`
 }
 
 // BuildTransportDegradationEvent builds a transport_degradation SSE event payload.

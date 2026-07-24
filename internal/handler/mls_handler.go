@@ -446,7 +446,7 @@ func (h *MLSHandler) sendWelcome(ctx context.Context, workspaceID uuid.UUID, cli
 			Type:        mls.EventWelcomeMessage,
 			WorkspaceID: workspaceID,
 			Timestamp:   time.Now().UTC(),
-			Payload:      nil,
+			Payload:     nil,
 		}
 		_ = client.Send(mls.MLSEventToSSE(evt))
 		return
@@ -457,7 +457,7 @@ func (h *MLSHandler) sendWelcome(ctx context.Context, workspaceID uuid.UUID, cli
 		Type:        mls.EventWelcomeMessage,
 		WorkspaceID: workspaceID,
 		Timestamp:   time.Now().UTC(),
-		Payload:      payload,
+		Payload:     payload,
 	}
 	_ = client.Send(mls.MLSEventToSSE(evt))
 }

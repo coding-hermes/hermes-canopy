@@ -39,21 +39,21 @@ type DB struct {
 	Snapshots SnapshotRepo
 	Events    EventRepo
 	// Approval system repositories (SPEC-DM-03, SPEC-DM-04).
-	Approvals  ApprovalRepo
-	AuditLog   AuditRepo
-	Users      UserRepo
-	Profiles   ProfileRepo
-	Members    TreeMemberRepo
+	Approvals ApprovalRepo
+	AuditLog  AuditRepo
+	Users     UserRepo
+	Profiles  ProfileRepo
+	Members   TreeMemberRepo
 	// Transport adapter repositories (SPEC-FTR-04 §4).
 	TransportConnections TransportConnectionRepo
 	TransportConfigs     TransportConfigRepo
 	TransportEvents      TransportEventRepo
 	// MLS encryption layer repos (SPE-FTR-03 §4).
-	MLSGroups            MLSGroupRepo
-	MLSMembers           MLSMemberRepo
-	MLSKeyPackages       MLSKeyPackageRepo
-	MLSPendingProposals  MLSPendingProposalRepo
-	migrated             bool
+	MLSGroups           MLSGroupRepo
+	MLSMembers          MLSMemberRepo
+	MLSKeyPackages      MLSKeyPackageRepo
+	MLSPendingProposals MLSPendingProposalRepo
+	migrated            bool
 }
 
 // PoolConfig is the minimal pgxpool configuration. Fields are populated
@@ -95,24 +95,24 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 	}
 
 	return &DB{
-		Pool:      pool,
-		Nodes:     NewPGNodeRepo(pool),
-		Edges:     NewPGEdgeRepo(pool),
-		Trees:     NewPGTreeRepo(pool),
-		Snapshots: NewSnapshotRepo(pool),
-		Events:    NewEventRepo(pool),
-		Approvals:             NewPGApprovalRepo(pool),
-		AuditLog:              NewPGAuditRepo(pool),
-		Users:                 NewPGUserRepo(pool),
-		Profiles:              NewPGProfileRepo(pool),
-		Members:               NewPGTreeMemberRepo(pool),
-		TransportConnections:  NewPGTransportConnectionRepo(pool),
-		TransportConfigs:      NewPGTransportConfigRepo(pool),
-		TransportEvents:       NewPGTransportEventRepo(pool),
-		MLSGroups:             NewPGMLSGroupRepo(pool),
-		MLSMembers:            NewPGMLSMemberRepo(pool),
-		MLSKeyPackages:        NewPGMLSKeyPackageRepo(pool),
-		MLSPendingProposals:   NewPGMLSPendingProposalRepo(pool),
+		Pool:                 pool,
+		Nodes:                NewPGNodeRepo(pool),
+		Edges:                NewPGEdgeRepo(pool),
+		Trees:                NewPGTreeRepo(pool),
+		Snapshots:            NewSnapshotRepo(pool),
+		Events:               NewEventRepo(pool),
+		Approvals:            NewPGApprovalRepo(pool),
+		AuditLog:             NewPGAuditRepo(pool),
+		Users:                NewPGUserRepo(pool),
+		Profiles:             NewPGProfileRepo(pool),
+		Members:              NewPGTreeMemberRepo(pool),
+		TransportConnections: NewPGTransportConnectionRepo(pool),
+		TransportConfigs:     NewPGTransportConfigRepo(pool),
+		TransportEvents:      NewPGTransportEventRepo(pool),
+		MLSGroups:            NewPGMLSGroupRepo(pool),
+		MLSMembers:           NewPGMLSMemberRepo(pool),
+		MLSKeyPackages:       NewPGMLSKeyPackageRepo(pool),
+		MLSPendingProposals:  NewPGMLSPendingProposalRepo(pool),
 	}, nil
 }
 

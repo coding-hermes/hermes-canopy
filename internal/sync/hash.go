@@ -15,13 +15,13 @@ import (
 
 // NodeDigest represents a node's hashable fields (SPEC-DM-02 §6.2).
 type NodeDigest struct {
-	ID            uuid.UUID
-	SeqNum        int64
-	CreatedAtEpoch int64 // milliseconds since Unix epoch
-	ParentID      string // "nil" for root nodes
-	ContentHash   string // SHA256 hex of node content
-	ContentFormat string
-	NodeType      string
+	ID             uuid.UUID
+	SeqNum         int64
+	CreatedAtEpoch int64  // milliseconds since Unix epoch
+	ParentID       string // "nil" for root nodes
+	ContentHash    string // SHA256 hex of node content
+	ContentFormat  string
+	NodeType       string
 }
 
 // EdgeDigest represents an edge's hashable fields (SPEC-DM-02 §6.2).
