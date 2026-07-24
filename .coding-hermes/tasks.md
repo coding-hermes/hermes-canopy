@@ -1,6 +1,6 @@
 # Hermes Canopy — Task Board
 
-||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10b ✅ (10.5/12)**
+|||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10d ✅ (11.5/12)**
 |||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
 ||||> **Last tick:** BE-10b — MLS HTTP handlers + wiring (10 endpoints), 428 lines across 3 files
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
@@ -183,7 +183,8 @@
 ||- [x] **BE-10b** — HTTP handlers + wiring (10 endpoints) ✅ COMPLETE 2026-07-24
 |  - [x] **BE-10c** — SSE events + welcome delivery ✅ COMPLETE 2026-07-24
   **Commit: 1227133** — 116 lines across 2 files. MLS service now broadcasts 6 SSE event types (group_created, member_added, welcome_message, member_removed, group_epoch_advanced) via SSE hub on all mutations. Welcome delivery per SPEC-FTR-03 Design Decision 16.
-|  - [ ] **BE-10d** — Tests: unit + integration
+|  - [x] **BE-10d** — Tests: unit + integration ✅ COMPLETE 2026-07-24
+  **Commits: 510e453 (32 tests), 9996b23 (+3 tests: AddExternalProposal no-broadcast, GetEpochSecret/GetGroupState no-broadcast, Encrypt not-group-member). 35 tests total covering all 10 MLSService methods + event bridge decorator.**
 - [ ] **BE-11 — HTTP Router & Middleware**
 - [ ] **BE-12 — Backend Integration Tests**
 
