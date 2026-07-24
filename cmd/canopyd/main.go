@@ -113,10 +113,10 @@ func main() {
 		database.MLSMembers,
 		database.MLSKeyPackages,
 		database.MLSPendingProposals,
-		sseHub,
 	)
+	mlsBridge := mls.NewMLSEventBridge(mlsSvc, sseHub)
 	kpMgr := newPGMLSKeyPackageManager(database.MLSKeyPackages)
-	mlsHandler := handler.NewMLSHandler(mlsSvc, kpMgr)
+	mlsHandler := handler.NewMLSHandler(mlsBridge, kpMgr)
 
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(
