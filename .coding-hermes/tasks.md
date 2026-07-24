@@ -1,8 +1,8 @@
 # Hermes Canopy — Task Board
 
-|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | **Phase 3 — API Specs ✅ (7/7)** | **Phase 3b — Topic Specs ✅ (5/5)** | **Phase 3c — Plugin & Card Specs ✅ (6/6)** | **Phase 3d — Post-MVP ✅ (7/7)** | **Phase 4 — Backend: BE-01 ✅ BE-02 ✅ BE-03 ✅ → BE-04 next**
-||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||> **Last tick:** BE-03 complete — 968-line TreeService (aa0c31a). 16 types, 16 error sentinels, atomic CreateTree tx, ListTrees pagination, GetTree with stats, DeleteTree. Wired to HTTP via TreeHandler.
+|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10a ✅ (10.25/12)**
+|||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
+|||> **Last tick:** BE-10a — MLS core types, interfaces, DDL (4 tables), stub service, PG repos (094947b)
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
 
 ---
