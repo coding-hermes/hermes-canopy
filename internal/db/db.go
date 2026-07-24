@@ -44,7 +44,11 @@ type DB struct {
 	Users      UserRepo
 	Profiles   ProfileRepo
 	Members    TreeMemberRepo
-	migrated   bool
+	// Transport adapter repositories (SPEC-FTR-04 §4).
+	TransportConnections TransportConnectionRepo
+	TransportConfigs     TransportConfigRepo
+	TransportEvents      TransportEventRepo
+	migrated             bool
 }
 
 // PoolConfig is the minimal pgxpool configuration. Fields are populated
@@ -92,11 +96,14 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 		Trees:     NewPGTreeRepo(pool),
 		Snapshots: NewSnapshotRepo(pool),
 		Events:    NewEventRepo(pool),
-		Approvals: NewPGApprovalRepo(pool),
-		AuditLog:  NewPGAuditRepo(pool),
-		Users:     NewPGUserRepo(pool),
-		Profiles:  NewPGProfileRepo(pool),
-		Members:   NewPGTreeMemberRepo(pool),
+		Approvals:             NewPGApprovalRepo(pool),
+		AuditLog:              NewPGAuditRepo(pool),
+		Users:                 NewPGUserRepo(pool),
+		Profiles:              NewPGProfileRepo(pool),
+		Members:               NewPGTreeMemberRepo(pool),
+		TransportConnections:  NewPGTransportConnectionRepo(pool),
+		TransportConfigs:      NewPGTransportConfigRepo(pool),
+		TransportEvents:       NewPGTransportEventRepo(pool),
 	}, nil
 }
 
