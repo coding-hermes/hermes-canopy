@@ -1,8 +1,8 @@
 # Hermes Canopy — Task Board
 
-|||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10a ✅ (10.25/12)**
+||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10b ✅ (10.5/12)**
 |||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-|||> **Last tick:** BE-10a — MLS core types, interfaces, DDL (4 tables), stub service, PG repos (094947b)
+||||> **Last tick:** BE-10b — MLS HTTP handlers + wiring (10 endpoints), 428 lines across 3 files
 |> **DuckBrain:** hermes-canopy namespace (23+ entries)
 
 ---
@@ -180,7 +180,7 @@
 |- [ ] **BE-10 — Encryption Layer (MLS-Only)** (see sub-tasks below)
 |- [x] **BE-10a** — Core types, interfaces, DDL, stub service, repos ✅ COMPLETE 2026-07-24
 |  **Commit: 094947b** — 809 lines across 12 files. internal/mls/types.go (149 lines, exact spec types/interfaces/errors/events), internal/mls/service.go (MSLServiceImpl — 10 methods, PG-backed), internal/db/mls_repo.go (4 repo interfaces + PG impls, 387 lines), db.go (4 MLS repos wired), DDL migrations (000014-000017, up+down). MiniMax-M3 worker generated types.go; foreman completed service/repos/migrations/wiring.
-|  - [ ] **BE-10b** — HTTP handlers + wiring (5+ endpoints)
+||- [x] **BE-10b** — HTTP handlers + wiring (10 endpoints) ✅ COMPLETE 2026-07-24
 |  - [ ] **BE-10c** — SSE events + welcome delivery
 |  - [ ] **BE-10d** — Tests: unit + integration
 - [ ] **BE-11 — HTTP Router & Middleware**

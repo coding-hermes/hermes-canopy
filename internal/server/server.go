@@ -26,6 +26,7 @@ type Server struct {
 	sseHub          sse.SSEHub
 	transportMgr    *transport.ConnectionManager
 	transportAdaper transport.TransportAdapter
+	mlsHandler      *handler.MLSHandler
 }
 
 // New creates a new Server with middleware and routes wired.
@@ -41,6 +42,7 @@ func New(
 	sel *transport.TransportSelector,
 	configRepo db.TransportConfigRepo,
 	eventRepo db.TransportEventRepo,
+	mlsHandler *handler.MLSHandler,
 ) *Server {
 	r := chi.NewRouter()
 
@@ -79,6 +81,11 @@ func New(
 	transHandler := handler.NewTransportHandler(transportAdaper, connMgr, configRepo, eventRepo, nodeID)
 	r.Mount("/api/v1/transports", transHandler.Routes())
 
+	// Workspace MLS endpoints per SPEC-FTR-03.
+	r.Route("/api/v1/workspaces/{workspace_id}/mls", func(r chi.Router) {
+		r.Mount("/", mlsHandler.Routes())
+	})
+
 	// Transport health probes (unauthenticated).
 	for _, tt := range transport.AllTransportTypes() {
 		r.Get("/health/transports/"+string(tt), transHandler.HealthProbe(string(tt)))
@@ -89,6 +96,7 @@ func New(
 		sseHub:          sseHub,
 		transportMgr:    connMgr,
 		transportAdaper: transportAdaper,
+		mlsHandler:      mlsHandler,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
