@@ -177,7 +177,12 @@
   **Commit: 3961566** — selector.go (251 lines): TransportSelector with SelectPrimary, SelectFallback, DetectTopology. DeploymentMode (7 modes). NetworkTopology (5 topologies). Capability negotiation. stub_adapters.go: NATS/WebRTC/Redis/Relay stubs. sse_adapter.go: full TransportAdapter impl for MVP.
 ||- [x] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring** ✅ COMPLETE 2026-07-24
   **Commit: 6190210** — +719 lines across 5 files. transport_repo.go (387 lines, 3 repo interfaces + PG impls), transport_handler.go (264 lines, 4 REST routes + health probe), db.go (transport repos wired into DB struct), server.go (transport params in New()), main.go (SSEAdapter/Selector/ConnectionManager/repos init). Build+vet+test all pass (11/11 packages).
-- [ ] **BE-10 — Encryption Layer (MLS-Only)**
+|- [ ] **BE-10 — Encryption Layer (MLS-Only)** (see sub-tasks below)
+|- [x] **BE-10a** — Core types, interfaces, DDL, stub service, repos ✅ COMPLETE 2026-07-24
+|  **Commit: 094947b** — 809 lines across 12 files. internal/mls/types.go (149 lines, exact spec types/interfaces/errors/events), internal/mls/service.go (MSLServiceImpl — 10 methods, PG-backed), internal/db/mls_repo.go (4 repo interfaces + PG impls, 387 lines), db.go (4 MLS repos wired), DDL migrations (000014-000017, up+down). MiniMax-M3 worker generated types.go; foreman completed service/repos/migrations/wiring.
+|  - [ ] **BE-10b** — HTTP handlers + wiring (5+ endpoints)
+|  - [ ] **BE-10c** — SSE events + welcome delivery
+|  - [ ] **BE-10d** — Tests: unit + integration
 - [ ] **BE-11 — HTTP Router & Middleware**
 - [ ] **BE-12 — Backend Integration Tests**
 
