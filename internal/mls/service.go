@@ -3,12 +3,15 @@ package mls
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 )
 
 // MLSServiceImpl implements MLSService using PostgreSQL-backed repos.
@@ -20,11 +23,43 @@ type MLSServiceImpl struct {
 	members db.MLSMemberRepo
 	kps     db.MLSKeyPackageRepo
 	props   db.MLSPendingProposalRepo
+	sseHub  sse.SSEHub
 }
 
 // NewMLSService creates a new MLSServiceImpl with the supplied dependencies.
-func NewMLSService(pool *pgxpool.Pool, groups db.MLSGroupRepo, members db.MLSMemberRepo, kps db.MLSKeyPackageRepo, props db.MLSPendingProposalRepo) *MLSServiceImpl {
-	return &MLSServiceImpl{pool: pool, groups: groups, members: members, kps: kps, props: props}
+func NewMLSService(pool *pgxpool.Pool, groups db.MLSGroupRepo, members db.MLSMemberRepo, kps db.MLSKeyPackageRepo, props db.MLSPendingProposalRepo, hub sse.SSEHub) *MLSServiceImpl {
+	return &MLSServiceImpl{pool: pool, groups: groups, members: members, kps: kps, props: props, sseHub: hub}
+}
+
+// broadcastMLSEvent converts an mLSEvent to an SSE hub broadcast on the
+// workspace stream. The workspaceID is used as the treeID for SSE routing
+// (one workspace → one tree per SPEC-FTR-03 Design Decision 3). Nil-safe.
+func (s *MLSServiceImpl) broadcastMLSEvent(ctx context.Context, ev MLSEvent) {
+	if s.sseHub == nil {
+		return
+	}
+	data, err := json.Marshal(ev.Payload)
+	if err != nil {
+		log.Ctx(ctx).Warn().Err(err).Str("type", string(ev.Type)).Msg("mls: marshal SSE payload")
+		return
+	}
+	_ = s.sseHub.Broadcast(ev.WorkspaceID, sse.SSEEvent{
+		TreeID:    ev.WorkspaceID,
+		Type:      string(ev.Type),
+		Data:      data,
+		Timestamp: ev.Timestamp,
+		ActorID:   ev.ActorProfileID,
+	})
+}
+
+// mustMarshalPayload marshals a map to json.RawMessage for use as MLSEvent payload.
+// Panics on marshal error (programming error if it fails).
+func mustMarshalPayload(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("mls: marshal event payload: " + err.Error())
+	}
+	return json.RawMessage(b)
 }
 
 func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorProfileID uuid.UUID, adminKeyPair Ed25519KeyPair) (*MLSGroup, error) {
@@ -63,6 +98,15 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		return nil, err
 	}
 
+	// SSE broadcast — group_created
+	s.broadcastMLSEvent(ctx, MLSEvent{
+		Type:           EventGroupCreated,
+		WorkspaceID:    workspaceID,
+		ActorProfileID: creatorProfileID,
+		Timestamp:      now,
+		Payload:        mustMarshalPayload(map[string]any{"group_id": groupID}),
+	})
+
 	return &MLSGroup{
 		ID:          groupID,
 		WorkspaceID: workspaceID,
@@ -92,7 +136,34 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	if err := s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+
+	// SSE broadcast — member_added + welcome_message
+	s.broadcastMLSEvent(ctx, MLSEvent{
+		Type:            EventMemberAdded,
+		WorkspaceID:     workspaceID,
+		ActorProfileID:  profileID,
+		TargetProfileID: &profileID,
+		Timestamp:       now,
+		Payload:         mustMarshalPayload(map[string]any{"profile_id": profileID.String()}),
+	})
+	// Welcome delivery per SPEC-FTR-03 Design Decision 16
+	if len(welcomeBytes) > 0 {
+		s.broadcastMLSEvent(ctx, MLSEvent{
+			Type:            EventWelcomeMessage,
+			WorkspaceID:     workspaceID,
+			ActorProfileID:  profileID,
+			TargetProfileID: &profileID,
+			Timestamp:       now,
+			Payload:         mustMarshalPayload(map[string]any{"welcome_bytes": welcomeBytes}),
+		})
+	}
+
+	return nil
 }
 
 func (s *MLSServiceImpl) LeaveGroup(ctx context.Context, workspaceID, profileID uuid.UUID) error {
@@ -105,7 +176,22 @@ func (s *MLSServiceImpl) LeaveGroup(ctx context.Context, workspaceID, profileID 
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	if err := s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash); err != nil {
+		return err
+	}
+
+	// SSE broadcast — member_removed
+	now := time.Now().UTC()
+	s.broadcastMLSEvent(ctx, MLSEvent{
+		Type:            EventMemberRemoved,
+		WorkspaceID:     workspaceID,
+		ActorProfileID:  profileID,
+		TargetProfileID: &profileID,
+		Timestamp:       now,
+		Payload:         mustMarshalPayload(map[string]any{"profile_id": profileID.String(), "reason": "left"}),
+	})
+
+	return nil
 }
 
 func (s *MLSServiceImpl) RemoveMember(ctx context.Context, workspaceID, profileID, callerProfileID uuid.UUID) error {
@@ -118,7 +204,22 @@ func (s *MLSServiceImpl) RemoveMember(ctx context.Context, workspaceID, profileI
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	if err := s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash); err != nil {
+		return err
+	}
+
+	// SSE broadcast — member_removed (by admin)
+	now := time.Now().UTC()
+	s.broadcastMLSEvent(ctx, MLSEvent{
+		Type:            EventMemberRemoved,
+		WorkspaceID:     workspaceID,
+		ActorProfileID:  callerProfileID,
+		TargetProfileID: &profileID,
+		Timestamp:       now,
+		Payload:         mustMarshalPayload(map[string]any{"profile_id": profileID.String(), "reason": "removed_by_admin"}),
+	})
+
+	return nil
 }
 
 func (s *MLSServiceImpl) Encrypt(ctx context.Context, workspaceID, profileID uuid.UUID, plaintext []byte) (MLSCiphertext, error) {
@@ -197,6 +298,15 @@ func (s *MLSServiceImpl) CommitProposals(ctx context.Context, workspaceID, profi
 	if err := s.props.DeleteAll(ctx, grp.ID); err != nil {
 		return nil, err
 	}
+
+	// SSE broadcast — group_epoch_advanced
+	s.broadcastMLSEvent(ctx, MLSEvent{
+		Type:           EventGroupEpochAdvanced,
+		WorkspaceID:    workspaceID,
+		ActorProfileID: profileID,
+		Timestamp:      time.Now().UTC(),
+		Payload:        mustMarshalPayload(map[string]any{"new_epoch": grp.Epoch + 1, "committed_proposals": len(props)}),
+	})
 
 	return []byte("placeholder-commit-bytes"), nil
 }

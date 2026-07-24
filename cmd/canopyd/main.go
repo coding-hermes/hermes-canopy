@@ -113,6 +113,7 @@ func main() {
 		database.MLSMembers,
 		database.MLSKeyPackages,
 		database.MLSPendingProposals,
+		sseHub,
 	)
 	kpMgr := newPGMLSKeyPackageManager(database.MLSKeyPackages)
 	mlsHandler := handler.NewMLSHandler(mlsSvc, kpMgr)
