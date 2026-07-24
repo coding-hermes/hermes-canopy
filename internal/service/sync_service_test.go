@@ -13,8 +13,8 @@ import (
 // --- SnapshotRepo stubs for sync tests ---------------------------------------
 
 type snapshotRepoStub struct {
-	snapshots      []*db.TreeSnapshot
-	createFn       func(ctx context.Context, treeID uuid.UUID) (*db.TreeSnapshot, error)
+	snapshots []*db.TreeSnapshot
+	createFn  func(ctx context.Context, treeID uuid.UUID) (*db.TreeSnapshot, error)
 }
 
 func (s *snapshotRepoStub) CreateSnapshot(ctx context.Context, treeID uuid.UUID) (*db.TreeSnapshot, error) {
@@ -28,11 +28,11 @@ func (s *snapshotRepoStub) CreateSnapshot(ctx context.Context, treeID uuid.UUID)
 	}
 	if ts == nil {
 		ts = &db.TreeSnapshot{
-			ID:      uuid.MustParse("10000000-0000-7000-8000-000000000001"),
-			TreeID:  treeID,
-			Hash:    "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-			NodeCount:  5,
-			EdgeCount:  4,
+			ID:        uuid.MustParse("10000000-0000-7000-8000-000000000001"),
+			TreeID:    treeID,
+			Hash:      "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+			NodeCount: 5,
+			EdgeCount: 4,
 			CreatedAt: time.Now(),
 		}
 	}
@@ -212,12 +212,12 @@ func TestSyncService_GetSyncResponse_Delta(t *testing.T) {
 	// by overriding the stub's createFn
 	repo.createFn = func(ctx context.Context, treeID uuid.UUID) (*db.TreeSnapshot, error) {
 		ts := &db.TreeSnapshot{
-			ID:         uuid.MustParse("20000000-0000-7000-8000-000000000002"),
-			TreeID:     treeID,
-			Hash:       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			NodeCount:  8,
-			EdgeCount:  7,
-			CreatedAt:  time.Now(),
+			ID:        uuid.MustParse("20000000-0000-7000-8000-000000000002"),
+			TreeID:    treeID,
+			Hash:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			NodeCount: 8,
+			EdgeCount: 7,
+			CreatedAt: time.Now(),
 		}
 		repo.snapshots = append(repo.snapshots, ts)
 		return ts, nil

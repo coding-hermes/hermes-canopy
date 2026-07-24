@@ -94,14 +94,14 @@ type sseHubStub struct {
 }
 
 func (*sseHubStub) Subscribe(context.Context, uuid.UUID, sse.SSEClient) error { return nil }
-func (*sseHubStub) Unsubscribe(uuid.UUID, string)                            {}
+func (*sseHubStub) Unsubscribe(uuid.UUID, string)                             {}
 func (h *sseHubStub) Broadcast(treeID uuid.UUID, event sse.SSEEvent) sse.SSEEvent {
 	h.treeID, h.event = treeID, event
 	h.count++
 	return event
 }
 func (*sseHubStub) ReplaySince(context.Context, uuid.UUID, string, string) error { return nil }
-func (*sseHubStub) SubscriberCount(uuid.UUID) int                               { return 0 }
+func (*sseHubStub) SubscriberCount(uuid.UUID) int                                { return 0 }
 func (*sseHubStub) TotalConnections() int                                        { return 0 }
 func (*sseHubStub) Shutdown(context.Context) error                               { return nil }
 

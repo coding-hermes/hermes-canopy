@@ -84,14 +84,14 @@ type TreeCreatePayload struct {
 
 // NodeAddPayload carries a new node added to a tree.
 type NodeAddPayload struct {
-	NodeID         string    `json:"node_id"`
-	ParentID       string    `json:"parent_id,omitempty"`
-	AuthorID       string    `json:"author_id"`
-	Content        string    `json:"content"`
-	ContentFormat  string    `json:"content_format"`
-	NodeType       string    `json:"node_type"`
-	SequenceNum    int64     `json:"sequence_num"`
-	CreatedAt      time.Time `json:"created_at"`
+	NodeID        string    `json:"node_id"`
+	ParentID      string    `json:"parent_id,omitempty"`
+	AuthorID      string    `json:"author_id"`
+	Content       string    `json:"content"`
+	ContentFormat string    `json:"content_format"`
+	NodeType      string    `json:"node_type"`
+	SequenceNum   int64     `json:"sequence_num"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // NodeUpdatePayload carries a mutation to an existing node's content.
@@ -147,28 +147,28 @@ type UserLeavePayload struct {
 // recovery. SnapshotData is opaque (hash-verified, MLS-encrypted in
 // production).
 type TreeSnapshotPayload struct {
-	SnapshotID  string          `json:"snapshot_id"`
-	Hash        string          `json:"hash"`
-	NodeCount   int             `json:"node_count"`
-	EdgeCount   int             `json:"edge_count"`
+	SnapshotID   string          `json:"snapshot_id"`
+	Hash         string          `json:"hash"`
+	NodeCount    int             `json:"node_count"`
+	EdgeCount    int             `json:"edge_count"`
 	SnapshotData json.RawMessage `json:"snapshot_data"`
 }
 
 // TreeDeltaPayload carries an incremental delta for resynchronisation.
 type TreeDeltaPayload struct {
-	FromHash    string          `json:"from_hash"`
-	ToHash      string          `json:"to_hash"`
-	AddedNodes  []string        `json:"added_nodes,omitempty"`
-	RemovedNodes []string       `json:"removed_nodes,omitempty"`
-	AddedEdges  []string        `json:"added_edges,omitempty"`
-	RemovedEdges []string       `json:"removed_edges,omitempty"`
-	DeltaData   json.RawMessage `json:"delta_data"`
+	FromHash     string          `json:"from_hash"`
+	ToHash       string          `json:"to_hash"`
+	AddedNodes   []string        `json:"added_nodes,omitempty"`
+	RemovedNodes []string        `json:"removed_nodes,omitempty"`
+	AddedEdges   []string        `json:"added_edges,omitempty"`
+	RemovedEdges []string        `json:"removed_edges,omitempty"`
+	DeltaData    json.RawMessage `json:"delta_data"`
 }
 
 // HeartbeatPayload is the keepalive message exchanged on idle connections.
 type HeartbeatPayload struct {
-	PeerID   string `json:"peer_id"`
-	Timestamp int64 `json:"timestamp"`
+	PeerID    string `json:"peer_id"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // AckPayload acknowledges receipt of messages up to the given sequence.

@@ -18,8 +18,8 @@ import (
 // For MVP, SSE is the primary and only fully-implemented transport.
 // SPEC-FTR-04 §2 Decision 7.
 type SSEAdapter struct {
-	hub  sse.SSEHub
-	mu   sync.RWMutex
+	hub   sse.SSEHub
+	mu    sync.RWMutex
 	conns map[string]*sseConnection // conn ID → metadata
 }
 

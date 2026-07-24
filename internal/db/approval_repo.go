@@ -371,12 +371,13 @@ func (r *PGApprovalRepo) Deny(ctx context.Context, id, actorID uuid.UUID, reason
 }
 
 // ExpirePending is a single statement that:
-//   1. UPDATE pending approvals whose expires_at <= now() to
-//      status='expired', decided_at=now(), decided_by=NULL (the
-//      system is the decider — there is no human actor).
-//   2. INSERT one audit_audit_log row per expired approval.
-//      RETURNING gives us the expired IDs and tree IDs in the
-//      same pass for downstream SSE fan-out.
+//  1. UPDATE pending approvals whose expires_at <= now() to
+//     status='expired', decided_at=now(), decided_by=NULL (the
+//     system is the decider — there is no human actor).
+//  2. INSERT one audit_audit_log row per expired approval.
+//     RETURNING gives us the expired IDs and tree IDs in the
+//     same pass for downstream SSE fan-out.
+//
 // Per SPEC-DM-03 §6 and the expire_pending_approvals() SQL
 // function defined in migration 000009.
 func (r *PGApprovalRepo) ExpirePending(ctx context.Context) ([]uuid.UUID, error) {

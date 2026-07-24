@@ -81,11 +81,11 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 	}
 
 	member := &db.MLSGroupMember{
-		ProfileID:  profileID,
-		GroupID:    grp.ID,
+		ProfileID:   profileID,
+		GroupID:     grp.ID,
 		MLSIdentity: []byte(profileID.String()),
-		AddedAt:    time.Now().UTC(),
-		LastActive: time.Now().UTC(),
+		AddedAt:     time.Now().UTC(),
+		LastActive:  time.Now().UTC(),
 	}
 
 	if err := s.members.Add(ctx, grp.ID, member); err != nil {

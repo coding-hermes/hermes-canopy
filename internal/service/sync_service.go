@@ -18,9 +18,9 @@ import (
 // --- Error sentinels ---------------------------------------------------------
 
 var (
-	ErrSyncTreeNotFound  = errors.New("sync service: tree not found")
-	ErrSnapshotNotFound  = errors.New("sync service: snapshot not found")
-	ErrInvalidHash       = errors.New("sync service: invalid hash format (must be 64 hex chars)")
+	ErrSyncTreeNotFound = errors.New("sync service: tree not found")
+	ErrSnapshotNotFound = errors.New("sync service: snapshot not found")
+	ErrInvalidHash      = errors.New("sync service: invalid hash format (must be 64 hex chars)")
 )
 
 // --- Types -------------------------------------------------------------------
@@ -48,10 +48,10 @@ type Snapshot struct {
 
 // Delta contains the set of changes between two snapshots.
 type Delta struct {
-	AddedNodes   int `json:"addedNodes"`
-	AddedEdges   int `json:"addedEdges"`
-	TotalNodes   int `json:"totalNodes"`
-	TotalEdges   int `json:"totalEdges"`
+	AddedNodes int `json:"addedNodes"`
+	AddedEdges int `json:"addedEdges"`
+	TotalNodes int `json:"totalNodes"`
+	TotalEdges int `json:"totalEdges"`
 }
 
 // SyncService defines the sync engine contract.
@@ -134,10 +134,10 @@ func (s *syncService) GetSyncResponse(ctx context.Context, treeID uuid.UUID, las
 	// Case 4: Delta between known and latest
 	resp.FullSnapshot = false
 	resp.Delta = &Delta{
-		AddedNodes:  latest.NodeCount - known.NodeCount,
-		AddedEdges:  latest.EdgeCount - known.EdgeCount,
-		TotalNodes:  latest.NodeCount,
-		TotalEdges:  latest.EdgeCount,
+		AddedNodes: latest.NodeCount - known.NodeCount,
+		AddedEdges: latest.EdgeCount - known.EdgeCount,
+		TotalNodes: latest.NodeCount,
+		TotalEdges: latest.EdgeCount,
 	}
 	return resp, nil
 }

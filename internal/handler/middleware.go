@@ -53,8 +53,8 @@ type visitor struct {
 // RateLimiter implements a per-IP token-bucket rate limiter.
 type RateLimiter struct {
 	mu     sync.Mutex
-	rate   float64   // tokens added per second
-	burst  int       // maximum accumulated tokens
+	rate   float64 // tokens added per second
+	burst  int     // maximum accumulated tokens
 	visits map[string]*visitor
 }
 

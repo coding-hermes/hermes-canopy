@@ -209,9 +209,9 @@ type CreateNodeResult struct {
 
 // DeleteNodeResult is the minimal info returned from soft-delete.
 type DeleteNodeResult struct {
-	ID        uuid.UUID  `json:"id"`
-	TreeID    uuid.UUID  `json:"treeId"`
-	DeletedAt time.Time  `json:"deletedAt"`
+	ID        uuid.UUID `json:"id"`
+	TreeID    uuid.UUID `json:"treeId"`
+	DeletedAt time.Time `json:"deletedAt"`
 }
 
 // --- Service interface + implementation ------------------------------------

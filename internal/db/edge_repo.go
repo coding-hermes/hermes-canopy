@@ -26,10 +26,10 @@ var ErrSelfEdge = errors.New("db: source and target cannot be the same")
 
 // EdgeCounts aggregates edge counts and edge-type breakdown for a tree.
 type EdgeCounts struct {
-	TreeID       uuid.UUID      `json:"treeId"`
-	Total        int64          `json:"total"`
-	Active       int64          `json:"active"`
-	ByType       map[string]int `json:"byType"`
+	TreeID uuid.UUID      `json:"treeId"`
+	Total  int64          `json:"total"`
+	Active int64          `json:"active"`
+	ByType map[string]int `json:"byType"`
 }
 
 // EdgeRepo defines edge-scoped persistence operations.

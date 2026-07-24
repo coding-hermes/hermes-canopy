@@ -29,12 +29,13 @@ func NewNodeHandler(svc service.NodeService, se sync.SyncEngine) *NodeHandler {
 }
 
 // Routes mounts the node endpoints.
-//   POST   /trees/{tree_id}/nodes              — create node
-//   GET    /trees/{tree_id}/nodes/{node_id}     — get node by ID
-//   PATCH  /nodes/{node_id}                     — update node
-//   DELETE /nodes/{node_id}                     — soft-delete node
-//   POST   /nodes/{node_id}/reply               — reply to node
-//   POST   /nodes/{node_id}/fork                — fork from node
+//
+//	POST   /trees/{tree_id}/nodes              — create node
+//	GET    /trees/{tree_id}/nodes/{node_id}     — get node by ID
+//	PATCH  /nodes/{node_id}                     — update node
+//	DELETE /nodes/{node_id}                     — soft-delete node
+//	POST   /nodes/{node_id}/reply               — reply to node
+//	POST   /nodes/{node_id}/fork                — fork from node
 func (h *NodeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/{tree_id}/nodes", h.handleCreate)
@@ -160,11 +161,11 @@ func (h *NodeHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	// Broadcast mutation through sync engine (best-effort).
 	if h.sync != nil {
 		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
-			Type:    sync.MutNodeUpdated,
-			TreeID:  out.TreeID,
-			NodeID:  out.ID,
-			ActorID: out.AuthorID,
-			Content: out.Content,
+			Type:      sync.MutNodeUpdated,
+			TreeID:    out.TreeID,
+			NodeID:    out.ID,
+			ActorID:   out.AuthorID,
+			Content:   out.Content,
 			Timestamp: time.Now().UTC(),
 		})
 	}
@@ -186,10 +187,10 @@ func (h *NodeHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	// Broadcast mutation through sync engine (best-effort).
 	if h.sync != nil {
 		_ = h.sync.OnNodeMutation(r.Context(), sync.NodeMutation{
-			Type:    sync.MutNodeRemoved,
-			TreeID:  out.TreeID,
-			NodeID:  out.ID,
-			ActorID: uuid.Nil,
+			Type:      sync.MutNodeRemoved,
+			TreeID:    out.TreeID,
+			NodeID:    out.ID,
+			ActorID:   uuid.Nil,
 			Timestamp: out.DeletedAt,
 		})
 	}

@@ -68,7 +68,7 @@ type Connection struct {
 type ConnectionState int
 
 const (
-	StateInit         ConnectionState = iota
+	StateInit ConnectionState = iota
 	StateConnecting
 	StateActive
 	StateDegraded

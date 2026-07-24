@@ -27,7 +27,9 @@ func (r *treeRepoStub) GetByID(_ context.Context, id uuid.UUID) (*db.Tree, error
 	}
 	return nil, db.ErrNotFound
 }
-func (r *treeRepoStub) GetByOwner(_ context.Context, _ uuid.UUID) ([]db.Tree, error) { return r.trees, nil }
+func (r *treeRepoStub) GetByOwner(_ context.Context, _ uuid.UUID) ([]db.Tree, error) {
+	return r.trees, nil
+}
 func (r *treeRepoStub) Update(_ context.Context, tree *db.Tree) (*db.Tree, error) {
 	for i := range r.trees {
 		if r.trees[i].ID == tree.ID {
@@ -56,30 +58,54 @@ func (r *treeRepoStub) Search(_ context.Context, _ string, limit, offset int) ([
 
 type nodeRepoStub struct{}
 
-func (n *nodeRepoStub) Create(_ context.Context, node *db.Node) (*db.Node, error)  { return node, nil }
-func (n *nodeRepoStub) GetByID(_ context.Context, _ uuid.UUID) (*db.Node, error)    { return nil, db.ErrNotFound }
-func (n *nodeRepoStub) GetByTree(_ context.Context, _ uuid.UUID) ([]db.Node, error)  { return nil, nil }
-func (n *nodeRepoStub) GetChildren(_ context.Context, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
-func (n *nodeRepoStub) GetAncestors(_ context.Context, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
-func (n *nodeRepoStub) GetSubtree(_ context.Context, _ uuid.UUID, _ int) ([]db.Node, error) { return nil, nil }
+func (n *nodeRepoStub) Create(_ context.Context, node *db.Node) (*db.Node, error) { return node, nil }
+func (n *nodeRepoStub) GetByID(_ context.Context, _ uuid.UUID) (*db.Node, error) {
+	return nil, db.ErrNotFound
+}
+func (n *nodeRepoStub) GetByTree(_ context.Context, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
+func (n *nodeRepoStub) GetChildren(_ context.Context, _ uuid.UUID) ([]db.Node, error) {
+	return nil, nil
+}
+func (n *nodeRepoStub) GetAncestors(_ context.Context, _ uuid.UUID) ([]db.Node, error) {
+	return nil, nil
+}
+func (n *nodeRepoStub) GetSubtree(_ context.Context, _ uuid.UUID, _ int) ([]db.Node, error) {
+	return nil, nil
+}
 func (n *nodeRepoStub) GetPath(_ context.Context, _, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
-func (n *nodeRepoStub) Update(_ context.Context, _ uuid.UUID, _ string, _ []byte) (*db.Node, error) { return nil, nil }
+func (n *nodeRepoStub) Update(_ context.Context, _ uuid.UUID, _ string, _ []byte) (*db.Node, error) {
+	return nil, nil
+}
 func (n *nodeRepoStub) SoftDelete(_ context.Context, _ uuid.UUID) error { return nil }
 func (n *nodeRepoStub) HardDelete(_ context.Context, _ uuid.UUID) error { return nil }
-func (n *nodeRepoStub) GetCounts(_ context.Context, _ uuid.UUID) (*db.NodeCounts, error) { return nil, nil }
+func (n *nodeRepoStub) GetCounts(_ context.Context, _ uuid.UUID) (*db.NodeCounts, error) {
+	return nil, nil
+}
 
 type edgeRepoStub struct{}
 
 func (e *edgeRepoStub) Create(_ context.Context, edge *db.Edge) (*db.Edge, error) { return edge, nil }
-func (e *edgeRepoStub) GetByID(_ context.Context, _ uuid.UUID) (*db.Edge, error)   { return nil, db.ErrNotFound }
-func (e *edgeRepoStub) GetBySource(_ context.Context, _ uuid.UUID) ([]db.Edge, error) { return nil, nil }
-func (e *edgeRepoStub) GetByTarget(_ context.Context, _ uuid.UUID) ([]db.Edge, error) { return nil, nil }
-func (e *edgeRepoStub) GetByTree(_ context.Context, _ uuid.UUID) ([]db.Edge, error) { return nil, nil }
-func (e *edgeRepoStub) SoftDelete(_ context.Context, _ uuid.UUID) error { return nil }
+func (e *edgeRepoStub) GetByID(_ context.Context, _ uuid.UUID) (*db.Edge, error) {
+	return nil, db.ErrNotFound
+}
+func (e *edgeRepoStub) GetBySource(_ context.Context, _ uuid.UUID) ([]db.Edge, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) GetByTarget(_ context.Context, _ uuid.UUID) ([]db.Edge, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) GetByTree(_ context.Context, _ uuid.UUID) ([]db.Edge, error)  { return nil, nil }
+func (e *edgeRepoStub) SoftDelete(_ context.Context, _ uuid.UUID) error              { return nil }
 func (e *edgeRepoStub) GetParents(_ context.Context, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
-func (e *edgeRepoStub) GetSiblings(_ context.Context, _, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
-func (e *edgeRepoStub) GetEdgeCounts(_ context.Context, _ uuid.UUID) (*db.EdgeCounts, error) { return nil, nil }
-func (e *edgeRepoStub) Move(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*db.Edge, error) { return nil, nil }
+func (e *edgeRepoStub) GetSiblings(_ context.Context, _, _ uuid.UUID) ([]db.Node, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) GetEdgeCounts(_ context.Context, _ uuid.UUID) (*db.EdgeCounts, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) Move(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*db.Edge, error) {
+	return nil, nil
+}
 
 func TestValidateCreateTree_ValidInput(t *testing.T) {
 	p := CreateTreeParams{

@@ -124,10 +124,10 @@ func (h *TransportHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 // --- PUT /api/v1/transports/{type} -----------------------------------------
 
 type updateTransportRequest struct {
-	Enabled        *bool                   `json:"enabled,omitempty"`
-	MaxMessageSize *int64                  `json:"max_message_size,omitempty"`
-	HeartbeatSecs  *int                    `json:"heartbeat_secs,omitempty"`
-	ConnectTimeout *int                    `json:"connect_timeout,omitempty"`
+	Enabled        *bool                  `json:"enabled,omitempty"`
+	MaxMessageSize *int64                 `json:"max_message_size,omitempty"`
+	HeartbeatSecs  *int                   `json:"heartbeat_secs,omitempty"`
+	ConnectTimeout *int                   `json:"connect_timeout,omitempty"`
 	ConfigJSON     map[string]interface{} `json:"config_json,omitempty"`
 }
 
@@ -227,20 +227,20 @@ func (h *TransportHandler) HealthProbe(tt string) http.HandlerFunc {
 // --- Response shapes (SPEC-FTR-04 §6.2) ------------------------------------
 
 type transportStatusResponse struct {
-	NodeID          string              `json:"node_id"`
-	DeploymentMode  string              `json:"deployment_mode"`
-	NetworkTopology string              `json:"network_topology"`
+	NodeID          string                `json:"node_id"`
+	DeploymentMode  string                `json:"deployment_mode"`
+	NetworkTopology string                `json:"network_topology"`
 	Transports      []transportStatusItem `json:"transports"`
-	ActiveFallback  map[string]string   `json:"active_fallback_chains"`
+	ActiveFallback  map[string]string     `json:"active_fallback_chains"`
 }
 
 type transportStatusItem struct {
-	Type            string   `json:"type"`
-	Enabled         bool     `json:"enabled"`
-	State           string   `json:"state"`
-	Connections     int      `json:"connections"`
-	HealthOK        bool     `json:"health_ok"`
-	LastHealthCheck *string  `json:"last_health_check"`
+	Type            string  `json:"type"`
+	Enabled         bool    `json:"enabled"`
+	State           string  `json:"state"`
+	Connections     int     `json:"connections"`
+	HealthOK        bool    `json:"health_ok"`
+	LastHealthCheck *string `json:"last_health_check"`
 }
 
 type transportConfigResponse struct {

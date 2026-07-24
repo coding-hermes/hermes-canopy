@@ -40,11 +40,11 @@ type MLSGroup struct {
 
 // MLSGroupState contains encrypted state required to resume an MLS group.
 type MLSGroupState struct {
-	Group              MLSGroup          `json:"group"`
-	EncryptedState     []byte            `json:"-"`
-	RatchetTree        []byte            `json:"ratchet_tree"`
-	ExporterSecretHash []byte            `json:"exporter_secret_hash"`
-	Members            []MLSGroupMember  `json:"members"`
+	Group              MLSGroup         `json:"group"`
+	EncryptedState     []byte           `json:"-"`
+	RatchetTree        []byte           `json:"ratchet_tree"`
+	ExporterSecretHash []byte           `json:"exporter_secret_hash"`
+	Members            []MLSGroupMember `json:"members"`
 }
 
 // MLSGroupMember is the authenticated member representation at an MLS leaf.
@@ -98,7 +98,7 @@ type MLSService interface {
 	Decrypt(ctx context.Context, workspaceID, profileID uuid.UUID, ciphertext MLSCiphertext) ([]byte, error)
 	AddExternalProposal(ctx context.Context, workspaceID, profileID uuid.UUID, proposalBytes []byte) error
 	CommitProposals(ctx context.Context, workspaceID, profileID uuid.UUID) ([]byte, error) // returns commit bytes
-	GetEpochSecret(ctx context.Context, workspaceID uuid.UUID) ([]byte, error)            // exporter secret
+	GetEpochSecret(ctx context.Context, workspaceID uuid.UUID) ([]byte, error)             // exporter secret
 	GetGroupState(ctx context.Context, workspaceID uuid.UUID) (*MLSGroupState, error)
 }
 

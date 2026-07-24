@@ -24,12 +24,12 @@ import (
 // --- Error sentinels -------------------------------------------------------
 
 var (
-	ErrApprovalNotFound  = errors.New("approval service: approval not found")
-	ErrAlreadyDecided    = errors.New("approval service: approval already decided")
-	ErrApprovalExpired   = errors.New("approval service: approval has expired")
-	ErrInvalidDenyReason = errors.New("approval service: deny reason is required (1-1000 chars)")
-	ErrPermissionDenied  = errors.New("approval service: permission denied")
-	ErrNotApprovalOwner  = errors.New("approval service: not the approval owner")
+	ErrApprovalNotFound   = errors.New("approval service: approval not found")
+	ErrAlreadyDecided     = errors.New("approval service: approval already decided")
+	ErrApprovalExpired    = errors.New("approval service: approval has expired")
+	ErrInvalidDenyReason  = errors.New("approval service: deny reason is required (1-1000 chars)")
+	ErrPermissionDenied   = errors.New("approval service: permission denied")
+	ErrNotApprovalOwner   = errors.New("approval service: not the approval owner")
 	ErrDenyReasonRequired = errors.New("approval service: deny reason is required")
 	ErrDenyReasonTooLong  = errors.New("approval service: deny reason exceeds 1000 characters")
 )

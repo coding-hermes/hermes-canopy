@@ -18,16 +18,16 @@ import (
 
 // mockMLSService wraps MLSService with configurable function fields and a call log.
 type mockMLSService struct {
-	createGroupFn       func(ctx context.Context, workspaceID, creatorProfileID uuid.UUID, adminKeyPair Ed25519KeyPair) (*MLSGroup, error)
-	joinGroupFn         func(ctx context.Context, workspaceID, profileID uuid.UUID, keyPackage MLSKeyPackage, welcomeBytes []byte) error
-	leaveGroupFn        func(ctx context.Context, workspaceID, profileID uuid.UUID) error
-	removeMemberFn      func(ctx context.Context, workspaceID, profileID, callerProfileID uuid.UUID) error
-	encryptFn           func(ctx context.Context, workspaceID, profileID uuid.UUID, plaintext []byte) (MLSCiphertext, error)
-	decryptFn           func(ctx context.Context, workspaceID, profileID uuid.UUID, ciphertext MLSCiphertext) ([]byte, error)
+	createGroupFn         func(ctx context.Context, workspaceID, creatorProfileID uuid.UUID, adminKeyPair Ed25519KeyPair) (*MLSGroup, error)
+	joinGroupFn           func(ctx context.Context, workspaceID, profileID uuid.UUID, keyPackage MLSKeyPackage, welcomeBytes []byte) error
+	leaveGroupFn          func(ctx context.Context, workspaceID, profileID uuid.UUID) error
+	removeMemberFn        func(ctx context.Context, workspaceID, profileID, callerProfileID uuid.UUID) error
+	encryptFn             func(ctx context.Context, workspaceID, profileID uuid.UUID, plaintext []byte) (MLSCiphertext, error)
+	decryptFn             func(ctx context.Context, workspaceID, profileID uuid.UUID, ciphertext MLSCiphertext) ([]byte, error)
 	addExternalProposalFn func(ctx context.Context, workspaceID, profileID uuid.UUID, proposalBytes []byte) error
-	commitProposalsFn   func(ctx context.Context, workspaceID, profileID uuid.UUID) ([]byte, error)
-	getEpochSecretFn    func(ctx context.Context, workspaceID uuid.UUID) ([]byte, error)
-	getGroupStateFn     func(ctx context.Context, workspaceID uuid.UUID) (*MLSGroupState, error)
+	commitProposalsFn     func(ctx context.Context, workspaceID, profileID uuid.UUID) ([]byte, error)
+	getEpochSecretFn      func(ctx context.Context, workspaceID uuid.UUID) ([]byte, error)
+	getGroupStateFn       func(ctx context.Context, workspaceID uuid.UUID) (*MLSGroupState, error)
 }
 
 func (m *mockMLSService) CreateGroup(ctx context.Context, workspaceID, creatorProfileID uuid.UUID, adminKeyPair Ed25519KeyPair) (*MLSGroup, error) {
@@ -126,9 +126,9 @@ func (h *mockSSEHub) Broadcast(treeID uuid.UUID, event sse.SSEEvent) sse.SSEEven
 func (h *mockSSEHub) ReplaySince(_ context.Context, _ uuid.UUID, _ string, _ string) error {
 	return nil
 }
-func (h *mockSSEHub) SubscriberCount(_ uuid.UUID) int { return 0 }
+func (h *mockSSEHub) SubscriberCount(_ uuid.UUID) int  { return 0 }
 func (h *mockSSEHub) TotalConnections() int            { return 0 }
-func (h *mockSSEHub) Shutdown(_ context.Context) error  { return nil }
+func (h *mockSSEHub) Shutdown(_ context.Context) error { return nil }
 
 func (h *mockSSEHub) broadcastCount() int {
 	h.mu.Lock()

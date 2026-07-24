@@ -140,7 +140,7 @@ const (
 // ProfileType enumerates whether a Profile is a human or a Hermes
 // agent profile. Maps to the profile_type enum (migration 000008).
 const (
-	ProfileTypeHuman        = "human"
+	ProfileTypeHuman         = "human"
 	ProfileTypeHermesProfile = "hermes-profile"
 )
 
@@ -175,14 +175,14 @@ const (
 // approval_audit_log. Maps to the audit_action enum (migration 000009).
 const (
 	AuditActionApprovalRequested = "approval_requested"
-	AuditActionApprovalGranted  = "approval_granted"
-	AuditActionApprovalDenied   = "approval_denied"
-	AuditActionApprovalExpired  = "approval_expired"
-	AuditActionRuleCreated      = "rule_created"
-	AuditActionRuleUpdated      = "rule_updated"
-	AuditActionRuleDeleted      = "rule_deleted"
-	AuditActionRuleAutoApproved = "rule_auto_approved"
-	AuditActionRuleAutoDenied   = "rule_auto_denied"
+	AuditActionApprovalGranted   = "approval_granted"
+	AuditActionApprovalDenied    = "approval_denied"
+	AuditActionApprovalExpired   = "approval_expired"
+	AuditActionRuleCreated       = "rule_created"
+	AuditActionRuleUpdated       = "rule_updated"
+	AuditActionRuleDeleted       = "rule_deleted"
+	AuditActionRuleAutoApproved  = "rule_auto_approved"
+	AuditActionRuleAutoDenied    = "rule_auto_denied"
 )
 
 // ============================================================
