@@ -175,8 +175,8 @@
   **Commit: 3961566** — connection_manager.go (385 lines): ConnectionManager with RouteMessage, OnConnect, OnDisconnect, DegradeTransport, MeasureBandwidth, EnforceRateLimit. MessageQueue ring buffer (10K cap). RateLimiter token-bucket. BandwidthProfile. events.go: SSE transport_status/error/degradation helpers.
 |- [x] **BE-09c — TransportSelector + Deployment Detection** ✅ COMPLETE 2026-07-24
   **Commit: 3961566** — selector.go (251 lines): TransportSelector with SelectPrimary, SelectFallback, DetectTopology. DeploymentMode (7 modes). NetworkTopology (5 topologies). Capability negotiation. stub_adapters.go: NATS/WebRTC/Redis/Relay stubs. sse_adapter.go: full TransportAdapter impl for MVP.
-|- [ ] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring**
-  **Migrations done** (000011-000013, up+down, uuidv7). **TODO:** transport_handler.go (5 endpoints per SPEC-FTR-04 §6), SSE events wiring (transport_status/error/degradation), wire into server.go + main.go.
+||- [x] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring** ✅ COMPLETE 2026-07-24
+  **Commit: 6190210** — +719 lines across 5 files. transport_repo.go (387 lines, 3 repo interfaces + PG impls), transport_handler.go (264 lines, 4 REST routes + health probe), db.go (transport repos wired into DB struct), server.go (transport params in New()), main.go (SSEAdapter/Selector/ConnectionManager/repos init). Build+vet+test all pass (11/11 packages).
 - [ ] **BE-10 — Encryption Layer (MLS-Only)**
 - [ ] **BE-11 — HTTP Router & Middleware**
 - [ ] **BE-12 — Backend Integration Tests**
