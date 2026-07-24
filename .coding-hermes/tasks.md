@@ -2,8 +2,8 @@
 
 |||||> **Status:** Phase 1 ✅ (9/9) | Phase 2 ✅ (4/4) | Phase 3 — API Specs ✅ (7/7) | Phase 3b — Topic Specs ✅ (5/5) | Phase 3c — Plugin & Card Specs ✅ (6/6) | Phase 3d — Post-MVP ✅ (7/7) | **Phase 4 — Backend: BE-01→BE-10d ✅ (11.5/12)**
 |||> **Foreman:** deepseek-v4-flash @ deepseek-foreman  
-||||> **Last tick:** BE-10b — MLS HTTP handlers + wiring (10 endpoints), 428 lines across 3 files
-|> **DuckBrain:** hermes-canopy namespace (23+ entries)
+||||> **Last tick:** BE-10d — MLS unit + integration tests committed (35 tests, 1,391 lines across 3 files). All 10 MLSService methods covered.
+||> **DuckBrain:** hermes-canopy namespace (25+ entries)
 
 ---
 
