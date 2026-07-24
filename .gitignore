@@ -32,6 +32,9 @@ bin/
 .DS_Store
 Thumbs.db
 
+# GitReins — auto-generated verdict history
+.gitreins/history/
+
 # Environment
 .env
 .env.local
