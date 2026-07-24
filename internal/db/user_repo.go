@@ -314,6 +314,9 @@ type TreeMemberRepo interface {
 	// The matching approval_audit_log rows are preserved (the audit
 	// table is immutable).
 	Remove(ctx context.Context, id uuid.UUID) error
+
+	// IsMember returns true when the given user is a member of the tree.
+	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
 }
 
 // PGTreeMemberRepo is the pgx-backed TreeMemberRepo implementation.
@@ -454,4 +457,18 @@ func (r *PGTreeMemberRepo) Remove(ctx context.Context, id uuid.UUID) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// IsMember returns true when the specified user has a membership row for the
+// given tree. Both user_id-tree_id combinations are valid (the PK constraint
+// enforces uniqueness, so EXISTS is safe regardless of duplicates).
+func (r *PGTreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM tree_members WHERE tree_id = $1 AND user_id = $2)`,
+		treeID, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("db: check tree member: %w", err)
+	}
+	return exists, nil
 }

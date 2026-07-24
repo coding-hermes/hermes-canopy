@@ -136,15 +136,6 @@ func profileMappingResponseFrom(mapping hermes.ProfileMapping) profileMappingRes
 	}
 }
 
-func parseWorkspaceID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "workspace_id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_WORKSPACE_ID", "workspace_id must be a valid UUID")
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
 func (h *ProfileHandler) writeRouterError(w http.ResponseWriter, r *http.Request, err error, operation string) {
 	switch {
 	case errors.Is(err, hermes.ErrProfileNameRequired), errors.Is(err, hermes.ErrTokenEmpty):

@@ -13,6 +13,7 @@ import (
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
@@ -32,6 +33,7 @@ type Server struct {
 // New creates a new Server with middleware and routes wired.
 func New(
 	addr string,
+	jwtSecret string,
 	treeSvc service.TreeService,
 	nodeSvc service.NodeService,
 	sseHub sse.SSEHub,
@@ -42,11 +44,13 @@ func New(
 	sel *transport.TransportSelector,
 	configRepo db.TransportConfigRepo,
 	eventRepo db.TransportEventRepo,
+	membersRepo db.TreeMemberRepo,
+	profileRouter *hermes.PGProfileRouter,
 	mlsHandler *handler.MLSHandler,
 ) *Server {
 	r := chi.NewRouter()
 
-	// Middleware stack (order matters)
+	// === Global middleware (applied to every route) ===
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(hlog.RequestIDHandler("req_id", "X-Request-Id"))
@@ -54,35 +58,65 @@ func New(
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(corsMiddleware())
+	r.Use(handler.BodySizeLimit(1024 * 1024)) // 1MB per SPEC-API-02 §10.1
 
-	// Health endpoint
+	// Rate limiter: 100 req/s per IP, burst 200.
+	rateLimiter := handler.NewRateLimiter(100, 200)
+	r.Use(handler.RateLimit(rateLimiter))
+
+	// Health and version endpoints (public — no auth).
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
+	r.Get("/version", versionHandler)
 
-	// REST endpoints
-	r.Mount("/trees", handler.NewTreeHandler(treeSvc, syncEngine).Routes())
-	r.Mount("/", handler.NewNodeHandler(nodeSvc, syncEngine).Routes())
+	// === Authenticated routes ===
+	authMW := handler.AuthMiddleware(jwtSecret)
+	membershipMW := handler.TreeMembershipMiddleware(membersRepo)
 
-	// SSE endpoint per SPEC-API-01.
-	sseHandler := sse.NewHandler(sseHub)
-	r.Get("/trees/{tree_id}/events", sseHandler.HandleTreeEvents)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(authMW)
 
-	// Sync endpoint per SPEC-DM-02 §7.
-	r.Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
+		// Tree CRUD (SPEC-API-02).
+		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine)
+		r.Mount("/trees", treeHandler.Routes())
 
-	// Approval endpoints per SPEC-API-05.
-	r.Mount("/approvals", handler.NewApprovalHandler(approvalSvc).Routes())
+		// Node CRUD (SPEC-API-03) — tree-scoped routes get membership check.
+		nodeHandler := handler.NewNodeHandler(nodeSvc, syncEngine)
+		treeNodes := chi.NewRouter()
+		treeNodes.Use(membershipMW)
+		treeNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/trees/{tree_id}/nodes", treeNodes)
+		r.Mount("/nodes", nodeHandler.Routes())
 
-	// Transport adapter endpoints per SPEC-FTR-04 §6.
+		// Sync endpoints (SPEC-DM-02 §7).
+		r.Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
+
+		// SSE endpoint (SPEC-API-01).
+		sseHandler := sse.NewHandler(sseHub)
+		r.With(membershipMW).Get("/trees/{tree_id}/events", sseHandler.HandleTreeEvents)
+
+		// Approval endpoints (SPEC-API-05).
+		r.Mount("/approvals", handler.NewApprovalHandler(approvalSvc).Routes())
+
+		// Profile routing (SPEC-FTR-07 §3.3).
+		r.Mount("/workspaces/{workspace_id}/profiles",
+			handler.NewProfileHandler(profileRouter).Routes()) // ProfileRouter passed via main.go wiring
+	})
+
+	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
 	nodeID, _ := os.Hostname()
 	if nodeID == "" {
 		nodeID = "canopyd-" + time.Now().Format("20060102150405")
 	}
 	transHandler := handler.NewTransportHandler(transportAdaper, connMgr, configRepo, eventRepo, nodeID)
-	r.Mount("/api/v1/transports", transHandler.Routes())
+	r.Route("/api/v1/transports", func(r chi.Router) {
+		r.Use(authMW)
+		r.Mount("/", transHandler.Routes())
+	})
 
-	// Workspace MLS endpoints per SPEC-FTR-03.
+	// Workspace MLS endpoints per SPEC-FTR-03 (authenticated).
 	r.Route("/api/v1/workspaces/{workspace_id}/mls", func(r chi.Router) {
+		r.Use(authMW)
 		r.Mount("/", mlsHandler.Routes())
 	})
 
@@ -137,6 +171,13 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","service":"canopyd"}`))
+}
+
+// versionHandler responds with the server version.
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"version":"dev"}`))
 }
 
 // corsMiddleware provides permissive CORS for local development.

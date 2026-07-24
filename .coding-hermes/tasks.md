@@ -185,8 +185,12 @@
   **Commit: 1227133** — 116 lines across 2 files. MLS service now broadcasts 6 SSE event types (group_created, member_added, welcome_message, member_removed, group_epoch_advanced) via SSE hub on all mutations. Welcome delivery per SPEC-FTR-03 Design Decision 16.
 |  - [x] **BE-10d** — Tests: unit + integration ✅ COMPLETE 2026-07-24
   **Commits: 510e453 (32 tests), 9996b23 (+3 tests: AddExternalProposal no-broadcast, GetEpochSecret/GetGroupState no-broadcast, Encrypt not-group-member). 35 tests total covering all 10 MLSService methods + event bridge decorator.**
-- [ ] **BE-11 — HTTP Router & Middleware**
-- [ ] **BE-12 — Backend Integration Tests**
+|- [x] **BE-11 — HTTP Router & Middleware**
+|  - [x] **BE-11a** — Extract shared handler utilities (writeError, writeJSON, decodeJSON) to handler_util.go ✅ COMPLETE 2026-07-24
+|  - [x] **BE-11b** — BodySizeLimit middleware (1MB, SPEC-API-02 §10.1) + RateLimit middleware (per-IP token bucket) ✅ COMPLETE 2026-07-24
+|  - [x] **BE-11c** — TreeMembershipMiddleware + wire AuthMiddleware into route groups ✅ COMPLETE 2026-07-24
+|  - [ ] **BE-11d** — Tests for all middleware (auth, membership, body size, rate limit)
+|- [ ] **BE-12 — Backend Integration Tests**
 
 ---
 
