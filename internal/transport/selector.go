@@ -1,13 +1,9 @@
 package transport
 
 import (
-	"context"
 	"sort"
 	"sync"
-	"time"
 )
-
-// --- DeploymentMode (SPEC-FTR-04 §3.5 / T1.8 §6.2) -------------------------
 
 // DeploymentMode enumerates the seven Canopy deployment modes.
 type DeploymentMode int
@@ -22,7 +18,7 @@ const (
 	ModeAirGapped
 )
 
-// String returns the deployment mode identifier used in API responses.
+// String returns the stable deployment mode identifier.
 func (m DeploymentMode) String() string {
 	switch m {
 	case ModeLocal:
@@ -44,8 +40,6 @@ func (m DeploymentMode) String() string {
 	}
 }
 
-// --- NetworkTopology (SPEC-FTR-04 §3.5 / T1.8 §6.2) ------------------------
-
 // NetworkTopology describes the node's network position.
 type NetworkTopology int
 
@@ -57,7 +51,7 @@ const (
 	TopologyAirGapped
 )
 
-// String returns the topology identifier used in API responses.
+// String returns the stable topology identifier.
 func (t NetworkTopology) String() string {
 	switch t {
 	case TopologyLoopback:
@@ -75,10 +69,7 @@ func (t NetworkTopology) String() string {
 	}
 }
 
-// --- TransportSelector (SPEC-FTR-04 §3.5) ----------------------------------
-
-// TransportSelector picks the best transport for a deployment mode based on
-// the priority matrix defined in T1.8 §6.2 and the spec's §2 Decision 3.
+// TransportSelector picks the best transport for a deployment mode.
 type TransportSelector struct {
 	mode      DeploymentMode
 	topology  NetworkTopology
@@ -87,165 +78,116 @@ type TransportSelector struct {
 	mu        sync.RWMutex
 }
 
-// NewTransportSelector constructs a selector for the given deployment mode.
-// The priority matrix and fallback chains are compiled at construction time;
-// DetectTopology can refine the ordering at startup.
-func NewTransportSelector(mode DeploymentMode) *TransportSelector {
-	ts := &TransportSelector{
+// NewTransportSelector creates a selector based on the deployment mode and
+// network topology. It pre-populates the ordered fallback chain.
+func NewTransportSelector(mode DeploymentMode, topology NetworkTopology) *TransportSelector {
+	selector := &TransportSelector{
 		mode:      mode,
+		topology:  topology,
 		fallbacks: make(map[TransportType]TransportType),
 	}
-	ts.applyPriorityMatrix()
-	return ts
+	selector.applyPriorityMatrix()
+	return selector
 }
 
-// applyPriorityMatrix populates available + fallbacks based on the
-// deployment mode (SPEC-FTR-04 §2 Decision 3, T1.8 §6.2).
-//
-//	Local        → SSE
-//	LAN          → SSE
-//	SelfHosted   → SSE
-//	SaaS         → SSE, NATS
-//	P2P          → WebRTC, SSE
-//	Federated    → NATS, SSE
-//	AirGapped    → Relay
 func (ts *TransportSelector) applyPriorityMatrix() {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	ts.available = ts.available[:0]
-	// Clear existing fallbacks.
-	ts.fallbacks = make(map[TransportType]TransportType)
-
 	switch ts.mode {
-	case ModeLocal:
-		ts.available = []TransportType{TransportSSE}
-	case ModeLAN:
-		ts.available = []TransportType{TransportSSE}
-	case ModeSelfHosted:
+	case ModeLocal, ModeLAN, ModeSelfHosted:
 		ts.available = []TransportType{TransportSSE}
 	case ModeSaaS:
-		ts.available = []TransportType{TransportSSE, TransportNATS}
-		ts.fallbacks[TransportSSE] = TransportNATS
+		ts.available = []TransportType{TransportSSE, TransportNATS, TransportRelay}
 	case ModeP2P:
-		ts.available = []TransportType{TransportWebRTC, TransportSSE}
-		ts.fallbacks[TransportWebRTC] = TransportSSE
+		ts.available = []TransportType{TransportWebRTC, TransportSSE, TransportRelay}
 	case ModeFederated:
-		ts.available = []TransportType{TransportNATS, TransportSSE}
-		ts.fallbacks[TransportNATS] = TransportSSE
+		ts.available = []TransportType{TransportNATS, TransportRedis, TransportWebRTC}
 	case ModeAirGapped:
 		ts.available = []TransportType{TransportRelay}
+	default:
+		ts.available = []TransportType{TransportSSE}
+	}
+	for i := 0; i+1 < len(ts.available); i++ {
+		ts.fallbacks[ts.available[i]] = ts.available[i+1]
 	}
 }
 
-// Mode returns the deployment mode.
+// SelectPrimary returns the best transport for a given peer. For MVP, SSE is
+// always selected because it is the only implemented transport adapter.
+func (ts *TransportSelector) SelectPrimary(peerID string) TransportType {
+	_ = peerID
+	return TransportSSE
+}
+
+// SelectFallback returns the next transport in the fallback chain.
+func (ts *TransportSelector) SelectFallback(current TransportType) (TransportType, error) {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	next, ok := ts.fallbacks[current]
+	if !ok {
+		return "", ErrNoTransportAvailable
+	}
+	return next, nil
+}
+
+// DetectTopology probes the network. MVP returns TopologyLoopback.
+func (ts *TransportSelector) DetectTopology() NetworkTopology {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.topology = TopologyLoopback
+	return ts.topology
+}
+
+// Mode returns the configured deployment mode.
 func (ts *TransportSelector) Mode() DeploymentMode {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	return ts.mode
 }
 
-// Topology returns the detected network topology.
+// Topology returns the current topology.
 func (ts *TransportSelector) Topology() NetworkTopology {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	return ts.topology
 }
 
-// Available returns the ordered list of transports available for this
-// deployment mode (primary first).
+// Available returns the ordered transport priority list.
 func (ts *TransportSelector) Available() []TransportType {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	out := make([]TransportType, len(ts.available))
-	copy(out, ts.available)
-	return out
+	result := make([]TransportType, len(ts.available))
+	copy(result, ts.available)
+	return result
 }
 
-// SelectPrimary returns the primary transport for a peer. In MVP, the
-// primary is always the first entry in the priority matrix for the
-// deployment mode. peerID is accepted for future per-peer selection logic.
-func (ts *TransportSelector) SelectPrimary(peerID string) TransportType {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	if len(ts.available) == 0 {
-		return TransportSSE // safe default
-	}
-	return ts.available[0]
-}
-
-// SelectFallback returns the next transport to try after current fails.
-// Returns ErrTransportUnreachable if there is no further fallback.
-func (ts *TransportSelector) SelectFallback(current TransportType) (TransportType, error) {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-
-	// Walk the fallback chain.
-	next, ok := ts.fallbacks[current]
-	if !ok {
-		return "", ErrTransportUnreachable
-	}
-	return next, nil
-}
-
-// DetectTopology performs a one-shot network probe to determine the
-// node's topology. For MVP, this is a heuristic: if the target is a
-// loopback address, assume loopback; otherwise assume NAT (the safest
-// general assumption behind a home/office router).
-//
-// This method does not change the available transports list — only the
-// topology metadata used for reporting. The priority matrix is fixed at
-// construction time per Decision 3.
-func (ts *TransportSelector) DetectTopology() NetworkTopology {
+// SetTopology overrides the detected topology.
+func (ts *TransportSelector) SetTopology(topology NetworkTopology) {
 	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	// MVP heuristic: local mode → loopback, everything else → NAT.
-	topology := TopologyNAT
-	if ts.mode == ModeLocal {
-		topology = TopologyLoopback
-	}
 	ts.topology = topology
-	return topology
+	ts.mu.Unlock()
 }
-
-// SetTopology overrides the detected topology (e.g. from config).
-func (ts *TransportSelector) SetTopology(t NetworkTopology) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	ts.topology = t
-}
-
-// --- negotiateCapabilities (SPEC-FTR-04 §3.5, §7 Edge Case 12) --------------
 
 // negotiateCapabilities computes the intersection of local and remote
-// transport capability flags. If the intersection is empty, the caller
-// should reject the connection with ErrTransportMismatch.
+// capabilities. The order is deterministic and sorted lexicographically.
 func negotiateCapabilities(local, remote []string) []string {
 	if len(local) == 0 || len(remote) == 0 {
 		return nil
 	}
 	remoteSet := make(map[string]struct{}, len(remote))
-	for _, c := range remote {
-		remoteSet[c] = struct{}{}
+	for _, capability := range remote {
+		remoteSet[capability] = struct{}{}
 	}
-	var out []string
-	for _, c := range local {
-		if _, ok := remoteSet[c]; ok {
-			out = append(out, c)
+
+	seen := make(map[string]struct{}, len(local))
+	result := make([]string, 0, len(local))
+	for _, capability := range local {
+		if _, ok := seen[capability]; ok {
+			continue
+		}
+		if _, ok := remoteSet[capability]; ok {
+			seen[capability] = struct{}{}
+			result = append(result, capability)
 		}
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(result)
+	return result
 }
-
-// --- context guard (keeps "context" import used even if future ---------------
-// changes remove the only call site) -----------------------------------------
-var _ context.Context = (*cancelCtx)(nil)
-
-type cancelCtx struct{}
-
-func (*cancelCtx) Deadline() (time.Time, bool)   { return time.Time{}, false }
-func (*cancelCtx) Done() <-chan struct{}          { return nil }
-func (*cancelCtx) Err() error                     { return context.Canceled }
-func (*cancelCtx) Value(key any) any              { return nil }

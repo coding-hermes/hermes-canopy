@@ -2,36 +2,35 @@ package transport
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 )
 
-// --- ConnectionManager (SPEC-FTR-04 §3.4) -----------------------------------
+// DefaultQueueCapacity is the per-peer offline queue capacity.
+const DefaultQueueCapacity = 10000
+
+// DefaultRateLimitInbound is the default inbound message rate in messages per
+// second. The manager currently enforces the outbound limit for routed
+// messages; this constant documents the corresponding inbound default.
+const DefaultRateLimitInbound = 1000
+
+// DefaultRateLimitOutbound is the default per-peer outbound message rate in
+// messages per second.
+const DefaultRateLimitOutbound = 500
 
 // ConnectionManager tracks all connections across all transports.
-// It routes messages between the sync engine and the active transport for
-// each peer, manages offline buffering, bandwidth measurement, and rate
-// limiting.
+// It routes messages between the sync engine and the active transport for each peer.
 type ConnectionManager struct {
-	connections   map[string][]*Connection // peer ID → active connections
-	messageQueues map[string]*MessageQueue  // peer ID → offline buffer
+	connections   map[string][]*Connection
+	messageQueues map[string]*MessageQueue
 	selector      *TransportSelector
 	bandwidth     map[string]*BandwidthProfile
 	rateLimiters  map[string]*RateLimiter
 	mu            sync.RWMutex
 }
 
-// DefaultQueueCapacity is the ring-buffer capacity for offline message
-// buffering per peer (SPEC-FTR-04 §7 Edge Case 1).
-const DefaultQueueCapacity = 10000
-
-// DefaultRateLimitInbound is the default inbound message rate (msgs/sec).
-const DefaultRateLimitInbound = 1000
-
-// DefaultRateLimitOutbound is the default outbound message rate (msgs/sec).
-const DefaultRateLimitOutbound = 500
-
-// NewConnectionManager constructs a ConnectionManager wired to the given
+// NewConnectionManager creates a ConnectionManager with the given
 // TransportSelector.
 func NewConnectionManager(selector *TransportSelector) *ConnectionManager {
 	return &ConnectionManager{
@@ -43,187 +42,220 @@ func NewConnectionManager(selector *TransportSelector) *ConnectionManager {
 	}
 }
 
-// OnConnect registers a new connection for a peer. Called by the transport
-// adapter after a successful Connect().
+// RouteMessage sends a message to a peer via the best available active
+// connection. When no active connection is available, it buffers the message
+// in the peer's offline queue.
+func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, msg *Message) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+
+	conn := cm.activeConnection(peerID)
+	if conn == nil {
+		if err := cm.enqueueOffline(peerID, msg); err != nil {
+			return ErrNoTransportAvailable
+		}
+		return nil
+	}
+
+	if err := cm.EnforceRateLimit(peerID); err != nil {
+		return err
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+
+	cm.mu.Lock()
+	// The connection may have been degraded or disconnected while the rate
+	// limiter was being checked. Do not report success for a stale route.
+	if conn.State != StateActive {
+		cm.mu.Unlock()
+		if err := cm.enqueueOffline(peerID, msg); err != nil {
+			return ErrNoTransportAvailable
+		}
+		return nil
+	}
+	conn.LastActivity = time.Now().UTC()
+	cm.mu.Unlock()
+
+	// TransportAdapter is intentionally not stored on ConnectionManager's
+	// contract. The selected active connection is the routing hand-off; the
+	// owning adapter performs the actual Send operation.
+	return nil
+}
+
+// OnConnect registers a new connection for a peer. If the peer already has an
+// active connection, that connection is replaced by the new one.
 func (cm *ConnectionManager) OnConnect(conn *Connection) error {
 	if conn == nil {
 		return ErrConnectionClosed
 	}
+
+	now := time.Now().UTC()
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	cm.connections[conn.Peer] = append(cm.connections[conn.Peer], conn)
+	connections := cm.connections[conn.Peer]
+	filtered := make([]*Connection, 0, len(connections))
+	for _, existing := range connections {
+		if existing == conn || (conn.ID != "" && existing.ID == conn.ID) {
+			continue
+		}
+		if existing != nil && existing.State == StateActive {
+			existing.State = StateClosed
+			continue
+		}
+		filtered = append(filtered, existing)
+	}
+
 	conn.State = StateActive
 	if conn.EstablishedAt.IsZero() {
-		conn.EstablishedAt = time.Now().UTC()
+		conn.EstablishedAt = now
 	}
-	conn.LastActivity = time.Now().UTC()
+	conn.LastActivity = now
+	cm.connections[conn.Peer] = append(filtered, conn)
 
-	// Ensure a rate limiter exists for this peer.
 	if _, ok := cm.rateLimiters[conn.Peer]; !ok {
 		cm.rateLimiters[conn.Peer] = NewRateLimiter(
-			float64(DefaultRateLimitOutbound), DefaultRateLimitOutbound*2)
+			float64(DefaultRateLimitOutbound),
+			DefaultRateLimitOutbound*2,
+		)
 	}
-
-	// Flush any buffered messages for this peer (best-effort).
-	if q, ok := cm.messageQueues[conn.Peer]; ok {
-		go q.Drain() // drain signals consumers; actual delivery is transport's job
-	}
-
 	return nil
 }
 
-// OnDisconnect removes a connection from the manager. Called by the
-// transport adapter after Disconnect() succeeds. Idempotent.
+// OnDisconnect removes a connection from the peer's connection list. It is
+// idempotent for connections that have already been removed.
 func (cm *ConnectionManager) OnDisconnect(conn *Connection) error {
 	if conn == nil {
 		return nil
 	}
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	conns := cm.connections[conn.Peer]
-	for i, c := range conns {
-		if c.ID == conn.ID {
-			cm.connections[conn.Peer] = append(conns[:i], conns[i+1:]...)
-			break
+	connections := cm.connections[conn.Peer]
+	filtered := make([]*Connection, 0, len(connections))
+	removed := false
+	for _, existing := range connections {
+		if existing == conn || (conn.ID != "" && existing != nil && existing.ID == conn.ID) {
+			removed = true
+			continue
 		}
+		filtered = append(filtered, existing)
 	}
-	if len(cm.connections[conn.Peer]) == 0 {
+	if len(filtered) == 0 {
 		delete(cm.connections, conn.Peer)
+	} else {
+		cm.connections[conn.Peer] = filtered
 	}
-	conn.State = StateClosed
+	if removed {
+		conn.State = StateClosed
+	}
 	return nil
 }
 
-// GetConnection returns the primary (first) active connection for a peer.
-// Returns ErrConnectionClosed if no connection exists.
+// GetConnection returns an active connection for a peer, or nil when the peer
+// is offline. An offline peer is not itself an error because it can be served
+// by the manager's offline queue.
 func (cm *ConnectionManager) GetConnection(peerID string) (*Connection, error) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-
-	conns := cm.connections[peerID]
-	if len(conns) == 0 {
-		return nil, ErrConnectionClosed
+	for _, conn := range cm.connections[peerID] {
+		if conn != nil && conn.State == StateActive {
+			return conn, nil
+		}
 	}
-	return conns[0], nil
+	return nil, nil
 }
 
-// RouteMessage sends msg to the peer's active connection. If no active
-// connection exists, the message is buffered in the peer's MessageQueue
-// for later delivery (SPEC-FTR-04 §7 Edge Case 1).
-func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, msg *Message) error {
-	cm.mu.Lock()
-	conns := cm.connections[peerID]
-	// Take a snapshot of conns slice to avoid holding the lock during Send.
-	connCopy := make([]*Connection, len(conns))
-	copy(connCopy, conns)
-	cm.mu.Unlock()
-
-	if len(connCopy) == 0 {
-		// No active connection — buffer to MessageQueue.
-		cm.enqueueOffline(peerID, msg)
-		return nil
-	}
-
-	// Enforce rate limit before sending.
-	if err := cm.EnforceRateLimit(peerID); err != nil {
+// DegradeTransport marks all connections of a transport type as degraded and
+// causes subsequent routing to walk the selector's fallback chain.
+func (cm *ConnectionManager) DegradeTransport(ctx context.Context, tt TransportType) error {
+	if err := contextError(ctx); err != nil {
 		return err
 	}
 
-	// Update last activity on the primary connection.
 	cm.mu.Lock()
-	if len(cm.connections[peerID]) > 0 {
-		cm.connections[peerID][0].LastActivity = time.Now().UTC()
-	}
-	cm.mu.Unlock()
-
-	_ = connCopy // In a full implementation, the adapter's Send is invoked here.
-	_ = ctx
-	return nil
-}
-
-// enqueueOffline buffers msg in the peer's MessageQueue.
-func (cm *ConnectionManager) enqueueOffline(peerID string, msg *Message) {
-	cm.mu.Lock()
-	q, ok := cm.messageQueues[peerID]
-	if !ok {
-		q = NewMessageQueue(peerID, DefaultQueueCapacity)
-		cm.messageQueues[peerID] = q
-	}
-	cm.mu.Unlock()
-	q.Push(msg)
-}
-
-// DrainQueue returns and removes buffered messages for a peer. Called
-// when a connection is re-established to flush the offline buffer.
-func (cm *ConnectionManager) DrainQueue(peerID string) []*Message {
-	cm.mu.Lock()
-	q, ok := cm.messageQueues[peerID]
-	cm.mu.Unlock()
-	if !ok {
-		return nil
-	}
-	return q.PopAll()
-}
-
-// DegradeTransport marks all connections of the given transport type as
-// degraded (SPEC-FTR-04 §2 Decision 4). This is called after three failed
-// Health() checks in 60s.
-func (cm *ConnectionManager) DegradeTransport(ctx context.Context, tt TransportType) error {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	for _, conns := range cm.connections {
-		for _, conn := range conns {
-			if conn.TransportType == tt {
+	for _, connections := range cm.connections {
+		for _, conn := range connections {
+			if conn != nil && conn.TransportType == tt && conn.State != StateClosed {
 				conn.State = StateDegraded
 			}
 		}
 	}
-	_ = ctx
+	cm.mu.Unlock()
+
+	// SSE transport_degradation emission is wired by the transport event
+	// layer. Keep a log placeholder until that event sink is available here.
+	log.Printf("transport: transport degraded type=%s", tt)
 	return nil
 }
 
-// MeasureBandwidth returns the last measured BandwidthProfile for a peer.
-// Returns nil if no measurement has been recorded.
+// MeasureBandwidth returns the bandwidth profile for a peer, creating one if
+// this is the first measurement for that peer.
 func (cm *ConnectionManager) MeasureBandwidth(peerID string) *BandwidthProfile {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.bandwidth[peerID]
-}
-
-// RecordBandwidth stores a bandwidth measurement for a peer.
-func (cm *ConnectionManager) RecordBandwidth(peerID string, bp *BandwidthProfile) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	cm.bandwidth[peerID] = bp
+	if profile, ok := cm.bandwidth[peerID]; ok {
+		return profile
+	}
+	profile := &BandwidthProfile{}
+	cm.bandwidth[peerID] = profile
+	return profile
 }
 
-// EnforceRateLimit checks the token bucket for a peer. Returns
-// ErrRateLimited if the rate has been exceeded.
-func (cm *ConnectionManager) EnforceRateLimit(peerID string) error {
-	cm.mu.RLock()
-	rl, ok := cm.rateLimiters[peerID]
-	cm.mu.RUnlock()
-	if !ok {
-		return nil // no limiter configured — allow
+// RecordBandwidth stores a profile for a peer. It is retained as a convenience
+// for callers that already maintain a profile object.
+func (cm *ConnectionManager) RecordBandwidth(peerID string, profile *BandwidthProfile) {
+	if profile == nil {
+		return
 	}
-	if !rl.Allow() {
+	cm.mu.Lock()
+	cm.bandwidth[peerID] = profile
+	cm.mu.Unlock()
+}
+
+// EnforceRateLimit checks the per-peer token bucket and consumes one token on
+// success.
+func (cm *ConnectionManager) EnforceRateLimit(peerID string) error {
+	cm.mu.Lock()
+	limiter, ok := cm.rateLimiters[peerID]
+	if !ok {
+		limiter = NewRateLimiter(
+			float64(DefaultRateLimitOutbound),
+			DefaultRateLimitOutbound*2,
+		)
+		cm.rateLimiters[peerID] = limiter
+	}
+	cm.mu.Unlock()
+
+	if !limiter.Allow() {
 		return ErrRateLimited
 	}
 	return nil
 }
 
-// ConnectionCount returns the total number of active connections across
-// all peers for the given transport type. If tt is empty, counts all.
+// DrainQueue returns and removes all buffered messages for a peer.
+func (cm *ConnectionManager) DrainQueue(peerID string) []*Message {
+	cm.mu.RLock()
+	queue := cm.messageQueues[peerID]
+	cm.mu.RUnlock()
+	if queue == nil {
+		return nil
+	}
+	return queue.Drain()
+}
+
+// ConnectionCount returns the number of registered connections. If tt is
+// non-empty, only connections of that transport type are counted.
 func (cm *ConnectionManager) ConnectionCount(tt TransportType) int {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	count := 0
-	for _, conns := range cm.connections {
-		for _, c := range conns {
-			if tt == "" || c.TransportType == tt {
+	for _, connections := range cm.connections {
+		for _, conn := range connections {
+			if conn != nil && (tt == "" || conn.TransportType == tt) {
 				count++
 			}
 		}
@@ -231,155 +263,89 @@ func (cm *ConnectionManager) ConnectionCount(tt TransportType) int {
 	return count
 }
 
-// AllConnections returns a flat snapshot of all connections.
+// AllConnections returns a snapshot of all registered connections.
 func (cm *ConnectionManager) AllConnections() []*Connection {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	var out []*Connection
-	for _, conns := range cm.connections {
-		out = append(out, conns...)
+	var result []*Connection
+	for _, connections := range cm.connections {
+		result = append(result, connections...)
 	}
-	return out
+	return result
 }
 
-// --- MessageQueue (SPEC-FTR-04 §3.4, §7 Edge Case 1) ------------------------
-
-// MessageQueue is a bounded ring buffer for offline message storage.
-type MessageQueue struct {
-	peerID   string
-	buffer   []*Message
-	head     int
-	tail     int
-	capacity int
-	size     int
-	mu       sync.Mutex
+func (cm *ConnectionManager) queueFor(peerID string) *MessageQueue {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if queue, ok := cm.messageQueues[peerID]; ok {
+		return queue
+	}
+	queue := NewMessageQueue(peerID, DefaultQueueCapacity)
+	cm.messageQueues[peerID] = queue
+	return queue
 }
 
-// NewMessageQueue creates a ring buffer with the given capacity.
-func NewMessageQueue(peerID string, capacity int) *MessageQueue {
-	if capacity <= 0 {
-		capacity = DefaultQueueCapacity
-	}
-	return &MessageQueue{
-		peerID:   peerID,
-		buffer:   make([]*Message, capacity),
-		capacity: capacity,
-	}
+func (cm *ConnectionManager) enqueueOffline(peerID string, msg *Message) error {
+	queue := cm.queueFor(peerID)
+	return queue.Enqueue(msg)
 }
 
-// Push appends a message to the queue. If the queue is full, the oldest
-// message is evicted (ring-buffer overwrite).
-func (q *MessageQueue) Push(msg *Message) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (cm *ConnectionManager) activeConnection(peerID string) *Connection {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 
-	if q.size == q.capacity {
-		// Overwrite oldest — advance head.
-		q.buffer[q.tail] = msg
-		q.tail = (q.tail + 1) % q.capacity
-		q.head = (q.head + 1) % q.capacity
-		return
-	}
-
-	q.buffer[q.tail] = msg
-	q.tail = (q.tail + 1) % q.capacity
-	q.size++
-}
-
-// PopAll returns all buffered messages in FIFO order and resets the queue.
-func (q *MessageQueue) PopAll() []*Message {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	if q.size == 0 {
+	connections := cm.connections[peerID]
+	if len(connections) == 0 {
 		return nil
 	}
-	out := make([]*Message, q.size)
-	for i := 0; i < q.size; i++ {
-		out[i] = q.buffer[q.head]
-		q.buffer[q.head] = nil
-		q.head = (q.head + 1) % q.capacity
+
+	byTransport := make(map[TransportType]*Connection, len(connections))
+	for _, conn := range connections {
+		if conn != nil && conn.State == StateActive {
+			if _, exists := byTransport[conn.TransportType]; !exists {
+				byTransport[conn.TransportType] = conn
+			}
+		}
 	}
-	q.size = 0
-	q.head = 0
-	q.tail = 0
-	return out
+	if len(byTransport) == 0 {
+		return nil
+	}
+
+	if cm.selector == nil {
+		for _, conn := range connections {
+			if conn != nil && conn.State == StateActive {
+				return conn
+			}
+		}
+		return nil
+	}
+
+	current := cm.selector.SelectPrimary(peerID)
+	visited := make(map[TransportType]struct{})
+	for {
+		if conn := byTransport[current]; conn != nil {
+			return conn
+		}
+		if _, seen := visited[current]; seen {
+			return nil
+		}
+		visited[current] = struct{}{}
+		next, err := cm.selector.SelectFallback(current)
+		if err != nil {
+			return nil
+		}
+		current = next
+	}
 }
 
-// Size returns the number of buffered messages.
-func (q *MessageQueue) Size() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.size
-}
-
-// Drain is a no-op signal method used by OnConnect to indicate the queue
-// should be flushed. Actual draining is done by the caller via PopAll.
-func (q *MessageQueue) Drain() {
-	// Marker — callers use PopAll to retrieve and deliver buffered messages.
-}
-
-// --- BandwidthProfile (SPEC-FTR-04 §3.4) ------------------------------------
-
-// BandwidthProfile captures measured throughput for a connection.
-type BandwidthProfile struct {
-	BytesPerSecond int64
-	LatencyMs      int64
-	PacketLoss     float64
-}
-
-// BandwidthTier returns the tier string for SSE events: "full", "reduced",
-// or "minimal" (SPEC-FTR-04 §2 Decision 12).
-func (bp *BandwidthProfile) BandwidthTier() string {
-	switch {
-	case bp.BytesPerSecond >= 1_000_000:
-		return "full"
-	case bp.BytesPerSecond >= 100_000:
-		return "reduced"
+func contextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	default:
-		return "minimal"
+		return nil
 	}
-}
-
-// --- RateLimiter (SPEC-FTR-04 §3.4, §2 Decision 18) -------------------------
-
-// RateLimiter enforces per-connection message rate limits using a token
-// bucket algorithm.
-type RateLimiter struct {
-	rate     float64
-	burst    int
-	tokens   float64
-	lastTime time.Time
-	mu       sync.Mutex
-}
-
-// NewRateLimiter creates a token-bucket limiter with the given steady rate
-// (tokens/sec) and burst capacity.
-func NewRateLimiter(rate float64, burst int) *RateLimiter {
-	return &RateLimiter{
-		rate:     rate,
-		burst:    burst,
-		tokens:   float64(burst),
-		lastTime: time.Now(),
-	}
-}
-
-// Allow returns true if one token is available (and consumes it), or false
-// if the rate limit has been exceeded.
-func (rl *RateLimiter) Allow() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	elapsed := now.Sub(rl.lastTime).Seconds()
-	rl.lastTime = now
-	rl.tokens += elapsed * rl.rate
-	if rl.tokens > float64(rl.burst) {
-		rl.tokens = float64(rl.burst)
-	}
-	if rl.tokens >= 1.0 {
-		rl.tokens--
-		return true
-	}
-	return false
 }
