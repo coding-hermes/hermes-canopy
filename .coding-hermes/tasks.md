@@ -23,7 +23,7 @@
 | BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
 | BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
-| BE-12f | GitHub Actions CI workflow with PostgreSQL service container | Medium | 2 | BE-12a | ++infra, ++ci | DeepSeek V4 Flash | Low | Step 3.7 Flash |
+| ✅ BE-12f | GitHub Actions CI workflow with PostgreSQL service container | Medium | 2 | BE-12a | ++infra, ++ci | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 | ✅ BE-13a | Fix missing workspaces table migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BE-13b | Fix canopy_app role migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BE-13c | Fix now() in index predicate (PATCHED — verified) | Medium | 1 | — | ++sql, ++testing | DeepSeek V4 Flash | Minimal | Step 3.7 Flash |

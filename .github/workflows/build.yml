@@ -15,6 +15,21 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: canopy
+          POSTGRES_PASSWORD: canopy
+          POSTGRES_DB: canopy
+        ports:
+          - 5437:5432
+        options: >-
+          --health-cmd pg_isready -U canopy
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,3 +49,8 @@ jobs:
 
       - name: Test (short)
         run: go test ./... -short -count=1 -timeout=60s
+
+      - name: Integration tests
+        run: go test ./... -count=1 -run 'TestIntegration' -timeout=180s
+        env:
+          CANOPY_TEST_DB_URL: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
