@@ -162,11 +162,16 @@ func (h *MLSHandler) Encrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ProfileID uuid.UUID `json:"profile_id"`
-		Plaintext []byte    `json:"plaintext_base64"`
+		WorkspaceID uuid.UUID `json:"workspace_id"`
+		ProfileID   uuid.UUID `json:"profile_id"`
+		Plaintext   []byte    `json:"plaintext_base64"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	if !matchesMLSWorkspace(workspaceID, req.WorkspaceID) {
+		writeError(w, http.StatusBadRequest, "WORKSPACE_ID_MISMATCH", "workspace_id must match the route workspace")
 		return
 	}
 
@@ -186,11 +191,16 @@ func (h *MLSHandler) Decrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ProfileID  uuid.UUID         `json:"profile_id"`
-		Ciphertext mls.MLSCiphertext `json:"ciphertext"`
+		WorkspaceID uuid.UUID         `json:"workspace_id"`
+		ProfileID   uuid.UUID         `json:"profile_id"`
+		Ciphertext  mls.MLSCiphertext `json:"ciphertext"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	if !matchesMLSWorkspace(workspaceID, req.WorkspaceID) {
+		writeError(w, http.StatusBadRequest, "WORKSPACE_ID_MISMATCH", "workspace_id must match the route workspace")
 		return
 	}
 
@@ -292,10 +302,15 @@ func (h *MLSHandler) CommitProposals(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ProfileID uuid.UUID `json:"profile_id"`
+		WorkspaceID uuid.UUID `json:"workspace_id"`
+		ProfileID   uuid.UUID `json:"profile_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	if !matchesMLSWorkspace(workspaceID, req.WorkspaceID) {
+		writeError(w, http.StatusBadRequest, "WORKSPACE_ID_MISMATCH", "workspace_id must match the route workspace")
 		return
 	}
 
@@ -305,6 +320,10 @@ func (h *MLSHandler) CommitProposals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"commit_bytes": commitBytes})
+}
+
+func matchesMLSWorkspace(routeID, bodyID uuid.UUID) bool {
+	return bodyID == uuid.Nil || bodyID == routeID
 }
 
 // --- Error helpers ----------------------------------------------------------
