@@ -10,15 +10,15 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-> **Status:** Phase 4 backend complete (BE-01→BE-11d + BE-13a/b/c + BE-14 + BE-17). P0 blockers resolved. Next: BE-15/16/18, then Phase 5 frontend.
-> **DuckBrain:** hermes-canopy namespace (25+ entries)
+> **Status:** Phase 4 backend complete (BE-01→BE-18). BE-12a scaffold done (docker-compose + testutil + uuidv7 fix). BE-12b→f integration suite next.
+> **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
 
 | ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
 |----|------|-----|-----|------|------|-------|-----|----------|
 | **Phase 4: Backend** | | | | | | | | |
-| BE-12a | Integration test framework (docker-compose PG + migration runner) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+| ✅ BE-12a | Integration test framework scaffolded (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 | BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |

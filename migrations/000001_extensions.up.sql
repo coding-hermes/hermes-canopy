@@ -31,7 +31,7 @@ BEGIN
 
     bytes := substring(int8send(ts_ms), 3, 6)
           || substring(int8send((7::bigint << 12) | rand_a), 7, 2)
-          || substring(int8send((2::bigint << 62) | rand_b), 3, 8);
+          || substring(int8send((2::bigint << 62) | rand_b), 1, 8);
 
     -- Set version (0x7 in high nibble of byte 6).
     bytes := set_byte(bytes, 6, (get_byte(bytes, 6) & 0x0f) | 0x70);

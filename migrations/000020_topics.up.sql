@@ -19,9 +19,8 @@ CREATE TABLE topics (
     CONSTRAINT fk_topics_tree
         FOREIGN KEY (tree_id) REFERENCES trees(id) ON DELETE CASCADE,
     CONSTRAINT fk_topics_root_node
-        FOREIGN KEY (root_node_id, tree_id) REFERENCES nodes(id, tree_id) ON DELETE CASCADE,
+        FOREIGN KEY (root_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT uq_topic_tree_slug UNIQUE (tree_id, slug),
-    CONSTRAINT uq_topic_tree_title UNIQUE (tree_id, LOWER(title)),
     CONSTRAINT chk_topic_status CHECK (status IN ('active', 'archived', 'deleted')),
     CONSTRAINT chk_topic_title_length CHECK (char_length(title) BETWEEN 1 AND 200),
     CONSTRAINT chk_topic_slug_length CHECK (char_length(slug) BETWEEN 1 AND 256)
@@ -35,6 +34,10 @@ CREATE INDEX idx_topics_status          ON topics(status);
 CREATE INDEX idx_topics_created         ON topics(tree_id, created_at DESC);
 CREATE INDEX idx_topics_tags            ON topics USING gin(topic_tags);
 CREATE INDEX idx_topics_search          ON topics USING gin(search_vector);
+
+-- Case-insensitive unique title per tree. Cannot use UNIQUE constraint
+-- with LOWER() — PostgreSQL requires a unique index instead.
+CREATE UNIQUE INDEX uq_topic_tree_title ON topics(tree_id, LOWER(title));
 
 CREATE OR REPLACE FUNCTION generate_topic_slug(title text) RETURNS text AS $$
 BEGIN

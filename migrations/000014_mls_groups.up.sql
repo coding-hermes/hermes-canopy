@@ -1,6 +1,6 @@
 CREATE TABLE mls_groups (
     group_id          BYTEA PRIMARY KEY,
-    workspace_id      UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id      UUID NOT NULL,
     cipher_suite      TEXT NOT NULL,
     epoch             BIGINT NOT NULL DEFAULT 0 CHECK (epoch >= 0),
     tree_hash_bytes   BYTEA NOT NULL,

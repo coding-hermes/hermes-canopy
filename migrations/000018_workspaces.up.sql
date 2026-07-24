@@ -10,3 +10,12 @@ CREATE TABLE IF NOT EXISTS workspaces (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- FK from profile_route (000010) — deferred here because the
+-- profile_route table was created before workspaces existed.
+ALTER TABLE profile_route ADD CONSTRAINT fk_profile_route_workspace
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE;
+
+-- FK from mls_groups (000014) — same ordering fix.
+ALTER TABLE mls_groups ADD CONSTRAINT fk_mls_groups_workspace
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE;

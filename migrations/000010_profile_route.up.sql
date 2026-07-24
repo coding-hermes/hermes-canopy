@@ -1,9 +1,11 @@
 -- 000010_profile_route.up.sql
 -- Canopy workspace to Hermes profile mappings (SPEC-FTR-07 §6.1).
+-- NOTE: FK to workspaces(id) is added in migration 000018 (ALTER TABLE),
+-- because the workspaces table is created there.
 
 CREATE TABLE IF NOT EXISTS profile_route (
     id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id             UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id             UUID NOT NULL,
     profile_name             VARCHAR(64) NOT NULL,
     display_name             VARCHAR(128) NOT NULL DEFAULT '',
     is_active                BOOLEAN NOT NULL DEFAULT false,
