@@ -536,3 +536,15 @@
 {"from":"internal/db/topic_repo.go","to":"pkg:github.com/google/uuid","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/db/topic_repo.go","to":"pkg:github.com/jackc/pgx/v5","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/db/topic_repo.go","to":"pkg:github.com/jackc/pgx/v5/pgxpool","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/service/node_service.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/sse","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:context","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:testing","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:context","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:fmt","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:os","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:testing","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"pkg:github.com/jackc/pgx/v5","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"pkg:github.com/jackc/pgx/v5/pgxpool","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/db","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"internal/testutil/integration.go","rel":"tested_by","provenance":"heuristic","confidence":0.8}
+{"from":"internal/testutil/integration.go","to":"internal/testutil/integration_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}

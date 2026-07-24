@@ -19,7 +19,7 @@
 |----|------|-----|-----|------|------|-------|-----|----------|
 | **Phase 4: Backend** | | | | | | | | |
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
-| BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| 🔄 BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB (worker spawned) | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
 | BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
