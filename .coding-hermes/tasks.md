@@ -27,7 +27,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-| **Status:** Phase 4 backend complete (BE-01→BE-18). BE-12a scaffold done. BE-12b worker re-dispatched. BE-12f CI workflow committed. GITREINS-JUDGE verified PASS.
+| **Status:** Phase 4 backend complete (BE-01→BE-18). BE-12a scaffold done. BE-12b worker dispatched (V4 Pro). GitReins history added to .gitignore. Build/tests/vet clean.
 > **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
@@ -36,7 +36,7 @@
 |----|------|-----|-----|------|------|-------|-----|----------|
 | **Phase 4: Backend** | | | | | | | | |
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
-| 🔄 BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB (worker re-dispatched tick 17:24) | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| 🔄 BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB (worker re-dispatched tick 17:24). **BUG-FIX tick 18:33:** splitCols() ambiguous column fixed — recursive CTE now uses explicit `n.` qualified columns to disambiguate from edges/sub CTE tree_id. TestBE12_EdgeCRUD now passes (subtree query was broken). | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
 | BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |

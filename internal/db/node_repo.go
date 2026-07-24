@@ -167,7 +167,9 @@ func (r *PGNodeRepo) GetSubtree(ctx context.Context, rootID uuid.UUID, maxDepth 
             FROM nodes
             WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.`+splitCols()+`, sub.depth + 1
+            SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content, n.content_format,
+                   n.node_type, n.sequence_num, n.metadata, n.created_at, n.edited_at, n.deleted_at,
+                   sub.depth + 1
             FROM nodes n
             JOIN edges e ON e.target_id = n.id
             JOIN sub ON sub.id = e.source_id
