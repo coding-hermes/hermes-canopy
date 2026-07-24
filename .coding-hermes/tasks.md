@@ -3,6 +3,23 @@
   All tasks MUST use matrix format: | ID | Task | Pri | Cpx | Deps | Tags | Model | Reasoning | Fallback |
   Before editing this file, load the skill: skill_view(name='coding-hermes-model-router')
   Validate: python3 ~/.hermes/scripts/validate-board-format.py .coding-hermes/tasks.md
+|- [x] **GITREINS-JUDGE — Configure LLM evaluator for commit quality review**
+  | 🔴 Critical | — | — | deepseek-v4-flash @ deepseek-foreman | GITREINS_LLM_API_KEY in ~/.hermes/.env | foreman-direct |
+
+  Run: `python3 ~/.hermes/scripts/check-gitreins-judge.py .` to verify.
+  Default limits (adjust per-project based on codebase size and task complexity):
+  - Fast/small projects: `max_iterations: 50`, `max_time: 10m`, tokens: `0.2M/0.4M`
+  - Large repos (Go monorepos, 100+ files): `max_iterations: 100`, `max_time: 30m`, tokens: `1M/2M`
+  - C++/Rust (slow compiles): `max_time: 30m` minimum
+  - Scheduler/production infra: `max_time: 30m`, tokens: `1M/2M`
+  Supervisor auto-flags projects where limits are too low for codebase size.
+
+| 🔴 Critical | — | — | deepseek-v4-flash @ deepseek-foreman | GITREINS_LLM_API_KEY in ~/.hermes/.env | foreman-direct |
+
+  Run: `python3 ~/.hermes/scripts/check-gitreins-judge.py .` to verify.
+  If missing, create/edit .gitreins/config.yaml with evaluator section using deepseek-v4-flash.
+  This is CRITICAL for code quality — no automated review of worker output without it.
+
   NEVER remove the matrix header row or NEVER-DONE / E2E-001 fixtures.
 -->
 
@@ -10,7 +27,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-> **Status:** Phase 4 backend complete (BE-01→BE-18). BE-12a scaffold done (docker-compose + testutil + uuidv7 fix). BE-12b→f integration suite next.
+| **Status:** Phase 4 backend complete (BE-01→BE-18). BE-12a scaffold done. BE-12b worker re-dispatched. BE-12f CI workflow committed. GITREINS-JUDGE verified PASS.
 > **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
@@ -19,7 +36,7 @@
 |----|------|-----|-----|------|------|-------|-----|----------|
 | **Phase 4: Backend** | | | | | | | | |
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
-| 🔄 BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB (worker spawned) | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| 🔄 BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB (worker re-dispatched tick 17:24) | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12c | Auth & approval integration: JWT flow, user creation, approval lifecycle | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
 | BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |

@@ -1,0 +1,11 @@
+tasks:
+- id: gitreins-judge-verify
+  title: Verify GitReins Tier 2 evaluator works with project config
+  criteria:
+  - GitReins config.yaml has pipeline section with tier1 and tier2 stages
+  - GITREINS_LLM_API_KEY is accessible from the environment
+  - Gitreins Tier 1 guard passes (secrets, build, lint, tests)
+  - A GitReins judge evaluation can be started and returns a result
+  status: complete
+  created_at: '2026-07-24T22:19:59.554678+00:00'
+  completed_at: '2026-07-24T22:26:30.244794+00:00'

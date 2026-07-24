@@ -58,7 +58,6 @@ func dropTestDB(ctx context.Context, url string) error {
 	return err
 }
 
-
 // DefaultTestDBURL is the default connection string for the
 // docker-compose PostgreSQL instance (port 5437, user/pass canopy).
 const DefaultTestDBURL = "postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable"

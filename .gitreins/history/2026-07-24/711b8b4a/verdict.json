@@ -1,0 +1,31 @@
+{
+  "task_id": "gitreins-judge-verify",
+  "task_title": "Verify GitReins Tier 2 evaluator works with project config",
+  "task_criteria": [
+    "GitReins config.yaml has pipeline section with tier1 and tier2 stages",
+    "GITREINS_LLM_API_KEY is accessible from the environment",
+    "Gitreins Tier 1 guard passes (secrets, build, lint, tests)",
+    "A GitReins judge evaluation can be started and returns a result"
+  ],
+  "passed": true,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 guard: Tier 1 Guards: PASS  (test mode: diff, full suite \u2014 safety trigger)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build",
+      "steps": [
+        {
+          "id": "guard",
+          "type": "script",
+          "passed": true,
+          "output": "Tier 1 Guards: PASS  (test mode: diff, full suite \u2014 safety trigger)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go_tests\n",
+          "error": ""
+        }
+      ]
+    }
+  },
+  "summary": "Judge Result: gitreins-judge-verify\n\nStage tier1: PASS\n    \u2713 guard: Tier 1 Guards: PASS  (test mode: diff, full suite \u2014 safety trigger)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-07-24T22:30:03.688880"
+}

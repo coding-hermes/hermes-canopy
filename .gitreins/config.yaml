@@ -1,0 +1,44 @@
+guards:
+  secrets: true
+  lint: true
+  tests: true
+  test_mode: diff
+  go:
+    build: true
+    lint: true
+    tests: true
+
+pipeline:
+  stages:
+    - id: tier1
+      parallel: true
+      on: [pre-commit, pre-eval]
+      steps:
+        - id: guard
+          type: script
+          run: "gitreins guard"
+          on_fail: block
+    - id: tier2
+      type: ai_eval
+      on: [pre-eval]
+      condition: "true"
+      max_iterations: 50
+      tools: [read_file, run_command, search_pattern, read_diff]
+
+evaluator:
+  max_iterations: 50
+  max_time: 10m
+  max_input_tokens: 1M
+  max_output_tokens: 0.4M
+  tool_call_weight: 0.1
+  fast_track: auto
+
+defaults:
+  model: deepseek-v4-flash
+  provider: deepseek-foreman
+  api_key_env: GITREINS_LLM_API_KEY
+
+history:
+  enabled: true
+  storage: git
+  max_verdicts: 1000
