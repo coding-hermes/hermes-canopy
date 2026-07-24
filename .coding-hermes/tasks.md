@@ -160,13 +160,13 @@
 |- [x] **BE-06 — Sync Engine** ✅ COMPLETE 2026-07-23
 |  **Commit: 2461eb2** — 20 files, +1,737 lines. SnapshotRepo, EventRepo, SyncEngine interface with OnNodeMutation/TreeMutation, ComputeDeltaForClient, SSE broadcast. DDL: 3 migrations (tree_snapshots, node_content_hash, tree_events). 5 API + delta types. 6 unit tests. MiniMax-M3 worker produced migrations, repos, sync engine (858 lines); foreman wrote handler, service facade, tests, wiring.
 |- [x] **BE-07 — Auth & Approval Engine** ✅ COMPLETE 2026-07-23 (specs: SPEC-FTR-01, SPEC-API-05, SPEC-DM-03, SPEC-DM-04)
-|  **Commit: 69debcf** — BE-07a+BE-07b (DDL + repos), foreman direct: BE-07c (service), BE-07d (handlers), BE-07e (wiring). Total: +2,700+ lines across 12 files.
+|  **Commits: 69debcf** (BE-07a+b), **555856e** (BE-07c+d+e), **cad525f** (BE-07f). Total: +2,400 lines across 16 files.
 |  - [x] **BE-07a** — DDL migrations: approvals, users, profiles, tree_members tables
 |  - [x] **BE-07b** — Go models + pgx repos: approval types, ApprovalRepo, UserRepo, ProfileRepo, audit logging
 |  - [x] **BE-07c** — ApprovalService: CreateApproval, GetPending, Approve, Deny (with audit + SSE broadcast)
 |  - [x] **BE-07d** — HTTP handlers: GET /approvals/pending, POST /approvals/{id}/approve, POST /approvals/{id}/deny, GET /approvals/history
 |  - [x] **BE-07e** — Wiring: register routes in server.go, init repos/services in main.go, SSE integration
-|  - [ ] **BE-07f** — Unit tests: approval service + handler tests
+|  - [x] **BE-07f** — Unit tests: auth middleware + approval service + config tests (cad525f)
 - [ ] **BE-08 — Profile Routing**
 - [ ] **BE-09 — Transport Adapter Layer**
 - [ ] **BE-10 — Encryption Layer (MLS-Only)**
