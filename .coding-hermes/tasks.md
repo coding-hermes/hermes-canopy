@@ -169,7 +169,14 @@
 |  - [x] **BE-07f** — Unit tests: auth middleware + approval service + config tests (cad525f)
 - [x] **BE-08 — Profile Routing** ✅ COMPLETE 2026-07-23
   **Commit: 65a35d8** — 8 files, +718 lines. PGProfileRouter with AES-256-GCM token encryption, profile management HTTP handlers, DDL migration (profile_route table), 4 handler tests, 5 crypto tests. Wired at `/api/v1/workspaces/{workspace_id}/profiles`.
-- [ ] **BE-09 — Transport Adapter Layer**
+|- [x] **BE-09a — Core Types + Interface (SPEC-FTR-04 §3)** ✅ COMPLETE 2026-07-24
+  MiniMax-M3 worker: TransportAdapter interface, Opcode (uint8), Message struct, ConnectOptions, Connection, ConnectionState, TransportType, AuthMaterial types, 13 opcodes, 10 sentinel errors, 13 payload types (TreeCreatePayload, NodeAddPayload etc.), capabilities. 1,492 lines across 9 files. Files: transport.go, errors.go, message.go, adapter.go, connection_manager.go, selector.go, sse_adapter.go, stub_adapters.go, events.go.
+|- [x] **BE-09b — ConnectionManager + MessageQueue + RateLimiter** ✅ COMPLETE 2026-07-24
+  ConnectionManager (385 lines) with RouteMessage, OnConnect, OnDisconnect, DegradeTransport, MeasureBandwidth, EnforceRateLimit. MessageQueue ring buffer (10,000 cap). RateLimiter token-bucket. BandwidthProfile. File: internal/transport/connection_manager.go.
+|- [x] **BE-09c — TransportSelector + Deployment Detection** ✅ COMPLETE 2026-07-24
+  TransportSelector (251 lines) with SelectPrimary, SelectFallback, DetectTopology. DeploymentMode (7 modes), NetworkTopology (5 topologies). Capability negotiation. File: internal/transport/selector.go.
+|- [ ] **BE-09d — DDL Migrations + Transport HTTP Handlers + Wiring**
+  **Migrations done** (000011-000013, up+down, uuidv7). **TODO:** transport_handler.go (5 endpoints per SPEC-FTR-04 §6), SSE events wiring (transport_status/error/degradation), wire into server.go + main.go.
 - [ ] **BE-10 — Encryption Layer (MLS-Only)**
 - [ ] **BE-11 — HTTP Router & Middleware**
 - [ ] **BE-12 — Backend Integration Tests**
