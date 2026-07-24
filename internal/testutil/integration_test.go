@@ -17,7 +17,7 @@ func TestIntegration_Migration(t *testing.T) {
 	// Verify essential tables exist by selecting from them.
 	var count int
 	rows := []string{
-		"trees", "nodes", "edges", "snapshots",
+		"trees", "nodes", "edges", "tree_snapshots",
 		"tree_events", "users", "profiles",
 		"approvals", "approval_audit_log",
 		"transport_connections", "transport_configs", "transport_events",
