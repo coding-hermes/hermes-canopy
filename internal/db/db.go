@@ -32,13 +32,19 @@ func MigrateSource() fs.FS {
 
 // DB wraps the pgxpool with the repository handles attached.
 type DB struct {
-	Pool     *pgxpool.Pool
-	Nodes    NodeRepo
-	Edges    EdgeRepo
-	Trees    TreeRepo
+	Pool      *pgxpool.Pool
+	Nodes     NodeRepo
+	Edges     EdgeRepo
+	Trees     TreeRepo
 	Snapshots SnapshotRepo
 	Events    EventRepo
-	migrated  bool
+	// Approval system repositories (SPEC-DM-03, SPEC-DM-04).
+	Approvals  ApprovalRepo
+	AuditLog   AuditRepo
+	Users      UserRepo
+	Profiles   ProfileRepo
+	Members    TreeMemberRepo
+	migrated   bool
 }
 
 // PoolConfig is the minimal pgxpool configuration. Fields are populated
@@ -86,6 +92,11 @@ func New(ctx context.Context, cfg PoolConfig) (*DB, error) {
 		Trees:     NewPGTreeRepo(pool),
 		Snapshots: NewSnapshotRepo(pool),
 		Events:    NewEventRepo(pool),
+		Approvals: NewPGApprovalRepo(pool),
+		AuditLog:  NewPGAuditRepo(pool),
+		Users:     NewPGUserRepo(pool),
+		Profiles:  NewPGProfileRepo(pool),
+		Members:   NewPGTreeMemberRepo(pool),
 	}, nil
 }
 
