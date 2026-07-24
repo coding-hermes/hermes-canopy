@@ -29,6 +29,9 @@ var (
 	ErrApprovalExpired   = errors.New("approval service: approval has expired")
 	ErrInvalidDenyReason = errors.New("approval service: deny reason is required (1-1000 chars)")
 	ErrPermissionDenied  = errors.New("approval service: permission denied")
+	ErrNotApprovalOwner  = errors.New("approval service: not the approval owner")
+	ErrDenyReasonRequired = errors.New("approval service: deny reason is required")
+	ErrDenyReasonTooLong  = errors.New("approval service: deny reason exceeds 1000 characters")
 )
 
 // ApprovalService defines the approval lifecycle operations.
@@ -104,10 +107,12 @@ func (s *approvalService) RequestApproval(ctx context.Context, treeID, nodeID, o
 	}
 
 	// Audit trail
+	prev := db.ApprovalStatusPending
 	_, aErr := s.audit.Create(ctx, &db.AuditEntry{
 		ApprovalID: created.ID,
 		Action:     db.AuditActionApprovalRequested,
 		Actor:      &requestedBy,
+		NewStatus:  &prev,
 		Details:    mustMarshalAuditDetail(treeID, nodeID, requestedBy, ownerID),
 	})
 	if aErr != nil {
@@ -153,6 +158,13 @@ func (s *approvalService) Approve(ctx context.Context, approvalID, actorID uuid.
 		}
 		return nil, fmt.Errorf("approval service: get approval: %w", err)
 	}
+
+	// Owner check — only the approval owner can approve
+	if appr.OwnerID != actorID {
+		return nil, fmt.Errorf("%w: approval %s is owned by %s",
+			ErrNotApprovalOwner, approvalID.String(), appr.OwnerID.String())
+	}
+
 	if appr.Status != db.ApprovalStatusPending {
 		return nil, fmt.Errorf("%w: current status is %s", ErrAlreadyDecided, appr.Status)
 	}
@@ -189,8 +201,11 @@ func (s *approvalService) Approve(ctx context.Context, approvalID, actorID uuid.
 func (s *approvalService) Deny(ctx context.Context, approvalID, actorID uuid.UUID, reason string) (*db.Approval, error) {
 	// Validate inputs
 	reason = strings.TrimSpace(reason)
-	if reason == "" || len(reason) > 1000 {
-		return nil, fmt.Errorf("%w: got %d chars", ErrInvalidDenyReason, len(reason))
+	if reason == "" {
+		return nil, fmt.Errorf("%w: got empty reason", ErrDenyReasonRequired)
+	}
+	if len(reason) > 1000 {
+		return nil, fmt.Errorf("%w: got %d chars", ErrDenyReasonTooLong, len(reason))
 	}
 
 	// Validate state
@@ -201,6 +216,13 @@ func (s *approvalService) Deny(ctx context.Context, approvalID, actorID uuid.UUI
 		}
 		return nil, fmt.Errorf("approval service: get approval: %w", err)
 	}
+
+	// Owner check — only the approval owner can deny
+	if appr.OwnerID != actorID {
+		return nil, fmt.Errorf("%w: approval %s is owned by %s",
+			ErrNotApprovalOwner, approvalID.String(), appr.OwnerID.String())
+	}
+
 	if appr.Status != db.ApprovalStatusPending {
 		return nil, fmt.Errorf("%w: current status is %s", ErrAlreadyDecided, appr.Status)
 	}
@@ -270,7 +292,7 @@ func (s *approvalService) broadcastApprovalEvent(ctx context.Context, appr *db.A
 		"approval_id": appr.ID.String(),
 		"tree_id":     appr.TreeID.String(),
 		"node_id":     appr.NodeID.String(),
-		"status":      status,
+		"new_status":  status,
 	}
 	if actorID != nil {
 		payload["actor_id"] = actorID.String()
