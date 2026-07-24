@@ -30,7 +30,7 @@ type Server struct {
 // from the outside if no route ever subscribes a client.
 //
 // syncEngine may be nil; handlers check for nil before broadcasting.
-func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub, syncEngine sync.SyncEngine) *Server {
+func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, sseHub sse.SSEHub, syncEngine sync.SyncEngine, approvalSvc service.ApprovalService) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters)
@@ -56,6 +56,9 @@ func New(addr string, treeSvc service.TreeService, nodeSvc service.NodeService, 
 
 	// Sync endpoint per SPEC-DM-02 §7.
 	r.Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
+
+	// Approval endpoints per SPEC-API-05.
+	r.Mount("/approvals", handler.NewApprovalHandler(approvalSvc).Routes())
 
 	return &Server{
 		router: r,

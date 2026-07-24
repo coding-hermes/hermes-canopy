@@ -89,7 +89,16 @@ func main() {
 	syncEngine := sync.NewEngine(database.Events, database.Snapshots, sseHub,
 		sync.DefaultEngineConfig())
 
-	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine)
+	approvalSvc := service.NewApprovalService(
+		database.Approvals,
+		database.AuditLog,
+		database.Users,
+		database.Profiles,
+		database.Members,
+		sseHub,
+	)
+
+	srv := server.New(cfg.HTTPAddr, treeService, nodeService, sseHub, syncEngine, approvalSvc)
 
 	srv.Router().Get("/version", versionHandler)
 
