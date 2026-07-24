@@ -632,3 +632,23 @@ func TestGetGroupState_NotFound(t *testing.T) {
 		t.Fatal("GetGroupState() expected error for non-existent workspace")
 	}
 }
+
+func TestEncrypt_NotGroupMember(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	creatorID := uuid.New()
+	nonMemberID := uuid.New()
+	keyPair := Ed25519KeyPair{PublicKey: []byte("pk")}
+
+	_, err := svc.CreateGroup(ctx, wsID, creatorID, keyPair)
+	if err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+
+	// Non-member tries to encrypt — should fail with ErrNotGroupMember
+	_, err = svc.Encrypt(ctx, wsID, nonMemberID, []byte("data"))
+	if !errors.Is(err, ErrNotGroupMember) {
+		t.Fatalf("Encrypt() error = %v, want ErrNotGroupMember", err)
+	}
+}
