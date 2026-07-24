@@ -2,7 +2,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-> **Status:** Phase 4 backend complete (BE-01→BE-11d + BE-13a/b/c + BE-17). P0 blockers resolved. Next: BE-14/15/16/18, then Phase 5 frontend.
+> **Status:** Phase 4 backend complete (BE-01→BE-11d + BE-13a/b/c + BE-14 + BE-17). P0 blockers resolved. Next: BE-15/16/18, then Phase 5 frontend.
 > **DuckBrain:** hermes-canopy namespace (25+ entries)
 
 ## Active Tasks
@@ -19,7 +19,7 @@
 | ✅ BE-13a | Fix missing workspaces table migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BE-13b | Fix canopy_app role migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BE-13c | Fix now() in index predicate (PATCHED — verified) | Medium | 1 | — | ++sql, ++testing | DeepSeek V4 Flash | Minimal | Step 3.7 Flash |
-| BE-14 | Implement /api/topics endpoints (stub routes + service iface done; implement actual CRUD) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | DeepSeek V4 Pro | High | GLM-5.2 |
+|| ✅ BE-14 | Implement /api/topics endpoints (full CRUD: repo + service + handler + migration + parseIntParam fix + server wiring) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | DeepSeek V4 Pro | High | GLM-5.2 |
 | BE-15 | Implement /api/cards endpoints (stub routes + service iface done; implement actual CRUD) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | DeepSeek V4 Pro | High | GLM-5.2 |
 | BE-16 | Implement /api/graph endpoints (stub routes + service iface done; implement actual CRUD) | High | 4 | BE-04 | ++backend, ++api, ++code-generation | GLM-5.2 | High | DeepSeek V4 Pro |
 | ✅ BE-17 | Wire extractActorID to JWT claims (returns uuid.Nil — auth blocked) | Critical | 3 | BE-07 | ++security, ++auth, ++backend | DeepSeek V4 Pro | High | GPT-5.6 Sol |
@@ -100,8 +100,8 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 ## Execution Order
 
 |1. ✅ **P0 blockers resolved:** BE-13a → BE-13b → BE-13c → BE-17 ✅
-|2. ⏳ **BE stubs deployed:** BE-14 → BE-15 → BE-16 (routes registered, handlers return 501 ⏳)
-|3. **BE remaining:** BE-14 impl → BE-15 impl → BE-16 impl → BE-18
+|2. ✅ **BE-14 completed:** full CRUD (repo, service, handler, migration, wiring). **BE stubs deployed:** BE-15 → BE-16 (routes registered, handlers return 501 ⏳)
+|3. **BE remaining:** BE-15 impl → BE-16 impl → BE-18
 3. **BE integration:** BE-12a → BE-12b/BE-12c/BE-12d/BE-12e (parallel) → BE-12f
 4. **FE scaffold:** FE-01 → FE-02 → FE-03 (sequential — CRDT then rendering)
 5. **FE parallel:** FE-04/FE-05/FE-06/FE-07 (after FE-02)
