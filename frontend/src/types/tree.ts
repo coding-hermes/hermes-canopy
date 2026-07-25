@@ -9,7 +9,12 @@
 
 export type ContentFormat = 'markdown' | 'plain' | 'rich';
 
-export type NodeType = 'message' | 'synthesis' | 'system';
+export type NodeType =
+  | 'message'
+  | 'synthesis'
+  | 'system'
+  | 'card'
+  | 'topic';
 
 export type EdgeType = 'reply' | 'fork' | 'synthesis' | 'reference';
 
@@ -115,6 +120,13 @@ export interface CreateTreePayload {
 
 // ─── React Flow Node/Edge Types ───────────────────────────────────────
 
+/** React Flow node type identifiers for custom rendering. */
+export type FlowNodeType =
+  | 'messageNode'
+  | 'synthesisNode'
+  | 'cardNode'
+  | 'topicNode';
+
 /** Extended React Flow node data carried on each flow node. */
 export interface TreeNodeCardData extends Record<string, unknown> {
   label: string;
@@ -124,4 +136,27 @@ export interface TreeNodeCardData extends Record<string, unknown> {
   createdAt: string;
   isAgent: boolean;
   isSystem: boolean;
+  /** Metadata from the Yjs node — used by CardNode for structured card data */
+  metadata: Record<string, unknown>;
+  /** Number of children (for collapse UI) */
+  childCount: number;
+  /** Whether this node is currently collapsed */
+  collapsed: boolean;
+  /** Card-specific type (e.g. 'file', 'task', 'code') */
+  cardType?: 'file' | 'task' | 'code';
+}
+
+/** Map NodeType to the React Flow custom node type string. */
+export function nodeTypeToFlowType(nodeType: string): FlowNodeType {
+  switch (nodeType) {
+    case 'synthesis':
+      return 'synthesisNode';
+    case 'card':
+      return 'cardNode';
+    case 'topic':
+      return 'topicNode';
+    case 'message':
+    default:
+      return 'messageNode';
+  }
 }

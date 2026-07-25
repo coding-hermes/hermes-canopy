@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@xyflow/react": "^12.11.2",
     "@xyflow/system": "^0.0.79",
+    "d3-hierarchy": "^3.1.2",
     "dagre": "^0.8.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -22,6 +23,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/dagre": "^0.7.54",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",

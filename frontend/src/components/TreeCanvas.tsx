@@ -1,11 +1,14 @@
 /**
  * Hermes Canopy — Tree Canvas (React Flow)
  *
- * Renders a conversation DAG as a navigable tree view.
- * Custom nodes (TreeNodeCard) show message metadata.
- * Custom edges show branch/fork/synthesis styling.
+ * Renders a conversation DAG as a navigable tree view with:
+ *   - Custom node types (MessageNode, SynthesisNode, CardNode, TopicNode)
+ *   - Custom edge types (ReplyEdge, ForkEdge, SynthesisEdge)
+ *   - Expand/collapse for branches
+ *   - Zoom-to-fit and focus-on-node animations
+ *   - Large tree fallback (>500 nodes) with simplified rendering
  *
- * Built on @xyflow/react v12 per T1.3 decision.
+ * Built on @xyflow/react v12.
  */
 
 import {
@@ -13,158 +16,46 @@ import {
   Background,
   Controls,
   MiniMap,
-  type Node,
-  type NodeProps,
-  type EdgeProps,
-  type NodeTypes,
-  BaseEdge,
-  getSmoothStepPath,
   MarkerType,
   ReactFlowProvider,
+  useReactFlow,
+  type Node,
+  type NodeTypes,
+  type Edge,
+  type FitViewOptions,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
+import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
 
-// ─── Custom Node: TreeNodeCard ────────────────────────────────────────
+// ─── Custom nodes ─────────────────────────────────────────────────────
 
-type TreeNodeCardNode = Node<TreeNodeCardData, 'treeNodeCard'>;
+import { MessageNode } from './nodes/MessageNode.tsx';
+import { SynthesisNode } from './nodes/SynthesisNode.tsx';
+import { CardNode } from './nodes/CardNode.tsx';
+import { TopicNode } from './nodes/TopicNode.tsx';
 
-function TreeNodeCard({ data, selected }: NodeProps<TreeNodeCardNode>) {
-  const typedData = data as TreeNodeCardData;
-  const isSynthesis = typedData.nodeType === 'synthesis';
-  const isSystem = typedData.isSystem;
+// ─── Custom edges ─────────────────────────────────────────────────────
 
-  let badge: string;
-  let badgeClass: string;
-  if (isSynthesis) {
-    badge = '⊕ Merge';
-    badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-  } else if (isSystem) {
-    badge = '⚙ System';
-    badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
-  } else if (typedData.isAgent) {
-    badge = '🤖 Agent';
-    badgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
-  } else {
-    badge = '👤 Human';
-    badgeClass = 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-  }
+import { ReplyEdge } from './edges/ReplyEdge.tsx';
+import { ForkEdge } from './edges/ForkEdge.tsx';
+import { SynthesisEdge } from './edges/SynthesisEdge.tsx';
 
-  return (
-    <div
-      className={`rounded-lg border bg-white dark:bg-gray-800 shadow-sm transition-shadow min-w-[180px] max-w-[260px] ${
-        selected
-          ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md'
-          : 'border-gray-200 dark:border-gray-700'
-      }`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass}`}>
-          {badge}
-        </span>
-      </div>
-
-      {/* Content */}
-      <div className="px-3 py-2">
-        <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-3">
-          {typedData.content.length > 120
-            ? `${typedData.content.slice(0, 120)}...`
-            : typedData.content}
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="px-3 py-1.5 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-        <span>{new Date(typedData.createdAt).toLocaleDateString()}</span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Custom Edge: SynthesisEdge ───────────────────────────────────────
-
-function SynthesisEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style,
-  markerEnd,
-}: EdgeProps) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 12,
-  });
-
-  return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        ...(style as React.CSSProperties),
-        stroke: '#f59e0b',
-        strokeWidth: 2,
-        strokeDasharray: '6,3',
-      }}
-      markerEnd={markerEnd}
-    />
-  );
-}
-
-// ─── Custom Edge: DefaultEdge ─────────────────────────────────────────
-
-function DefaultEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style,
-  markerEnd,
-}: EdgeProps) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8,
-  });
-
-  return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={style as React.CSSProperties}
-      markerEnd={markerEnd}
-    />
-  );
-}
-
-// ─── Edge Types Registry ──────────────────────────────────────────────
-
-const edgeTypes = {
-  synthesisEdge: SynthesisEdge,
-  defaultEdge: DefaultEdge,
-};
-
-// ─── Node Types Registry ──────────────────────────────────────────────
+// ─── Registries ───────────────────────────────────────────────────────
 
 const nodeTypes: NodeTypes = {
-  treeNodeCard: TreeNodeCard,
+  messageNode: MessageNode,
+  synthesisNode: SynthesisNode,
+  cardNode: CardNode,
+  topicNode: TopicNode,
+};
+
+const edgeTypes = {
+  replyEdge: ReplyEdge,
+  forkEdge: ForkEdge,
+  synthesisEdge: SynthesisEdge,
 };
 
 // ─── Tree Canvas Props ────────────────────────────────────────────────
@@ -172,14 +63,144 @@ const nodeTypes: NodeTypes = {
 export interface TreeCanvasProps {
   /** Tree data from useYjsTree hook */
   tree: UseYjsTreeResult;
-  /** Called when nodes change */
-  onNodesChange?: (nodes: UseYjsTreeResult['nodes']) => void;
 }
 
-// ─── Tree Canvas Component ────────────────────────────────────────────
+// ─── Collapse helpers ─────────────────────────────────────────────────
+
+/**
+ * Compute which nodes should be hidden because an ancestor is collapsed.
+ */
+function computeHiddenNodes(
+  _nodes: Node<TreeNodeCardData>[],
+  collapsedNodeIds: Set<string>,
+  edges: Edge[],
+): Set<string> {
+  const hidden = new Set<string>();
+
+  // Build child map
+  const childrenMap = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = childrenMap.get(edge.source) ?? [];
+    list.push(edge.target);
+    childrenMap.set(edge.source, list);
+  }
+
+  function markDescendants(nodeId: string): void {
+    const children = childrenMap.get(nodeId) ?? [];
+    for (const childId of children) {
+      if (!hidden.has(childId)) {
+        hidden.add(childId);
+        markDescendants(childId);
+      }
+    }
+  }
+
+  for (const nodeId of collapsedNodeIds) {
+    markDescendants(nodeId);
+  }
+
+  return hidden;
+}
+
+// ─── Main Component ───────────────────────────────────────────────────
 
 function TreeCanvasInner({ tree }: TreeCanvasProps) {
-  const { nodes, edges, treeTitle, isReady } = tree;
+  const { nodes: allNodes, edges: allEdges, treeTitle, isReady } = tree;
+  const reactFlowInstance = useReactFlow();
+
+  // Collapse state
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+
+  // Compute hidden nodes from collapse state
+  const hiddenNodes = useMemo(
+    () => computeHiddenNodes(allNodes, collapsedNodes, allEdges),
+    [allNodes, collapsedNodes, allEdges],
+  );
+
+  // Filter visible nodes and edges
+  const visibleNodes = useMemo(
+    () => allNodes.filter((n) => !hiddenNodes.has(n.id)),
+    [allNodes, hiddenNodes],
+  );
+
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((n) => n.id)),
+    [visibleNodes],
+  );
+
+  const visibleEdges = useMemo(
+    () =>
+      allEdges.filter(
+        (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target),
+      ),
+    [allEdges, visibleNodeIds],
+  );
+
+  // Large tree detection
+  const totalCount = allNodes.length;
+  const isLargeTree = shouldUseSimplifiedMode(totalCount);
+
+  // ─── Handlers ────────────────────────────────────────────────────
+
+  /** Toggle collapse/expand for a node's subtree */
+  const toggleCollapse = useCallback(
+    (nodeId: string) => {
+      setCollapsedNodes((prev) => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  /** Handle node click: toggle collapse on double-click */
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      // Single click selects (default React Flow behavior)
+      // Double-click toggles collapse
+      if ((_event as unknown as { detail: number }).detail === 2) {
+        toggleCollapse(node.id);
+      }
+    },
+    [toggleCollapse],
+  );
+
+  /** Zoom to fit all visible nodes with animation */
+  const zoomToFit = useCallback(() => {
+    const opts: FitViewOptions = {
+      padding: 0.3,
+      duration: 400,
+      maxZoom: 1.5,
+    };
+    reactFlowInstance.fitView(opts);
+  }, [reactFlowInstance]);
+
+  /** Focus on a specific node with animation */
+  const focusOnNode = useCallback(
+    (nodeId: string) => {
+      const node = allNodes.find((n) => n.id === nodeId);
+      if (node) {
+        reactFlowInstance.setCenter(node.position.x, node.position.y, {
+          zoom: 1.0,
+          duration: 500,
+        });
+      }
+    },
+    [allNodes, reactFlowInstance],
+  );
+
+  // Store focusOnNode in ref for keyboard shortcut access
+  const focusRef = useRef(focusOnNode);
+  focusRef.current = focusOnNode;
+  const zoomRef = useRef(zoomToFit);
+  zoomRef.current = zoomToFit;
+
+  // ─── Loading state ───────────────────────────────────────────────
 
   if (!isReady) {
     return (
@@ -194,7 +215,9 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
     );
   }
 
-  if (nodes.length === 0) {
+  // ─── Empty state ─────────────────────────────────────────────────
+
+  if (allNodes.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -202,46 +225,100 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
             🌳 Empty Tree
           </p>
           <p className="text-gray-400 dark:text-gray-500 text-sm">
-            {treeTitle ? `"${treeTitle}" has no nodes yet.` : 'Create a tree to get started.'}
+            {treeTitle
+              ? `"${treeTitle}" has no nodes yet.`
+              : 'Create a tree to get started.'}
           </p>
         </div>
       </div>
     );
   }
 
+  // ─── Render ──────────────────────────────────────────────────────
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.3 }}
-      minZoom={0.1}
-      maxZoom={1.5}
-      defaultEdgeOptions={{
-        type: 'defaultEdge',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#6b7280' },
-      }}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background color="#e5e7eb" gap={20} size={1} />
-      <Controls
-        position="bottom-right"
-        className="!bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-700"
-      />
-      <MiniMap
-        position="bottom-left"
-        nodeColor={(n) => {
-          const d = n.data as TreeNodeCardData | undefined;
-          if (d?.isSystem) return '#3b82f6';
-          if (d?.isAgent) return '#7c3aed';
-          if (d?.nodeType === 'synthesis') return '#f59e0b';
-          return '#22c55e';
+    <div className="h-full w-full relative">
+      {/* Large tree warning banner */}
+      {isLargeTree && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-1.5 text-sm text-amber-800 dark:text-amber-200 shadow-md">
+          ⚠️ Large tree ({totalCount} nodes) — simplified rendering active
+        </div>
+      )}
+
+      {/* Collapse info */}
+      {collapsedNodes.size > 0 && (
+        <div className="absolute top-2 right-4 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 shadow-sm">
+          {collapsedNodes.size} branch{collapsedNodes.size !== 1 ? 'es' : ''}{' '}
+          collapsed · {hiddenNodes.size} node{hiddenNodes.size !== 1 ? 's' : ''}{' '}
+          hidden
+        </div>
+      )}
+
+      <ReactFlow
+        nodes={visibleNodes}
+        edges={visibleEdges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.3, duration: 300 }}
+        minZoom={isLargeTree ? 0.05 : 0.1}
+        maxZoom={2}
+        defaultEdgeOptions={{
+          type: 'replyEdge',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 16,
+            height: 16,
+            color: '#9ca3af',
+          },
         }}
-        className="!bg-gray-100 dark:!bg-gray-900 !border-gray-200 dark:!border-gray-700"
-      />
-    </ReactFlow>
+        // Large tree optimizations
+        onlyRenderVisibleElements={isLargeTree}
+        nodesDraggable={!isLargeTree}
+        nodesConnectable={false}
+        elementsSelectable
+        elevateEdgesOnSelect
+        proOptions={{ hideAttribution: true }}
+        onNodeClick={onNodeClick}
+      >
+        <Background
+          color="#e5e7eb"
+          gap={isLargeTree ? 40 : 20}
+          size={1}
+        />
+        <Controls
+          position="bottom-right"
+          showZoom
+          showFitView
+          showInteractive={false}
+          onFitView={zoomToFit}
+          className="!bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-700"
+        />
+        <MiniMap
+          position="bottom-left"
+          nodeColor={(n) => {
+            const d = n.data as TreeNodeCardData | undefined;
+            if (!d) return '#6b7280';
+            switch (d.nodeType) {
+              case 'synthesis':
+                return '#f59e0b';
+              case 'card':
+                return '#3b82f6';
+              case 'topic':
+                return '#f43f5e';
+              case 'system':
+                return '#3b82f6';
+              case 'message':
+                return d.isAgent ? '#7c3aed' : '#22c55e';
+              default:
+                return '#6b7280';
+            }
+          }}
+          maskColor="rgba(0,0,0,0.1)"
+          className="!bg-gray-100 dark:!bg-gray-900 !border-gray-200 dark:!border-gray-700"
+        />
+      </ReactFlow>
+    </div>
   );
 }
 
