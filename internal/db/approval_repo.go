@@ -38,6 +38,10 @@ type ApprovalRepo interface {
 	// total count matching the filter (ignoring limit/offset).
 	ListPending(ctx context.Context, ownerID uuid.UUID, treeID *uuid.UUID, limit, offset int) ([]Approval, int, error)
 
+	// ListAll returns all approvals for an ownerID, regardless of
+	// status, sorted by created_at DESC. limit clamped [1, 200].
+	ListAll(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]Approval, int, error)
+
 	// ListByTree returns approvals for a tree, optionally filtered
 	// by status. status == "" returns all rows.
 	ListByTree(ctx context.Context, treeID uuid.UUID, status string, limit, offset int) ([]Approval, error)
@@ -201,6 +205,56 @@ func (r *PGApprovalRepo) ListPending(ctx context.Context, ownerID uuid.UUID, tre
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("db: iterate pending approvals: %w", err)
+	}
+	return out, total, nil
+}
+
+// ListAll returns all approvals for ownerID regardless of status,
+// sorted by created_at DESC (newest first). limit clamped [1, 200].
+func (r *PGApprovalRepo) ListAll(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]Approval, int, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	if err := r.pool.QueryRow(ctx, `
+        SELECT COUNT(*)::int
+        FROM approvals
+        WHERE owner_id = $1`,
+		ownerID,
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("db: count all approvals: %w", err)
+	}
+	if total == 0 {
+		return []Approval{}, 0, nil
+	}
+
+	rows, err := r.pool.Query(ctx, `
+        SELECT `+approvalColumns+`
+        FROM approvals
+        WHERE owner_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3`,
+		ownerID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: select all approvals: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]Approval, 0, limit)
+	for rows.Next() {
+		var a Approval
+		if err := scanApproval(rows, &a); err != nil {
+			return nil, 0, fmt.Errorf("db: scan approval: %w", err)
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("db: iterate all approvals: %w", err)
 	}
 	return out, total, nil
 }

@@ -30,12 +30,37 @@ func NewApprovalHandler(svc service.ApprovalService) *ApprovalHandler {
 // Routes mounts the approval endpoints under /approvals.
 func (h *ApprovalHandler) Routes() chi.Router {
 	r := chi.NewRouter()
+	r.Get("/", h.ListAll)
 	r.Get("/pending", h.ListPending)
 	r.Get("/history", h.ListHistory)
 	r.Get("/{approval_id}", h.GetApproval)
 	r.Post("/{approval_id}/approve", h.Approve)
 	r.Post("/{approval_id}/deny", h.Deny)
 	return r
+}
+
+// --- GET /approvals -------------------------------------------------------
+
+func (h *ApprovalHandler) ListAll(w http.ResponseWriter, r *http.Request) {
+	ownerID := extractActorID(r)
+
+	limit, offset := parsePagination(r)
+	approvals, total, err := h.svc.GetAll(r.Context(), ownerID, limit, offset)
+	if err != nil {
+		log.Error().Err(err).Str("owner_id", ownerID.String()).Msg("approval handler: list all")
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list approvals")
+		return
+	}
+	if approvals == nil {
+		approvals = []db.Approval{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"approvals": approvals,
+		"total":     total,
+		"limit":     limit,
+		"offset":    offset,
+	})
 }
 
 // --- GET /approvals/pending -----------------------------------------------

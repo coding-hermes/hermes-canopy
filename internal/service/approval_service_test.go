@@ -43,6 +43,9 @@ func (r *approvalRepoStub) GetByNodeID(_ context.Context, _ uuid.UUID) (*db.Appr
 func (r *approvalRepoStub) ListPending(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _, _ int) ([]db.Approval, int, error) {
 	return r.pending, r.total, nil
 }
+func (r *approvalRepoStub) ListAll(_ context.Context, _ uuid.UUID, _, _ int) ([]db.Approval, int, error) {
+	return r.pending, r.total, nil
+}
 func (r *approvalRepoStub) ListByTree(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]db.Approval, error) {
 	return nil, nil
 }

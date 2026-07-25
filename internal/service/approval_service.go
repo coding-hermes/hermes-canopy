@@ -43,6 +43,9 @@ type ApprovalService interface {
 	// treeID may be nil to span all trees.
 	GetPending(ctx context.Context, ownerID uuid.UUID, treeID *uuid.UUID, limit, offset int) ([]db.Approval, int, error)
 
+	// GetAll returns all approvals for an ownerID regardless of status.
+	GetAll(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]db.Approval, int, error)
+
 	// GetApproval returns a single approval by ID.
 	GetApproval(ctx context.Context, id uuid.UUID) (*db.Approval, error)
 
@@ -130,6 +133,16 @@ func (s *approvalService) GetPending(ctx context.Context, ownerID uuid.UUID, tre
 	out, total, err := s.approvals.ListPending(ctx, ownerID, treeID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("approval service: list pending: %w", err)
+	}
+	return out, total, nil
+}
+
+// --- GetAll ---------------------------------------------------------------
+
+func (s *approvalService) GetAll(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]db.Approval, int, error) {
+	out, total, err := s.approvals.ListAll(ctx, ownerID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("approval service: list all: %w", err)
 	}
 	return out, total, nil
 }

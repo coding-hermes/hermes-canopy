@@ -304,8 +304,10 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
     try {
       const res = await fetch(apiUrl('/approvals'));
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      const data = (await res.json()) as ApprovalItem[];
-      setItems(Array.isArray(data) ? data : []);
+      const data = (await res.json()) as ApprovalItem[] | { approvals: ApprovalItem[] };
+      // Handle both wrapped ({ approvals: [...] }) and flat (ApprovalItem[]) responses
+      const items = Array.isArray(data) ? data : (data as { approvals: ApprovalItem[] }).approvals ?? [];
+      setItems(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load approvals');
     } finally {
