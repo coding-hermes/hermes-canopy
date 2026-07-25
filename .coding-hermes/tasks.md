@@ -60,7 +60,7 @@
 60|| ✅ FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
 61|| FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
 62|| ✅ FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader). Committed e907b26 — 14 files, 350 lines. Worker (Hy3) + foreman fix (unused label TS6133). | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
-63||| FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
+63|| ✅ FE-11 | Frontend integration tests (Playwright + vitest). 41 tests across 6 files. Worker: Step 3.7 Flash. Build+tcs clean. Commit 7123cf6. | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
 64||| **E2E Bugs (Tick 13)** | | | | | | | | |
 ||| BUG-001 | Port 8080/8081/8082 occupied by ASCE Docker containers (krakend, asce_api, mcp-server) — NOT a zombie. Canopyd needs HTTP_ADDR env var override or different default port. Re-scoped to config fix. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 66||| ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
@@ -476,3 +476,5 @@
 | 11 | Dispatch | ✅ DISPATCHED | FE-11 (Frontend integration tests — Playwright + vitest). Model: Step 3.7 Flash (per router for testing). Dependencies: FE-03 ✅ satisfied |
 
 **Verdict:** COMPLETED + DISPATCHED — FE-10 worker (Hy3) delivered WCAG 2.1 AA across all components. Foreman fixed 3 TS6133 errors (unused `label` in edge destructuring). Committed e907b26 (14 files, +350/-47). Dispatched FE-11 (Playwright + vitest integration tests). Phase 5 frontend: 9/11 tasks done. Next unblocked: FE-09 (Offline, Low). E2E-001 overdue (6 ticks since last run — Tick 13). BUG-001 (port config) remains. Load healthy.
++
++**Post-tick update:** FE-11 worker completed same-tick (7123cf6, 41 tests across 6 files: tree-rendering, navigation, crud-pages, approval-panel, accessibility, setup.ts). Phase 5 frontend: 10/11 done. Only FE-09 (Offline, Low, Cpx 5) remains in Phase 5.
