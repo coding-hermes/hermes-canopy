@@ -116,7 +116,9 @@ func (r *PGNodeRepo) GetByTree(ctx context.Context, treeID uuid.UUID) ([]Node, e
 // ordered by edge.sequence_num then node.sequence_num.
 func (r *PGNodeRepo) GetChildren(ctx context.Context, parentID uuid.UUID) ([]Node, error) {
 	rows, err := r.pool.Query(ctx, `
-        SELECT `+nodeColumns+`
+        SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
+               n.content_format, n.node_type, n.sequence_num, n.metadata,
+               n.created_at, n.edited_at, n.deleted_at
         FROM nodes n
         JOIN edges e ON e.target_id = n.id
         WHERE e.source_id = $1

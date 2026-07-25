@@ -218,7 +218,9 @@ func (r *PGEdgeRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 // rather than Edges.
 func (r *PGEdgeRepo) GetParents(ctx context.Context, targetID uuid.UUID) ([]Node, error) {
 	rows, err := r.pool.Query(ctx, `
-        SELECT `+nodeColumns+`
+        SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
+               n.content_format, n.node_type, n.sequence_num, n.metadata,
+               n.created_at, n.edited_at, n.deleted_at
         FROM nodes n
         JOIN edges e ON e.source_id = n.id
         WHERE e.target_id = $1

@@ -9,6 +9,8 @@ package testutil
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
@@ -33,47 +35,26 @@ func ensureCanopyRole(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// dropTestDB drops and recreates the test database so each run starts
-// with a clean slate. Connects to the default postgres database first.
-func dropTestDB(ctx context.Context, url string) error {
-	conn, err := pgx.Connect(ctx, url)
+// dropTestDBByName drops (if exists) and recreates the named test database
+// so each run starts with a clean slate and concurrent packages don't
+// interfere. Connects to the admin (postgres) database first.
+// Uses WITH (FORCE) to terminate any lingering connections on retries.
+func dropTestDBByName(ctx context.Context, adminURL, dbName string) error {
+	conn, err := pgx.Connect(ctx, adminURL)
 	if err != nil {
 		return fmt.Errorf("connect for drop: %w", err)
 	}
 	defer conn.Close(ctx)
 
-	// Terminate existing connections to the target database.
-	if _, err := conn.Exec(ctx, `
-		SELECT pg_terminate_backend(pg_stat_activity.pid)
-		FROM pg_stat_activity
-		WHERE pg_stat_activity.datname = 'canopy'
-		  AND pid <> pg_backend_pid()
-	`); err != nil {
-		// Ignore errors — the test DB may not exist yet.
-		_ = err
-	}
-
-	_, _ = conn.Exec(ctx, "DROP DATABASE IF EXISTS canopy WITH (FORCE)")
-	_, err = conn.Exec(ctx, "CREATE DATABASE canopy")
+	_, _ = conn.Exec(ctx, fmt.Sprintf(
+		"DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName))
+	_, err = conn.Exec(ctx, fmt.Sprintf(
+		"CREATE DATABASE %s", dbName))
 	return err
 }
 
-// DefaultTestDBURL is the default connection string for the
-// docker-compose PostgreSQL instance (port 5437, user/pass canopy).
-const DefaultTestDBURL = "postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable"
-
-// TestDBURL returns the database URL for integration tests, preferring
-// the CANOPY_TEST_DB_URL environment variable over the default.
-func TestDBURL() string {
-	if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
-		return u
-	}
-	return DefaultTestDBURL
-}
-
 // SkipIfNoDB skips the test if integration tests are disabled.
-// Set CANOPY_SKIP_INTEGRATION=1 or CANOPY_TEST_DB_URL to an
-// unreachable URL to skip.
+// Set CANOPY_SKIP_INTEGRATION=1 to skip.
 func SkipIfNoDB(t *testing.T) {
 	t.Helper()
 	if os.Getenv("CANOPY_SKIP_INTEGRATION") != "" {
@@ -81,41 +62,60 @@ func SkipIfNoDB(t *testing.T) {
 	}
 }
 
-// NewIntegrationPool creates a pgxpool connected to the test database
-// and runs all pending migrations. It first drops and recreates the
-// database from a fresh state, creates the canopy_app role (needed by
-// migration 000009), then runs all migrations.
+// uniqueDBName generates a unique database name per call so concurrent
+// integration test packages (handler, testutil, etc.) do not interfere.
+// Each test call to NewIntegrationPool creates an isolated database,
+// preventing cross-package dropTestDB() from killing another test's
+// connections via pg_terminate_backend().
+func uniqueDBName() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "canopy_test"
+	}
+	return "canopy_" + hex.EncodeToString(b)
+}
+
+// NewIntegrationPool creates a pgxpool connected to a FRESH, uniquely-named
+// test database and runs all pending migrations. Each call creates an
+// isolated database so concurrent test packages (handler, testutil, etc.)
+// do not interfere via dropTestDB/pg_terminate_backend.
 // Callers MUST close the pool when done: pool.Close().
 func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 
-	url := TestDBURL()
+	dbName := uniqueDBName()
 
-	// Drop and recreate the database to ensure a clean slate.
-	// Connect to the default 'postgres' database for admin operations.
+	// Admin connection URL (to the default 'postgres' database).
 	adminURL := "postgres://canopy:canopy@localhost:5437/postgres?sslmode=disable"
-	if os.Getenv("CANOPY_ADMIN_DB_URL") != "" {
-		adminURL = os.Getenv("CANOPY_ADMIN_DB_URL")
-	}
-	if err := dropTestDB(ctx, adminURL); err != nil {
-		t.Fatalf("NewIntegrationPool: dropTestDB: %v", err)
+	if u := os.Getenv("CANOPY_ADMIN_DB_URL"); u != "" {
+		adminURL = u
 	}
 
-	cfg, err := pgxpool.ParseConfig(url)
+	// Drop (if re-running) and recreate the unique test database.
+	dropTestDBByName(ctx, adminURL, dbName)
+
+	// Connect to the newly-created database.
+	targetURL := fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", dbName)
+	if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
+		// If a custom URL is set, use it as-is (user wants a specific DB).
+		targetURL = u
+	}
+
+	cfg, err := pgxpool.ParseConfig(targetURL)
 	if err != nil {
-		t.Fatalf("NewIntegrationPool: pgxpool.ParseConfig(%s): %v", url, err)
+		t.Fatalf("NewIntegrationPool: pgxpool.ParseConfig(%s): %v", targetURL, err)
 	}
 	cfg.MaxConns = 10
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		t.Fatalf("NewIntegrationPool: pgxpool.NewWithConfig(%s): %v", url, err)
+		t.Fatalf("NewIntegrationPool: pgxpool.NewWithConfig(%s): %v", targetURL, err)
 	}
 	t.Cleanup(pool.Close)
 
 	// Ping to verify connectivity.
 	if err := pool.Ping(ctx); err != nil {
-		t.Fatalf("NewIntegrationPool: ping(%s): %v", url, err)
+		t.Fatalf("NewIntegrationPool: ping(%s): %v", targetURL, err)
 	}
 
 	// Create the canopy_app role before running migrations (migration
@@ -125,8 +125,8 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	}
 
 	// Run migrations.
-	if err := db.MigrateUp(url); err != nil {
-		t.Fatalf("NewIntegrationPool: MigrateUp(%s): %v", url, err)
+	if err := db.MigrateUp(targetURL); err != nil {
+		t.Fatalf("NewIntegrationPool: MigrateUp(%s): %v", targetURL, err)
 	}
 
 	return pool
