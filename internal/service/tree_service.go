@@ -778,17 +778,16 @@ func (s *TreeServiceImpl) computeStats(ctx context.Context, treeID uuid.UUID, tr
 		var depth int
 		err := s.pool.QueryRow(ctx, `
             WITH RECURSIVE chain AS (
-                SELECT 0 AS depth
-                WHERE EXISTS (SELECT 1 FROM nodes WHERE id = $1 AND deleted_at IS NULL)
+                SELECT id, 0 AS depth
+                FROM nodes
+                WHERE id = $1 AND deleted_at IS NULL
                 UNION ALL
-                SELECT chain.depth + 1
+                SELECT n.id, chain.depth + 1
                 FROM chain
-                JOIN nodes child ON child.parent_id IN (
-                    SELECT id FROM nodes WHERE tree_id = $2 AND deleted_at IS NULL
-                )
+                JOIN nodes n ON n.parent_id = chain.id AND n.deleted_at IS NULL
                 WHERE chain.depth < 1000000
             )
-            SELECT COALESCE(MAX(depth), 0) FROM chain`, *rootID, treeID,
+            SELECT COALESCE(MAX(depth), 0) FROM chain`, *rootID,
 		).Scan(&depth)
 		if err == nil {
 			stats.MaxDepth = depth + 1 // include the root itself
