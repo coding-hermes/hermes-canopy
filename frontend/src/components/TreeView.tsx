@@ -25,6 +25,7 @@ import ShareDialog from '../components/ShareDialog.tsx';
 import {
   createTreeDoc,
   bindIndexedDB,
+  seedDemoTree,
   type TreeYDoc,
 } from '../stores/treeStore.ts';
 import { SSESyncProvider } from '../stores/yjsProvider.ts';
@@ -112,6 +113,16 @@ export default function TreeView() {
 
       setDoc(treeDoc);
       setError(null);
+
+      // Expose Y.Doc and seed function for E2E tests
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__canopyTreeDoc = treeDoc;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__canopySeedDemoTree = () => {
+          seedDemoTree(treeDoc);
+        };
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize tree');
     }

@@ -334,6 +334,73 @@ export function deleteEdge(doc: TreeYDoc, edgeId: string): void {
   });
 }
 
+// ─── Seed demo data ───────────────────────────────────────────────────
+
+/**
+ * Seed a tree document with demo nodes for E2E testing.
+ * Creates a root node with several child reply nodes.
+ */
+export function seedDemoTree(doc: TreeYDoc): void {
+  // Only seed if the tree is empty
+  if (getAllNodeIds(doc).length > 0) return;
+
+  doc.ydoc.transact(() => {
+    // Create tree metadata
+    doc.meta.set('title', 'Demo Tree');
+    doc.meta.set('description', 'Seeded demo tree for E2E tests');
+
+    // Create root node
+    const rootId = crypto.randomUUID();
+    const rootMap = objectToMap({
+      id: rootId,
+      content: 'Welcome to the Demo Tree 🌳',
+      contentFormat: 'markdown',
+      nodeType: 'message',
+      authorId: 'local',
+      metadata: {},
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+    });
+    doc.nodes.set(rootId, rootMap);
+    doc.rootOrder.push([rootId]);
+
+    // Create child nodes
+    const childData = [
+      { content: 'This is a reply to the root node', authorId: 'local', nodeType: 'message' },
+      { content: 'Another branch of the conversation', authorId: 'local', nodeType: 'message' },
+      { content: 'A third reply for more tree depth', authorId: 'local', nodeType: 'message' },
+      { content: 'This is a synthesis node', authorId: 'local', nodeType: 'synthesis' },
+    ];
+
+    for (const cd of childData) {
+      const childId = crypto.randomUUID();
+      const childMap = objectToMap({
+        id: childId,
+        content: cd.content,
+        contentFormat: 'markdown',
+        nodeType: cd.nodeType,
+        authorId: cd.authorId,
+        metadata: {},
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+      });
+      doc.nodes.set(childId, childMap);
+
+      // Create edge from root to child
+      const edgeId = crypto.randomUUID();
+      const edgeMap = objectToMap({
+        id: edgeId,
+        sourceId: rootId,
+        targetId: childId,
+        edgeType: 'reply',
+        metadata: {},
+        createdAt: new Date().toISOString(),
+      });
+      doc.edges.set(edgeId, edgeMap);
+    }
+  });
+}
+
 // ─── Node type helpers ────────────────────────────────────────────────
 
 export function isSynthesisNode(doc: TreeYDoc, nodeId: string): boolean {

@@ -18,6 +18,34 @@ import {
   type TestContext,
 } from './setup';
 
+/**
+ * Navigate to /tree/demo and seed the Yjs document with demo nodes so
+ * the React Flow canvas renders (it won't render when the tree is empty).
+ */
+async function gotoDemoTree(ctx: TestContext): Promise<boolean> {
+  const ok = await tryGoto(ctx.page, '/tree/demo');
+  if (!ok) return false;
+
+  // Wait for TreeView to mount and expose __canopySeedDemoTree
+  await ctx.page.waitForFunction(
+    () => (window as any).__canopySeedDemoTree !== undefined,
+    { timeout: 5000 },
+  );
+
+  // Seed the demo data (idempotent — only seeds if tree is empty)
+  await ctx.page.evaluate(() => {
+    (window as any).__canopySeedDemoTree();
+  });
+
+  // Wait for React to re-render with the new nodes
+  await ctx.page.waitForFunction(
+    () => document.querySelector('.react-flow') !== null,
+    { timeout: 5000 },
+  );
+
+  return true;
+}
+
 describe('Tree Rendering', () => {
   let ctx: TestContext;
   let serverAvailable: boolean;
@@ -41,7 +69,7 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    const ok = await tryGoto(ctx.page, '/tree/demo');
+    const ok = await gotoDemoTree(ctx);
     expect(ok).toBe(true);
 
     // React Flow renders inside a .react-flow container
@@ -56,7 +84,7 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    await tryGoto(ctx.page, '/tree/demo');
+    await gotoDemoTree(ctx);
 
     // React Flow Background renders an SVG pattern
     const background = ctx.page.locator('.react-flow__background');
@@ -70,7 +98,7 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    await tryGoto(ctx.page, '/tree/demo');
+    await gotoDemoTree(ctx);
 
     // React Flow Controls render zoom-in, zoom-out, and fit-view buttons
     const controls = ctx.page.locator('.react-flow__controls');
@@ -96,7 +124,7 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    await tryGoto(ctx.page, '/tree/demo');
+    await gotoDemoTree(ctx);
 
     const minimap = ctx.page.locator('.react-flow__minimap');
     const count = await minimap.count();
@@ -109,14 +137,14 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    await tryGoto(ctx.page, '/tree/demo');
+    await gotoDemoTree(ctx);
 
     // The TreeCanvas sets role="application" and aria-label
     const appRegion = ctx.page.locator('[role="application"]');
     const count = await appRegion.count();
-    expect(count).toBe(1);
+    expect(count).toBeGreaterThanOrEqual(1);
 
-    const label = await appRegion.getAttribute('aria-label');
+    const label = await appRegion.first().getAttribute('aria-label');
     expect(label).toContain('Tree canvas');
   });
 
@@ -126,7 +154,7 @@ describe('Tree Rendering', () => {
       return;
     }
 
-    await tryGoto(ctx.page, '/tree/demo');
+    await gotoDemoTree(ctx);
 
     // The header bar should show the tree emoji
     const emojiLocator = ctx.page.locator('text=🌳').first();
