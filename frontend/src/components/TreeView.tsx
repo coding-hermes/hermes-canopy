@@ -13,6 +13,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import TreeCanvas from '../components/TreeCanvas.tsx';
 import NavigationBar from '../components/NavigationBar.tsx';
+import MessageComposer, {
+  type PinnedNode,
+} from '../components/MessageComposer.tsx';
 import {
   createTreeDoc,
   bindIndexedDB,
@@ -96,6 +99,19 @@ export default function TreeView() {
     setTimeout(() => setFocusNodeId(nodeId), 0);
   }, []);
 
+  // Handle message send from MessageComposer
+  const handleSendMessage = useCallback(
+    (_message: string, _files: File[], _pinnedNodes: PinnedNode[]) => {
+      // TODO: Wire to actual message-sending API (backend integration)
+      console.log('[TreeView] Message sent:', {
+        text: _message.slice(0, 100),
+        fileCount: _files.length,
+        pinnedCount: _pinnedNodes.length,
+      });
+    },
+    [],
+  );
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -110,10 +126,10 @@ export default function TreeView() {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full flex flex-col">
       {/* Tree header bar */}
       <div
-        className="h-10 flex items-center px-4 gap-3 border-b"
+        className="h-10 flex items-center px-4 gap-3 border-b shrink-0"
         style={{
           backgroundColor: '#0f0f1a',
           borderColor: '#2d2d4a',
@@ -133,21 +149,29 @@ export default function TreeView() {
       </div>
 
       {/* Navigation bar (search + breadcrumbs) */}
-      <NavigationBar
-        nodes={tree.nodes}
-        edges={tree.edges}
-        selectedNodeId={selectedNodeId}
-        onNavigateToNode={handleNavigateToNode}
-      />
+      <div className="shrink-0">
+        <NavigationBar
+          nodes={tree.nodes}
+          edges={tree.edges}
+          selectedNodeId={selectedNodeId}
+          onNavigateToNode={handleNavigateToNode}
+        />
+      </div>
 
       {/* Canvas fills remaining space */}
-      <div className="h-[calc(100%-5rem)]">
+      <div className="flex-1 min-h-0">
         <TreeCanvas
           tree={tree}
           onSelectionChange={handleSelectionChange}
           focusNodeId={focusNodeId}
         />
       </div>
+
+      {/* Message composer — bottom-docked */}
+      <MessageComposer
+        onSend={handleSendMessage}
+        disabled={!tree.isReady}
+      />
     </div>
   );
 }
