@@ -1,0 +1,2 @@
+// State management stores (Zustand or similar)
+// Each store manages a slice of application state
