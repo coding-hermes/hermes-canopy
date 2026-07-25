@@ -44,3 +44,15 @@ tasks:
   status: complete
   created_at: '2026-07-25T09:19:02.333522+00:00'
   completed_at: '2026-07-25T09:28:15.427833+00:00'
+- id: BUG-009
+  title: Fix CRUD pages E2E test failures (4/4 tests fail)
+  criteria:
+  - Root cause of 4/4 crud-pages.test.ts failures identified
+  - All crud-pages Playwright tests pass against running canopyd server with seeded
+    data
+  - CRUD pages properly seed or mock data for E2E test environment
+  - npm run build passes, tsc --noEmit clean
+  - No regression in other E2E test suites
+  status: complete
+  created_at: '2026-07-25T09:56:22.780201+00:00'
+  completed_at: '2026-07-25T09:59:53.413914+00:00'
