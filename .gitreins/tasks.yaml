@@ -56,3 +56,16 @@ tasks:
   status: complete
   created_at: '2026-07-25T09:56:22.780201+00:00'
   completed_at: '2026-07-25T09:59:53.413914+00:00'
+- id: INT-01
+  title: "End-to-end tree flow integration (create \u2192 edit \u2192 merge \u2192\
+    \ approve)"
+  criteria:
+  - Start canopyd with PG, create a tree via API, add nodes via API, edit node content,
+    verify CRDT merge, create approval, approve, verify audit trail
+  - All integration tests pass against a running canopyd server with real PostgreSQL
+  - "Tree flow end-to-end works: POST /api/v1/trees \u2192 POST /api/v1/nodes \u2192\
+    \ PATCH /api/v1/nodes/{id} \u2192 POST /api/v1/approvals \u2192 POST /api/v1/approvals/{id}/approve"
+  - npm run build passes, tsc --noEmit clean
+  - No regression in existing unit or integration tests
+  status: pending
+  created_at: '2026-07-25T10:29:21.517017+00:00'
