@@ -79,7 +79,7 @@
 73|| ✅ INT-03 | Multi-profile integration (switch profiles, isolated trees, routing). 4 tests (839 lines): MultipleProfiles, ProfileSwitching, ProfileRouting, ProfileIsolation. Commit 8b87b90. | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 74|| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
 75|| INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
-76|| INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate) | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
+76|| ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 77|| **Phase 7: Testing** | | | | | | | | |
 78|| TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
 79|| TEST-02 | Integration test suite (docker-compose, full API surface) | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
@@ -704,3 +704,23 @@
 **INT-02 Worker Output:** INT-02 worker (DeepSeek V4 Pro) delivered 831 lines in multi_user_integration_test.go. 4 tests: TestINT02_ConcurrentEdits, TestINT02_CRDTMerge, TestINT02_PresenceState, TestINT02_PermissionsEnforcement. Requires PG at 5437 to run. go vet clean.
 
 **Verdict:** DISPATCHED — INT-02 integration tests committed (bd4c7b1). INT-03 dispatched to worker. Phase 6: 2/6 tasks done (INT-01 in progress with fork 503 blocker, INT-02 ✅, INT-03 dispatched). INT-01 fork 503 root cause investigation remains open — likely pgxpool connection leak in prior Create calls within test context. E2E-001: 2 ticks since last run (Tick 28) — due in 3-8 ticks. Phase 5: 10/11 done (only FE-09 remaining). Load healthy.
+
+### Tick 31 — 2026-07-25 08:45 UTC (DeepSeek V4 Pro — Foreman Audit + INT-06 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Only edges.jsonl (Hilo noise), restored |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 792 edges, 137 files, 766 imports. Hilo=useful (+18 edges, +1 file since Tick 28) |
+| 4 | Tests | ✅ ALL PASS | All unit packages PASS (service, card, mls, sse, transport, config, hermes). Integration tests need PG at 5437. Frontend: npm build PASS, tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO (tree_service.go:442). None critical |
+| 6 | Deps | ⚠️ 159 OUTDATED | cloud SDKs, Azure, keyring, chi, zerolog behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | INT-06 dispatched + completed (d767d54). Marked ✅. GitReins: 7 complete, 1 pending (INT-01). Board and GitReins agree |
+| 11 | Dispatch | ✅ DISPATCHED | INT-06 worker (DeepSeek V4 Pro): CLI wiring — 455 lines in cli.go, modified main.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. 32 API calls, 1.87M input tokens. Commit d767d54 |
+
+**INT-01 Fork 503 — foreman analysis:** Examined Fork() in node_service.go:698-751. Path: Fork → GetByID (works) → GetChildren (fails — DB unavailable). GetChildren is a straightforward JOIN query (nodes+edges WHERE source_id=$1) with proper defer rows.Close(). Pool config: MaxConns=25, MinConns=5. The Create call runs inside a pgx transaction (tx.BeginTx) with defer Rollback(), so the tx is always cleaned up. One observation: Create's soft-delete detection (line 321) uses `s.pool.QueryRow` directly (outside the tx), which creates an additional connection from the pool. With sequential API calls in the test each opening a new pool connection + the tx consuming one, the default pgxpool max of 4 could be exhausted. However, the test pool is created with pgxpool.New with default MaxConns=4 (pgx default, not the 25 from db.New). Root cause: `testutil.NewIntegrationPool` uses `pgxpool.New()` which defaults to 4 max connections. The integration test creates connections for: (1) main pool, (2-4) API calls in steps 1-3 each open their own connection. By step 4's Fork, the pool may be exhausted. **Fix candidate:** add explicit MaxConns to testutil.NewIntegrationPool's pgxpool config (e.g., 10). Worth testing before next INT-01 re-dispatch.
+
+**Verdict:** DISPATCHED — INT-06 CLI wiring complete (commit d767d54). All 11 gates healthy. Phase 6: 3/6 tasks done (INT-01 blocked by fork 503, INT-02/03/06 ✅). INT-01 fork 503 root cause narrowed: test pool defaults to 4 max connections via pgxpool.New(), likely exhausted by sequential API calls. Fix: add explicit MaxConns to test pool config. E2E-001: 3 ticks since last run (Tick 28) — due in 2-7 ticks. Phase 5: 10/11 done (only FE-09 remaining). Next: investigate/prove INT-01 pool fix, FE-09 (Offline, Low, Cpx 5), or TEST-01 (coverage).
