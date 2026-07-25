@@ -59,7 +59,7 @@
 59|| ✅ FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 60|| ✅ FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
 61|| FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
-62|| FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader) | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
+62|| ✅ FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader). Committed e907b26 — 14 files, 350 lines. Worker (Hy3) + foreman fix (unused label TS6133). | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
 63||| FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
 64||| **E2E Bugs (Tick 13)** | | | | | | | | |
 ||| BUG-001 | Port 8080/8081/8082 occupied by ASCE Docker containers (krakend, asce_api, mcp-server) — NOT a zombie. Canopyd needs HTTP_ADDR env var override or different default port. Re-scoped to config fix. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
@@ -440,3 +440,39 @@
 | 11 | Dispatch | ⏸️ DEFERRED | BUG-004 fixed+committed consumed tick. Foreman fixed 3 TS bugs in worker output. 4/5 E2E bugs resolved. BUG-001 re-scoped to config fix |
 
 **Verdict:** COMPLETED — BUG-004 worker (DeepSeek V4 Pro) delivered 5 CRUD pages (2,223 lines). Foreman fixed 3 TS bugs: unused imports in TopicsPage/TreesPage, copy-paste setTreesLoading→setCardsLoading, card.data unknown type. BUG-001 diagnosed as ASCE Docker containers (not zombie). 4 of 5 E2E bugs resolved. Phase 5: 8/11 done. Next unblocked: FE-09 (Low, Cpx 5) or FE-10 (Medium, Cpx 3). Load healthy.
+
+### Tick 17 — 2026-07-25 02:22 UTC (DeepSeek V4 Pro — Foreman Audit + Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 749 edges, 126 files, 723 imports. Hilo=useful (+17 edges, +4 files since Tick 16) |
+| 4 | Tests | ⚠️ 9 FAIL (suite) | Known: handler+testutil need PG docker at 5437. All unit packages PASS. Frontend: npm build PASS, tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 1 cursor TODO, 3 auth test SKIPs, 5 stub adapters (post-MVP). None critical |
+| 6 | Deps | ✅ CLEAN | 0 outdated (improvement — cloud SDKs updated since Tick 16) |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | Tick 16 retrospective complete. FE-10 dispatched this tick. Board and GitReins agree |
+| 11 | Dispatch | ✅ DISPATCHED | FE-10 worker: Accessibility audit + fixes (WCAG 2.1 AA). Model: Hy3 (UI/HTML/CSS primary per router) |
+
+**Verdict:** DISPATCHED — FE-10 Accessibility (Medium, Cpx 3). Phase 5 frontend: 8/11 done, FE-10 in flight. Next unblocked: FE-11 (Integration tests, Medium), FE-09 (Offline, Low). E2E-001 due in 1-2 ticks (last run Tick 13, due every 5-10). BUG-001 (port config) remains — Low, simple fix. Load healthy.
+
+### Tick 18 — 2026-07-25 02:29 UTC (DeepSeek V4 Pro — Foreman Audit + Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY | FE-10 worker output uncommitted: 14 files (accessibility.ts, edge/node components, TreeCanvas, App, index.css, package.json) |
+| 2 | GitReins guard | ✅ PASS | 4 guards all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 749 edges, 126 files, 723 imports. Hilo=useful |
+| 4 | Tests | ⚠️ 4 FAIL (suite) | Known: handler+testutil need PG docker at 5437. All unit packages PASS. Frontend: tsc clean after foreman fix |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 1 cursor TODO, 5 stub adapters (post-MVP). None critical |
+| 6 | Deps | ✅ CLEAN | 0 Go outdated, 2 npm outdated (typescript 7.0.2, @types/node 26.1.1 — major versions). Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean |
+| 9 | Static analysis | ✅ CLEAN | go vet + tsc clean (after foreman fix of 3 TS6133 errors) |
+| 10 | Board consistency | ✅ UPDATED | FE-10 marked ✅ (e907b26). Worker delivered. Foreman fixed 3 TS errors (unused `label` in ForkEdge/ReplyEdge/SynthesisEdge). Phase 5: 9/11 done |
+| 11 | Dispatch | ✅ DISPATCHED | FE-11 (Frontend integration tests — Playwright + vitest). Model: Step 3.7 Flash (per router for testing). Dependencies: FE-03 ✅ satisfied |
+
+**Verdict:** COMPLETED + DISPATCHED — FE-10 worker (Hy3) delivered WCAG 2.1 AA across all components. Foreman fixed 3 TS6133 errors (unused `label` in edge destructuring). Committed e907b26 (14 files, +350/-47). Dispatched FE-11 (Playwright + vitest integration tests). Phase 5 frontend: 9/11 tasks done. Next unblocked: FE-09 (Offline, Low). E2E-001 overdue (6 ticks since last run — Tick 13). BUG-001 (port config) remains. Load healthy.
