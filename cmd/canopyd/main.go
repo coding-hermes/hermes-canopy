@@ -37,6 +37,19 @@ import (
 var version = "dev"
 
 func main() {
+	// If a known subcommand is present, route to CLI mode.
+	// Parse flags AFTER detecting the subcommand so server flags don't
+	// interfere with CLI flags.
+	if hasSubcommand() {
+		// Strip any server flags that may precede the subcommand, then
+		// rebuild os.Args so runCLI sees only [binary, subcommand, ...].
+		args := stripServerFlags(os.Args[1:])
+		os.Args = append([]string{os.Args[0]}, args...)
+		runCLI()
+		return
+	}
+
+	// Server mode: parse server flags.
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
