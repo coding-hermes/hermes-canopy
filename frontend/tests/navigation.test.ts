@@ -67,6 +67,9 @@ describe('Navigation', () => {
 
     // Should navigate to /trees
     await ctx.page.waitForURL('**/trees', { timeout: 10_000 });
+    // Wait for React to actually render TreesPage (race condition: URL changes
+    // before the component unmounts Dashboard and mounts TreesPage)
+    await ctx.page.waitForSelector('h1:text-is("Trees")', { timeout: 10_000 });
     const heading = ctx.page.locator('h1');
     const text = await heading.innerText();
     expect(text).toContain('Trees');
@@ -84,6 +87,8 @@ describe('Navigation', () => {
     await cardsLink.click();
 
     await ctx.page.waitForURL('**/cards', { timeout: 10_000 });
+    // Wait for React to render CardsPage (same race condition as Trees link)
+    await ctx.page.waitForSelector('h1:text-is("Cards")', { timeout: 10_000 });
     const heading = ctx.page.locator('h1');
     const text = await heading.innerText();
     expect(text).toContain('Cards');
