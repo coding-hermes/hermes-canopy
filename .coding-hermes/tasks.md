@@ -27,7 +27,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-| **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e). FE-05 (Message Composer) NEXT.
+| **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e), FE-05 ✅ (16a3570). FE-06 (Approval Panel) NEXT.
 > **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
@@ -54,7 +54,7 @@
 | ✅ FE-02 | Tree data store (Yjs CRDT + React Flow integration). Yjs store + SSE sync provider + React Flow canvas + dagre layout. 7 new files, 1,721 lines. Commit a7a638e. Build passes (223 modules). | High | 5 | FE-01 | ++frontend, ++crdt, ++typescript | DeepSeek V4 Pro | High | GLM-5.2 |
 || ✅ FE-03 | Tree rendering engine (React Flow + d3-hierarchy layout + Canvas fallback). 7 new files (4 nodes, 3 edges, d3Layout), 3 modified. d3-hierarchy Reingold-Tilford layout, custom node/edge types, >500 node fallback, expand/collapse, zoom-to-fit. 266 modules. Commit d7ec81d. | High | 5 | FE-02 | ++frontend, ++visualization, ++react | DeepSeek V4 Pro | High | GLM-5.2 |
 | ✅ FE-04 | Navigation system (pan, zoom, search, breadcrumbs, minimap). Commit 4f42a7e — 2 new files (NavigationBar.tsx, Breadcrumbs.tsx) + TreeCanvas.tsx modified. Fuzzy search, minimap, controls, breadcrumbs, keyboard shortcuts. 267 modules, build PASS. | Medium | 3 | FE-03 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
-| FE-05 | Message composer (rich text, file attachments, agent context pinning) | High | 3 | FE-01 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
+| ✅ FE-05 | Message composer (rich text, file attachments, agent context pinning). Commit 16a3570 — MessageComposer.tsx (460 lines), wired into TreeView.tsx. tsc + build PASS. | High | 3 | FE-01 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
 | FE-06 | Approval panel (pending items, approve/deny, diff view, audit trail) | Medium | 3 | FE-01, BE-07 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 | FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
@@ -289,3 +289,21 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | 11 | Dispatch | ✅ DISPATCHED | FE-04 worker (DeepSeek V4 Pro): NavigationBar.tsx + Breadcrumbs.tsx new files + TreeCanvas.tsx modified. Fuzzy search, minimap, controls, breadcrumbs, keyboard shortcuts. 48 tool calls, 3.3M input tokens. Commit 4f42a7e. |
 
 **Verdict:** DISPATCHED — FE-04 navigation system complete (commit 4f42a7e). Phase 5 frontend: 4/11 tasks done. Next: FE-05 (Message Composer), FE-06 (Approval Panel), FE-07 (Multi-user) all parallel-ready after FE-01 satisfied. Load 3.70 (healthy, 52GB available).
+
+### Tick 9 — 2026-07-24 22:35 UTC (DeepSeek V4 Pro)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 679 edges, 109 files, 653 imports. Hilo=useful (+4 edges from prior) |
+| 4 | Tests | ⚠️ 5 FAIL (suite) | Known: handler integration (duplicate PG DB), sse heartbeat ordering, testutil migration. All packages pass individually. Frontend: npm run build PASS (268 modules, 527KB JS) |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. Unchanged. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud.google.com/go, Azure SDK, keyring, chi, zerolog behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK |
+| 10 | Board consistency | ✅ UPDATED | FE-05 dispatched this tick and completed. Marked ✅ with commit 16a3570. Status and execution order updated |
+| 11 | Dispatch | ✅ DISPATCHED | FE-05 worker (DeepSeek V4 Pro, Hy3 primary): MessageComposer.tsx (460 lines) + TreeView.tsx wired. Auto-grow textarea, file drag-and-drop + previews, context pinning chips, Cmd/Ctrl+Enter, char/token count. 18 tool calls, 927K input tokens. Commit 16a3570 |
+
+**Verdict:** DISPATCHED — FE-05 Message Composer complete (commit 16a3570). Phase 5 frontend: 5/11 tasks done. Next: FE-06 (Approval Panel — deps FE-01+BE-07 ✅), FE-07 (Multi-user — deps FE-02 ✅), FE-08 (Agent context viz — deps SPEC-PL-04+FE-05 now ⚡). Load healthy.
