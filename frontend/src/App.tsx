@@ -1,6 +1,10 @@
 import { NavLink, Outlet, Routes, Route } from 'react-router-dom'
 import TreeView from './components/TreeView'
 import ApprovalPanel from './components/ApprovalPanel'
+import TreesPage from './pages/TreesPage'
+import NodesPage from './pages/NodesPage'
+import TopicsPage from './pages/TopicsPage'
+import CardsPage from './pages/CardsPage'
 
 function Dashboard() {
   return (
@@ -145,22 +149,13 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
-        <Route path="trees" element={<Placeholder title="Trees" />} />
+        <Route path="trees" element={<TreesPage />} />
         <Route path="tree/:treeId" element={<TreeView />} />
-        <Route path="nodes" element={<Placeholder title="Nodes" />} />
-        <Route path="topics" element={<Placeholder title="Topics" />} />
-        <Route path="cards" element={<Placeholder title="Cards" />} />
+        <Route path="nodes" element={<NodesPage />} />
+        <Route path="topics" element={<TopicsPage />} />
+        <Route path="cards" element={<CardsPage />} />
         <Route path="approvals" element={<ApprovalPanel />} />
       </Route>
     </Routes>
-  )
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">Coming soon.</p>
-    </div>
   )
 }
