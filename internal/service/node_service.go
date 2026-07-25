@@ -813,15 +813,15 @@ func (s *NodeServiceImpl) computeDepth(ctx context.Context, nodeID uuid.UUID, pa
 	var depth int
 	err := s.pool.QueryRow(ctx, `
         WITH RECURSIVE chain AS (
-            SELECT 0 AS depth
-            WHERE EXISTS (SELECT 1 FROM nodes WHERE id = $1 AND deleted_at IS NULL)
+            SELECT id, parent_id, 0 AS depth
+            FROM nodes
+            WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT chain.depth + 1
+            SELECT n.id, n.parent_id, chain.depth + 1
             FROM chain
-            JOIN nodes child ON child.parent_id = (
-                SELECT parent_id FROM nodes WHERE id = $1
-            )
-            WHERE chain.depth < 1000000
+            JOIN nodes n ON n.id = chain.parent_id
+            WHERE chain.parent_id IS NOT NULL
+              AND chain.depth < 1000000
         )
         SELECT COALESCE(MAX(depth), 0) FROM chain`,
 		nodeID,
