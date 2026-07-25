@@ -664,3 +664,23 @@
 | 11 | Dispatch | ✅ E2E DISPATCHED | E2E-001 worker (DeepSeek V4 Pro): 41/41 PASS (100%). 2 navigation tests fixed (React routing race: waitForURL resolves before React renders). Commit 24d0a92. 40 API calls, 2.2M input tokens. Full stack: canopyd:8091 + PG:5437 + Vite:5173 |
 
 **Verdict:** E2E-001 DISPATCHED + COMPLETED — First foreman tick to achieve 100% E2E pass rate (41/41). Worker fixed 2 navigation tests (React routing race condition: waitForURL vs waitForSelector). All 5 test suites green: navigation (9), crud-pages (13), approval-panel (5), accessibility (7), tree-rendering (7). INT-01 fork issue: TestINT01_SynthesisAndDeny fork still returns 503 even in isolation — DB works for steps 1-3 (create tree, create child A, create reply B) but becomes unavailable during Fork.GetChildren call. This is NOT the BUG-011 error mapping issue (500→503 fix is correct) — DB is genuinely unavailable during the fork transaction. Needs deeper investigation (pool/transaction lifecycle). Phase 5: 10/11 done (only FE-09 Offline remaining). All 11 tracked bugs resolved. Next: investigate fork 503 root cause OR dispatch INT-02 (multi-user integration). Load 3.37 healthy (51Gi available).
+
+### Tick 29 — 2026-07-25 08:02 UTC (DeepSeek V4 Pro — Foreman Audit + INT-02 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Only .vfs/graph/edges.jsonl modified (Hilo post-commit noise). Restored |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 774 edges, 136 files, 748 imports. Hilo=useful (unchanged since Tick 28) |
+| 4 | Tests | ✅ ALL PASS | All unit packages PASS (card, config, hermes, mls, service, sse, transport). sync: no test files. Frontend: npm build PASS (645KB JS), tsc --noEmit clean |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO (tree_service.go:442), 3 auth test SKIPs (documented). None critical for MVP |
+| 6 | Deps | ⚠️ 159 OUTDATED | Widespread cloud SDKs, Azure, keyring, chi, zerolog, jwt behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ AGREED | GitReins: 7 complete (gitreins-judge-verify, BUG-003/006/008/009/010/011), 1 pending (INT-01). Board and GitReins agree |
+| 11 | Dispatch | ✅ DISPATCHED | INT-02 worker (DeepSeek V4 Pro): Multi-user integration — 2+ users, concurrent edits, CRDT merge. Deps FE-07+BE-07 ✅ satisfied. Parallel to INT-01 |
+
+**INT-01 Fork 503 analysis:** GetChildren(node_repo.go:117) fails with DB unavailable during the Fork call in TestINT01_SynthesisAndDeny. The query is straightforward (JOIN edges WHERE source_id=$1), and GetByID succeeds immediately before it. Possible causes: (a) connection pool exhaustion (b) context cancellation during test cleanup (c) pgxpool transaction leak in prior Create calls. Worth checking pg_stat_activity during test run and whether Create/GetByID in the same test close their rows/transactions properly.
+
+**Verdict:** DISPATCHED — INT-02 sent to worker. All gates healthy. INT-01 fork 503 remains the only open blocker; root cause narrowed to pool/transaction lifecycle in the integration test context (not a query bug). E2E-001: 1 tick since last run (Tick 28) — due in 4-9 ticks. Next: investigate INT-01 fork 503 OR dispatch INT-03. Load healthy.
