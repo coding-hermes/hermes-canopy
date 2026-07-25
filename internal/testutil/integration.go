@@ -102,9 +102,14 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("NewIntegrationPool: dropTestDB: %v", err)
 	}
 
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		t.Fatalf("NewIntegrationPool: pgxpool.New(%s): %v", url, err)
+		t.Fatalf("NewIntegrationPool: pgxpool.ParseConfig(%s): %v", url, err)
+	}
+	cfg.MaxConns = 10
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewIntegrationPool: pgxpool.NewWithConfig(%s): %v", url, err)
 	}
 	t.Cleanup(pool.Close)
 
