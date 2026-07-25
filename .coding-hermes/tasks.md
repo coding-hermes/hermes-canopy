@@ -74,7 +74,7 @@
 68||| ✅ BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
 |||| ✅ BUG-005 | Approvals page — resolved as side-effect of BUG-002 + BUG-003 (relative /api/v1 + dev JWT auto-injection). Now works with Vite proxy. | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
 70||| **Phase 6: Integration** | | | | | | | | |
-71||| 🔄 INT-01 | End-to-end tree flow (create → edit → merge → approve). Commits: 493a7f5 (Tick 24 base), 37da11c (computeStats CTE fix), 7bfcd5b (Tick 26 — 974 lines, 3 tests). TestINT01_FullTreeFlow ✅ (BUG-010 depth verified), TestINT01_TreeFlowWithBranching ✅ (depth chain A=1,B=2,C=3). TestINT01_SynthesisAndDeny ⚠️ BLOCKED by BUG-011 (fork endpoint 500). | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
+71||| 🔄 INT-01 | End-to-end tree flow (create → edit → merge → approve). Commits: 493a7f5 (Tick 24 base), 37da11c (computeStats CTE fix), 7bfcd5b (Tick 26 — 974 lines, 3 tests). TestINT01_FullTreeFlow ✅, TestINT01_TreeFlowWithBranching ✅. TestINT01_SynthesisAndDeny ⚠️ fork returns 503 even in isolation — DB becomes unavailable during fork call despite working for steps 1-3. Deeper investigation needed: may be pool/transaction issue in fork path. 2/3 tests PASS, 1 blocked. | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
 72|| INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge) | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 73|| INT-03 | Multi-profile integration (switch profiles, isolated trees, routing) | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 74|| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
@@ -98,7 +98,7 @@
 92|| DIST-03 | Open source readiness (LICENSE, CONTRIBUTING, CoC, issue templates) | Low | 1 | — | ++documentation | DeepSeek V4 Flash | Minimal | GPT-5.6 Terra |
 93|| **Continuous** | | | | | | | | |
 94|| INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
-95|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash |
+95|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). 2 navigation tests fixed (React routing race). Commit 24d0a92. |
 96|| NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 97|
 98|## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
@@ -646,3 +646,21 @@
 | 11 | Fix applied | ✅ BUG-011 FIXED | Root cause: writeServiceError in node_handler.go + tree_handler.go had no case for ErrDatabaseUnavailable → all DB errors fell to default 500 INTERNAL_ERROR. Fix: added 503 SERVICE_UNAVAILABLE mapping to both handlers. Commit 5b7c785 |
 
 **Verdict:** BLOCKER RESOLVED — BUG-011 error mapping fixed in both node and tree handlers (5b7c785). The fork endpoint's 500 was caused by unmapped ErrDatabaseUnavailable in writeServiceError (both handlers), not a CTE bug. Any DB error during Fork/GetChildren returned 500 with hidden message. Now surfaces as 503 SERVICE_UNAVAILABLE. INT-01 unblocked — ready for re-dispatch. E2E-001: 8 ticks overdue (last run Tick 19). Next: re-dispatch INT-01 with PG running OR E2E-001. Load healthy.
+
+### Tick 28 — 2026-07-25 07:35 UTC (DeepSeek V4 Pro — Foreman Audit + E2E Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY | .gitreins/tasks.yaml staged (prior-foreman sync: BUG-010+011 GitReins completions). edges.jsonl restored. frontend/test-results/ untracked (harmless) |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 774 edges, 136 files, 748 imports. Hilo=useful |
+| 4 | Tests | ⚠️ 5 FAIL (known) | Unit packages all PASS (card, config, hermes, mls, service, sse, transport). Integration handler: TestBE12c_UserRegistration (duplicate pg_database — parallel race), TestINT01_SynthesisAndDeny (fork 503 — DB unavailable during fork despite steps 1-3 working), testutil: TestIntegration_Migration (PG terminating), TestIntegration_Truncate (duplicate pg_database). Frontend: tsc clean, build PASS (645KB JS) |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud SDKs (cloud.google.com v0.121→v0.123), Azure SDK (azcore v1.4→v1.22), keyring v1.2.1→v1.2.2. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 7 complete (gitreins-judge-verify, BUG-003/006/008/009/010/011), 1 pending (INT-01). Prior-foreman .gitreins/tasks.yaml changes committed (3aaac35). Board and GitReins agree |
+| 11 | Dispatch | ✅ E2E DISPATCHED | E2E-001 worker (DeepSeek V4 Pro): 41/41 PASS (100%). 2 navigation tests fixed (React routing race: waitForURL resolves before React renders). Commit 24d0a92. 40 API calls, 2.2M input tokens. Full stack: canopyd:8091 + PG:5437 + Vite:5173 |
+
+**Verdict:** E2E-001 DISPATCHED + COMPLETED — First foreman tick to achieve 100% E2E pass rate (41/41). Worker fixed 2 navigation tests (React routing race condition: waitForURL vs waitForSelector). All 5 test suites green: navigation (9), crud-pages (13), approval-panel (5), accessibility (7), tree-rendering (7). INT-01 fork issue: TestINT01_SynthesisAndDeny fork still returns 503 even in isolation — DB works for steps 1-3 (create tree, create child A, create reply B) but becomes unavailable during Fork.GetChildren call. This is NOT the BUG-011 error mapping issue (500→503 fix is correct) — DB is genuinely unavailable during the fork transaction. Needs deeper investigation (pool/transaction lifecycle). Phase 5: 10/11 done (only FE-09 Offline remaining). All 11 tracked bugs resolved. Next: investigate fork 503 root cause OR dispatch INT-02 (multi-user integration). Load 3.37 healthy (51Gi available).
