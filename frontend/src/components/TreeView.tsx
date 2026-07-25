@@ -6,11 +6,13 @@
  *   - SSE sync provider
  *   - IndexedDB persistence
  *   - React Flow canvas
+ *   - Navigation (search, breadcrumbs, node focus)
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import TreeCanvas from '../components/TreeCanvas.tsx';
+import NavigationBar from '../components/NavigationBar.tsx';
 import {
   createTreeDoc,
   bindIndexedDB,
@@ -25,6 +27,10 @@ export default function TreeView() {
   const docRef = useRef<TreeYDoc | null>(null);
   const providerRef = useRef<SSESyncProvider | null>(null);
   const [doc, setDoc] = useState<TreeYDoc | null>(null);
+
+  // Navigation state
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
 
   // Initialize Yjs document + providers
   useEffect(() => {
@@ -76,6 +82,20 @@ export default function TreeView() {
 
   const tree = useYjsTree(doc);
 
+  // Handle selection change from canvas
+  const handleSelectionChange = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+  }, []);
+
+  // Handle navigate-to-node from NavigationBar
+  const handleNavigateToNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    // Toggle focusNodeId to trigger animation even if same node
+    setFocusNodeId(null);
+    // Use setTimeout to ensure React processes the null first
+    setTimeout(() => setFocusNodeId(nodeId), 0);
+  }, []);
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -92,11 +112,17 @@ export default function TreeView() {
   return (
     <div className="h-full w-full">
       {/* Tree header bar */}
-      <div className="h-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 gap-3">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div
+        className="h-10 flex items-center px-4 gap-3 border-b"
+        style={{
+          backgroundColor: '#0f0f1a',
+          borderColor: '#2d2d4a',
+        }}
+      >
+        <span className="text-sm font-medium" style={{ color: '#e2e8f0' }}>
           🌳 {tree.treeTitle || 'Tree View'}
         </span>
-        <span className="text-xs text-gray-400 dark:text-gray-500">
+        <span className="text-xs" style={{ color: '#94a3b8' }}>
           {tree.nodes.length} nodes · {tree.edges.length} edges
         </span>
         {!tree.isReady && (
@@ -106,9 +132,21 @@ export default function TreeView() {
         )}
       </div>
 
+      {/* Navigation bar (search + breadcrumbs) */}
+      <NavigationBar
+        nodes={tree.nodes}
+        edges={tree.edges}
+        selectedNodeId={selectedNodeId}
+        onNavigateToNode={handleNavigateToNode}
+      />
+
       {/* Canvas fills remaining space */}
-      <div className="h-[calc(100%-2.5rem)]">
-        <TreeCanvas tree={tree} />
+      <div className="h-[calc(100%-5rem)]">
+        <TreeCanvas
+          tree={tree}
+          onSelectionChange={handleSelectionChange}
+          focusNodeId={focusNodeId}
+        />
       </div>
     </div>
   );

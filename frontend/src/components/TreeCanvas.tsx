@@ -7,6 +7,8 @@
  *   - Expand/collapse for branches
  *   - Zoom-to-fit and focus-on-node animations
  *   - Large tree fallback (>500 nodes) with simplified rendering
+ *   - Keyboard shortcuts (Ctrl+0 fit, Ctrl+= zoom in, Ctrl+- zoom out)
+ *   - MiniMap with dark theme styling
  *
  * Built on @xyflow/react v12.
  */
@@ -25,7 +27,7 @@ import {
   type FitViewOptions,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
 import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
@@ -63,6 +65,10 @@ const edgeTypes = {
 export interface TreeCanvasProps {
   /** Tree data from useYjsTree hook */
   tree: UseYjsTreeResult;
+  /** Called when the user selects a node (click) */
+  onSelectionChange?: (nodeId: string | null) => void;
+  /** When set, the canvas will focus/center on this node */
+  focusNodeId?: string | null;
 }
 
 // ─── Collapse helpers ─────────────────────────────────────────────────
@@ -104,7 +110,7 @@ function computeHiddenNodes(
 
 // ─── Main Component ───────────────────────────────────────────────────
 
-function TreeCanvasInner({ tree }: TreeCanvasProps) {
+function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasProps) {
   const { nodes: allNodes, edges: allEdges, treeTitle, isReady } = tree;
   const reactFlowInstance = useReactFlow();
 
@@ -158,17 +164,24 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
     [],
   );
 
-  /** Handle node click: toggle collapse on double-click */
+  /** Handle node click: select node, toggle collapse on double-click */
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Single click selects (default React Flow behavior)
+      // Single click selects
+      onSelectionChange?.(node.id);
+
       // Double-click toggles collapse
       if ((_event as unknown as { detail: number }).detail === 2) {
         toggleCollapse(node.id);
       }
     },
-    [toggleCollapse],
+    [toggleCollapse, onSelectionChange],
   );
+
+  /** Deselect when clicking the canvas background */
+  const onPaneClick = useCallback(() => {
+    onSelectionChange?.(null);
+  }, [onSelectionChange]);
 
   /** Zoom to fit all visible nodes with animation */
   const zoomToFit = useCallback(() => {
@@ -199,6 +212,51 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
   focusRef.current = focusOnNode;
   const zoomRef = useRef(zoomToFit);
   zoomRef.current = zoomToFit;
+
+  // ─── Keyboard shortcuts ──────────────────────────────────────────
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const mod = e.ctrlKey || e.metaKey;
+
+      if (mod && e.key === '0') {
+        e.preventDefault();
+        zoomRef.current();
+      } else if (mod && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        reactFlowInstance.zoomIn({ duration: 200 });
+      } else if (mod && e.key === '-') {
+        e.preventDefault();
+        reactFlowInstance.zoomOut({ duration: 200 });
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [reactFlowInstance]);
+
+  // ─── Focus on node when focusNodeId prop changes ─────────────────
+
+  // Ref to track the latest focusOnNode (avoid stale closure)
+  const focusFnRef = useRef(focusOnNode);
+  focusFnRef.current = focusOnNode;
+
+  // Track previous focusNodeId to avoid re-focusing on same node
+  const prevFocusRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (focusNodeId && focusNodeId !== prevFocusRef.current) {
+      prevFocusRef.current = focusNodeId;
+      // Small delay to ensure layout is stable
+      const timer = setTimeout(() => {
+        focusFnRef.current(focusNodeId);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+    if (focusNodeId === null) {
+      prevFocusRef.current = null;
+    }
+  }, [focusNodeId]);
 
   // ─── Loading state ───────────────────────────────────────────────
 
@@ -280,6 +338,7 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
         elevateEdgesOnSelect
         proOptions={{ hideAttribution: true }}
         onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
       >
         <Background
           color="#e5e7eb"
@@ -292,10 +351,10 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
           showFitView
           showInteractive={false}
           onFitView={zoomToFit}
-          className="!bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-700"
+          className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_button]:!bg-[#1a1a2e] [&_button]:!border-[#2d2d4a] [&_button]:!text-[#e2e8f0] [&_button:hover]:!bg-[#7c3aed] [&_button:hover]:!text-white [&_button_svg]:!fill-[#e2e8f0] [&_button:hover_svg]:!fill-white"
         />
         <MiniMap
-          position="bottom-left"
+          position="bottom-right"
           nodeColor={(n) => {
             const d = n.data as TreeNodeCardData | undefined;
             if (!d) return '#6b7280';
@@ -314,8 +373,9 @@ function TreeCanvasInner({ tree }: TreeCanvasProps) {
                 return '#6b7280';
             }
           }}
-          maskColor="rgba(0,0,0,0.1)"
-          className="!bg-gray-100 dark:!bg-gray-900 !border-gray-200 dark:!border-gray-700"
+          maskColor="rgba(15,15,26,0.7)"
+          className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_svg]:!rounded-md"
+          style={{ width: 180, height: 120 }}
         />
       </ReactFlow>
     </div>
