@@ -323,6 +323,8 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 		errors.Is(err, service.ErrForkRequiresChildren),
 		errors.Is(err, service.ErrNoUpdateFields):
 		writeError(w, 400, "VALIDATION_ERROR", err.Error())
+	case errors.Is(err, service.ErrDatabaseUnavailable):
+		writeError(w, 503, "SERVICE_UNAVAILABLE", "database unavailable")
 	case errors.Is(err, service.ErrNodeAuthorRequired):
 		writeError(w, 403, "FORBIDDEN", err.Error())
 	default:

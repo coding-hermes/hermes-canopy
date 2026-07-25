@@ -221,6 +221,8 @@ func (h *TreeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 		writeError(w, 400, "VALIDATION_ERROR", err.Error())
 	case errors.Is(err, service.ErrTreeNotFound):
 		writeError(w, 404, "TREE_NOT_FOUND", "tree not found")
+	case errors.Is(err, service.ErrDatabaseUnavailable):
+		writeError(w, 503, "SERVICE_UNAVAILABLE", "database unavailable")
 	case errors.Is(err, service.ErrTreeDeleted):
 		writeError(w, 410, "TREE_DELETED", "tree has been deleted")
 	default:
