@@ -20,3 +20,14 @@ tasks:
   status: complete
   created_at: '2026-07-25T06:11:03.153202+00:00'
   completed_at: '2026-07-25T06:17:31.856904+00:00'
+- id: BUG-006
+  title: 'Fix double h1: NavigationBar logo + page titles both use h1'
+  criteria:
+  - NavigationBar component no longer uses h1 for the logo; use span instead
+  - Each page has exactly one h1 (the page title)
+  - Playwright locator('h1') resolves to exactly 1 element on each page
+  - npm run build passes, tsc --noEmit clean
+  - 5 affected E2E tests that failed on locator('h1') now pass
+  - No accessibility regression (a11y check passes)
+  status: pending
+  created_at: '2026-07-25T08:25:48.326110+00:00'

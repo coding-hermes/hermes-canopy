@@ -32,9 +32,9 @@ function Layout() {
         aria-label="Main navigation"
       >
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <span className="text-lg font-semibold text-gray-900 dark:text-white">
             🌳 Canopy
-          </h1>
+          </span>
         </div>
         <nav className="flex-1 p-4 space-y-1" aria-label="Primary navigation">
           <NavLink
