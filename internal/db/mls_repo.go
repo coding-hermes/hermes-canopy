@@ -104,12 +104,21 @@ func NewPGMLSGroupRepo(pool *pgxpool.Pool) *PGMLSGroupRepo {
 }
 
 func (r *PGMLSGroupRepo) Create(ctx context.Context, group *MLSGroup) error {
-	stateJSON, err := json.Marshal(group.EncryptedState)
-	if err != nil {
-		return fmt.Errorf("mls_group: marshal state: %w", err)
+	var stateJSON []byte
+	if len(group.EncryptedState) == 0 {
+		// CHECK constraint ck_mls_groups_state_object requires
+		// jsonb_typeof(encrypted_state) = 'object'. An empty
+		// object satisfies this; json.Marshal(nil) produces null.
+		stateJSON = []byte("{}")
+	} else {
+		var err error
+		stateJSON, err = json.Marshal(group.EncryptedState)
+		if err != nil {
+			return fmt.Errorf("mls_group: marshal state: %w", err)
+		}
 	}
 
-	_, err = r.pool.Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.CreatedAt, group.UpdatedAt)
@@ -172,14 +181,23 @@ func NewPGMLSMemberRepo(pool *pgxpool.Pool) *PGMLSMemberRepo {
 }
 
 func (r *PGMLSMemberRepo) Add(ctx context.Context, groupID []byte, member *MLSGroupMember) error {
-	_, err := r.pool.Exec(ctx,
+	// Compute next leaf_index: MAX+1 (or 0 for first member).
+	var nextLeaf int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(leaf_index), -1) + 1 FROM mls_group_members WHERE group_id = $1`,
+		groupID).Scan(&nextLeaf)
+	if err != nil {
+		return fmt.Errorf("mls_member: next leaf index: %w", err)
+	}
+
+	_, err = r.pool.Exec(ctx,
 		`INSERT INTO mls_group_members (group_id, profile_id, mls_identity, encryption_pubkey, signature_pubkey, credential_type, leaf_index, added_at, last_active)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		 ON CONFLICT (group_id, profile_id) DO UPDATE SET
 		   mls_identity = EXCLUDED.mls_identity,
 		   last_active = now()`,
 		groupID, member.ProfileID, member.MLSIdentity, member.EncryptionPublicKey,
-		member.SignaturePublicKey, member.CredentialType, 0, member.AddedAt, member.LastActive)
+		member.SignaturePublicKey, member.CredentialType, nextLeaf, member.AddedAt, member.LastActive)
 	if err != nil {
 		return fmt.Errorf("mls_member: add: %w", err)
 	}
