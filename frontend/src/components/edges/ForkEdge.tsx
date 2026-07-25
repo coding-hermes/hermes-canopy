@@ -28,14 +28,25 @@ export function ForkEdge({
   });
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        stroke: '#8b5cf6',
-        strokeWidth: 2,
-      }}
-      markerEnd={markerEnd}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: '#8b5cf6',
+          strokeWidth: 2,
+        }}
+        markerEnd={markerEnd}
+      />
+      {/* Invisible wider path for keyboard/screen reader access */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        role="presentation"
+        aria-hidden="true"
+      />
+    </>
   );
 }

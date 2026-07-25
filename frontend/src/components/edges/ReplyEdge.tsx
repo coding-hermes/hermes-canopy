@@ -28,14 +28,25 @@ export function ReplyEdge({
   });
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        stroke: '#9ca3af',
-        strokeWidth: 1.5,
-      }}
-      markerEnd={markerEnd}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: '#9ca3af',
+          strokeWidth: 1.5,
+        }}
+        markerEnd={markerEnd}
+      />
+      {/* Invisible wider path for keyboard/screen reader access */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        role="presentation"
+        aria-hidden="true"
+      />
+    </>
   );
 }

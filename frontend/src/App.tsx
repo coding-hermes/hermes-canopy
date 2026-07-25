@@ -20,14 +20,23 @@ function Dashboard() {
 function Layout() {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Skip to main content link */}
+      <a href="#main-content" className="skip-to-main">
+        Skip to main content
+      </a>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+      <aside
+        className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col"
+        role="navigation"
+        aria-label="Main navigation"
+      >
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
             🌳 Canopy
           </h1>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1" aria-label="Primary navigation">
           <NavLink
             to="/"
             className={({ isActive }) =>
@@ -38,6 +47,7 @@ function Layout() {
               }`
             }
             end
+            aria-label="Dashboard"
           >
             Dashboard
           </NavLink>
@@ -50,6 +60,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Trees"
           >
             Trees
           </NavLink>
@@ -62,6 +73,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Tree View — demo tree"
           >
             🌳 Tree View
           </NavLink>
@@ -74,6 +86,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Nodes"
           >
             Nodes
           </NavLink>
@@ -86,6 +99,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Topics"
           >
             Topics
           </NavLink>
@@ -98,6 +112,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Cards"
           >
             Cards
           </NavLink>
@@ -110,6 +125,7 @@ function Layout() {
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               }`
             }
+            aria-label="Approvals"
           >
             Approvals
           </NavLink>
@@ -124,7 +140,10 @@ function Layout() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-6">
+        <header
+          className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-6"
+          role="banner"
+        >
           <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
             Knowledge Canopy
           </h2>
@@ -136,7 +155,14 @@ function Layout() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto">
+        <main id="main-content" className="flex-1 overflow-auto" role="main">
+          {/* ARIA live region for dynamic content announcements */}
+          <div
+            id="aria-live-announcer"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          />
           <Outlet />
         </main>
       </div>

@@ -21,17 +21,23 @@ function SynthesisNodeComponent({ data, selected }: NodeProps<SynthesisNodeType>
           ? 'border-amber-500 ring-2 ring-amber-500/30 shadow-md'
           : 'border-amber-200 dark:border-amber-800'
       }`}
+      role="article"
+      aria-label={`Synthesis node: ${typedData.content?.slice(0, 60) || 'untitled'}`}
+      tabIndex={0}
     >
       {/* Target handle — multi-parent synthesis nodes accept from multiple sources */}
       <Handle
         type="target"
         position={Position.Top}
         className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label="Connect input from parent nodes to synthesis"
+        role="button"
+        tabIndex={0}
       />
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-200 dark:border-amber-800">
-        <span className="text-amber-600 dark:text-amber-300 text-base">⊕</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-200 dark:border-amber-800" role="heading" aria-level={3}>
+        <span className="text-amber-600 dark:text-amber-300 text-base" aria-hidden="true">⊕</span>
         <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
           Synthesis
         </span>
@@ -56,6 +62,9 @@ function SynthesisNodeComponent({ data, selected }: NodeProps<SynthesisNodeType>
         type="source"
         position={Position.Bottom}
         className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label="Connect output from synthesis node"
+        role="button"
+        tabIndex={0}
       />
     </div>
   );

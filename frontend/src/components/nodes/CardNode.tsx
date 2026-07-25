@@ -54,16 +54,22 @@ function CardNodeComponent({ data, selected }: NodeProps<CardNodeType>) {
           ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md'
           : ''
       }`}
+      role="article"
+      aria-label={`${cardType} card: ${typedData.content?.slice(0, 60) || 'untitled'}`}
+      tabIndex={0}
     >
       <Handle
         type="target"
         position={Position.Top}
         className="!bg-blue-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label={`Connect input to ${cardType} card`}
+        role="button"
+        tabIndex={0}
       />
 
       {/* Header with card type */}
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-t-md ${colors.bg}`}>
-        <span className="text-base">{icon}</span>
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-t-md ${colors.bg}`} role="heading" aria-level={3}>
+        <span className="text-base" aria-hidden="true">{icon}</span>
         <span className={`text-sm font-semibold capitalize ${colors.text}`}>
           {cardType}
         </span>
@@ -87,6 +93,9 @@ function CardNodeComponent({ data, selected }: NodeProps<CardNodeType>) {
         type="source"
         position={Position.Bottom}
         className="!bg-blue-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label={`Connect output from ${cardType} card`}
+        role="button"
+        tabIndex={0}
       />
     </div>
   );

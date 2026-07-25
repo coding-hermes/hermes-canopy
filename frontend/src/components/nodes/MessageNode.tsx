@@ -31,12 +31,18 @@ function MessageNodeComponent({ data, selected }: NodeProps<MessageNodeType>) {
           ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md'
           : 'border-gray-200 dark:border-gray-700'
       }`}
+      role="article"
+      aria-label={`${isAgent ? 'Agent' : 'Human'} message: ${typedData.content?.slice(0, 60) || 'untitled'}`}
+      tabIndex={0}
     >
       {/* Target handle (incoming edges from parent) */}
       <Handle
         type="target"
         position={Position.Top}
         className="!bg-gray-400 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label={`Connect input to ${typedData.label || 'message node'}`}
+        role="button"
+        tabIndex={0}
       />
 
       {/* Header */}
@@ -70,6 +76,9 @@ function MessageNodeComponent({ data, selected }: NodeProps<MessageNodeType>) {
         type="source"
         position={Position.Bottom}
         className="!bg-gray-400 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
+        aria-label={`Connect output from ${typedData.label || 'message node'}`}
+        role="button"
+        tabIndex={0}
       />
     </div>
   );

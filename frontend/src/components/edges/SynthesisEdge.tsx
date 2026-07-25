@@ -29,15 +29,26 @@ export function SynthesisEdge({
   });
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        stroke: '#f59e0b',
-        strokeWidth: 2.5,
-        strokeDasharray: '8,4',
-      }}
-      markerEnd={markerEnd}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: '#f59e0b',
+          strokeWidth: 2.5,
+          strokeDasharray: '8,4',
+        }}
+        markerEnd={markerEnd}
+      />
+      {/* Invisible wider path for keyboard/screen reader access */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        role="presentation"
+        aria-hidden="true"
+      />
+    </>
   );
 }

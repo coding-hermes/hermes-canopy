@@ -121,25 +121,34 @@ function CreateTreeDialog({
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
-            <div className="flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            <div
+              id="create-tree-error"
+              className="flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs"
+              role="alert"
+            >
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Title *</label>
+            <label htmlFor="create-tree-title" className="block text-xs text-gray-400 mb-1">Title *</label>
             <input
+              id="create-tree-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
               placeholder="My Conversation Tree"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              aria-required="true"
+              aria-invalid={!!error && !title.trim()}
+              aria-describedby={error ? "create-tree-error" : undefined}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Description</label>
+            <label htmlFor="create-tree-desc" className="block text-xs text-gray-400 mb-1">Description</label>
             <textarea
+              id="create-tree-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
@@ -148,8 +157,9 @@ function CreateTreeDialog({
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Root Message</label>
+            <label htmlFor="create-tree-root-msg" className="block text-xs text-gray-400 mb-1">Root Message</label>
             <textarea
+              id="create-tree-root-msg"
               value={rootContent}
               onChange={(e) => setRootContent(e.target.value)}
               rows={3}
@@ -276,6 +286,7 @@ function TreeCard({
             }}
             className="p-1.5 rounded-md text-gray-600 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
             title="Open tree"
+            aria-label={`Open tree: ${tree.title}`}
           >
             <ExternalLink className="w-4 h-4" />
           </button>
@@ -286,6 +297,7 @@ function TreeCard({
             }}
             className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Delete tree"
+            aria-label={`Delete tree: ${tree.title}`}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -372,8 +384,11 @@ export default function TreesPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div
+          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           <span>{error}</span>
           <button onClick={fetchTrees} className="ml-auto text-xs underline hover:text-red-300">
             Retry

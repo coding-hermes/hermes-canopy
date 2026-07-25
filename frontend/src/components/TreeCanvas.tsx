@@ -246,6 +246,9 @@ function TreeCanvasInner({
 
   // ─── Keyboard shortcuts ──────────────────────────────────────────
 
+  // Track which node has keyboard focus (separate from selection)
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const mod = e.ctrlKey || e.metaKey;
@@ -259,12 +262,44 @@ function TreeCanvasInner({
       } else if (mod && e.key === '-') {
         e.preventDefault();
         reactFlowInstance.zoomOut({ duration: 200 });
+      } else if (e.key === 'Tab' && !mod) {
+        // Tab cycles through visible nodes
+        e.preventDefault();
+        const visibleIds = visibleNodes.map((n) => n.id);
+        if (visibleIds.length === 0) return;
+        const currentIdx = focusedNodeId
+          ? visibleIds.indexOf(focusedNodeId)
+          : -1;
+        const nextIdx = e.shiftKey
+          ? (currentIdx <= 0 ? visibleIds.length - 1 : currentIdx - 1)
+          : (currentIdx >= visibleIds.length - 1 ? 0 : currentIdx + 1);
+        const nextId = visibleIds[nextIdx];
+        setFocusedNodeId(nextId);
+        onSelectionChange?.(nextId);
+        focusRef.current(nextId);
+      } else if (e.key === 'Enter' && focusedNodeId) {
+        // Enter toggles collapse on focused node
+        e.preventDefault();
+        toggleCollapse(focusedNodeId);
+      } else if (e.key === 'Escape') {
+        // Escape deselects
+        setFocusedNodeId(null);
+        onSelectionChange?.(null);
+      } else if (e.key === 'Home' && visibleNodes.length > 0) {
+        // Home jumps to root node
+        e.preventDefault();
+        const rootId = visibleNodes[0]?.id;
+        if (rootId) {
+          setFocusedNodeId(rootId);
+          onSelectionChange?.(rootId);
+          focusRef.current(rootId);
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, visibleNodes, focusedNodeId, toggleCollapse, onSelectionChange]);
 
   // ─── Focus on node when focusNodeId prop changes ─────────────────
 
@@ -326,7 +361,13 @@ function TreeCanvasInner({
   // ─── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="h-full w-full relative" onMouseMove={handleMouseMove}>
+    <div
+      className="h-full w-full relative"
+      onMouseMove={handleMouseMove}
+      role="application"
+      aria-label={`Tree canvas: ${treeTitle || 'Untitled'} — ${totalCount} nodes`}
+      aria-roledescription="Interactive tree visualization"
+    >
       {/* Large tree warning banner */}
       {isLargeTree && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-1.5 text-sm text-amber-800 dark:text-amber-200 shadow-md">
@@ -386,6 +427,7 @@ function TreeCanvasInner({
           showInteractive={false}
           onFitView={zoomToFit}
           className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_button]:!bg-[#1a1a2e] [&_button]:!border-[#2d2d4a] [&_button]:!text-[#e2e8f0] [&_button:hover]:!bg-[#7c3aed] [&_button:hover]:!text-white [&_button_svg]:!fill-[#e2e8f0] [&_button:hover_svg]:!fill-white"
+          aria-label="Canvas controls: zoom in, zoom out, fit view"
         />
         <MiniMap
           position="bottom-right"
@@ -411,6 +453,7 @@ function TreeCanvasInner({
           maskColor="rgba(15,15,26,0.7)"
           className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_svg]:!rounded-md"
           style={{ width: 180, height: 120 }}
+          aria-label="Tree minimap: overview of all nodes"
         />
       </ReactFlow>
     </div>
