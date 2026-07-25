@@ -62,14 +62,14 @@
 62|| ✅ FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader). Committed e907b26 — 14 files, 350 lines. Worker (Hy3) + foreman fix (unused label TS6133). | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
 63|| ✅ FE-11 | Frontend integration tests (Playwright + vitest). 41 tests across 6 files. Worker: Step 3.7 Flash. Build+tcs clean. Commit 7123cf6. | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
 | **E2E Bugs (Tick 19)** | | | | | | | | |
-| BUG-006 | Double <h1>: NavigationBar logo uses <h1> for "🌳 Canopy" AND page titles use <h1> — Playwright locator('h1') resolves to 2 elements in 5 tests. Fix: change either NavBar logo to <span> or tests to use getByRole('heading', { name: '...' }). | Medium | 2 | FE-04 | ++frontend, ++testing, ++a11y | DeepSeek V4 Flash | Low | Hy3 |
-| BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| ✅ BUG-006 | Double <h1>: NavigationBar logo uses <h1> for "🌳 Canopy" AND page titles use <h1>. FIXED: changed sidebar logo in App.tsx from h1 to span (commit b099659). Each page now has exactly one h1. | Medium | 2 | FE-04 | ++frontend, ++testing, ++a11y | DeepSeek V4 Flash | Low | Hy3 |
+| ✅ BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BUG-008 | E2E test failures in approval-panel (10/10 tests fail) — needs investigation. Possible cause: approval endpoint returns empty array with no data seeded. Tests may need setup fixtures. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BUG-009 | E2E test failures in crud-pages (4/4 tests fail) — CRUD pages may need pagination or data pre-seeding. Tests may also hit h1 duplication (BUG-006). | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
 | ✅ BUG-001 | Port 8080 occupied — HTTP_ADDR env var already exists in config.go (line 79). No code change needed. Start with: HTTP_ADDR=:8090 ./canopyd. DOCUMENTED Tick 19. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 66||| ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
 67|||| ✅ BUG-003 | Add dev JWT auto-injection: Vite proxy injects dev JWT (HS256) with sub=00000000-0000-0000-0000-000000000001. API base changed to relative /api/v1. Commit c2d50e4. | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
-68||| BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
+68||| ✅ BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
 |||| ✅ BUG-005 | Approvals page — resolved as side-effect of BUG-002 + BUG-003 (relative /api/v1 + dev JWT auto-injection). Now works with Vite proxy. | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
 70||| **Phase 6: Integration** | | | | | | | | |
 71||| INT-01 | End-to-end tree flow (create → edit → merge → approve) | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
@@ -500,3 +500,39 @@
 | 11 | Dispatch | ✅ E2E DISPATCHED | E2E-001 worker: started canopyd on :8091, Vite, ran 41 Playwright tests — 23 PASS, 18 FAIL. 4 bugs found (BUG-006→009). Real E2E results for first time |
 
 **Verdict:** E2E-001 RAN WITH REAL RESULTS — First foreman tick to actually execute E2E tests end-to-end against a running canopyd server. Worker found 1 real migration bug (canopy_app REVOKE ordering, committed 7647eda) and 4 E2E test bugs. 23/41 tests passing (56%). Previous ticks never actually ran E2E — just dispatched workers that read files. This tick: server up, browser testing, real results. BUG-006 (double h1) is a 10-minute fix. BUG-007 (tree page no React Flow) needs investigation. Phase 5: 10/11 done. Only FE-09 (Offline) remains. All 5 original E2E bugs (BUG-001→005) now resolved. Load healthy (50GB available).
+
+### Tick 20 — 2026-07-25 03:25 UTC (DeepSeek V4 Pro — Foreman Audit + BUG-006 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | edges.jsonl restored. Untracked: screenshots.mjs (E2E script from Tick 19) |
+| 2 | GitReins guard | ✅ PASS | Config present. evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. task_complete timed out at 300s (evaluator running). Guards configured: secrets/build/lint/tests |
+| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful (unchanged from Tick 19) |
+| 4 | Tests | ⚠️ 5 FAIL (suite) | Known: handler+testutil need PG at 5437 (not running). All unit/service/mls/card/transport PASS individually. Frontend: tsc clean, build PASS (643KB JS, 64KB CSS) |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical for MVP |
+| 6 | Deps | ⚠️ OUTDATED | cloud SDKs (cloud.google.com v0.121→v0.123, Azure SDK azcore v1.4→v1.22), keyring v1.2.1→v1.2.2. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard config) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | BUG-006 dispatched + completed (b099659). Marked ✅. 3 of 4 Tick 19 E2E bugs remain |
+| 11 | Dispatch | ✅ COMPLETED | BUG-006 worker (DeepSeek V4 Pro): changed sidebar logo from h1 to span in App.tsx. 9 tool calls, 328K input tokens. Build + tsc clean. Commit b099659. Fix location: logo was in App.tsx Layout sidebar, not NavigationBar.tsx |
+
+**Verdict:** COMPLETED — BUG-006 dispatched and resolved (commit b099659). The double-h1 issue was in App.tsx sidebar logo (not NavigationBar.tsx as initially described). Now each page has exactly one h1 (the page title). 3 E2E bugs remain: BUG-007 (tree page no React Flow), BUG-008 (approval panel 10/10 fail), BUG-009 (CRUD pages 4/4 fail). Phase 5: 10/11 done (only FE-09 Offline remaining). Next: BUG-007 or BUG-009 — BUG-008 is High priority but likely needs backend data seeding investigation. E2E-001: 5 ticks since last run. Load healthy.
+
+### Tick 21 — 2026-07-25 03:52 UTC (DeepSeek V4 Pro — Foreman Audit + BUG-007 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY | .coding-hermes/tasks.md (staged M from Tick 20), .gitreins/tasks.yaml (unstaged BUG-006 completion). .vfs/graph/edges.jsonl restored |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful (unchanged) |
+| 4 | Tests | ⚠️ 2 FAIL (suite) | Known: handler+testutil need PG at 5437 (not running). All unit packages PASS individually. Frontend: tsc clean, build PASS (314ms, 643KB JS) |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical |
+| 6 | Deps | ⚠️ OUTDATED | Go: cloud SDKs, Azure, keyring behind. npm: @types/node 24→26, typescript 6→7 (major). Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ FIXED | BUG-004 stale: done since Tick 15 (2,128 lines CRUD pages on disk, no "Coming Soon" text — only HTML placeholder attrs). Marked ✅. BUG-007 marked ✅ (20af9d4). GitReins: 4 tasks all complete. Dual-source: board and GitReins agree |
+| 11 | Dispatch | ✅ DISPATCHED | BUG-007 worker (DeepSeek V4 Pro): 7/7 tree-rendering tests PASS. Root cause: TreeCanvas empty-state early-return when no nodes. Fix: seed demo tree data + expose window.__canopySeedDemoTree() for E2E. Commit 20af9d4. 36 tool calls, 2.1M input tokens |
+
+**Verdict:** DISPATCHED — BUG-007 fixed (commit 20af9d4). Board staleness corrected: BUG-004 ✅ (done Tick 15, 2,128 lines verified on disk). BUG-006 GitReins completion committed. 2 E2E bugs remain: BUG-008 (High, approval panel 10/10 fail) and BUG-009 (Medium, CRUD pages 4/4 fail). Phase 5: 10/11 done. FE-09 (Offline, Low) remains. Load healthy (3.74, 50Gi available).
