@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package handler provides HTTP handlers for Canopy REST endpoints.
 // This file contains INT-02: Multi-user integration tests verifying
 // concurrent editing, CRDT merge, presence state, and permissions
@@ -706,7 +708,7 @@ func TestINT02_PermissionsEnforcement(t *testing.T) {
 
 	// Alice (member) can access.
 	req = multiUserRequest(t, membershipSrv.URL, http.MethodGet,
-		"/api/v1/trees/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(),
+		"/api/v1/nodes/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(),
 		authorA, nil)
 	resp, err = membershipSrv.Client().Do(req)
 	if err != nil {
@@ -721,7 +723,7 @@ func TestINT02_PermissionsEnforcement(t *testing.T) {
 
 	// Bob (non-member) gets 403.
 	req = multiUserRequest(t, membershipSrv.URL, http.MethodGet,
-		"/api/v1/trees/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(),
+		"/api/v1/nodes/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(),
 		authorB, nil)
 	resp, err = membershipSrv.Client().Do(req)
 	if err != nil {
@@ -739,7 +741,7 @@ func TestINT02_PermissionsEnforcement(t *testing.T) {
 
 	// Unauthenticated request routed to membership server → 401.
 	req, _ = http.NewRequest(http.MethodGet,
-		membershipSrv.URL+"/api/v1/trees/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(), nil)
+		membershipSrv.URL+"/api/v1/nodes/"+tree.ID.String()+"/nodes/"+tree.RootNodeID.String(), nil)
 	resp, err = membershipSrv.Client().Do(req)
 	if err != nil {
 		t.Fatalf("step 7 — unauthenticated GET node: %v", err)
