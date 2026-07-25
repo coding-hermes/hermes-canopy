@@ -141,7 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_created    ON approval_audit_log(created_at
 
 -- Revoke UPDATE/DELETE to enforce immutability at DB level
 REVOKE UPDATE, DELETE ON approval_audit_log FROM PUBLIC;
-REVOKE UPDATE, DELETE ON approval_audit_log FROM canopy_app;
+-- REVOKE FROM canopy_app moved to 000019_canopy_role.up.sql (role does not exist yet at this point)
 
 -- ============================================================
 -- Triggers
