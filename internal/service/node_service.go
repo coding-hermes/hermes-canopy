@@ -397,12 +397,20 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 	// Insert edge from parent → new node. EdgeRepo.Create handles the
 	// single-parent rule for non-synthesis targets.
 	var createdEdge db.Edge
+	var edgeSeqNum int64
+	if err := tx.QueryRow(ctx, `
+        SELECT COALESCE(MAX(sequence_num), 0) + 1
+        FROM edges
+        WHERE tree_id = $1`, treeID,
+	).Scan(&edgeSeqNum); err != nil {
+		return nil, fmt.Errorf("%w: edge sequence_num: %v", ErrDatabaseUnavailable, err)
+	}
 	err = tx.QueryRow(ctx, `
         INSERT INTO edges
             (tree_id, source_id, target_id, edge_type, sequence_num, metadata)
-        VALUES ($1, $2, $3, $4, NULL, '{}'::jsonb)
+        VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)
         RETURNING `+edgeColumns,
-		treeID, input.ParentID, created.ID, edgeType,
+		treeID, input.ParentID, created.ID, edgeType, edgeSeqNum,
 	).Scan(
 		&createdEdge.ID, &createdEdge.TreeID, &createdEdge.SourceID,
 		&createdEdge.TargetID, &createdEdge.EdgeType,
