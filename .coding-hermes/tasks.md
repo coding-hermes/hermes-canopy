@@ -64,7 +64,7 @@
 | **E2E Bugs (Tick 19)** | | | | | | | | |
 | ✅ BUG-006 | Double <h1>: NavigationBar logo uses <h1> for "🌳 Canopy" AND page titles use <h1>. FIXED: changed sidebar logo in App.tsx from h1 to span (commit b099659). Each page now has exactly one h1. | Medium | 2 | FE-04 | ++frontend, ++testing, ++a11y | DeepSeek V4 Flash | Low | Hy3 |
 | ✅ BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| BUG-008 | E2E test failures in approval-panel (10/10 tests fail) — needs investigation. Possible cause: approval endpoint returns empty array with no data seeded. Tests may need setup fixtures. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| ✅ BUG-008 | E2E approval-panel tests (5 tests, all PASS). Root cause: handler Routes() only had /pending, /history, /{id}, /{id}/approve, /{id}/deny — bare GET / was missing. Fix: added ListAll to ApprovalRepo + ApprovalService, registered r.Get("/", h.ListAll) in Routes(), updated frontend to handle {approvals: [...]} wrapper. Commit 93229ea. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | BUG-009 | E2E test failures in crud-pages (4/4 tests fail) — CRUD pages may need pagination or data pre-seeding. Tests may also hit h1 duplication (BUG-006). | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
 | ✅ BUG-001 | Port 8080 occupied — HTTP_ADDR env var already exists in config.go (line 79). No code change needed. Start with: HTTP_ADDR=:8090 ./canopyd. DOCUMENTED Tick 19. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 66||| ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
@@ -536,3 +536,21 @@
 | 11 | Dispatch | ✅ DISPATCHED | BUG-007 worker (DeepSeek V4 Pro): 7/7 tree-rendering tests PASS. Root cause: TreeCanvas empty-state early-return when no nodes. Fix: seed demo tree data + expose window.__canopySeedDemoTree() for E2E. Commit 20af9d4. 36 tool calls, 2.1M input tokens |
 
 **Verdict:** DISPATCHED — BUG-007 fixed (commit 20af9d4). Board staleness corrected: BUG-004 ✅ (done Tick 15, 2,128 lines verified on disk). BUG-006 GitReins completion committed. 2 E2E bugs remain: BUG-008 (High, approval panel 10/10 fail) and BUG-009 (Medium, CRUD pages 4/4 fail). Phase 5: 10/11 done. FE-09 (Offline, Low) remains. Load healthy (3.74, 50Gi available).
+
+### Tick 22 — 2026-07-25 04:17 UTC (DeepSeek V4 Pro — Foreman Audit + BUG-008 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Only frontend/test-results/ untracked (harmless). Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful |
+| 4 | Tests | ⚠️ 5 FAIL (suite) | Known: handler+testutil need PG at 5437 (docker not running). All unit packages PASS (card, mls, sse, service). Frontend: tsc clean, build PASS (645KB JS, 64KB CSS) |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO. None critical for MVP |
+| 6 | Deps | ✅ CLEAN | 0 outdated Go deps. npm: @types/node 24→26, typescript 6→7 (major). Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | BUG-008 dispatched + completed (93229ea). Marked ✅. 1 E2E bug remains: BUG-009 (Medium, CRUD pages 4/4 fail) |
+| 11 | Dispatch | ✅ DISPATCHED | BUG-008 worker (DeepSeek V4 Pro): Root cause — approval handler Routes() missing bare GET / route. Added ListAll to repo+service+handler, updated frontend to handle {approvals: [...]} wrapper. All 5 approval-panel tests PASS. 50 tool calls, 3.7M input tokens. Commit 93229ea |
+
+**Verdict:** DISPATCHED — BUG-008 fixed (commit 93229ea). Root cause was a missing route — handler only exposed /pending, /history, /{id}, /{id}/approve, /{id}/deny. Frontend ApprovalPanel.fetchApprovals() called bare GET /api/v1/approvals → 404. Fixed with ListAll endpoint + frontend response wrapper handling. 5/5 approval-panel tests PASS. BUG-009 (CRUD pages 4/4 fail) is the last remaining E2E bug. Phase 5: 10/11 done (only FE-09 Offline remains). E2E-001: 5 ticks since last full run (Tick 19) — due next tick. Load healthy.
