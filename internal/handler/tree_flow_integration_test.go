@@ -6,6 +6,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -162,9 +163,19 @@ func TestINT01_FullTreeFlow(t *testing.T) {
 				i+1, nodeDetail.ID, nodeID)
 		}
 		if nodeDetail.Content != nodeContents[i] {
-			t.Fatalf("step 2 — node %d content mismatch", i+1)
+			t.Fatalf("step 2 — node %d content mismatch", i)
 		}
-		t.Logf("step 2 ✓ verified node %d: content matches", i+1)
+		// BUG-010 fix verification: depth should be 1 for children of root
+		if nodeDetail.Depth != 1 {
+			t.Fatalf("step 2 — node %d depth = %d, want 1 (child of root)",
+				i+1, nodeDetail.Depth)
+		}
+		if nodeDetail.ChildCount < 0 {
+			t.Fatalf("step 2 — node %d childCount = %d, want >= 0",
+				i+1, nodeDetail.ChildCount)
+		}
+		t.Logf("step 2 ✓ verified node %d: content matches, depth=%d, childCount=%d",
+			i+1, nodeDetail.Depth, nodeDetail.ChildCount)
 	}
 
 	// ── Step 3: Edit node content via HTTP PATCH ────────────────────────
@@ -482,6 +493,11 @@ func TestINT01_FullTreeFlow(t *testing.T) {
 		if i == 0 && nd.Content != newContent {
 			t.Fatalf("step 7 — node 0 content reverted unexpectedly")
 		}
+		// Depth should remain 1 (direct child of root).
+		if nd.Depth != 1 {
+			t.Fatalf("step 7 — node %d depth = %d, want 1 (child of root)",
+				i+1, nd.Depth)
+		}
 	}
 	t.Logf("step 7 ✓ all %d child nodes accessible after full flow", len(childNodeIDs))
 
@@ -529,6 +545,14 @@ func TestINT01_TreeFlowWithBranching(t *testing.T) {
 
 	t.Logf("chain: root → A(%s) → B(%s) → C(%s)",
 		nodes[0].id, nodes[1].id, nodes[2].id)
+
+	// Verify depth chain (BUG-010 fix): root=0, A=1, B=2, C=3.
+	expectedDepths := []int{1, 2, 3}
+	for i, node := range nodes {
+		verifyNodeDepth(t, srv, tree.ID, node.id, expectedDepths[i],
+			fmt.Sprintf("chain depth %d", expectedDepths[i]))
+	}
+	t.Logf("depth chain verified: A=1, B=2, C=3")
 
 	// Edit node B.
 	newContent := "Node B — updated with additional content for branching test"
@@ -603,7 +627,7 @@ func TestINT01_TreeFlowWithBranching(t *testing.T) {
 	}
 	t.Logf("audit trail: %d entries", len(hist.Entries))
 
-	// Verify full tree is accessible.
+	// Verify full tree is accessible and depths are correct after full flow.
 	req = approvalRequest(t, srv.Server.URL, http.MethodGet,
 		"/api/v1/trees/"+tree.ID.String(), srv.UserID, nil)
 	resp, err = srv.Server.Client().Do(req)
@@ -614,7 +638,12 @@ func TestINT01_TreeFlowWithBranching(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET tree: status=%d", resp.StatusCode)
 	}
-	t.Logf("INT-01 branching: ✓ tree accessible, full flow passed")
+	// Re-verify depth chain still intact.
+	for i, node := range nodes {
+		verifyNodeDepth(t, srv, tree.ID, node.id, expectedDepths[i],
+			fmt.Sprintf("post-flow depth %d", expectedDepths[i]))
+	}
+	t.Logf("INT-01 branching: ✓ tree accessible, depth chain intact, full flow passed")
 }
 
 // ── Helper ─────────────────────────────────────────────────────────────
@@ -652,4 +681,294 @@ func createChildNodeForFlow(t *testing.T, srv *approvalTestServer,
 		t.Fatal("node has nil result or id")
 	}
 	return result.Node.ID
+}
+
+// ---------------------------------------------------------------------------
+// INT-01: Synthesis (reply/fork) + deny flow + depth chain verification
+//
+// Covers:
+//   1. POST /api/v1/nodes/nodes/{node_id}/reply  → creates a reply child
+//   2. POST /api/v1/nodes/nodes/{node_id}/fork   → creates a fork child
+//   3. GET node with depth verification at multiple levels (BUG-010 fix)
+//   4. POST /api/v1/approvals/{id}/deny          → deny with reason
+//   5. GET /api/v1/approvals/history             → verify denial audit trail
+// ---------------------------------------------------------------------------
+
+func TestINT01_SynthesisAndDeny(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewIntegrationPool(t)
+	defer testutil.TruncateAll(t, pool)
+
+	srv := newTestServerWithApprovals(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+	t.Logf("created test user: %s", ownerID)
+
+	// ── Step 1: Create tree ────────────────────────────────────────────
+	tree := createTestTree(t, srv)
+	t.Logf("step 1 ✓ created tree: %s (root: %s)", tree.ID, tree.RootNodeID)
+
+	// ── Step 2: Create child A under root ───────────────────────────────
+	childAID := createChildNodeForFlow(t, srv, tree.ID, tree.RootNodeID,
+		"## Node A\n\nFirst child under root — source for reply and fork.")
+	t.Logf("step 2 ✓ created child A: %s (depth=1)", childAID)
+
+	// Verify A's depth.
+	verifyNodeDepth(t, srv, tree.ID, childAID, 1,
+		"child of root should have depth=1")
+
+	// ── Step 3: Reply to A (creates A→B with reply edge) ──────────────
+	replyBody := map[string]any{
+		"content":        "## Node B\n\nReply to node A — should have depth=2.",
+		"content_format": "markdown",
+		"node_type":      "message",
+	}
+	req := approvalRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/nodes/nodes/"+childAID.String()+"/reply",
+		srv.UserID, replyBody)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("step 3 — POST reply: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("step 3 — POST reply: status=%d, body=%s",
+			resp.StatusCode, string(bodyBytes))
+	}
+
+	var replyResult service.CreateNodeResult
+	if err := json.NewDecoder(resp.Body).Decode(&replyResult); err != nil {
+		t.Fatalf("step 3 — decode reply: %v", err)
+	}
+	if replyResult.Node == nil || replyResult.Node.ID == uuid.Nil {
+		t.Fatal("step 3 — reply node has nil result or id")
+	}
+	if replyResult.Edge == nil {
+		t.Fatal("step 3 — reply edge is nil")
+	}
+	childBID := replyResult.Node.ID
+	if replyResult.Edge.EdgeType != "reply" {
+		t.Fatalf("step 3 — reply edge type = %q, want \"reply\"",
+			replyResult.Edge.EdgeType)
+	}
+	t.Logf("step 3 ✓ reply created: B=%s, edge_type=%s",
+		childBID, replyResult.Edge.EdgeType)
+
+	// Verify B's depth (root=0, A=1, B=2).
+	verifyNodeDepth(t, srv, tree.ID, childBID, 2,
+		"reply child should have depth=2")
+
+	// ── Step 4: Fork from A (creates A→C with fork edge) ──────────────
+	forkBody := map[string]any{
+		"content":        "## Node C\n\nFork from node A — divergent branch at depth=2.",
+		"content_format": "markdown",
+		"node_type":      "message",
+	}
+	req = approvalRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/nodes/nodes/"+childAID.String()+"/fork",
+		srv.UserID, forkBody)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("step 4 — POST fork: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("step 4 — POST fork: status=%d, body=%s",
+			resp.StatusCode, string(bodyBytes))
+	}
+
+	var forkResult service.CreateNodeResult
+	if err := json.NewDecoder(resp.Body).Decode(&forkResult); err != nil {
+		t.Fatalf("step 4 — decode fork: %v", err)
+	}
+	if forkResult.Node == nil || forkResult.Node.ID == uuid.Nil {
+		t.Fatal("step 4 — fork node has nil result or id")
+	}
+	if forkResult.Edge == nil {
+		t.Fatal("step 4 — fork edge is nil")
+	}
+	childCID := forkResult.Node.ID
+	if forkResult.Edge.EdgeType != "fork" {
+		t.Fatalf("step 4 — fork edge type = %q, want \"fork\"",
+			forkResult.Edge.EdgeType)
+	}
+	t.Logf("step 4 ✓ fork created: C=%s, edge_type=%s",
+		childCID, forkResult.Edge.EdgeType)
+
+	// Verify C's depth (root=0, A=1, C=2).
+	verifyNodeDepth(t, srv, tree.ID, childCID, 2,
+		"fork child should have depth=2")
+
+	// ── Step 5: Create approval for B and deny it via HTTP ─────────────
+	approvalRepo := db.NewPGApprovalRepo(pool)
+	auditRepo := db.NewPGAuditRepo(pool)
+	userRepo := db.NewPGUserRepo(pool)
+	profileRepo := db.NewPGProfileRepo(pool)
+	memberRepo := db.NewPGTreeMemberRepo(pool)
+	sseHub := sse.NewHub()
+	approvalSvc := service.NewApprovalService(approvalRepo, auditRepo, userRepo,
+		profileRepo, memberRepo, sseHub)
+
+	created, err := approvalSvc.RequestApproval(context.Background(),
+		tree.ID, childBID, ownerID, srv.UserID)
+	if err != nil {
+		t.Fatalf("step 5 — RequestApproval: %v", err)
+	}
+	if created.Status != db.ApprovalStatusPending {
+		t.Fatalf("step 5 — approval status = %q, want %q",
+			created.Status, db.ApprovalStatusPending)
+	}
+	t.Logf("step 5 ✓ created approval: id=%s, status=%s", created.ID, created.Status)
+
+	// ── Step 6: Deny the approval via HTTP ─────────────────────────────
+	denyBody := map[string]any{
+		"reason": "Content needs revision — missing required citations.",
+	}
+	req = approvalRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/approvals/"+created.ID.String()+"/deny",
+		ownerID, denyBody)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("step 6 — POST deny: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errBody apiErrorBody
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		t.Fatalf("step 6 — POST deny: status=%d, want %d; error=%+v",
+			resp.StatusCode, http.StatusOK, errBody)
+	}
+
+	var denied db.Approval
+	if err := json.NewDecoder(resp.Body).Decode(&denied); err != nil {
+		t.Fatalf("step 6 — decode denied: %v", err)
+	}
+	if denied.Status != db.ApprovalStatusDenied {
+		t.Fatalf("step 6 — denied status = %q, want %q",
+			denied.Status, db.ApprovalStatusDenied)
+	}
+	if denied.DeniedReason == nil || *denied.DeniedReason == "" {
+		t.Fatal("step 6 — denied reason is empty")
+	}
+	t.Logf("step 6 ✓ denied: status=%s, reason=%q",
+		denied.Status, *denied.DeniedReason)
+
+	// ── Step 7: Verify audit trail contains denied action ───────────────
+	req = approvalRequest(t, srv.Server.URL, http.MethodGet,
+		"/api/v1/approvals/history?approval_id="+created.ID.String(),
+		ownerID, nil)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("step 7 — GET history: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("step 7 — GET history: status=%d", resp.StatusCode)
+	}
+
+	var hist struct {
+		Entries []db.AuditEntry `json:"entries"`
+	}
+	json.NewDecoder(resp.Body).Decode(&hist)
+	if len(hist.Entries) < 2 {
+		t.Fatalf("step 7 — audit trail: expected >=2 entries, got %d",
+			len(hist.Entries))
+	}
+
+	var hasRequested, hasDenied bool
+	for _, e := range hist.Entries {
+		switch e.Action {
+		case db.AuditActionApprovalRequested:
+			hasRequested = true
+		case db.AuditActionApprovalDenied:
+			hasDenied = true
+			if e.NewStatus == nil || *e.NewStatus != db.ApprovalStatusDenied {
+				t.Fatalf("step 7 — audit NewStatus = %v, want %q",
+					e.NewStatus, db.ApprovalStatusDenied)
+			}
+		}
+	}
+	if !hasRequested {
+		t.Fatal("step 7 — audit trail missing approval_requested entry")
+	}
+	if !hasDenied {
+		t.Fatal("step 7 — audit trail missing approval_denied entry")
+	}
+	t.Logf("step 7 ✓ audit trail verified: %d entries (has_requested=%v, has_denied=%v)",
+		len(hist.Entries), hasRequested, hasDenied)
+
+	// ── Step 8: Verify tree integrity ───────────────────────────────────
+	req = approvalRequest(t, srv.Server.URL, http.MethodGet,
+		"/api/v1/trees/"+tree.ID.String(), srv.UserID, nil)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("step 8 — GET tree: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("step 8 — GET tree: status=%d", resp.StatusCode)
+	}
+	var finalTree service.Tree
+	json.NewDecoder(resp.Body).Decode(&finalTree)
+	if finalTree.ID != tree.ID {
+		t.Fatalf("step 8 — tree ID mismatch")
+	}
+
+	// Verify all nodes still accessible with correct depths.
+	allNodes := map[uuid.UUID]int{
+		tree.RootNodeID: 0,
+		childAID:        1,
+		childBID:        2,
+		childCID:        2,
+	}
+	for nodeID, expectedDepth := range allNodes {
+		verifyNodeDepth(t, srv, tree.ID, nodeID, expectedDepth,
+			"integrity check")
+	}
+	t.Logf("step 8 ✓ tree integrity verified: all %d nodes at correct depths",
+		len(allNodes))
+
+	t.Logf("INT-01 synthesis+deny ✓ complete (tree=%s)", tree.ID)
+}
+
+// verifyNodeDepth fetches a node via HTTP GET and asserts its depth.
+func verifyNodeDepth(t *testing.T, srv *approvalTestServer,
+	treeID, nodeID uuid.UUID, expectedDepth int, context string) {
+	t.Helper()
+
+	req := approvalRequest(t, srv.Server.URL, http.MethodGet,
+		"/api/v1/nodes/"+treeID.String()+"/nodes/"+nodeID.String(),
+		srv.UserID, nil)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("%s — GET node %s: %v", context, nodeID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("%s — GET node %s: status=%d, body=%s",
+			context, nodeID, resp.StatusCode, string(bodyBytes))
+	}
+
+	var detail service.NodeDetail
+	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+		t.Fatalf("%s — decode node %s: %v", context, nodeID, err)
+	}
+	if detail.Depth != expectedDepth {
+		t.Fatalf("%s — node %s depth = %d, want %d",
+			context, nodeID, detail.Depth, expectedDepth)
+	}
+	if detail.ID != nodeID {
+		t.Fatalf("%s — node ID mismatch: got %s, want %s",
+			context, detail.ID, nodeID)
+	}
 }
