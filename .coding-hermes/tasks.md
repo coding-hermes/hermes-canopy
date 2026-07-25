@@ -66,14 +66,14 @@
 | ✅ BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-008 | E2E approval-panel tests (5 tests, all PASS). Root cause: handler Routes() only had /pending, /history, /{id}, /{id}/approve, /{id}/deny — bare GET / was missing. Fix: added ListAll to ApprovalRepo + ApprovalService, registered r.Get("/", h.ListAll) in Routes(), updated frontend to handle {approvals: [...]} wrapper. Commit 93229ea. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-009 | E2E test failures in crud-pages (4/4 tests fail). Dual root cause: (1) Vite proxy targeting :8080 but canopyd on :8091 → all API 404s, (2) crud-pages test locator 'text=Select a tree' matched 2 elements (h3+p) causing Playwright strict-mode error. Fixes: vite.config.ts proxy → :8091 (67d7c03) + locator→h3 hasText (9ba0129). 13/13 PASS. | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
-| 🔴 BUG-010 | computeDepth CTE infinite loop — GET node API hangs (node_service.go:814). Recursive CTE uses $1 (original node ID) instead of walking parent chain → infinite recursion. Blocks INT-01. Discovered Tick 24. | Critical | 3 | BE-04 | ++backend, ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
+|| ✅ BUG-010 | computeDepth CTE infinite loop — FIXED Tick 25. Recursive CTE now starts from the node itself (SELECT id, parent_id FROM nodes WHERE id = $1) and joins on n.id = chain.parent_id, walking UP the parent chain until NULL. Commit 7600e14. INT-01 unblocked. | Critical | 3 | BE-04 | ++backend, ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-001 | Port 8080 occupied — HTTP_ADDR env var already exists in config.go (line 79). No code change needed. Start with: HTTP_ADDR=:8090 ./canopyd. DOCUMENTED Tick 19. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 66||| ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
 67|||| ✅ BUG-003 | Add dev JWT auto-injection: Vite proxy injects dev JWT (HS256) with sub=00000000-0000-0000-0000-000000000001. API base changed to relative /api/v1. Commit c2d50e4. | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
 68||| ✅ BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
 |||| ✅ BUG-005 | Approvals page — resolved as side-effect of BUG-002 + BUG-003 (relative /api/v1 + dev JWT auto-injection). Now works with Vite proxy. | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
 70||| **Phase 6: Integration** | | | | | | | | |
-71||| 🔄 INT-01 | End-to-end tree flow (create → edit → merge → approve). Dispatched Tick 24 — 655 lines, 2 tests committed (493a7f5). BLOCKED by BUG-010 (computeDepth CTE infinite loop — GET node hangs). | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
+71||| 🔄 INT-01 | End-to-end tree flow (create → edit → merge → approve). Dispatched Tick 24 — 655 lines, 2 tests committed (493a7f5). BLOCKED by BUG-010 was fixed Tick 25 (7600e14). UNBLOCKED — ready for continuation. Worker needs to finish full tree flow test now that GET node works. | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
 72|| INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge) | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 73|| INT-03 | Multi-profile integration (switch profiles, isolated trees, routing) | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 74|| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
@@ -591,3 +591,21 @@
 | 11 | Dispatch | ✅ DISPATCHED | INT-01 worker (DeepSeek V4 Pro): 655 lines, 2 tests (TestINT01_FullTreeFlow + TestINT01_TreeFlowWithBranching). Tree creation + child nodes PASS. **BLOCKED at step 2:** GET node hangs in computeDepth() CTE (node_service.go:814) — recursive CTE uses $1 instead of parent chain → infinite loop. Worker timed out 600s/30 calls. Foreman committed 493a7f5 + filed BUG-010 (Critical) |
 
 **Verdict:** DISPATCHED + BLOCKER FOUND — INT-01 worker produced high-quality integration tests (655 lines) exercising full tree lifecycle. Test revealed a pre-existing Critical bug: computeDepth() recursive CTE uses fixed $1 parameter instead of walking parent chain → infinite loop on GET /api/v1/nodes/{tree_id}/nodes/{node_id}. Filed as BUG-010. INT-01 blocked until BUG-010 fixed. Phase 6: INT-01 in progress, BUG-010 is new Critical blocker. All other gates healthy. E2E-001: 5 ticks since last full run (Tick 19) — due next tick. Load 2.47 healthy (50Gi available). Next: BUG-010 (Critical, Cpx 3) or FE-09 (Low, Cpx 5 — last Phase 5 task).
+
+### Tick 25 — 2026-07-25 06:05 UTC (DeepSeek V4 Pro — Foreman Fix + Audit)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Only frontend/test-results/ untracked (harmless) |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful |
+| 4 | Tests | ✅ PASS | All unit packages PASS (service, card, mls, sse, transport, config, hermes). Integration tests need PG at 5437 |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud SDKs, Azure, keyring behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK |
+| 10 | Board consistency | ✅ FIXED | BUG-010 fixed + marked ✅ (7600e14). INT-01 unblocked. Board and GitReins agree |
+| 11 | Fix applied | ✅ BUG-010 FIXED | computeDepth CTE: changed from fixed-subquery JOIN to proper parent-chain walk. Starts from node itself (SELECT id, parent_id FROM nodes), recurses ON n.id = chain.parent_id until NULL. Commit 7600e14 |
+
+**Verdict:** BLOCKER RESOLVED — BUG-010 (computeDepth CTE infinite loop) fixed directly by foreman (7600e14). Root cause: CTE used `JOIN nodes child ON child.parent_id = (SELECT parent_id FROM nodes WHERE id = $1)` which always returns the same fixed parent → infinite recursion. Fix: CTE now starts from node itself, joins each row to ITS parent via `ON n.id = chain.parent_id`, walking UP until NULL. All unit tests PASS. INT-01 unblocked — ready for re-dispatch. E2E-001: 6 ticks since last full run (due every 5-10). Next: re-dispatch INT-01 (now unblocked) or E2E-001.
