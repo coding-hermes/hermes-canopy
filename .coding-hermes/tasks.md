@@ -38,7 +38,7 @@
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 || ✅ BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB. 5 tests (TreeCRUD, NodeCRUD, EdgeCRUD, AuthRejection, ValidationErrors — all PASS). 758 lines in internal/handler/integration_test.go. Edge sequence_num fix included (MAX+1 per tree). Committed 863ca35. | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || ✅ BE-12c | Auth & approval integration: 7 tests (868 lines). 4/4 PASS: ApprovalCreate, ApprovalApproveDeny, ApprovalAuditTrail, AuthIntegration. 3 SKIP: UserRegistration/Login/Refresh (no /api/v1/auth/* endpoints — gap documented). Committed 9bea412. | High | 3 | BE-12a | ++testing, ++security, ++auth | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| BE-12d | MLS integration: group creation, membership, encryption via real DB | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
+| ⚠️ BE-12d | MLS integration: group creation, membership, encryption via real DB (partial: GroupCRUD ✅, Encrypt ✅, MemberManagement ❌ — join returns 500). Committed 26d88c1. Needs join/leave fix. | High | 4 | BE-10d, BE-12a | ++testing, ++security, ++encryption | GLM-5.2 | High | DeepSeek V4 Pro |
 | BE-12e | Transport integration: SSE hub, connection lifecycle, rate limiting | Medium | 3 | BE-09d, BE-12a | ++testing, ++sse, ++transport | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 | ✅ BE-12f | GitHub Actions CI workflow with PostgreSQL service container | Medium | 2 | BE-12a | ++infra, ++ci | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 | ✅ BE-13a | Fix missing workspaces table migration — P0 blocking | Critical | 2 | — | ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
@@ -181,3 +181,21 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | 11 | Dispatch | ⏸️ DEFERRED | BE-12c worker still running (dispatched 5 min ago). BE-12d ready but blocked on worker slot. Load 1.79 (healthy, 51GB available) |
 
 **Verdict:** IDLE AUDIT — BE-12c dispatched in prior tick, still in flight. All gates healthy. No new dispatch. DuckBrain namespace healthy (20+ entries).
+
+### Tick 3 — 2026-07-24 20:05 UTC (DeepSeek V4 Pro)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY | BE-12d worker output: mls_repo.go (fix), mls_integration_test.go (1078 lines, new), mls_debug_test.go (new — IMPORT CYCLE, removed) |
+| 2 | GitReins guard | ✅ PASS | No Go staged; 4 guards green |
+| 3 | Hilo graph | ✅ USEFUL | 589 edges, 88 files, 563 imports. Hilo=useful |
+| 4 | Tests | ⚠️ PARTIAL | BE-12d: GroupCRUD ✅, Encrypt ✅, MemberManagement ❌ (join returns 500). Pre-existing: handler+testutil parallel DB race (6 FAIL in suite) |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | All post-MVP stubs. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud SDKs, Azure SDK, keyring behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M |
+| 8 | Secrets | ✅ CLEAN | via GitReins guard |
+| 9 | Static analysis | ⚠️ FIXED | mls_debug_test.go had import cycle (db→mls→db). Removed. go vet clean after |
+| 10 | Board consistency | ⚠️ STALE→FIXED | BE-12d marked 🔄 but worker output uncommitted. Verified valid parts, removed broken debug test, committed 26d88c1. Corrected to ⚠️ partial |
+| 11 | Dispatch | ⏸️ DEFERRED | BE-12d join bug needs investigation. BE-12e blocked on BE-12d completion. No E2E tick due (last was Tick 1). Load 1.42 (healthy, 51GB available) |
+
+**Verdict:** ACTION TAKEN — Committed BE-12d partial worker output (26d88c1): mls_repo.go fix + mls_integration_test.go (2/3 pass). Removed broken mls_debug_test.go (import cycle). BE-12d join returns 500 — needs worker debug. Board updated with partial status. No dispatch (blocked on join fix).
