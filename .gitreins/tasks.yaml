@@ -78,5 +78,19 @@ tasks:
   - TestINT01_TreeFlowWithBranching passes full flow without timeout
   - go build + go vet clean
   - No regression in existing unit or integration tests
-  status: pending
+  status: complete
   created_at: '2026-07-25T10:43:57.565363+00:00'
+  completed_at: '2026-07-25T12:10:45.146621+00:00'
+- id: BUG-011
+  title: Fork endpoint returns 500 INTERNAL_ERROR
+  criteria:
+  - POST /api/v1/nodes/nodes/{node_id}/fork returns 500 INTERNAL_ERROR when parent
+    has children
+  - "Root cause: GetChildren error wrapping falls through to default error case \u2014\
+    \ ErrDatabaseUnavailable not mapped in writeServiceError"
+  - 'Fix: add ErrDatabaseUnavailable to error mapping (503 SERVICE_UNAVAILABLE) AND
+    investigate why GetChildren fails in test context'
+  - TestINT01_SynthesisAndDeny step 4 should pass after fix
+  status: complete
+  created_at: '2026-07-25T11:44:53.124184+00:00'
+  completed_at: '2026-07-25T12:09:08.646012+00:00'
