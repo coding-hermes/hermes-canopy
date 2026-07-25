@@ -65,7 +65,7 @@
 | ✅ BUG-006 | Double <h1>: NavigationBar logo uses <h1> for "🌳 Canopy" AND page titles use <h1>. FIXED: changed sidebar logo in App.tsx from h1 to span (commit b099659). Each page now has exactly one h1. | Medium | 2 | FE-04 | ++frontend, ++testing, ++a11y | DeepSeek V4 Flash | Low | Hy3 |
 | ✅ BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-008 | E2E approval-panel tests (5 tests, all PASS). Root cause: handler Routes() only had /pending, /history, /{id}, /{id}/approve, /{id}/deny — bare GET / was missing. Fix: added ListAll to ApprovalRepo + ApprovalService, registered r.Get("/", h.ListAll) in Routes(), updated frontend to handle {approvals: [...]} wrapper. Commit 93229ea. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| ✅ BUG-009 | E2E test failures in crud-pages (4/4 tests fail). Root cause: TopicsPage 'Select a tree' locator matched 2 elements (h3 + p), Playwright strict mode error. Fix: locator('h3', { hasText: 'Select a tree' }). 13/13 PASS. Commit 9ba0129. | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
+| ✅ BUG-009 | E2E test failures in crud-pages (4/4 tests fail). Dual root cause: (1) Vite proxy targeting :8080 but canopyd on :8091 → all API 404s, (2) crud-pages test locator 'text=Select a tree' matched 2 elements (h3+p) causing Playwright strict-mode error. Fixes: vite.config.ts proxy → :8091 (67d7c03) + locator→h3 hasText (9ba0129). 13/13 PASS. | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
 | ✅ BUG-001 | Port 8080 occupied — HTTP_ADDR env var already exists in config.go (line 79). No code change needed. Start with: HTTP_ADDR=:8090 ./canopyd. DOCUMENTED Tick 19. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 66||| ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
 67|||| ✅ BUG-003 | Add dev JWT auto-injection: Vite proxy injects dev JWT (HS256) with sub=00000000-0000-0000-0000-000000000001. API base changed to relative /api/v1. Commit c2d50e4. | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
@@ -555,20 +555,20 @@
 
 **Verdict:** DISPATCHED — BUG-008 fixed (commit 93229ea). Root cause was a missing route — handler only exposed /pending, /history, /{id}, /{id}/approve, /{id}/deny. Frontend ApprovalPanel.fetchApprovals() called bare GET /api/v1/approvals → 404. Fixed with ListAll endpoint + frontend response wrapper handling. 5/5 approval-panel tests PASS. BUG-009 (CRUD pages 4/4 fail) is the last remaining E2E bug. Phase 5: 10/11 done (only FE-09 Offline remains). E2E-001: 5 ticks since last full run (Tick 19) — due next tick. Load healthy.
 
-### Tick 23 — 2026-07-25 09:56 UTC (DeepSeek V4 Pro — Foreman Audit + BUG-009 Dispatch)
+### Tick 23 — 2026-07-25 04:58 UTC (DeepSeek V4 Pro — Foreman Audit + BUG-009 Dispatch)
 
 | # | Gate | Result | Detail |
 |---|------|--------|--------|
-| 1 | Git status | ⚠️ DIRTY | .gitreins/tasks.yaml (BUG-008 completion sync). frontend/test-results/ untracked. Committed sync + restored clean |
+| 1 | Git status | ⚠️ DIRTY | .gitreins/tasks.yaml (BUG-009 GitReins auto-completion: premature), crud-pages.test.ts (uncommitted locator fix). Committed both as 9ba0129 |
 | 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
-| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful (unchanged from Tick 22) |
-| 4 | Tests | ⚠️ FAIL (suite) | Go integration tests need PG at 5437 (docker not running). All unit packages PASS. Frontend: tsc clean, build PASS |
-| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical |
-| 6 | Deps | ⚠️ OUTDATED | cloud SDKs, Azure SDK, keyring behind. Not impacting build |
-| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured |
+| 3 | Hilo graph | ✅ USEFUL | 763 edges, 135 files, 737 imports. Hilo=useful |
+| 4 | Tests | ⚠️ 4 FAIL (suite) | Known: handler+testutil need PG at 5437 (docker not running). All unit packages PASS (card, mls, sse, service, config). Frontend: tsc clean, build PASS (645KB JS). vitest unit: no test files in src/ (jsdom missing, but no unit tests either) |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO. None critical |
+| 6 | Deps | ✅ CLEAN | 0 outdated Go deps |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
 | 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
-| 9 | Static analysis | ✅ CLEAN | go vet: no issues. tsc --noEmit: clean |
-| 10 | Board consistency | ✅ UPDATED | BUG-009 dispatched + completed (9ba0129). All 5 E2E bugs now RESOLVED. Board and GitReins agree |
-| 11 | Dispatch | ✅ DISPATCHED | BUG-009 worker (DeepSeek V4 Pro): Root cause — TopicsPage 'Select a tree' locator matched 2 elements (h3 + description p), Playwright strict mode error. Fix: locator('h3', { hasText: 'Select a tree' }). 13/13 PASS. 25 tool calls, 1.8M input tokens. Commit 9ba0129 |
+| 9 | Static analysis | ✅ CLEAN | go vet + tsc --noEmit: clean |
+| 10 | Board consistency | ⚠️ DRIFT | GitReins auto-completed BUG-009 with 09:59 timestamp but no code fix existed. Worker confirmed: 4/4 CRUD tests still failing before fix |
+| 11 | Dispatch | ✅ DISPATCHED | BUG-009 worker (DeepSeek V4 Pro): Root cause — Vite proxy targeting localhost:8080 but canopyd runs on :8091 (HTTP_ADDR). All API calls 404'd. Fix: vite.config.ts proxy target → localhost:8091 (67d7c03). Secondary fix: crud-pages test locator 'text=Select a tree' → 'h3' hasText (9ba0129). Result: 13/13 CRUD tests PASS, 5/5 approval, 7/7 accessibility, 7/7 tree rendering. 39 tool calls, 2.8M input tokens |
 
-**Verdict:** DISPATCHED — BUG-009 fixed (commit 9ba0129). The last remaining E2E bug resolved. All 5 E2E bugs from Tick 19 (BUG-001 through BUG-005) and Tick 19 follow-ups (BUG-006 through BUG-009) are now ALL RESOLVED. E2E test suite: trees rendering (7/7), navigation, crud-pages (13/13), approval-panel (5/5), accessibility — all confirmed passing by workers. Phase 5: 10/11 core tasks done. Only FE-09 (Offline mode, Low, Cpx 5) remains in Phase 5. E2E-001 now at 4 ticks since last full run (Tick 19) — suitable for next tick. Next: FE-09 (Offline — Low priority but last P5 task) or advance to Phase 6 Integration tasks.
+**Verdict:** DISPATCHED — BUG-009 fixed (commits 9ba0129 + 67d7c03). Dual root cause: (1) Vite proxy wrong port (8080→8091) — all API calls 404'd, (2) Playwright strict-mode locator ambiguity. ALL 9 E2E bugs from Ticks 19-23 now RESOLVED. Phase 5: 10/11 done (only FE-09 Offline remains). E2E test suite: 39/41 passing (2 pre-existing navigation failures unrelated). E2E-001: 4 ticks since last full run (Tick 19). Next: FE-09 (Offline, Low, Cpx 5 — last P5 task) or advance to Phase 6 Integration. Load healthy.
