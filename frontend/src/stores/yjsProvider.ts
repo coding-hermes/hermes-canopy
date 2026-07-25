@@ -5,12 +5,23 @@
  *   - SSE (EventSource) for server→client real-time updates
  *   - HTTP POST for client→server local changes
  *
+ * Also manages multi-user presence/awareness state:
+ *   - Local user presence (cursor, viewport, permission)
+ *   - Remote user presence from SSE events
+ *
  * The SSE endpoint is /api/v1/events (SPEC-API-01).
  * One provider instance per tree.
  */
 
 import * as Y from 'yjs';
 import type { TreeYDoc } from './treeStore.ts';
+import type {
+  UserPresence,
+  LocalPresence,
+  CursorPosition,
+  ViewportState,
+  PresenceChangeHandler,
+} from '../types/multiUser.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -25,6 +36,8 @@ export interface YjsProviderOptions {
   onError?: (error: Error) => void;
   /** Called when a server update is applied */
   onSynced?: () => void;
+  /** Called when remote presence state changes */
+  onPresenceChange?: PresenceChangeHandler;
 }
 
 // ─── SSE Event Types ──────────────────────────────────────────────────
@@ -47,6 +60,14 @@ export class SSESyncProvider {
   private updateHandler: ((update: Uint8Array, origin: unknown) => void) | null =
     null;
 
+  // ─── Awareness / Presence state ────────────────────────────────
+  /** Map of userId → UserPresence for all remote users */
+  private remotePresence = new Map<string, UserPresence>();
+  /** Local user presence state */
+  private localPresence: LocalPresence | null = null;
+  /** Debounce timer for cursor position updates */
+  private cursorDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(doc: TreeYDoc, options: YjsProviderOptions) {
     this.doc = doc;
     this.treeId = options.treeId;
@@ -56,6 +77,47 @@ export class SSESyncProvider {
 
   get connected(): boolean {
     return this._connected;
+  }
+
+  // ─── Presence / Awareness public API ─────────────────────────────
+
+  /** Get all remote user presence states (read-only snapshot). */
+  getRemotePresence(): ReadonlyMap<string, UserPresence> {
+    return this.remotePresence;
+  }
+
+  /** Set local user presence (who we are, our permission, cursor, etc.). */
+  setLocalPresence(presence: LocalPresence): void {
+    this.localPresence = presence;
+    // Broadcast to server (debounced)
+    void this.pushPresence();
+  }
+
+  /** Update only the cursor position (debounced to avoid flooding). */
+  updateCursor(cursor: CursorPosition): void {
+    if (!this.localPresence) return;
+    this.localPresence = { ...this.localPresence, cursor };
+    if (this.cursorDebounceTimer) clearTimeout(this.cursorDebounceTimer);
+    this.cursorDebounceTimer = setTimeout(() => {
+      void this.pushPresence();
+    }, 50);
+  }
+
+  /** Update only the viewport state (debounced). */
+  updateViewport(viewport: ViewportState): void {
+    if (!this.localPresence) return;
+    this.localPresence = { ...this.localPresence, viewport };
+    void this.pushPresence();
+  }
+
+  /** Remove local presence (cleanup on disconnect). */
+  clearLocalPresence(): void {
+    this.localPresence = null;
+    // Send a leave message
+    void fetch(
+      `${this.apiBase}/api/v1/trees/${encodeURIComponent(this.treeId)}/presence/leave`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    ).catch(() => { /* best-effort */ });
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────
@@ -104,6 +166,15 @@ export class SSESyncProvider {
       this.handleSSEMessage(e.data);
     }) as EventListener);
 
+    // Presence/awareness events
+    this.eventSource.addEventListener('presence_update', ((e: MessageEvent) => {
+      this.handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
+    }) as EventListener);
+
+    this.eventSource.addEventListener('cursor_update', ((e: MessageEvent) => {
+      this.handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
+    }) as EventListener);
+
     this.eventSource.onerror = (): void => {
       this._connected = false;
       this.options.onDisconnected?.('SSE connection error');
@@ -126,6 +197,13 @@ export class SSESyncProvider {
       this.doc.ydoc.off('update', this.updateHandler);
       this.updateHandler = null;
     }
+
+    if (this.cursorDebounceTimer) {
+      clearTimeout(this.cursorDebounceTimer);
+      this.cursorDebounceTimer = null;
+    }
+
+    this.clearLocalPresence();
 
     if (this.eventSource) {
       this.eventSource.close();
@@ -284,5 +362,86 @@ export class SSESyncProvider {
         err instanceof Error ? err : new Error(String(err)),
       );
     }
+  }
+
+  // ─── Presence sync ──────────────────────────────────────────────
+
+  /** Push local presence state to server. */
+  private async pushPresence(): Promise<void> {
+    if (!this.localPresence) return;
+    try {
+      const response = await fetch(
+        `${this.apiBase}/api/v1/trees/${encodeURIComponent(this.treeId)}/presence`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.localPresence),
+        },
+      );
+
+      if (!response.ok) {
+        console.warn(
+          `[SSESyncProvider] Push presence failed: ${response.status}`,
+        );
+      }
+    } catch {
+      // Silently ignore — presence is best-effort
+    }
+  }
+
+  /** Handle incoming presence_update SSE event. */
+  private handlePresenceEvent(data: Record<string, unknown>): void {
+    const userId = data.userId as string | undefined;
+    if (!userId) return;
+
+    // Ignore our own presence
+    if (this.localPresence && userId === this.localPresence.userId) return;
+
+    const presence: UserPresence = {
+      userId,
+      userName: (data.userName as string) ?? 'Unknown',
+      avatarColor: (data.avatarColor as string) ?? '#6b7280',
+      permission: (data.permission as UserPresence['permission']) ?? 'viewer',
+      cursor: data.cursor
+        ? (data.cursor as CursorPosition)
+        : null,
+      viewport: data.viewport
+        ? (data.viewport as ViewportState)
+        : null,
+      isActive: (data.isActive as boolean) ?? true,
+      lastSeen: (data.lastSeen as string) ?? new Date().toISOString(),
+    };
+
+    // Handle leave event
+    if (data.type === 'leave') {
+      this.remotePresence.delete(userId);
+    } else {
+      this.remotePresence.set(userId, presence);
+    }
+
+    this.options.onPresenceChange?.(this.remotePresence);
+  }
+
+  /** Handle incoming cursor_update SSE event (lighter variant). */
+  private handleCursorEvent(data: Record<string, unknown>): void {
+    const userId = data.userId as string | undefined;
+    if (!userId) return;
+
+    if (this.localPresence && userId === this.localPresence.userId) return;
+
+    const existing = this.remotePresence.get(userId);
+    if (!existing) return; // Only update cursors for known users
+
+    const cursor = data.cursor as CursorPosition | undefined;
+    const viewport = data.viewport as ViewportState | undefined;
+
+    this.remotePresence.set(userId, {
+      ...existing,
+      ...(cursor ? { cursor } : {}),
+      ...(viewport ? { viewport } : {}),
+      lastSeen: (data.lastSeen as string) ?? new Date().toISOString(),
+    });
+
+    this.options.onPresenceChange?.(this.remotePresence);
   }
 }
