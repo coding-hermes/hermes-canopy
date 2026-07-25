@@ -35,6 +35,8 @@ export interface MessageComposerProps {
   onSend: (message: string, files: File[], pinnedNodes: PinnedNode[]) => void;
   /** Whether the composer is disabled (e.g., tree not ready) */
   disabled?: boolean;
+  /** Read-only mode — viewers cannot send messages (shows view-only state) */
+  readOnly?: boolean;
   /** Placeholder text for the textarea */
   placeholder?: string;
 }
@@ -144,6 +146,7 @@ function formatFileSize(bytes: number): string {
 export default function MessageComposer({
   onSend,
   disabled = false,
+  readOnly = false,
   placeholder = 'Type a message...',
 }: MessageComposerProps) {
   const [text, setText] = useState('');
@@ -179,7 +182,8 @@ export default function MessageComposer({
   const charCount = text.length;
   // Rough token estimate: ~4 characters per token for English text
   const tokenEstimate = Math.max(0, Math.ceil(charCount / 4));
-  const canSend = !disabled && text.trim().length > 0;
+  const canSend = !disabled && !readOnly && text.trim().length > 0;
+  const isInputDisabled = disabled || readOnly;
 
   // ─── Send handler ─────────────────────────────────────────────────
 
@@ -338,13 +342,15 @@ export default function MessageComposer({
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            disabled={disabled}
+            disabled={isInputDisabled}
             rows={1}
             className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:select-none"
             style={{
               color: '#e2e8f0',
               maxHeight: '300px',
               lineHeight: '1.5',
+              opacity: isInputDisabled ? 0.5 : 1,
+              cursor: isInputDisabled ? 'not-allowed' : 'text',
             }}
             aria-label="Message input"
           />
@@ -436,9 +442,11 @@ export default function MessageComposer({
       >
         {/* Character + token count */}
         <span>
-          {charCount > 0
-            ? `${charCount} chars · ~${tokenEstimate} tokens`
-            : 'Ready'}
+          {readOnly
+            ? '🔒 View-only mode'
+            : charCount > 0
+              ? `${charCount} chars · ~${tokenEstimate} tokens`
+              : 'Ready'}
         </span>
 
         {/* Keyboard shortcut hint */}

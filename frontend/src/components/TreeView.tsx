@@ -7,15 +7,21 @@
  *   - IndexedDB persistence
  *   - React Flow canvas
  *   - Navigation (search, breadcrumbs, node focus)
+ *   - Multi-user presence (PresenceBar, CollaborativeCursors)
+ *   - Share dialog with permission management
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { Share2 } from 'lucide-react';
 import TreeCanvas from '../components/TreeCanvas.tsx';
 import NavigationBar from '../components/NavigationBar.tsx';
 import MessageComposer, {
   type PinnedNode,
 } from '../components/MessageComposer.tsx';
+import PresenceBar from '../components/PresenceBar.tsx';
+import CollaborativeCursors from '../components/CollaborativeCursors.tsx';
+import ShareDialog from '../components/ShareDialog.tsx';
 import {
   createTreeDoc,
   bindIndexedDB,
@@ -23,6 +29,37 @@ import {
 } from '../stores/treeStore.ts';
 import { SSESyncProvider } from '../stores/yjsProvider.ts';
 import { useYjsTree } from '../stores/useYjsTree.ts';
+import { usePresence } from '../hooks/usePresence.ts';
+import type {
+  PermissionLevel,
+  ShareInvitePayload,
+} from '../types/multiUser.ts';
+import { getColorForUser } from '../types/multiUser.ts';
+// ─── Mock membership ───────────────────────────────────────────────────
+
+interface Member {
+  userId: string;
+  userName: string;
+  email: string;
+  permission: PermissionLevel;
+  avatarColor: string;
+}
+
+function buildInitialMembers(): Member[] {
+  // In production, these would be fetched from the backend.
+  // For now, we seed with a demo member.
+  return [
+    {
+      userId: 'demo_user_1',
+      userName: 'Demo User',
+      email: 'demo@example.com',
+      permission: 'editor',
+      avatarColor: getColorForUser('demo_user_1'),
+    },
+  ];
+}
+
+// ─── Component ─────────────────────────────────────────────────────────
 
 export default function TreeView() {
   const { treeId } = useParams<{ treeId: string }>();
@@ -34,6 +71,10 @@ export default function TreeView() {
   // Navigation state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+
+  // Share dialog state
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [members, setMembers] = useState<Member[]>(buildInitialMembers);
 
   // Initialize Yjs document + providers
   useEffect(() => {
@@ -85,6 +126,15 @@ export default function TreeView() {
 
   const tree = useYjsTree(doc);
 
+  // ── Multi-user presence ──────────────────────────────────────────
+  const {
+    remotePresence,
+    userId: localUserId,
+    permission: currentPermission,
+  } = usePresence(providerRef.current, 'You');
+
+  // ── Handlers ──────────────────────────────────────────────────────
+
   // Handle selection change from canvas
   const handleSelectionChange = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
@@ -93,16 +143,13 @@ export default function TreeView() {
   // Handle navigate-to-node from NavigationBar
   const handleNavigateToNode = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId);
-    // Toggle focusNodeId to trigger animation even if same node
     setFocusNodeId(null);
-    // Use setTimeout to ensure React processes the null first
     setTimeout(() => setFocusNodeId(nodeId), 0);
   }, []);
 
   // Handle message send from MessageComposer
   const handleSendMessage = useCallback(
     (_message: string, _files: File[], _pinnedNodes: PinnedNode[]) => {
-      // TODO: Wire to actual message-sending API (backend integration)
       console.log('[TreeView] Message sent:', {
         text: _message.slice(0, 100),
         fileCount: _files.length,
@@ -111,6 +158,41 @@ export default function TreeView() {
     },
     [],
   );
+
+  // ── Share dialog handlers ─────────────────────────────────────────
+
+  const handleInvite = useCallback(
+    (payload: ShareInvitePayload) => {
+      console.log('[TreeView] Invite sent:', payload);
+      // Add the invited user to local members (placeholder)
+      const mockUserId = `mock_${Date.now()}`;
+      const newMember: Member = {
+        userId: mockUserId,
+        userName: payload.email.split('@')[0] ?? payload.email,
+        email: payload.email,
+        permission: payload.permission,
+        avatarColor: getColorForUser(mockUserId),
+      };
+      setMembers((prev) => [...prev, newMember]);
+    },
+    [],
+  );
+
+  const handlePermissionChange = useCallback(
+    (userId: string, permission: PermissionLevel) => {
+      setMembers((prev) =>
+        prev.map((m) => (m.userId === userId ? { ...m, permission } : m)),
+      );
+    },
+    [],
+  );
+
+  const handleRemoveMember = useCallback((userId: string) => {
+    setMembers((prev) => prev.filter((m) => m.userId !== userId));
+  }, []);
+
+  // ── Derive viewer mode ────────────────────────────────────────────
+  const isViewer = currentPermission === 'viewer';
 
   if (error) {
     return (
@@ -146,7 +228,37 @@ export default function TreeView() {
             Connecting...
           </span>
         )}
+
+        {/* Share button (non-viewers only) */}
+        {!isViewer && (
+          <button
+            onClick={() => setShowShareDialog(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ml-auto"
+            style={{
+              backgroundColor: '#7c3aed18',
+              color: '#a78bfa',
+              border: '1px solid #7c3aed33',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#7c3aed28';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#7c3aed18';
+            }}
+            aria-label="Share tree"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </button>
+        )}
       </div>
+
+      {/* Presence bar — shows online avatars */}
+      <PresenceBar
+        remotePresence={remotePresence}
+        localUserId={localUserId}
+        onlineCount={(remotePresence.size || 0) + 1}
+      />
 
       {/* Navigation bar (search + breadcrumbs) */}
       <div className="shrink-0">
@@ -159,18 +271,42 @@ export default function TreeView() {
       </div>
 
       {/* Canvas fills remaining space */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative">
         <TreeCanvas
           tree={tree}
           onSelectionChange={handleSelectionChange}
           focusNodeId={focusNodeId}
+          nodesDraggable={!isViewer}
+          collaborativeCursors={
+            <CollaborativeCursors
+              remotePresence={remotePresence}
+              localUserId={localUserId}
+            />
+          }
         />
       </div>
 
-      {/* Message composer — bottom-docked */}
+      {/* Message composer — bottom-docked, disabled for viewers */}
       <MessageComposer
         onSend={handleSendMessage}
         disabled={!tree.isReady}
+        readOnly={isViewer}
+        placeholder={
+          isViewer
+            ? 'View-only mode — request edit access to contribute'
+            : 'Type a message...'
+        }
+      />
+
+      {/* Share dialog */}
+      <ShareDialog
+        open={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        treeId={treeId ?? ''}
+        members={members}
+        onPermissionChange={handlePermissionChange}
+        onRemoveMember={handleRemoveMember}
+        onInvite={handleInvite}
       />
     </div>
   );

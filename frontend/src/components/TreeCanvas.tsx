@@ -9,6 +9,7 @@
  *   - Large tree fallback (>500 nodes) with simplified rendering
  *   - Keyboard shortcuts (Ctrl+0 fit, Ctrl+= zoom in, Ctrl+- zoom out)
  *   - MiniMap with dark theme styling
+ *   - Collaborative cursors overlay (multi-user)
  *
  * Built on @xyflow/react v12.
  */
@@ -27,7 +28,7 @@ import {
   type FitViewOptions,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
 import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
@@ -69,6 +70,12 @@ export interface TreeCanvasProps {
   onSelectionChange?: (nodeId: string | null) => void;
   /** When set, the canvas will focus/center on this node */
   focusNodeId?: string | null;
+  /** Override nodesDraggable (e.g. disable for viewer permission) */
+  nodesDraggable?: boolean;
+  /** Collaborative cursors overlay (multi-user) */
+  collaborativeCursors?: ReactNode;
+  /** Called when the user's mouse moves on the canvas (screen coords) */
+  onCanvasMouseMove?: (x: number, y: number) => void;
 }
 
 // ─── Collapse helpers ─────────────────────────────────────────────────
@@ -110,7 +117,14 @@ function computeHiddenNodes(
 
 // ─── Main Component ───────────────────────────────────────────────────
 
-function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasProps) {
+function TreeCanvasInner({
+  tree,
+  onSelectionChange,
+  focusNodeId,
+  nodesDraggable: nodesDraggableOverride,
+  collaborativeCursors,
+  onCanvasMouseMove,
+}: TreeCanvasProps) {
   const { nodes: allNodes, edges: allEdges, treeTitle, isReady } = tree;
   const reactFlowInstance = useReactFlow();
 
@@ -146,6 +160,9 @@ function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasPro
   const totalCount = allNodes.length;
   const isLargeTree = shouldUseSimplifiedMode(totalCount);
 
+  // Determine draggable state
+  const isDraggable = nodesDraggableOverride ?? !isLargeTree;
+
   // ─── Handlers ────────────────────────────────────────────────────
 
   /** Toggle collapse/expand for a node's subtree */
@@ -176,6 +193,18 @@ function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasPro
       }
     },
     [toggleCollapse, onSelectionChange],
+  );
+
+  /** Track mouse movement on canvas for cursor tracking */
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent) => {
+      if (!onCanvasMouseMove) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX - bounds.left;
+      const y = event.clientY - bounds.top;
+      onCanvasMouseMove(x, y);
+    },
+    [onCanvasMouseMove],
   );
 
   /** Deselect when clicking the canvas background */
@@ -295,7 +324,7 @@ function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasPro
   // ─── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full w-full relative" onMouseMove={handleMouseMove}>
       {/* Large tree warning banner */}
       {isLargeTree && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-1.5 text-sm text-amber-800 dark:text-amber-200 shadow-md">
@@ -311,6 +340,9 @@ function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasPro
           hidden
         </div>
       )}
+
+      {/* Collaborative cursors overlay — rendered absolutely over the canvas */}
+      {collaborativeCursors}
 
       <ReactFlow
         nodes={visibleNodes}
@@ -332,7 +364,7 @@ function TreeCanvasInner({ tree, onSelectionChange, focusNodeId }: TreeCanvasPro
         }}
         // Large tree optimizations
         onlyRenderVisibleElements={isLargeTree}
-        nodesDraggable={!isLargeTree}
+        nodesDraggable={isDraggable}
         nodesConnectable={false}
         elementsSelectable
         elevateEdgesOnSelect
