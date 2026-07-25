@@ -39,3 +39,8 @@ Thumbs.db
 .env
 .env.local
 *.env
+
+# E2E artifacts (screenshots + temp scripts from E2E testing ticks)
+.coding-hermes/e2e-test.py
+.coding-hermes/e2e-deep.py
+.coding-hermes/e2e-screenshots/

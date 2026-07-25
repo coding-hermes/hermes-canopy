@@ -9,3 +9,13 @@ tasks:
   status: complete
   created_at: '2026-07-24T22:19:59.554678+00:00'
   completed_at: '2026-07-24T22:26:30.244794+00:00'
+- id: BUG-003
+  title: Add dev JWT auto-injection for frontend dev mode
+  criteria:
+  - Frontend dev mode automatically obtains a valid JWT token without manual config
+  - 'All /api/v1/* API calls in dev mode include Authorization: Bearer header'
+  - TOKEN_MISSING errors no longer appear when running npm run dev
+  - Backend accepts the dev JWT and extracts actor ID correctly
+  - No secrets committed (dev JWT uses a well-known or auto-generated key)
+  status: in_progress
+  created_at: '2026-07-25T06:11:03.153202+00:00'

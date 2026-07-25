@@ -60,9 +60,15 @@
 | ✅ FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
 | FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
 | FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader) | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
-| FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
-| **Phase 6: Integration** | | | | | | | | |
-| INT-01 | End-to-end tree flow (create → edit → merge → approve) | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
+|| FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
+|| **E2E Bugs (Tick 13)** | | | | | | | | |
+|| BUG-001 | Fix port 8080 zombie: Docker namespaced process left stale sockets on 8080/8081/8082 blocking canopyd default port. Needs cleanup or HTTP_ADDR env var | Medium | 2 | — | ++debugging, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
+|| BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. Route through proxy or add CORS headers to canopyd | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
+||| 🔄 BUG-003 | Add dev JWT auto-injection: no token configured in frontend dev mode; all /api/v1/* calls return TOKEN_MISSING. Blocking real API integration | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
+|| BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
+|| BUG-005 | Approvals page shows "Failed to fetch" error with Retry link — API call fails (likely CORS + auth). Combined fix with BUG-002 + BUG-003 | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
+|| **Phase 6: Integration** | | | | | | | | |
+|| INT-01 | End-to-end tree flow (create → edit → merge → approve) | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
 | INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge) | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 | INT-03 | Multi-profile integration (switch profiles, isolated trees, routing) | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 | INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
@@ -361,3 +367,21 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | 11 | Dispatch | ✅ DISPATCHED | FE-08 worker (DeepSeek V4 Pro): types/agent.ts + ThinkingCard + IterationCard + SearchResultCard + AgentCardNode wrapper. Modified CardNode, TreeCanvas, useYjsTree. 27 tool calls, 1.8M input. Build+tcs clean. Commit d016012 |
 
 **Verdict:** DISPATCHED — FE-08 Agent context visualization complete (commit d016012). Phase 5 frontend: 8/11 tasks done. Next: FE-09 (Offline mode — Low priority, Cpx 5, dep FE-02). E2E-001 now 12 ticks overdue (never run) — needs docker-compose server running. Load 2.49 (healthy, 49GB available).
+
+### Tick 13 — 2026-07-25 00:42 UTC (DeepSeek V4 Pro — Foreman + E2E)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 732 edges, 122 files, 706 imports. Hilo=useful (+17 edges, +4 files from FE-08) |
+| 4 | Tests | ⚠️ 4 FAIL (suite) | Known: handler integration (duplicate PG DB), testutil migration. All individual packages PASS. Frontend: npm run build PASS (590KB JS), tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud.google.com/go, Azure SDK, keyring, chi, zerolog behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | E2E-001 dispatched (13 ticks overdue). 5 new E2E bugs added (BUG-001→005). Board and GitReins agree |
+| 11 | Dispatch | ✅ E2E DISPATCHED | E2E-001 worker (DeepSeek V4 Pro): 49 tool calls, 2.0M input tokens. First-ever E2E run. Found 5 real bugs + 2 config issues |
+
+**Verdict:** E2E DISCOVERY — First E2E testing tick completed. Worker found 5 real issues missed by unit tests: (1) Port 8080 zombie, (2) CORS — hardcoded localhost:8080 in approvals, (3) No dev JWT auto-injection, (4) Trees/Nodes/Topics/Cards all "Coming soon" placeholders, (5) Approvals page broken ("Failed to fetch"). Added BUG-001→005. 9 screenshots saved. Phase 5 frontend: 8/11 tasks done. Load 4.59 (healthy, 50GB available).
