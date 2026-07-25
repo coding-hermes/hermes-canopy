@@ -80,12 +80,22 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 		return err
 	}
 
+	// Use stub keys to satisfy NOT NULL constraints until a real MLS
+	// library provides actual key material from the KeyPackage/Welcome.
+	stubKey := make([]byte, 32)
+	if len(keyPackage.KeyPackageBytes) > 0 {
+		copy(stubKey, keyPackage.KeyPackageBytes[:min(32, len(keyPackage.KeyPackageBytes))])
+	}
+
 	member := &db.MLSGroupMember{
-		ProfileID:   profileID,
-		GroupID:     grp.ID,
-		MLSIdentity: []byte(profileID.String()),
-		AddedAt:     time.Now().UTC(),
-		LastActive:  time.Now().UTC(),
+		ProfileID:           profileID,
+		GroupID:             grp.ID,
+		MLSIdentity:         []byte(profileID.String()),
+		EncryptionPublicKey: stubKey,
+		SignaturePublicKey:  stubKey,
+		CredentialType:      "basic",
+		AddedAt:             time.Now().UTC(),
+		LastActive:          time.Now().UTC(),
 	}
 
 	if err := s.members.Add(ctx, grp.ID, member); err != nil {
