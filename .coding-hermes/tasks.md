@@ -27,7 +27,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-| **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e), FE-05 ✅ (16a3570), FE-06 ✅ (65b4882). FE-07 (Multi-user) NEXT.
+> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e), FE-05 ✅ (16a3570), FE-06 ✅ (65b4882), FE-07 ✅ (3b708ed). FE-08 (Agent context) NEXT.
 > **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
@@ -56,7 +56,7 @@
 | ✅ FE-04 | Navigation system (pan, zoom, search, breadcrumbs, minimap). Commit 4f42a7e — 2 new files (NavigationBar.tsx, Breadcrumbs.tsx) + TreeCanvas.tsx modified. Fuzzy search, minimap, controls, breadcrumbs, keyboard shortcuts. 267 modules, build PASS. | Medium | 3 | FE-03 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
 | ✅ FE-05 | Message composer (rich text, file attachments, agent context pinning). Commit 16a3570 — MessageComposer.tsx (460 lines), wired into TreeView.tsx. tsc + build PASS. | High | 3 | FE-01 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
 || ✅ FE-06 | Approval panel (pending items, approve/deny, diff view, audit trail). 4 new files (ApprovalPanel.tsx, ApprovalDiff.tsx, AuditTrail.tsx, approval.ts types) + App.tsx route. Build PASS (561KB JS), tsc clean. Commit 65b4882. | Medium | 3 | FE-01, BE-07 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
+| ✅ FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 | FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
 | FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
 | FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader) | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
