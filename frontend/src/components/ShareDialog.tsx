@@ -191,9 +191,11 @@ export default function ShareDialog({
                 <Mail
                   className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
                   style={{ color: '#4a4a6a' }}
+                  aria-hidden="true"
                 />
                 <input
                   type="email"
+                  id="share-invite-email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="colleague@example.com"
@@ -206,11 +208,14 @@ export default function ShareDialog({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleSendInvite();
                   }}
+                  aria-required="true"
                 />
               </div>
 
               {/* Permission select */}
+              <label htmlFor="share-invite-permission" className="sr-only">Permission level</label>
               <select
+                id="share-invite-permission"
                 value={permission}
                 onChange={(e) => setPermission(e.target.value as PermissionLevel)}
                 className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-1 focus:ring-[#7c3aed] cursor-pointer"
@@ -228,7 +233,9 @@ export default function ShareDialog({
               </select>
 
               {/* Optional message */}
+              <label htmlFor="share-invite-message" className="sr-only">Personal message (optional)</label>
               <input
+                id="share-invite-message"
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

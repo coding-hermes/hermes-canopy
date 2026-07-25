@@ -294,6 +294,7 @@ function CardRow({
             }}
             className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Archive card"
+            aria-label={`Archive card`}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -415,8 +416,11 @@ export default function CardsPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div
+          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto">
             <X className="w-4 h-4" />
@@ -426,9 +430,10 @@ export default function CardsPage() {
 
       {/* Tree Selector */}
       <div className="mb-6">
-        <label className="block text-xs text-gray-500 mb-2">Select Tree</label>
+        <label htmlFor="cards-tree-select" className="block text-xs text-gray-500 mb-2">Select Tree</label>
         <div className="relative max-w-md">
           <select
+            id="cards-tree-select"
             value={selectedTreeId}
             onChange={(e) => handleTreeSelect(e.target.value)}
             className="w-full appearance-none bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 cursor-pointer"

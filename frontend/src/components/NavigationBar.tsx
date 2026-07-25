@@ -266,6 +266,16 @@ export default function NavigationBar({
               borderColor: '#2d2d4a',
               color: '#e2e8f0',
             }}
+            role="combobox"
+            aria-label="Search nodes"
+            aria-expanded={showResults && searchResults.length > 0}
+            aria-controls="search-results-listbox"
+            aria-activedescendant={
+              showResults && searchResults.length > 0
+                ? `search-result-${searchResults[selectedIndex]?.node.id}`
+                : undefined
+            }
+            aria-autocomplete="list"
           />
         </div>
 
@@ -274,6 +284,9 @@ export default function NavigationBar({
           <div
             ref={resultsRef}
             className="absolute top-full mt-1 w-full rounded-md border shadow-xl z-50 max-h-64 overflow-y-auto"
+            id="search-results-listbox"
+            role="listbox"
+            aria-label="Search results"
             style={{
               backgroundColor: '#1a1a2e',
               borderColor: '#2d2d4a',
@@ -284,6 +297,9 @@ export default function NavigationBar({
                 key={result.node.id}
                 onClick={() => handleSelectResult(result.node.id)}
                 className="w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2"
+                id={`search-result-${result.node.id}`}
+                role="option"
+                aria-selected={index === selectedIndex}
                 style={{
                   backgroundColor:
                     index === selectedIndex ? '#7c3aed22' : 'transparent',

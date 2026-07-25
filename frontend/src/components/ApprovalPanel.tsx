@@ -146,10 +146,11 @@ function ConfirmDialog({
           </h3>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <label className="block text-xs text-gray-400">
+          <label htmlFor="confirm-comment" className="block text-xs text-gray-400">
             Comment (optional)
           </label>
           <textarea
+            id="confirm-comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
@@ -232,6 +233,7 @@ function ApprovalCard({
                 disabled={acting}
                 className="p-1.5 rounded-md text-green-400 hover:bg-green-500/20 disabled:opacity-40 transition-colors"
                 title="Approve"
+                aria-label={`Approve: ${item.title}`}
               >
                 <Check className="w-4 h-4" />
               </button>
@@ -243,6 +245,7 @@ function ApprovalCard({
                 disabled={acting}
                 className="p-1.5 rounded-md text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
                 title="Deny"
+                aria-label={`Deny: ${item.title}`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -622,6 +625,19 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
           onCancel={() => setConfirmAction(null)}
         />
       )}
+
+      {/* ARIA live region for approval status changes */}
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {acting ? `Processing ${confirmAction?.action}...` : ''}
+        {!acting && items.length > 0
+          ? `${items.filter((i) => i.status === 'pending').length} pending approvals`
+          : ''}
+      </div>
     </div>
   );
 }

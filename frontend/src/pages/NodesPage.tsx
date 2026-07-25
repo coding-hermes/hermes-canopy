@@ -245,6 +245,7 @@ function NodeRow({
           onClick={onEdit}
           className="p-1.5 rounded-md text-gray-600 hover:text-purple-400 hover:bg-purple-500/10"
           title="Edit content"
+          aria-label={`Edit node ${node.id.slice(0, 8)}`}
         >
           <Edit3 className="w-3.5 h-3.5" />
         </button>
@@ -252,6 +253,7 @@ function NodeRow({
           onClick={onDelete}
           className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10"
           title="Delete node"
+          aria-label={`Delete node ${node.id.slice(0, 8)}`}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -371,8 +373,11 @@ export default function NodesPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div
+          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto">
             <X className="w-4 h-4" />
@@ -382,9 +387,10 @@ export default function NodesPage() {
 
       {/* Tree Selector */}
       <div className="mb-6">
-        <label className="block text-xs text-gray-500 mb-2">Select Tree</label>
+        <label htmlFor="nodes-tree-select" className="block text-xs text-gray-500 mb-2">Select Tree</label>
         <div className="relative">
           <select
+            id="nodes-tree-select"
             value={selectedTreeId ?? ''}
             onChange={(e) => handleTreeSelect(e.target.value)}
             className="w-full max-w-md appearance-none bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 cursor-pointer"
