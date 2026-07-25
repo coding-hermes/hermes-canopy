@@ -69,3 +69,14 @@ tasks:
   - No regression in existing unit or integration tests
   status: pending
   created_at: '2026-07-25T10:29:21.517017+00:00'
+- id: BUG-010
+  title: "Fix computeDepth CTE infinite loop \u2014 blocks GET node API (INT-01 blocked)"
+  criteria:
+  - "computeDepth CTE in node_service.go:814 no longer hangs \u2014 recursive step\
+    \ follows parent chain instead of reusing $1 parameter"
+  - TestINT01_FullTreeFlow passes step 2 (GET node) without timeout
+  - TestINT01_TreeFlowWithBranching passes full flow without timeout
+  - go build + go vet clean
+  - No regression in existing unit or integration tests
+  status: pending
+  created_at: '2026-07-25T10:43:57.565363+00:00'
