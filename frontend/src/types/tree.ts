@@ -125,7 +125,8 @@ export type FlowNodeType =
   | 'messageNode'
   | 'synthesisNode'
   | 'cardNode'
-  | 'topicNode';
+  | 'topicNode'
+  | 'agentCardNode';
 
 /** Extended React Flow node data carried on each flow node. */
 export interface TreeNodeCardData extends Record<string, unknown> {
@@ -144,6 +145,8 @@ export interface TreeNodeCardData extends Record<string, unknown> {
   collapsed: boolean;
   /** Card-specific type (e.g. 'file', 'task', 'code') */
   cardType?: 'file' | 'task' | 'code';
+  /** When true, this card node is an agent iteration card */
+  isAgentCard?: boolean;
 }
 
 /** Map NodeType to the React Flow custom node type string. */

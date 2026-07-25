@@ -39,6 +39,7 @@ import { MessageNode } from './nodes/MessageNode.tsx';
 import { SynthesisNode } from './nodes/SynthesisNode.tsx';
 import { CardNode } from './nodes/CardNode.tsx';
 import { TopicNode } from './nodes/TopicNode.tsx';
+import { AgentCardNode } from './agent/AgentCardNode.tsx';
 
 // ─── Custom edges ─────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ const nodeTypes: NodeTypes = {
   synthesisNode: SynthesisNode,
   cardNode: CardNode,
   topicNode: TopicNode,
+  agentCardNode: AgentCardNode,
 };
 
 const edgeTypes = {
@@ -394,7 +396,8 @@ function TreeCanvasInner({
               case 'synthesis':
                 return '#f59e0b';
               case 'card':
-                return '#3b82f6';
+                // Agent cards get a purple tint, regular cards get blue
+                return d.isAgentCard ? '#7c3aed' : '#3b82f6';
               case 'topic':
                 return '#f43f5e';
               case 'system':

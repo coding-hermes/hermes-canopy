@@ -12,6 +12,7 @@ import { MarkerType, type Node, type Edge } from '@xyflow/react';
 import type { TreeYDoc } from './treeStore.ts';
 import type { TreeNodeCardData } from '../types/tree.ts';
 import { nodeTypeToFlowType } from '../types/tree.ts';
+import { isAgentCardMetadata } from '../types/agent.ts';
 import {
   getAllNodeIds,
   getNode,
@@ -72,14 +73,19 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
 
     // Determine cardType from metadata if this is a card node
     let cardType: 'file' | 'task' | 'code' | undefined;
+    let isAgentCard = false;
     if (nodeType === 'card' && nodeData.metadata) {
       const mt = nodeData.metadata.cardType as string | undefined;
       if (mt === 'file' || mt === 'task' || mt === 'code') {
         cardType = mt;
       }
+      // Check if this is an agent iteration card
+      if (isAgentCardMetadata(nodeData.metadata)) {
+        isAgentCard = true;
+      }
     }
 
-    const flowType = nodeTypeToFlowType(nodeType);
+    const flowType = isAgentCard ? 'agentCardNode' : nodeTypeToFlowType(nodeType);
 
     rfNodes.push({
       id: nodeId,
@@ -97,6 +103,7 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
         childCount,
         collapsed: false,
         cardType,
+        isAgentCard,
       },
     });
   }
