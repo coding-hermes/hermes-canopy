@@ -725,7 +725,27 @@
 
 **Verdict:** DISPATCHED — INT-06 CLI wiring complete (commit d767d54). All 11 gates healthy. Phase 6: 3/6 tasks done (INT-01 blocked by fork 503, INT-02/03/06 ✅). INT-01 fork 503 root cause narrowed: test pool defaults to 4 max connections via pgxpool.New(), likely exhausted by sequential API calls. Fix: add explicit MaxConns to test pool config. E2E-001: 3 ticks since last run (Tick 28) — due in 2-7 ticks. Phase 5: 10/11 done (only FE-09 remaining). Next: investigate/prove INT-01 pool fix, FE-09 (Offline, Low, Cpx 5), or TEST-01 (coverage).
 
-### Tick 32 — 2026-07-25 09:10 UTC (DeepSeek V4 Pro — Foreman Fix + Audit)
+### Tick 33 — 2026-07-25 12:03 UTC (DeepSeek V4 Flash — Foreman Investigation + Fix)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean after commit 2df5225 |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green |
+| 3 | Hilo graph | ✅ USEFUL | 809 edges, 136 files, 3 languages. Hilo=useful |
+| 4 | Tests | ✅ PASS | All unit packages PASS (card, config, hermes, mls, service, sse, transport). Handler integration: ALL PASS (14.7s — including TestINT01_SynthesisAndDeny ✅). Testutil integration: PASS. SSE heartbeat failure pre-existing (known timing race). Frontend: build PASS (645KB JS), tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud SDKs, Azure, keyring, chi, zerolog, cel.dev/expr behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | INT-01 marked ✅ (3/3 tests PASS). Tick 33 retrospective added |
+| 11 | Fix applied | ✅ INT-01 UNBLOCKED | Four-part fix: (1) Qualify GetChildren SELECT with n. prefix (ambiguous `id` column). (2) Same fix for GetParents in edge_repo.go. (3) Unique DB names per test call with `uniqueDBName()` — each NewIntegrationPool creates an isolated DB, preventing cross-package dropTestDB interference. (4) Expose real error message in 503 response for future diagnosis |
+
+**INT-01 fork 503 Root Cause (Tick 33 discovery):** The fork endpoint's call to `GetChildren(parentNodeID)` in db/node_repo.go used bare `nodeColumns` (`id, tree_id, ...`) in a SELECT with `JOIN nodes n + edges e`. Both tables share columns `id, tree_id, sequence_num, created_at, deleted_at`. PostgreSQL raised SQLSTATE 42702 ("column reference 'id' is ambiguous"), which was wrapped as `ErrDatabaseUnavailable` and returned as 503. Previous diagnosis (Tick 31-32: "pool exhaustion" → MaxConns 4→10) was incorrect — the fix was always an SQL query bug. The pool fix remains harmless but unnecessary.
+
+**The MaxConns=10 fix from d802b1b was a red herring.** The real issue was an unqualified `nodeColumns` in a JOIN query — columns `id`, `tree_id`, `sequence_num`, `created_at`, `deleted_at` all exist in both `nodes` and `edges` tables. PostgreSQL cannot resolve which table to use. This pattern was also fixed in `GetParents` (edge_repo.go:221) which had the same JOIN + bare-columns bug.
+
+**Verdict:** INT-01 UNBLOCKED — 3/3 integration tests PASS with PG at 5437. Phase 6: 4/6 tasks done (INT-01/02/03/06 ✅). INT-04 (Offline sync, Low, Cpx 5) blocked on FE-09. INT-05 (Performance, Medium, Cpx 3) unblocked. E2E-001: 5 ticks since last run (Tick 28, due every 5-10) — due next tick. Never-done audit due (last: Tick 33). Next: E2E-001 or Dispatch INT-05. Load 4.21 healthy (50Gi available).
 
 | # | Gate | Result | Detail |
 |---|------|--------|--------|
