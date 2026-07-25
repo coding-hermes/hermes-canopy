@@ -64,7 +64,7 @@
 || **E2E Bugs (Tick 13)** | | | | | | | | |
 || BUG-001 | Fix port 8080 zombie: Docker namespaced process left stale sockets on 8080/8081/8082 blocking canopyd default port. Needs cleanup or HTTP_ADDR env var | Medium | 2 | — | ++debugging, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 || BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. Route through proxy or add CORS headers to canopyd | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
-||| 🔄 BUG-003 | Add dev JWT auto-injection: no token configured in frontend dev mode; all /api/v1/* calls return TOKEN_MISSING. Blocking real API integration | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
+||| ✅ BUG-003 | Add dev JWT auto-injection: Vite proxy injects dev JWT (HS256) with sub=00000000-0000-0000-0000-000000000001. API base changed to relative /api/v1. Commit c2d50e4. | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
 || BUG-005 | Approvals page shows "Failed to fetch" error with Retry link — API call fails (likely CORS + auth). Combined fix with BUG-002 + BUG-003 | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
 || **Phase 6: Integration** | | | | | | | | |
