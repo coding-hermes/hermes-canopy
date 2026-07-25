@@ -27,7 +27,7 @@
 
 > **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 > **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e), FE-05 ✅ (16a3570), FE-06 ✅ (65b4882), FE-07 ✅ (3b708ed). FE-08 (Agent context) NEXT.
+> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01 ✅ (286884b), FE-02 ✅ (a7a638e), FE-03 ✅ (d7ec81d), FE-04 ✅ (4f42a7e), FE-05 ✅ (16a3570), FE-06 ✅ (65b4882), FE-07 ✅ (3b708ed), FE-08 ✅ (d016012). FE-09 (Offline mode) NEXT.
 > **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 
 ## Active Tasks
@@ -57,7 +57,7 @@
 | ✅ FE-05 | Message composer (rich text, file attachments, agent context pinning). Commit 16a3570 — MessageComposer.tsx (460 lines), wired into TreeView.tsx. tsc + build PASS. | High | 3 | FE-01 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
 || ✅ FE-06 | Approval panel (pending items, approve/deny, diff view, audit trail). 4 new files (ApprovalPanel.tsx, ApprovalDiff.tsx, AuditTrail.tsx, approval.ts types) + App.tsx route. Build PASS (561KB JS), tsc clean. Commit 65b4882. | Medium | 3 | FE-01, BE-07 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ FE-07 | Multi-user features (presence, cursors, permissions, share dialog) | Medium | 4 | FE-02 | ++frontend, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
-| FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | Hy3 | Medium | DeepSeek V4 Pro |
+| ✅ FE-08 | Agent context visualization (thinking cards, iteration cards, search results) | Medium | 4 | SPEC-PL-04, FE-05 | ++frontend, ++ui, ++react | DeepSeek V4 Pro | Medium | Hy3 |
 | FE-09 | Offline mode (Service Worker + y-indexeddb + Background Sync) | Low | 5 | FE-02 | ++frontend, ++offline, ++service-worker | DeepSeek V4 Pro | High | GPT-5.6 Sol |
 | FE-10 | Accessibility (WCAG 2.1 AA, keyboard nav, screen reader) | Medium | 3 | FE-03 | ++frontend, ++accessibility, ++ui | Hy3 | Medium | DeepSeek V4 Flash |
 | FE-11 | Frontend integration tests (Playwright + vitest) | Medium | 3 | FE-03 | ++testing, ++frontend, ++e2e | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
@@ -129,8 +129,8 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 ||3. ✅ **BE-18 completed:** SSE broadcast in node_service.go (Create, Update, SoftDelete)
 ||4. ✅ **BE integration COMPLETE:** BE-12a → BE-12b → BE-12c → BE-12d → BE-12e → BE-12f (all ✅)
 |5. ✅ **FE scaffold:** FE-01 → FE-02 → FE-03 (sequential — CRDT then rendering)
-|||6. **FE parallel:** FE-04/FE-05/FE-06/FE-07 (after FE-02) — FE-04/05/06 ✅, FE-07 NEXT
-|7. **Integration:** INT-01 (after BE-12b + FE-03) → INT-02/INT-03/INT-04/INT-05 (parallel)
+||||6. **FE parallel:** FE-04/FE-05/FE-06/FE-07 (after FE-02) — FE-04/05/06/07 ✅, FE-08 ✅
+||7. **Integration:** INT-01 (after BE-12b + FE-03) → INT-02/INT-03/INT-04/INT-05 (parallel)
 |8. **Testing/Hardening:** TEST-01/TEST-02/TEST-03/TEST-04/TEST-05 (after INT-01)
 |9. **Deploy:** DEPLOY-01 → DEPLOY-02/DEPLOY-03 (parallel) → DEPLOY-04/DEPLOY-05
 |10. **Distribution:** DIST-01 → DIST-02/DIST-03
@@ -343,3 +343,21 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | 11 | Dispatch | ✅ COMPLETED | FE-07 worker (DeepSeek V4 Pro): 4 new files (usePresence.ts, PresenceBar.tsx, CollaborativeCursors.tsx, ShareDialog.tsx) + 3 modified (TreeView.tsx, TreeCanvas.tsx, MessageComposer.tsx). 38 tool calls, 3.2M input. Build PASS (578KB JS), tsc clean. Commits fbe8e30 → 3b708ed → add5a3e |
 
 **Verdict:** COMPLETED — FE-07 Multi-user features delivered. Worker built presence bar, collaborative cursors, share dialog, permission-aware UI (readOnly mode for viewers, nodesDraggable control, Share button). Orphan stores/usePresence.ts removed. Phase 5 frontend: 7/11 tasks done. Next: FE-08 (Agent context visualization — deps SPEC-PL-04 + FE-05 ⚡). E2E-001 due next tick (every 5-10 ticks).
+
+### Tick 12 — 2026-07-25 00:03 UTC (DeepSeek V4 Pro — Foreman)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. No Go files staged |
+| 3 | Hilo graph | ✅ USEFUL | 715 edges, 118 files, 689 imports. Hilo=useful |
+| 4 | Tests | ⚠️ 2 FAIL (suite) | Known: handler integration (duplicate PG DB), testutil migration. All individual packages PASS. Frontend: npm run build PASS, tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 stub adapters (post-MVP), 1 cursor TODO, 3 auth test SKIPs. None critical |
+| 6 | Deps | ⚠️ OUTDATED | cloud.google.com/go, Azure SDK, keyring, chi, zerolog behind. Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. tsc --noEmit: clean |
+| 10 | Board consistency | ✅ UPDATED | GitReins dual-source: only gitreins-judge-verify (complete). FE-08 dispatched + completed. Board and GitReins agree |
+| 11 | Dispatch | ✅ DISPATCHED | FE-08 worker (DeepSeek V4 Pro): types/agent.ts + ThinkingCard + IterationCard + SearchResultCard + AgentCardNode wrapper. Modified CardNode, TreeCanvas, useYjsTree. 27 tool calls, 1.8M input. Build+tcs clean. Commit d016012 |
+
+**Verdict:** DISPATCHED — FE-08 Agent context visualization complete (commit d016012). Phase 5 frontend: 8/11 tasks done. Next: FE-09 (Offline mode — Low priority, Cpx 5, dep FE-02). E2E-001 now 12 ticks overdue (never run) — needs docker-compose server running. Load 2.49 (healthy, 49GB available).
