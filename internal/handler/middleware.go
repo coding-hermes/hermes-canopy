@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,13 +127,37 @@ type TreeMemberChecker interface {
 // treeMembershipKey holds the role in context for handlers that need it.
 type treeMembershipKey struct{}
 
+// treeIDFromPath extracts the tree ID from the URL path. In chi, middleware
+// runs before route matching, so chi.URLParam is not available for params
+// defined on mounted subrouters. Instead, we parse the path directly.
+//
+// Path patterns:
+//   /api/v1/nodes/{tree_id}/nodes/{node_id}   → tree_id at segment 3
+//   /api/v1/trees/{id}/...                     → tree_id at segment 3
+//
+// Routes without a tree ID segment (e.g., /api/v1/trees for listing) return empty.
+func treeIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	// Expected: ["api", "v1", "nodes|trees", "{id}", ...]
+	if len(parts) < 4 {
+		return ""
+	}
+	if parts[0] != "api" || parts[1] != "v1" {
+		return ""
+	}
+	if parts[2] != "nodes" && parts[2] != "trees" {
+		return ""
+	}
+	return parts[3]
+}
+
 // TreeMembershipMiddleware returns middleware that verifies the authenticated
-// user is a member of the tree referenced by the {tree_id} URL parameter.
-// Routes without {tree_id} pass through unchecked.
+// user is a member of the tree referenced by the tree_id URL segment.
+// Routes without a tree_id segment pass through unchecked.
 func TreeMembershipMiddleware(checker TreeMemberChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			treeIDStr := chiURLParam(r, "tree_id")
+			treeIDStr := treeIDFromPath(r.URL.Path)
 			if treeIDStr == "" {
 				// Route has no tree_id parameter — nothing to check.
 				next.ServeHTTP(w, r)

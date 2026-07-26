@@ -808,13 +808,6 @@ func newTestServerWithMembership(t *testing.T, pool *pgxpool.Pool, treeID, membe
 	memberChecker := &stubMemberChecker{treeID: treeID, member: memberID}
 	membershipMW := TreeMembershipMiddleware(memberChecker)
 
-	// Override chiURLParam so membership middleware can resolve tree_id.
-	saved := chiURLParam
-	chiURLParam = func(r *http.Request, key string) string {
-		return chi.URLParam(r, key)
-	}
-	t.Cleanup(func() { chiURLParam = saved })
-
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 		r.Use(membershipMW)
