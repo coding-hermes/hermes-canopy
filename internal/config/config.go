@@ -24,6 +24,9 @@ type Config struct {
 
 	// JWT
 	JWTSecret string
+
+	// Metrics
+	MetricsEnabled bool
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -40,15 +43,16 @@ func (c *Config) DSN() string {
 // Default returns a Config with sensible development defaults.
 func Default() *Config {
 	return &Config{
-		DBHost:     "localhost",
-		DBPort:     5432,
-		DBUser:     "canopy",
-		DBPassword: "canopy",
-		DBName:     "canopy",
-		DBSSLMode:  "disable",
-		HTTPAddr:   ":8080",
-		LogLevel:   "info",
-		JWTSecret:  "dev-secret-change-me",
+		DBHost:         "localhost",
+		DBPort:         5432,
+		DBUser:         "canopy",
+		DBPassword:     "canopy",
+		DBName:         "canopy",
+		DBSSLMode:      "disable",
+		HTTPAddr:       ":8080",
+		LogLevel:       "info",
+		JWTSecret:      "dev-secret-change-me",
+		MetricsEnabled: false,
 	}
 }
 
@@ -84,6 +88,9 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		c.JWTSecret = v
+	}
+	if v := os.Getenv("METRICS_ENABLED"); v == "true" || v == "1" {
+		c.MetricsEnabled = true
 	}
 	return c
 }

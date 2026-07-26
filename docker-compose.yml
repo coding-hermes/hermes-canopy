@@ -33,6 +33,7 @@ services:
       HTTP_ADDR: ":8080"
       DB_URL: postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable
       CANOPY_DEV: "false"
+      METRICS_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy

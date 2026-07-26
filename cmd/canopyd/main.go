@@ -29,6 +29,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/telemetry"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/transport"
 )
 
@@ -163,9 +164,16 @@ func main() {
 	connMgr := transport.NewConnectionManager(ss)
 	tptAdapter := transport.NewSSEAdapter(sseHub)
 
+	// Prometheus metrics — nil by default, enabled via METRICS_ENABLED=true.
+	var metrics *telemetry.Metrics
+	if cfg.MetricsEnabled {
+		metrics = telemetry.NewMetrics()
+		log.Info().Msg("prometheus metrics enabled on /metrics")
+	}
+
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc)
+		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics)
 
 	// Start server in background
 

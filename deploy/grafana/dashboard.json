@@ -1,0 +1,40 @@
+{
+  "title": "Canopy — Server Metrics",
+  "tags": ["canopy", "prometheus"],
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "title": "Request Latency (p50/p95/p99)",
+      "type": "timeseries",
+      "targets": [{"expr": "histogram_quantile(0.50, rate(request_duration_seconds_bucket[5m]))", "legendFormat": "p50"}, {"expr": "histogram_quantile(0.95, rate(request_duration_seconds_bucket[5m]))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.99, rate(request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "title": "Requests per Second",
+      "type": "timeseries",
+      "targets": [{"expr": "rate(request_total[5m])", "legendFormat": "{{method}} {{path}}"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "title": "Active Connections",
+      "type": "timeseries",
+      "targets": [{"expr": "active_connections", "legendFormat": "active"}],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}
+    },
+    {
+      "title": "Tree & Node Count",
+      "type": "stat",
+      "targets": [{"expr": "tree_count", "legendFormat": "Trees"}, {"expr": "node_count", "legendFormat": "Nodes"}],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}
+    },
+    {
+      "title": "Error Rate",
+      "type": "timeseries",
+      "targets": [{"expr": "rate(request_total{status=~\"5..\"}[5m])", "legendFormat": "5xx"}, {"expr": "rate(request_total{status=~\"4..\"}[5m])", "legendFormat": "4xx"}],
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}
+    }
+  ],
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {"refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m"]}
+}

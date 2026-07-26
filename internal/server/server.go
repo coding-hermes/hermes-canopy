@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
@@ -17,6 +18,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/telemetry"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/transport"
 )
 
@@ -28,6 +30,7 @@ type Server struct {
 	transportMgr    *transport.ConnectionManager
 	transportAdaper transport.TransportAdapter
 	mlsHandler      *handler.MLSHandler
+	metrics         *telemetry.Metrics
 }
 
 // New creates a new Server with middleware and routes wired.
@@ -46,10 +49,11 @@ func New(
 	eventRepo db.TransportEventRepo,
 	membersRepo db.TreeMemberRepo,
 	profileRouter *hermes.PGProfileRouter,
-	mlsHandler *handler.MLSHandler,
-	topicSvc service.TopicService,
-	cardSvc service.CardService,
-	graphSvc service.GraphService,
+	mlsHandler     *handler.MLSHandler,
+	topicSvc       service.TopicService,
+	cardSvc        service.CardService,
+	graphSvc       service.GraphService,
+	metrics        *telemetry.Metrics,
 ) *Server {
 	r := chi.NewRouter()
 
@@ -67,10 +71,20 @@ func New(
 	rateLimiter := handler.NewRateLimiter(100, 200)
 	r.Use(handler.RateLimit(rateLimiter))
 
+	// Prometheus metrics middleware (records request duration, count, active conns).
+	if metrics != nil {
+		r.Use(telemetry.MetricsMiddleware(metrics))
+	}
+
 	// Health and version endpoints (public — no auth).
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
 	r.Get("/version", versionHandler)
+
+	// Prometheus /metrics endpoint (public — standard practice for /metrics).
+	if metrics != nil {
+		r.Handle("/metrics", promhttp.Handler())
+	}
 
 	// === Authenticated routes ===
 	authMW := handler.AuthMiddleware(jwtSecret)
@@ -143,6 +157,7 @@ func New(
 		transportMgr:    connMgr,
 		transportAdaper: transportAdaper,
 		mlsHandler:      mlsHandler,
+		metrics:         metrics,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
