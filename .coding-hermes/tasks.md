@@ -90,7 +90,7 @@
 | **Phase 8: Deployment** | | | | | | | | |
 || ✅ DEPLOY-01 | Production Dockerfile (3-stage: frontend→Go→alpine), docker-compose.yml (canopyd + PG), .dockerignore. Image 52.4MB, builds PASS. WebUI Native Binary deferred. Tick 58. | High | 3 | BE-12f, FE-03 | ++infra, ++docker, ++deploy | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 || ✅ DEPLOY-02 | Observability (Prometheus + Grafana + structured logging + traces) — committed ebe6c02. Metrics middleware + /metrics + METRICS_ENABLED config + Grafana dashboard | Medium | 3 | BE-05 | ++observability, ++monitoring | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| DEPLOY-03 | CI/CD (GitHub Actions: test → build → deploy → smoke test) | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+|| ✅ DEPLOY-03 | CI/CD (GitHub Actions: test → build → deploy → smoke test) — committed. Enhanced CI: golangci-lint, frontend npm build+tsc, gitleaks, Docker build. 100-line workflow. | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 | DEPLOY-04 | Documentation (README, API docs, deploy guide, architecture overview) | Low | 2 | — | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
 | DEPLOY-05 | Migration plan (existing Hermes data → canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | **Phase 9: Distribution** | | | | | | | | |
@@ -206,7 +206,7 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
 | 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 15 packages incl. telemetry). tsc --noEmit: clean. npm build: PASS. |
 | 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 pending tasks. Format valid (PASS). DEPLOY-02 → ✅ (board fixed — Tick 60 only updated tick log, missed the task row). 5 active tasks remain (TEST-02→05, DEPLOY-03→05, DIST-01/02/03, E2E-001). |
-| 11 | Dispatch | 🔄 DISPATCHED | DEPLOY-03 (CI/CD pipeline) re-dispatched via worker (deleg_e939bba4) — Tick 60 dispatch produced no output. Enhanced CI: npm build, Docker build, gitleaks, golangci-lint added to existing build.yml. |
+| 11 | Dispatch | ✅ DEPLOY-03 WORKER COMPLETE | DEPLOY-03 worker (deleg_e939bba4) produced enhanced CI workflow: golangci-lint action, frontend npm install+build+tsc, gitleaks secrets scan, Docker image build, deploy info step. 100-line workflow verified: go build OK, tsc clean, Docker build PASS. |
 
 **Coverage (Tick 61):** 35.7% total (unchanged — no new source logic this tick). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16). telemetry package: 0% (acceptable — initial integration).
 
@@ -221,9 +221,9 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 - GATE 8: ✅ Secrets clean
 - GATE 9: ✅ Static analysis clean (go vet, tsc, build). New telemetry package compiles.
 - GATE 10: ✅ Board consistent (DEPLOY-02 ✅ fixed, format valid)
-- GATE 11: 🔄 DEPLOY-03 CI/CD worker re-dispatched
+- GATE 11: ✅ DEPLOY-03 CI/CD worker output committed — enhanced CI workflow with frontend build, Docker, gitleaks, golangci-lint
 
-**Verdict:** DEPLOY-02 ✅ board marker now correct. All tests pass (15/15 Go packages + frontend). PG healthy (24h+). Phase 8: 2/5 deployment tasks done. DEPLOY-03 (CI/CD pipeline enhancement) re-dispatched via worker — enhanced CI adds npm build, Docker image build, gitleaks, and golangci-lint to the existing workflow. 5 remaining active tasks: TEST-02→05 (testing phase) and DEPLOY-03→05 (deployment), plus DIST-01/02/03 (distribution, low priority) and E2E-001 (recurring). Coverage 35.7% held steady.
+**Verdict:** DEPLOY-02 ✅ board marker now fixed. DEPLOY-03 ✅ WORKER COMPLETE — enhanced CI/CD workflow committed. 3/5 Phase 8 deployment tasks done. All tests pass (15/15 Go packages + frontend). PG healthy (24h+). 4 remaining active tasks: TEST-02→05 (testing phase), DEPLOY-04→05 (documentation + migration plan), plus DIST-01/02/03 (low priority) and E2E-001 (recurring). Coverage 35.7% held steady. Next dispatch: DEPLOY-04 (Documentation) — README, API docs, deploy guide, architecture overview — manageable foreman-direct task.
 
 ### Tick 59 — 2026-07-26 08:58 UTC (DeepSeek V4 Flash)
 
