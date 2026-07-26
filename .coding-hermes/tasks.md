@@ -800,3 +800,23 @@
 | 11 | Dispatch | ✅ INT-05 DISPATCHED | INT-05 worker (DeepSeek V4 Pro): benchmark tests (3 tests — 2000 nodes, 50 concurrent SSE, latency p99). Using existing testutil infrastructure (PG at 5437). Worker running —
 
 **Verdict:** DISPATCHED — INT-05 performance baseline dispatched (Tick 35, for real this time — delegate_task to DeepSeek V4 Pro worker). All 11 gates healthy. PG on :5437 running, canopyd integration tests verified. Phase 6: 5/6 done (INT-01/02/03/06 ✅, INT-05 in flight, INT-04 blocked on FE-09). Phase 5: 10/11 done (only FE-09 Offline remains). E2E-001: 7 ticks since last run (Tick 28) — overdue next tick. Load healthy.
+
+### Tick 36 — 2026-07-25 21:13 UTC (DeepSeek V4 Flash — Foreman Audit)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean, master branch. No dirty files |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger on .gitreins/). GITREINS_LLM_API_KEY configured |
+| 3 | Hilo graph | ✅ USEFUL | 823 edges, 139 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (67), context (62). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 14 Go packages all PASS (cached). Frontend: npm build PASS (644.75 KB JS, 63.96 KB CSS), tsc --noEmit clean. No failures |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 post-MVP stub adapters (transport/), 1 cursor TODO (tree_service.go:442). None critical for MVP |
+| 6 | Deps | ⚠️ 159 OUTDATED | cloud SDKs (Google, Azure), keyring, chi, zerolog, cel.dev/expr, ClickHouse behind. Not impacting build. No breaking upgrades |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. GITREINS_LLM_API_KEY configured |
+| 8 | Secrets | ✅ CLEAN | gitleaks detect: no leaks found (8.34s scan, 199MB). No config changes needed |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean. cargo/tailwind clean |
+| 10 | Board consistency | ✅ AGREED | GitReins: 7 complete tasks (gitreins-judge-verify, BUG-003/006/008/009/010/011, INT-01 all ✅). Board and GitReins agree. Tick 35 INT-05 dispatched — in flight |
+| 11 | Dispatch | ✅ E2E-001 RE-DISPATCHED | E2E-001 overdue (7 ticks since Tick 28 — last 100% pass). Re-running full Playwright suite (41 tests) against canopyd:8091 + PG:5437 + Vite:5173 |
+
+**E2E-001 OVERDUE — Re-dispatching.** Last full run was Tick 28 (7 ticks ago, 41/41 PASS). All E2E bugs from Ticks 19-23 resolved (BUG-001→011 ✅). INT-05 Cpx 2/3 performance baseline dispatched Tick 35 — still in flight (benchmarks take time: 2000 node rendering, 50 concurrent SSE). Phase 5: 10/11 done, only FE-09 (Offline, Low, Cpx 5) remains. Phase 6: 5/6 done (INT-01/02/03/06 ✅, INT-05 in flight, INT-04 blocked on FE-09). DuckBrain: tick entry written.
+
+**Verdict:** AUDIT ONLY — E2E-001 re-dispatched overdue. All 11 gates healthy. INT-05 worker in flight. No new blockers or regressions. Load 9.01 (elevated, 46Gi available — healthy).
