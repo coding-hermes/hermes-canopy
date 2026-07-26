@@ -27,7 +27,7 @@
 27|
 28|> **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 29|> **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-30|> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend COMPLETE (FE-01→FE-11 all ✅). FE-09 (Offline mode) written foreman-direct Tick 45 — Service Worker + y-indexeddb + Background Sync + offline indicator. 8 files, 430 lines. Commit 8af8bc1. Phase 6: INT-01/02/03/05/06 ✅. INT-04 now UNBLOCKED (FE-09 ✅). Phase 7: TEST-01 in progress (coverage 31.1%).
+30|> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend COMPLETE (FE-01→FE-11 all ✅). Phase 6 integration COMPLETE (INT-01/02/03/04/05/06 all ✅). Phase 7: TEST-01 in progress (coverage 19.0%).
 31|> **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 32|
 33|## Active Tasks
@@ -77,7 +77,7 @@
 71||| ✅ INT-01 | End-to-end tree flow (create → edit → merge → approve). Fork 503 root cause FIXED Tick 33 (ambiguous column in GetChildren SELECT — both db/node_repo.go and db/edge_repo.go). Unique DB names per test call (testutil/integration.go) fixes cross-package interference. 3/3 tests PASS with PG. | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
 72|| ✅ INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge). 4 tests (831 lines): ConcurrentEdits, CRDTMerge, PresenceState, PermissionsEnforcement. Commit bd4c7b1. | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 73|| ✅ INT-03 | Multi-profile integration (switch profiles, isolated trees, routing). 4 tests (839 lines): MultipleProfiles, ProfileSwitching, ProfileRouting, ProfileIsolation. Commit 8b87b90. | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
-74|| 🔄 INT-04 | Offline sync integration (offline → edit → reconnect → merge) — DISPATCHED Tick 46 via delegate_task | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
+74|| ✅ INT-04 | Offline sync integration — 2 tests, 7-step offline sync flow verified: snapshot capture → offline edits → delta computation → full sync → no-op delta. Foreman-direct after 1 failed delegate_task. Commit d6c3f77. Both PASS (0.66s). Phase 6 COMPLETE. | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Flash | High | DeepSeek V4 Pro |
 81|| ✅ INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — Foreman-direct: 2000 nodes in 49.9s (25ms/node), p50=246µs, p99=440µs. Commit 6e5d3ba. | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
 82|| ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 76|| ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
@@ -1032,4 +1032,30 @@
 **NEVER-DONE Audit Tick 46:** All 11 gates checked. No blockers. PG:5437 up 17h healthy. Phase 5: 11/11 ✅. Phase 6: 5/6 done (INT-04 in flight). DuckBrain entry written (hermes-canopy namespace).
 
 **Verdict:** DISPATCHED — INT-04 offline sync integration dispatched. All gates healthy. Phase 5 COMPLETE. Phase 6: 5/6 done. Next tick: INT-04 completion, E2E-001 (10 ticks overdue), or TEST-01 coverage push.
+
+### Tick 47 — 2026-07-26 06:42 UTC (DeepSeek V4 Flash — Foreman Direct + Audit)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. INT-04 committed (d6c3f77). Master branch, 106 commits ahead of origin/master |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger on .gitreins/). GITREINS_LLM_API_KEY configured |
+| 3 | Hilo graph | ✅ USEFUL | 867 edges, 146 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (71). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 12 Go packages all PASS. INT-04: 2/2 PASS (0.66s). Handler 51.8s with PG at 5437 (running 22h). Frontend: npm build PASS (646 KB JS, 64 KB CSS, 3.8 KB SW), tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 post-MVP stub adapters (transport/), 1 cursor TODO (tree_service.go:442), 3 auth test SKIPs (documented). None critical for MVP |
+| 6 | Deps | ⚠️ 159+ OUTDATED | Go: cloud SDKs, chi, zerolog, cel.dev/expr, ClickHouse behind. npm: 3 outdated (@types/node, typescript, lucide-react). Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks detect: no leaks found (7.83s, 200.9MB scanned) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 14+ packages). tsc --noEmit: clean |
+| 10 | Board consistency | ✅ AGREED | GitReins: 8 complete tasks. INT-04 marked ✅. Phase 6 now COMPLETE (6/6). Board and GitReins agree. No drift |
+| 11 | Dispatch | ⏸️ DEFERRED | INT-04 written foreman-direct after 1 failed delegate_task (Tick 46). Phase 6 COMPLETE. E2E-001: 19 ticks overdue — due next tick. TEST-01 still needs coverage push (transport 16.7%, hermes 25.0%, db 0.0%) |
+
+**INT-04 Results (foreman-direct):** INT-04 delegate_task from Tick 46 produced no output (same pattern as INT-05 and FE-09 workers). Foreman wrote offline sync integration test directly — 2 tests, 301 lines:
+- **TestINT04_OfflineSync:** 7-step flow: create tree → capture snapshot → simulate 2 offline node adds + 1 node update → compute delta (2 added, 1 changed ✓) → full sync for new clients (5 nodes ✓) → no-op delta for up-to-date clients (0 added ✓). All PASS.
+- **TestINT04_SyncEngineDirect:** Unknown hash fallback (compacted-away) returns full sync. Node count integrity after batch mutations. All PASS.
+
+**Coverage (Tick 47):** 19.0% (cached — no coverage changes this tick). transport 16.7%, hermes 25.0%, db 0.0% remain below target.
+
+**NEVER-DONE Audit Tick 47:** All 11 gates checked. No blockers. PG:5437 up 22h healthy. Phase 5: 11/11 ✅. Phase 6: 6/6 ✅ COMPLETE. DuckBrain: MCP connection intermittent — entry pending.
+
+**Verdict:** COMPLETED — INT-04 offline sync integration tests written foreman-direct (d6c3f77). Phase 6 integration COMPLETE (6/6 tasks ✅). All gates healthy. Phase 5: 11/11 ✅. Phase 6: 6/6 ✅. Phase 7: TEST-01 in progress. Next tick: E2E-001 (19 ticks overdue — CRITICAL), TEST-01 coverage push, or Phase 8 deployment.
 
