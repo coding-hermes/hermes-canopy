@@ -82,7 +82,7 @@
 | ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 | ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 | **Phase 7: Testing** | | | | | | | | |
-||| 🔄 TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) — tree_repo ✅, node+edge dispatched | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | DeepSeek V4 Pro | Medium | Step 3.7 Flash | ✅ Tick 52: 17 tree_repo tests fixed + PASS. 🔄 Tick 53: node_repo + edge_repo tests dispatched (worker deleg_7528b11c). Remaining: approval, topic, user, mls, transport, snapshot, event. |
+||| 🔄 TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) — tree_repo ✅, node_repo ✅, edge_repo ✅ | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | DeepSeek V4 Pro | Medium | Step 3.7 Flash | ✅ Tick 52: 17 tree_repo tests fixed + PASS. ✅ Tick 54: node_repo (21 tests) + edge_repo (18 tests) committed. 🔄 Tick 54: approval_repo + topic_repo dispatched (deleg_acb3ca7f).
 | TEST-02 | Integration test suite (docker-compose, full API surface) | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
 | TEST-03 | Chaos & resilience (kill backend, network partition, DB outage) | Low | 4 | INT-01 | ++testing, ++chaos, ++resilience | DeepSeek V4 Pro | High | GLM-5.2 |
 | TEST-04 | Security audit (MLS key rotation, JWT expiry, auth bypass attempts) | Medium | 4 | BE-10d, BE-07 | ++testing, ++security, ++audit | GLM-5.2 | High | GPT-5.6 Sol |
@@ -190,4 +190,35 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 - GATE 10: ✅ Board consistent
 - GATE 11: 🔄 TEST-01 node+edge dispatched (worker deleg_7528b11c)
 
-**Verdict:** COVERAGE PUSH — Phases 1-6 complete. PG healthy (21h uptime). All tests pass. Coverage 32.5% with db/ at 6.1% (massive gap, only tree_repo has tests). Dispatched TEST-01 worker targeting node+edge repos. Remaining coverage gaps: approval_repo, topic_repo, user_repo, mls_repo, transport_repo, snapshot_repo, event_repo. Next: complete node+edge tests, then remaining repo coverage, then Phase 8 deployment (DEPLOY-01 Docker). Load healthy.
+**Verdict:** COVERAGE PUSH — Phases 1-6 complete. PG healthy (22h uptime). All tests pass. Coverage 35.8% (+3.3%). db/ tree_repo 87.8%, node_repo 74.2%, edge_repo 84.9%. Dispatched TEST-01 worker targeting approval_repo + topic_repo. Next: remaining repo coverage, then Phase 8 deployment (DEPLOY-01 Docker). Load healthy.
+
+### Tick 54 — 2026-07-26 06:08 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ COMMITTED | Worker (deleg_7528b11c) produced 21 node_repo + 18 edge_repo tests (920 lines). Committed 375cfb0. Coverage 32.5%→35.8%. Only `.vfs/graph/edges.jsonl` and `frontend/test-results/` untracked |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger). GITREINS_LLM_API_KEY configured |
+| 3 | Hilo graph | ✅ USEFUL | 907 edges, 150 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (72). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 14 Go packages all PASS (handler 54.8s, integration with PG at :5437 — 22h uptime). Frontend: npm build PASS |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 post-MVP stub adapters (transport/), 1 cursor TODO (tree_service.go:442). None critical |
+| 6 | Deps | ⚠️ 150+ Go outdated | Cloud SDKs, chi, zerolog, cel.dev/expr behind. npm: 3 outdated (@types/node, typescript, lucide-react). Not blocking |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit: clean. npm build PASS |
+| 10 | Board consistency | ✅ AGREED | GitReins: no active tasks. MATRIX format, routing notes current. No drift |
+| 11 | Dispatch | 🔄 DISPATCHED | TEST-01 approval_repo + topic_repo tests dispatched (deleg_acb3ca7f) |
+
+**Coverage (Tick 54):** 35.8% total. db/ tree_repo: 87.8%, node_repo: 74.2%, edge_repo: 84.9%. Remaining 0%: approval, topic, user, mls, transport, snapshot, event.
+
+**NEVER-DONE Audit Tick 54:** All 11 gates checked.
+- GATE 1: ✅ Worker code committed (375cfb0)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (907 edges, 150 files)
+- GATE 4: ✅ All 14 Go packages PASS
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 150+ outdated Go deps (non-blocking)
+- GATE 7: ✅ GitReins config present
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean
+- GATE 10: ✅ Board consistent
+- GATE 11: 🔄 TEST-01 approval+topic dispatched (deleg_acb3ca7f)
