@@ -68,8 +68,8 @@ func (r *PGNodeRepo) Create(ctx context.Context, node *Node) (*Node, error) {
         INSERT INTO nodes
             (tree_id, parent_id, author_id, content, content_format,
              node_type, sequence_num, metadata)
-        VALUES ($1, $2, $3, $4, COALESCE($5, 'markdown'),
-                COALESCE($6, 'message'), COALESCE(NULLIF($7, 0), NULL),
+        VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'markdown'),
+                COALESCE(NULLIF($6, ''), 'message'), COALESCE(NULLIF($7, 0), NULL),
                 COALESCE($8, '{}'::jsonb))
         RETURNING `+nodeColumns,
 		node.TreeID, node.ParentID, node.AuthorID, node.Content,
@@ -136,12 +136,16 @@ func (r *PGNodeRepo) GetChildren(ctx context.Context, parentID uuid.UUID) ([]Nod
 // Result includes the input node (index 0) up to the root (last).
 func (r *PGNodeRepo) GetAncestors(ctx context.Context, nodeID uuid.UUID) ([]Node, error) {
 	rows, err := r.pool.Query(ctx, `
-        WITH RECURSIVE chain AS (
+        WITH RECURSIVE chain(id, tree_id, parent_id, author_id, content,
+                content_format, node_type, sequence_num, metadata, created_at,
+                edited_at, deleted_at) AS (
             SELECT `+nodeColumns+`
             FROM nodes
             WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.`+splitCols()+`
+            SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
+                   n.content_format, n.node_type, n.sequence_num, n.metadata,
+                   n.created_at, n.edited_at, n.deleted_at
             FROM nodes n
             JOIN chain c ON n.id = c.parent_id
             WHERE n.deleted_at IS NULL
@@ -313,7 +317,7 @@ func (r *PGNodeRepo) HardDelete(ctx context.Context, id uuid.UUID) error {
 func (r *PGNodeRepo) GetCounts(ctx context.Context, treeID uuid.UUID) (*NodeCounts, error) {
 	c := &NodeCounts{TreeID: treeID}
 	err := r.pool.QueryRow(ctx, `
-        WITH tree_nodes AS (
+        WITH RECURSIVE tree_nodes AS (
             SELECT id, parent_id, deleted_at
             FROM nodes
             WHERE tree_id = $1

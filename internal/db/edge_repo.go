@@ -296,7 +296,8 @@ func (r *PGEdgeRepo) Move(ctx context.Context, id uuid.UUID, newSourceID uuid.UU
 	row := r.pool.QueryRow(ctx, `
         UPDATE edges
         SET source_id = $2,
-            sequence_num = NULL
+            sequence_num = (SELECT COALESCE(MAX(sequence_num), 0) + 1
+                            FROM edges WHERE source_id = $2 AND deleted_at IS NULL)
         WHERE id = $1 AND deleted_at IS NULL
           AND source_id != $2
         RETURNING `+edgeColumns,
@@ -308,9 +309,6 @@ func (r *PGEdgeRepo) Move(ctx context.Context, id uuid.UUID, newSourceID uuid.UU
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("db: move edge: %w", err)
-	}
-	if e.SourceID == newSourceID {
-		return nil, ErrSelfEdge
 	}
 	return &e, nil
 }
