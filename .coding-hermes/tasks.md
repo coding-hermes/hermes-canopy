@@ -27,7 +27,7 @@
 27|
 28|> **Core purpose:** Hermes-native knowledge canopy — collaborative tree-structured knowledge with multi-agent approval, offline-first CRDT sync, MLS encryption, and plugin-based extension cards. Canvas for agent-visible memory.
 29|> **Language:** Go (backend) + TypeScript/React (frontend) | **CI:** GitHub Actions
-30|> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01→FE-08, FE-10→FE-11 ✅. FE-09 (Offline) remaining. INT-01 fork 503 pool fix applied (d802b1b) — unblocked, ready for re-test with PG. Phase 6: INT-02/03/06 ✅, INT-01 🔄 unblocked.
+30|> **Status:** Phase 4 backend + integration COMPLETE (BE-01→BE-18, BE-12a→BE-12e all ✅). Phase 5 frontend: FE-01→FE-08, FE-10→FE-11 ✅. FE-09 (Offline) remaining. Phase 6: INT-01/02/03/05/06 ✅. INT-04 blocked on FE-09.
 31|> **DuckBrain:** hermes-canopy namespace (populated tick 2026-07-24-16-07 — status, bugs, tasks, architecture, CI)
 32|
 33|## Active Tasks
@@ -78,7 +78,7 @@
 72|| ✅ INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge). 4 tests (831 lines): ConcurrentEdits, CRDTMerge, PresenceState, PermissionsEnforcement. Commit bd4c7b1. | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 73|| ✅ INT-03 | Multi-profile integration (switch profiles, isolated trees, routing). 4 tests (839 lines): MultipleProfiles, ProfileSwitching, ProfileRouting, ProfileIsolation. Commit 8b87b90. | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 74|| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
-81|| 🔄 INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — dispatched Tick 35, re-dispatch needed (no worker output found) | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
+81|| ✅ INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — Foreman-direct: 2000 nodes in 49.9s (25ms/node), p50=246µs, p99=440µs. Commit 6e5d3ba. | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
 82|| ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 76|| ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 77|| **Phase 7: Testing** | | | | | | | | |
@@ -860,4 +860,24 @@
 
 **NEVER-DONE Audit Tick 38:** All 11 gates checked. No new blockers or regressions. PG at 5437 still running (15h uptime, healthy). Frontend build clean. Phase 5: 10/11 done (FE-09 Offline remains — Low, Cpx 5). Phase 6: 5/6 done (INT-01/02/03/06 ✅, INT-05 re-dispatched, INT-04 blocked on FE-09). Phase 7/8: all pending.
 
-**Verdict:** AUDIT + DISPATCH — INT-05 re-dispatched (3rd attempt) with explicit file path and build/verification instructions. E2E-001 from Tick 37 still in flight. All 11 gates healthy. No regressions or blockers. Phase 5 frontend complete minus FE-09 (Offline). Phase 6 integration 5/6 complete. Load healthy (46Gi available).
+| **Verdict:** AUDIT + DISPATCH — INT-05 re-dispatched (3rd attempt) with explicit file path and build/verification instructions. E2E-001 from Tick 37 still in flight. All 11 gates healthy. No regressions or blockers. Phase 5 frontend complete minus FE-09 (Offline). Phase 6 integration 5/6 complete. Load healthy (46Gi available).
+
+### Tick 39 — 2026-07-25 22:32 UTC (DeepSeek V4 Flash — Foreman Audit + INT-05 Done)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Master branch. Last commit: Tick 38 board update (026cf9d). Workdir clean |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff. check-gitreins-judge.py PASS |
+| 3 | Hilo graph | ✅ USEFUL | 823 edges, 139 files, 3 languages. Top dep: google/uuid (67). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 12 Go packages all PASS (cached). Frontend: npm build PASS (644.75 KB JS, 63.96 KB CSS). tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 9 TODOs | 5 post-MVP stub adapters (transport/), 1 cursor TODO (tree_service.go:442), 3 auth test SKIPs. None critical |
+| 6 | Deps | ⚠️ 159+ OUTDATED | Go: cloud SDKs, Azure, keyring, chi, zerolog behind. npm: 3 outdated (@types/node 24→26, typescript 6→7, lucide-react). None impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks detect: no leaks found |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 12 packages). tsc --noEmit: clean |
+| 10 | Board consistency | ✅ AGREED | GitReins: 8 complete tasks. Board and GitReins agree. INT-05 now ✅ |
+| 11 | Dispatch | ✅ INT-05 COMPLETED | INT-05 written foreman-direct after 3 failed delegate_task attempts. 2 tests: 2000 nodes in 49.9s (25ms/node), p99 latency 440µs. Commit 6e5d3ba. PG at 5437 running (17h). |
+
+**NEVER-DONE Audit Tick 39:** All 11 gates checked. No new blockers or regressions. INT-05 resolved after 3 failed dispatch attempts — benchmark tests written foreman-direct using existing testutil infrastructure. Phase 6: 5/6 tasks done (INT-01/02/03/05/06 ✅). INT-04 blocked on FE-09. Phase 5: 10/11 done (FE-09 Offline remains, Low, Cpx 5). Phase 7+ all pending.
+
+**Verdict:** INT-05 COMPLETED — 3 failed delegate_task attempts finally resolved by writing benchmark tests directly. Benchmark results: 2000 nodes created in 49.9s (24.95ms/node), p99 latency 440µs across 50 samples. Phase 6 integration 5/6 complete. Next: FE-09 (Offline, last P5 task) or Phase 7 testing (TEST-01→TEST-05). PG uptime 17h, load healthy (46Gi available). DuckBrain: entry written.
