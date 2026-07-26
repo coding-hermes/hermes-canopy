@@ -65,19 +65,19 @@
 | ✅ BUG-006 | Double <h1>: NavigationBar logo uses <h1> for "🌳 Canopy" AND page titles use <h1>. FIXED: changed sidebar logo in App.tsx from h1 to span (commit b099659). Each page now has exactly one h1. | Medium | 2 | FE-04 | ++frontend, ++testing, ++a11y | DeepSeek V4 Flash | Low | Hy3 |
 | ✅ BUG-007 | Tree page doesn't render React Flow components (.react-flow, .react-flow__background, .react-flow__controls, .react-flow__minimap) — 5 tests fail. Likely because tree page needs data/messages before canvas renders. Tests should seed data or page should show empty canvas. | Medium | 3 | FE-03 | ++frontend, ++testing, ++visualization | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-008 | E2E approval-panel tests (5 tests, all PASS). Root cause: handler Routes() only had /pending, /history, /{id}, /{id}/approve, /{id}/deny — bare GET / was missing. Fix: added ListAll to ApprovalRepo + ApprovalService, registered r.Get("/", h.ListAll) in Routes(), updated frontend to handle {approvals: [...]} wrapper. Commit 93229ea. | High | 3 | BE-07, FE-06 | ++frontend, ++testing, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| ✅ BUG-009 | E2E test failures in crud-pages (4/4 tests fail). Dual root cause: (1) Vite proxy targeting :8080 but canopyd on :8091 → all API 404s, (2) crud-pages test locator 'text=Select a tree' matched 2 elements (h3+p) causing Playwright strict-mode error. Fixes: vite.config.ts proxy → :8091 (67d7c03) + locator→h3 hasText (9ba0129). 13/13 PASS. | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
+| ✅ BUG-009 | E2E test failures in crud-pages (4/4 tests fail). Dual root cause: (1) Vite proxy targeting :8080 but canopyd on :8091 -> all API 404s, (2) crud-pages test locator 'text=Select a tree' matched 2 elements (h3+p) causing Playwright strict-mode error. Fixes: vite.config.ts proxy -> :8091 (67d7c03) + locator->h3 hasText (9ba0129). 13/13 PASS. | Medium | 3 | BUG-004 | ++frontend, ++testing | DeepSeek V4 Pro | Medium | Hy3 |
 || ✅ BUG-010 | computeDepth CTE infinite loop — FIXED Tick 25. Recursive CTE now starts from the node itself (SELECT id, parent_id FROM nodes WHERE id = $1) and joins on n.id = chain.parent_id, walking UP the parent chain until NULL. Commit 7600e14. INT-01 unblocked. | Critical | 3 | BE-04 | ++backend, ++debugging, ++sql | DeepSeek V4 Pro | Medium | GLM-5.2 |
-|| ✅ BUG-011 | Fork endpoint returns 500 INTERNAL_ERROR — FIXED Tick 27 (5b7c785). Root cause: ErrDatabaseUnavailable unmapped in writeServiceError (node + tree handlers) → default 500. Fix: added 503 SERVICE_UNAVAILABLE mapping. INT-01 unblocked. | High | 2 | BE-04 | ++backend, ++debugging, ++testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
+|| ✅ BUG-011 | Fork endpoint returns 500 INTERNAL_ERROR — FIXED Tick 27 (5b7c785). Root cause: ErrDatabaseUnavailable unmapped in writeServiceError (node + tree handlers) -> default 500. Fix: added 503 SERVICE_UNAVAILABLE mapping. INT-01 unblocked. | High | 2 | BE-04 | ++backend, ++debugging, ++testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-001 | Port 8080 occupied — HTTP_ADDR env var already exists in config.go (line 79). No code change needed. Start with: HTTP_ADDR=:8090 ./canopyd. DOCUMENTED Tick 19. | Low | 1 | — | ++config, ++infra | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 || ✅ BUG-002 | Fix CORS: frontend/src/types/approval.ts:80 hardcodes http://localhost:8080/api/v1/approvals bypassing Vite proxy. RESOLVED by BUG-003 (approval.ts now uses relative /api/v1). Only remaining localhost:8080 is App.tsx:129 status display. | Medium | 2 | — | ++frontend, ++api, ++config | DeepSeek V4 Flash | Low | Hy3 |
 || ✅ BUG-003 | Add dev JWT auto-injection: Vite proxy injects dev JWT (HS256) with sub=00000000-0000-0000-0000-000000000001. API base changed to relative /api/v1. Commit c2d50e4. | Medium | 2 | BE-07 | ++frontend, ++auth, ++dev-tools | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || ✅ BUG-004 | Trees/Nodes/Topics/Cards pages are "Coming soon" placeholders — no real CRUD UI wired. Backend APIs exist but frontend pages are stubs | High | 4 | BE-04, FE-03 | ++frontend, ++ui, ++crud | DeepSeek V4 Pro | High | GLM-5.2 |
 || ✅ BUG-005 | Approvals page — resolved as side-effect of BUG-002 + BUG-003 (relative /api/v1 + dev JWT auto-injection). Now works with Vite proxy. | Medium | 2 | BUG-002, BUG-003 | ++frontend, ++ui, ++debugging | DeepSeek V4 Flash | Medium | Hy3 |
 | **Phase 6: Integration** | | | | | | | | |
-|| ✅ INT-01 | End-to-end tree flow (create → edit → merge → approve). Fork 503 root cause FIXED Tick 33 (ambiguous column in GetChildren SELECT — both db/node_repo.go and db/edge_repo.go). Unique DB names per test call (testutil/integration.go) fixes cross-package interference. 3/3 tests PASS with PG. | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
+|| ✅ INT-01 | End-to-end tree flow (create -> edit -> merge -> approve). Fork 503 root cause FIXED Tick 33 (ambiguous column in GetChildren SELECT — both db/node_repo.go and db/edge_repo.go). Unique DB names per test call (testutil/integration.go) fixes cross-package interference. 3/3 tests PASS with PG. | High | 4 | BE-12b, FE-03 | ++testing, ++e2e, ++integration | Step 3.7 Flash | High | DeepSeek V4 Pro |
 | ✅ INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge). 4 tests (831 lines): ConcurrentEdits, CRDTMerge, PresenceState, PermissionsEnforcement. Commit bd4c7b1. | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 | ✅ INT-03 | Multi-profile integration (switch profiles, isolated trees, routing). 4 tests (839 lines): MultipleProfiles, ProfileSwitching, ProfileRouting, ProfileIsolation. Commit 8b87b90. | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
-| ✅ INT-04 | Offline sync integration — 2 tests, 7-step offline sync flow verified: snapshot capture → offline edits → delta computation → full sync → no-op delta. Foreman-direct after 1 failed delegate_task. Commit d6c3f77. Both PASS (0.66s). Phase 6 COMPLETE. | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Flash | High | DeepSeek V4 Pro |
+| ✅ INT-04 | Offline sync integration — 2 tests, 7-step offline sync flow verified: snapshot capture -> offline edits -> delta computation -> full sync -> no-op delta. Foreman-direct after 1 failed delegate_task. Commit d6c3f77. Both PASS (0.66s). Phase 6 COMPLETE. | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Flash | High | DeepSeek V4 Pro |
 | ✅ INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — Foreman-direct: 2000 nodes in 49.9s (25ms/node), p50=246µs, p99=440µs. Commit 6e5d3ba. | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 | ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
@@ -88,11 +88,11 @@
 | TEST-04 | Security audit (MLS key rotation, JWT expiry, auth bypass attempts) | Medium | 4 | BE-10d, BE-07 | ++testing, ++security, ++audit | GLM-5.2 | High | GPT-5.6 Sol |
 | TEST-05 | Accessibility audit (axe-core, manual screen reader, keyboard-only) | Low | 3 | FE-10 | ++testing, ++accessibility | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
 | **Phase 8: Deployment** | | | | | | | | |
-|| ✅ DEPLOY-01 | Production Dockerfile (3-stage: frontend→Go→alpine), docker-compose.yml (canopyd + PG), .dockerignore. Image 52.4MB, builds PASS. WebUI Native Binary deferred. Tick 58. | High | 3 | BE-12f, FE-03 | ++infra, ++docker, ++deploy | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+|| ✅ DEPLOY-01 | Production Dockerfile (3-stage: frontend->Go->alpine), docker-compose.yml (canopyd + PG), .dockerignore. Image 52.4MB, builds PASS. WebUI Native Binary deferred. Tick 58. | High | 3 | BE-12f, FE-03 | ++infra, ++docker, ++deploy | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 || ✅ DEPLOY-02 | Observability (Prometheus + Grafana + structured logging + traces) — committed ebe6c02. Metrics middleware + /metrics + METRICS_ENABLED config + Grafana dashboard | Medium | 3 | BE-05 | ++observability, ++monitoring | DeepSeek V4 Pro | Medium | GLM-5.2 |
-|| ✅ DEPLOY-03 | CI/CD (GitHub Actions: test → build → deploy → smoke test) — committed. Enhanced CI: golangci-lint, frontend npm build+tsc, gitleaks, Docker build. 100-line workflow. | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
+|| ✅ DEPLOY-03 | CI/CD (GitHub Actions: test -> build -> deploy -> smoke test) — committed. Enhanced CI: golangci-lint, frontend npm build+tsc, gitleaks, Docker build. 100-line workflow. | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 || ✅ DEPLOY-04 | Documentation (README, API docs, deploy guide, architecture overview) | Low | 2 | — | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
-|| ✅ DEPLOY-05 | Migration plan (existing Hermes data → canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
+|| ✅ DEPLOY-05 | Migration plan (existing Hermes data -> canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | **Phase 9: Distribution** | | | | | | | | |
 | DIST-01 | Multi-tenant + Multi-transport isolation | Low | 4 | BE-09d | ++multi-tenant, ++transport | DeepSeek V4 Pro | High | GLM-5.2 |
 | DIST-02 | Self-host guide (single binary, env vars, TLS, backup) | Low | 2 | DEPLOY-01 | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
@@ -627,3 +627,35 @@ Docker compose `up -d` blocked by transient Alpine mirror issue (network timeout
 
 **Verdict:** STABLE TICK — All systems healthy. PG at :5437 accepting connections (no crash recovery since Tick 64). 16/16 Go packages all PASS. Frontend build clean. Phase 8 (Deployment) 5/5 COMPLETE ✅. Three workers still in flight: TEST-02 (Tick 63 — integration test suite), E2E-001 (Tick 62 — browser E2E), TEST-03 (Tick 66 — chaos and resilience). Host load moderate (10.00). Remaining tasks (post-MVP/low-priority): TEST-04 (security audit), TEST-05 (accessibility), DIST-01/02/03 (distribution). Coverage 35.7% steady. Next tick: check worker results, drain pending queue.
 
+### Tick 68 — 2026-07-26 13:23 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact — no source changes). No worker output found on disk. |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 937 edges, 154 files (unchanged — no source changes). Top dep: google/uuid (76). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 16 Go packages all PASS (cached — no source changes). Frontend: npm build PASS (vite 8.1.5, 647KB JS + 64KB CSS + 3.8KB SW). tsc --noEmit clean. 41/41 frontend E2E tests PASS (vitest integration config). PG healthy at :5437. |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442) + 3 auth test SKIPs (BE-12c — documented). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 4 outdated (@types/node, lucide-react, typescript, tailwindcss). Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active tasks. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard — no zombie gitleaks processes). |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 16 packages). tsc --noEmit: clean. npm build: PASS. Board format validation: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid (PASS). Phase 8: 5/5 COMPLETE ✅. TEST-02 (Tick 63) + E2E-001 (Tick 62) + TEST-03 (Tick 66) still pending. |
+| 11 | Dispatch | ⏸️ NO DISPATCH — 3 WORKERS PENDING | Host load moderate (8.29). Three workers still in flight: TEST-02 (Tick 63 — integration test suite), E2E-001 (Tick 62 — browser E2E), TEST-03 (Tick 66 — chaos and resilience). Not dispatching new work — let existing workers drain. |
+
+**Coverage (Tick 68):** 35.7% total (unchanged — no new source logic this tick). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓, topic_repo: ✓. Per-package: handler 43.9%, mls 80.6%, card 70.8%, sse 67.5%, transport 16.7%, service 26.5%, sync 43.8%, server 22.2%, hermes 25.0%, telemetry 0.0%.
+
+**NEVER-DONE Audit Tick 68:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact — harmless)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (937 edges, 154 files)
+- GATE 4: ✅ All 16 Go packages PASS. 41/41 frontend E2E tests PASS. Frontend build PASS. PG healthy.
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 153 outdated Go deps (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build)
+- GATE 10: ✅ Board consistent (format valid, dual-source agreed, Phase 8 complete)
+- GATE 11: ⏸️ No dispatch — 3 workers pending (TEST-02, E2E-001, TEST-03)
+
+**Verdict:** STABLE TICK — All systems healthy. PG accepting connections at :5437 (no crash recovery since Tick 64). 16/16 Go packages all PASS. 41/41 frontend E2E tests PASS. Frontend build + tsc clean. Phase 8 (Deployment) 5/5 COMPLETE ✅. Three workers still in flight: TEST-02 (Tick 63 — integration test suite), E2E-001 (Tick 62 — browser E2E), TEST-03 (Tick 66 — chaos and resilience). Host load moderate (8.29). Remaining tasks (post-MVP/low-priority): TEST-04 (security audit), TEST-05 (accessibility), DIST-01/02/03 (distribution). Coverage 35.7% steady. Next tick: check worker results, drain pending queue.
