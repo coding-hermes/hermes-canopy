@@ -78,7 +78,8 @@
 72|| ✅ INT-02 | Multi-user integration (2+ users, concurrent edits, CRDT merge). 4 tests (831 lines): ConcurrentEdits, CRDTMerge, PresenceState, PermissionsEnforcement. Commit bd4c7b1. | Medium | 4 | FE-07, BE-07 | ++testing, ++multi-user, ++crdt | DeepSeek V4 Pro | High | GLM-5.2 |
 73|| ✅ INT-03 | Multi-profile integration (switch profiles, isolated trees, routing). 4 tests (839 lines): MultipleProfiles, ProfileSwitching, ProfileRouting, ProfileIsolation. Commit 8b87b90. | Low | 3 | BE-08 | ++testing, ++multi-profile | DeepSeek V4 Pro | Medium | Step 3.7 Flash |
 74|| INT-04 | Offline sync integration (offline → edit → reconnect → merge) | Low | 5 | FE-09 | ++testing, ++offline, ++sync | DeepSeek V4 Pro | High | GPT-5.6 Sol |
-75|| 🔄 INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — dispatched Tick 35 (worker in flight — DeepSeek V4 Pro) | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
+81|| 🔄 INT-05 | Performance baseline (render 2000 nodes, 50 concurrent SSE, latency p99) — dispatched Tick 35, re-dispatch needed (no worker output found) | Medium | 3 | INT-01 | ++performance, ++benchmark | DeepSeek V4 Pro | Medium | GLM-5.2 |
+82|| ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 76|| ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 77|| **Phase 7: Testing** | | | | | | | | |
 78|| TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
@@ -820,3 +821,23 @@
 **E2E-001 OVERDUE — Re-dispatching.** Last full run was Tick 28 (7 ticks ago, 41/41 PASS). All E2E bugs from Ticks 19-23 resolved (BUG-001→011 ✅). INT-05 Cpx 2/3 performance baseline dispatched Tick 35 — still in flight (benchmarks take time: 2000 node rendering, 50 concurrent SSE). Phase 5: 10/11 done, only FE-09 (Offline, Low, Cpx 5) remains. Phase 6: 5/6 done (INT-01/02/03/06 ✅, INT-05 in flight, INT-04 blocked on FE-09). DuckBrain: tick entry written.
 
 **Verdict:** AUDIT ONLY — E2E-001 re-dispatched overdue. All 11 gates healthy. INT-05 worker in flight. No new blockers or regressions. Load 9.01 (elevated, 46Gi available — healthy).
+
+### Tick 37 — 2026-07-25 21:33 UTC (DeepSeek V4 Flash — Foreman Audit + E2E-001 Dispatch)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean, master branch. Only edges.jsonl (Hilo noise, restored) |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff. check-gitreins-judge.py PASS |
+| 3 | Hilo graph | ✅ USEFUL | 823 edges, 139 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (67). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 14 Go packages all PASS (handler 17.7s, all integration cached). PG at 5437 running (13h). Frontend: npm build PASS (644.75 KB JS, 63.96 KB CSS), tsc --noEmit clean |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 post-MVP stub adapters (transport/), 1 cursor TODO (tree_service.go:442). None critical for MVP |
+| 6 | Deps | ⚠️ 159 OUTDATED | cloud SDKs (Google, Azure), keyring, chi, zerolog, cel.dev/expr, ClickHouse behind. Not impacting build. No breaking upgrades |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks detect: no leaks found. Clean scan |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK. tsc --noEmit clean |
+| 10 | Board consistency | ✅ AGREED | GitReins: 8 complete (gitreins-judge-verify, BUG-003/006/008/009/010/011, INT-01 all ✅). Board and GitReins agree. INT-05 marked needing re-dispatch. E2E-001 re-dispatched |
+| 11 | Dispatch | ✅ E2E-001 RE-DISPATCHED | E2E-001 overdue (9 ticks since Tick 28 — last 100% pass). Dispatched via delegate_task to DeepSeek V4 Flash worker. INT-05 needs re-dispatch (no benchmark files found from Ticks 34-35 dispatches) |
+
+**NEVER-DONE Audit Tick 37:** All 11 gates checked. No new blockers or regressions. INT-04 remains blocked on FE-09 (Offline, Low, Cpx 5). DuckBrain entry written.
+
+**Verdict:** AUDIT ONLY — E2E-001 re-dispatched overdue (9 ticks). INT-05 needs re-dispatch (prior delegate_task calls produced no committed output). All source gates healthy. Phase 5: 10/11 done (FE-09 remaining). Phase 6: 5/6 done (INT-01/02/03/06 ✅, INT-05 pending, INT-04 blocked on FE-09). Load healthy.
