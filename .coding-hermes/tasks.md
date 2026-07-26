@@ -89,7 +89,7 @@
 | TEST-05 | Accessibility audit (axe-core, manual screen reader, keyboard-only) | Low | 3 | FE-10 | ++testing, ++accessibility | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
 | **Phase 8: Deployment** | | | | | | | | |
 || ✅ DEPLOY-01 | Production Dockerfile (3-stage: frontend→Go→alpine), docker-compose.yml (canopyd + PG), .dockerignore. Image 52.4MB, builds PASS. WebUI Native Binary deferred. Tick 58. | High | 3 | BE-12f, FE-03 | ++infra, ++docker, ++deploy | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
-| DEPLOY-02 | Observability (Prometheus + Grafana + structured logging + traces) | Medium | 3 | BE-05 | ++observability, ++monitoring | DeepSeek V4 Pro | Medium | GLM-5.2 |
+|| ✅ DEPLOY-02 | Observability (Prometheus + Grafana + structured logging + traces) — committed ebe6c02. Metrics middleware + /metrics + METRICS_ENABLED config + Grafana dashboard | Medium | 3 | BE-05 | ++observability, ++monitoring | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | DEPLOY-03 | CI/CD (GitHub Actions: test → build → deploy → smoke test) | Medium | 3 | BE-12f | ++infra, ++ci | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 | DEPLOY-04 | Documentation (README, API docs, deploy guide, architecture overview) | Low | 2 | — | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
 | DEPLOY-05 | Migration plan (existing Hermes data → canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
@@ -191,6 +191,39 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 - GATE 11: 🔄 DEPLOY-03 CI/CD worker dispatched
 
 **Verdict:** DEPLOY-02 COMPLETE ✅ — Prometheus metrics integrated and wired. Telemetry middleware records request duration/count/active connections. /metrics endpoint live at same port (METRICS_ENABLED=true). Grafana dashboard JSON in deploy/grafana/. All tests pass, build clean. Next: DEPLOY-03 (CI/CD pipeline via GitHub Actions) dispatched. Phase 8 (Deployment) — 2/5 tasks done (DEPLOY-01 Docker ✅, DEPLOY-02 Observability ✅).
+
+### Tick 61 — 2026-07-26 14:33 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact). DEPLOY-02 code from Tick 59 worker fully committed (ebe6c02). Tick 60 board update committed (e049688). |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured. |
+| 3 | Hilo graph | ✅ USEFUL | 937 edges (+3 from Tick 60), 154 files. Top dep: google/uuid (76). `internal/telemetry/` now tracked (2 files, 0 package-internal edges). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 15 Go packages all PASS (handler 59.1s, integration with PG at :5437 — 24h+ uptime). db/ 24.8s, card 0.3s. Frontend: npm build PASS (vite 8.1.5, SW 3.8KB). |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442). No new TODOs from telemetry package. |
+| 6 | Deps | ⚠️ 160+ Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 3 outdated (@types/node, typescript, lucide-react). Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. GitReins: 9 completed tasks, zero active tasks. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via guard) |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 15 packages incl. telemetry). tsc --noEmit: clean. npm build: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 pending tasks. Format valid (PASS). DEPLOY-02 → ✅ (board fixed — Tick 60 only updated tick log, missed the task row). 5 active tasks remain (TEST-02→05, DEPLOY-03→05, DIST-01/02/03, E2E-001). |
+| 11 | Dispatch | 🔄 DISPATCHED | DEPLOY-03 (CI/CD pipeline) re-dispatched via worker (deleg_e939bba4) — Tick 60 dispatch produced no output. Enhanced CI: npm build, Docker build, gitleaks, golangci-lint added to existing build.yml. |
+
+**Coverage (Tick 61):** 35.7% total (unchanged — no new source logic this tick). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16). telemetry package: 0% (acceptable — initial integration).
+
+**NEVER-DONE Audit Tick 61:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact — harmless)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (937 edges, 154 files)
+- GATE 4: ✅ All 15 Go packages PASS. Frontend build PASS. PG healthy (24h+).
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 160+ outdated Go deps (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build). New telemetry package compiles.
+- GATE 10: ✅ Board consistent (DEPLOY-02 ✅ fixed, format valid)
+- GATE 11: 🔄 DEPLOY-03 CI/CD worker re-dispatched
+
+**Verdict:** DEPLOY-02 ✅ board marker now correct. All tests pass (15/15 Go packages + frontend). PG healthy (24h+). Phase 8: 2/5 deployment tasks done. DEPLOY-03 (CI/CD pipeline enhancement) re-dispatched via worker — enhanced CI adds npm build, Docker image build, gitleaks, and golangci-lint to the existing workflow. 5 remaining active tasks: TEST-02→05 (testing phase) and DEPLOY-03→05 (deployment), plus DIST-01/02/03 (distribution, low priority) and E2E-001 (recurring). Coverage 35.7% held steady.
 
 ### Tick 59 — 2026-07-26 08:58 UTC (DeepSeek V4 Flash)
 
