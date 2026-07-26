@@ -494,3 +494,36 @@ Docker compose `up -d` blocked by transient Alpine mirror issue (network timeout
 - GATE 11: ✅ NO DISPATCH — TEST-01 complete. Ready for Phase 8 (DEPLOY-01 Docker).
 
 **Verdict:** TEST-01 APPROVAL + TOPIC TESTS COMPLETE ✅ — The 3rd-attempt worker (Tick 56 deleg_202ee4a3) eventually succeeded. 910 lines of test code written: 19 approval_repo tests + 16 topic_repo tests + 2 migration bug fixes (ambiguous column in refresh_topic_node_count, expired status constraint in approvals). All 35 tests PASS against PG at :5437 (23h uptime). Coverage 35.7%. Phase 7 primary objective achieved. Phase 8 (DEPLOY-01 Docker + Compose) is the highest-priority next task. Host load 8.89 — moderate, OK for foreman work but too high for LUNA E2E workers. Idle tick count: 0 (active tick — worker output committed).
+
+### Tick 64 — 2026-07-26 17:19 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact — no source changes). PG had a crash recovery event (<1min) earlier this tick — now healthy. |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured. gitleaks timed out at 30s (3 zombie processes found, killed) — fell back to built-in scanner (clean). |
+| 3 | Hilo graph | ✅ USEFUL | 937 edges, 154 files (unchanged — board-only tick). Top dep: google/uuid (76). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 16 Go packages all PASS. PG recovered from crash recovery (was in recovery mode after improper shutdown — all integration tests now pass). handler 89.9s, db 29.5s. Frontend: npm build PASS (vite 8.1.5, SW 3.8KB). tsc --noEmit clean. Coverage: db 35.7%, handler 43.9%, mls 80.6%, card 70.8%, sse 67.5%, transport 16.7%, overall steady. |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442) + 3 auth test SKIPs (BE-12c — documented). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 4 outdated (@types/node, typescript, lucide-react, tailwindcss). Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. GitReins: 9 completed tasks, zero active tasks. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks fallback to built-in scanner (3 zombie gitleaks killed — 300%+ CPU each). Built-in scan: clean. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all packages). tsc --noEmit: clean. npm build: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 pending tasks. Format valid (PASS). TEST-02 dispatched Tick 63 (pending). E2E-001 dispatched Tick 62 (pending). 5 active tasks remain (TEST-02→05, DEPLOY-05, DIST-01/02/03). |
+| 11 | Dispatch | ⏸️ NO DISPATCH — HIGH LOAD | Host load 59.28 (dropping from 65.87 after zombie cleanup). Multiple concurrent foreman ticks running (RethinkDB, off-by-one, HEADING, Kobayashi-Maru). Not dispatching new workers — let TEST-02 + E2E-001 complete. Existing dispatches: TEST-02 (Tick 63, deleg_4e101cf7 — still pending), E2E-001 (Tick 62, deleg_2e84e384 — still pending). |
+
+**Coverage (Tick 64):** 35.7% total (db package). Per-package: db/ 35.7%, handler 43.9%, mls 80.6%, card 70.8%, sse 67.5%, transport 16.7%, service 26.5%, sync 43.8%, server 22.2%, hermes 25.0%. cmd/canopyd 0.0%, telemetry 0.0%, migrations 0.0% (no tests — acceptable for non-code packages). Overall project coverage holding.
+
+**NEVER-DONE Audit Tick 64:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact — harmless)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests; gitleaks timeout → built-in fallback clean)
+- GATE 3: ✅ Hilo useful (937 edges, 154 files)
+- GATE 4: ✅ All 16 Go packages PASS. PG recovered from crash (now healthy). Frontend build PASS.
+- GATE 5: ⚠️ 6 TODOs + 3 auth test SKIPs (all documented, non-critical)
+- GATE 6: ⚠️ 153 outdated Go deps, 4 npm outdated (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean (built-in scanner after gitleaks timeout — 3 zombie processes killed)
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build)
+- GATE 10: ✅ Board consistent (format valid, no drift)
+- GATE 11: ⏸️ No dispatch — high load (59.28), allowing TEST-02 + E2E-001 workers to complete
+
+**Verdict:** OBSERVATION TICK — PG suffered an improper shutdown and recovered in ~4s (standard crash recovery). All tests PASS after recovery. 3 zombie gitleaks processes found consuming 300%+ CPU each (from prior guard runs) — killed. Host load high (59.28) from concurrent foreman ticks across the fleet — no new work dispatched. Two workers pending: TEST-02 (Tick 63, comprehensive integration test suite) and E2E-001 (Tick 62, recurring browser E2E). Phase 8: 3/5 tasks done (DEPLOY-01→03 ✅). Remaining: TEST-02→05, DEPLOY-05, DIST-01/02/03. Next tick: check worker results, dispatch DEPLOY-05 (migration plan) or TEST-03 (chaos) depending on load.
