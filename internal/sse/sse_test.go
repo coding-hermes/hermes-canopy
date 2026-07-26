@@ -327,7 +327,9 @@ func TestHandleTreeEvents_BroadcastFlow(t *testing.T) {
 	srv, hub, tid := newSSETestServer(t)
 	url := srv.URL + "/trees/" + tid.String() + "/events"
 
-	// Open an SSE connection.
+	// Open an SSE connection with heartbeats disabled for deterministic
+	// event parsing.
+	url = url + "?include_heartbeat=false"
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
