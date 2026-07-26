@@ -82,7 +82,7 @@
 | ✅ E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 37: re-dispatched via delegate_task |
 | ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 | **Phase 7: Testing** | | | | | | | | |
-| TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
+|| 🔄 TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | DeepSeek V4 Pro | Medium | Step 3.7 Flash | 🔄 Tick 50: db/ package tests dispatched (tree/node/edge repos — 0.0%→target 80%) |
 | TEST-02 | Integration test suite (docker-compose, full API surface) | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
 | TEST-03 | Chaos & resilience (kill backend, network partition, DB outage) | Low | 4 | INT-01 | ++testing, ++chaos, ++resilience | DeepSeek V4 Pro | High | GLM-5.2 |
 | TEST-04 | Security audit (MLS key rotation, JWT expiry, auth bypass attempts) | Medium | 4 | BE-10d, BE-07 | ++testing, ++security, ++audit | GLM-5.2 | High | GPT-5.6 Sol |
@@ -462,3 +462,36 @@ E2E-001 dispatched — 19 ticks overdue. Phases 5+6 COMPLETE. DuckBrain entry wr
 **NEVER-DONE Audit Tick 49:** All 11 gates checked. No new blockers or regressions. PG:5437 running 19h healthy. Phase 5: 11/11 ✅ COMPLETE. Phase 6: 6/6 ✅ COMPLETE. E2E-001 in flight from Tick 48. Next: TEST-01 coverage push (transport 16.7%, hermes 25.0%, db 0.0%), TEST-02 integration suite, or Phase 8 deployment (DEPLOY-01 Docker).
 
 **Verdict:** AUDIT ONLY — All 11 gates healthy. No regressions or blockers. E2E-001 in flight from Tick 48 (20 ticks overdue). DuckBrain entry written. Phase 5+6 COMPLETE. Phase 7+8 remaining. Load healthy (46Gi available). Next: TEST-01 coverage push, TEST-02, or DEPLOY-01.
+
+### Tick 50 — 2026-07-26 04:04 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `frontend/test-results/` untracked (Playwright artifact — harmless) |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green. test_mode: diff (safety trigger). GITREINS_LLM_API_KEY configured |
+| 3 | Hilo graph | ✅ USEFUL | 878 edges, 147 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (71). Hilo=useful |
+| 4 | Tests | ✅ ALL PASS | 14 Go packages all PASS (handler 62.4s, integration tests with PG at :5437 — 21h uptime). Frontend: npm build PASS (646KB JS + 64KB CSS + 3.8KB SW), tsc clean |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 post-MVP stub adapters (transport/stub_adapters.go), 1 cursor TODO (tree_service.go:442), 3 auth test SKIPs (BE-12c — documented). None critical for MVP |
+| 6 | Deps | ⚠️ 159+ Go outdated | cloud SDKs (Google, Azure), chi, zerolog, cel.dev/expr, ClickHouse behind. npm: 3 outdated (@types/node, typescript, lucide-react). Not impacting build |
+| 7 | GitReins config | ✅ PRESENT | evaluator: deepseek-v4-flash, 50 iter/10m/1M:0.4M. GITREINS_LLM_API_KEY configured. check-gitreins-judge.py PASS |
+| 8 | Secrets | ✅ CLEAN | gitleaks detect: no leaks (8.44s, 201MB scanned). Clean scan |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 14+ packages). tsc --noEmit: clean. npm build: PASS |
+| 10 | Board consistency | ✅ AGREED | GitReins: no stale active tasks for hermes-canopy. Phase 5: 11/11 ✅. Phase 6: 6/6 ✅ COMPLETE. No drift detected |
+| 11 | Dispatch | 🔄 DISPATCHED | TEST-01 db/ package worker (DeepSeek V4 Pro): write integration tests for tree_repo.go, node_repo.go, edge_repo.go — 0.0%→~60% coverage target. PG:5437 running 21h healthy |
+
+**Coverage (Tick 50):** 31.1% total (fresh coverage.out). Key gaps: db/ all repos 0.0%, hermes/profile_router 0.0%, transport/connection_manager 0.0%, cmd/canopyd 0.0%, migrations 0.0%.
+
+**NEVER-DONE Audit Tick 50:** All 11 gates checked.
+- GATE 1: ✅ Git clean
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (878 edges, 147 files)
+- GATE 4: ✅ All 14 Go packages PASS
+- GATE 5: ⚠️ 6 TODOs (all documented, non-critical)
+- GATE 6: ⚠️ 159+ outdated Go deps (cloud SDKs — non-blocking)
+- GATE 7: ✅ GitReins config present
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean
+- GATE 10: ✅ Board consistent
+- GATE 11: 🔄 TEST-01 db/ package dispatched
+
+**Verdict:** COVERAGE PUSH — Phases 1-6 complete. PG healthy (21h uptime). All tests pass. Coverage 31.1% with massive db/ gap at 0.0%. Dispatched TEST-01 worker targeting tree/node/edge repos. Next: complete db/ tests, then continue Phase 7 (TEST-02→05) or start Phase 8 (DEPLOY-01). Load healthy (39Gi available). Worker in flight from deleg_517ad3ed.
