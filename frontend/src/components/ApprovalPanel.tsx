@@ -426,7 +426,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Approvals</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Approvals</h1>
           <p className="text-sm text-gray-500 mt-1">
             Review and manage pending change requests
           </p>

@@ -19,7 +19,9 @@ export async function apiGet<T>(path: string): Promise<T> {
     const body = await res.text();
     let msg: string;
     try {
-      msg = JSON.parse(body).error ?? body;
+      const parsed = JSON.parse(body);
+      const e = parsed.error;
+      msg = (typeof e === 'object' && e !== null ? e.message : e) ?? body;
     } catch {
       msg = body || `HTTP ${res.status}`;
     }
@@ -38,7 +40,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     const text = await res.text();
     let msg: string;
     try {
-      msg = JSON.parse(text).error ?? text;
+      const parsed = JSON.parse(text);
+      const e = parsed.error;
+      msg = (typeof e === 'object' && e !== null ? e.message : e) ?? text;
     } catch {
       msg = text || `HTTP ${res.status}`;
     }
@@ -57,7 +61,9 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
     const text = await res.text();
     let msg: string;
     try {
-      msg = JSON.parse(text).error ?? text;
+      const parsed = JSON.parse(text);
+      const e = parsed.error;
+      msg = (typeof e === 'object' && e !== null ? e.message : e) ?? text;
     } catch {
       msg = text || `HTTP ${res.status}`;
     }
@@ -72,7 +78,9 @@ export async function apiDelete(path: string): Promise<void> {
     const text = await res.text();
     let msg: string;
     try {
-      msg = JSON.parse(text).error ?? text;
+      const parsed = JSON.parse(text);
+      const e = parsed.error;
+      msg = (typeof e === 'object' && e !== null ? e.message : e) ?? text;
     } catch {
       msg = text || `HTTP ${res.status}`;
     }
