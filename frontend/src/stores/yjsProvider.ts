@@ -14,6 +14,7 @@
  */
 
 import * as Y from 'yjs';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import type { TreeYDoc } from './treeStore.ts';
 import type {
   UserPresence,
@@ -28,6 +29,8 @@ import type {
 export interface YjsProviderOptions {
   treeId: string;
   apiBase?: string;
+  /** Enable y-indexeddb persistence (local backup of Yjs data) */
+  enablePersistence?: boolean;
   /** Called when the provider connects successfully */
   onConnected?: () => void;
   /** Called when the provider disconnects */
@@ -59,6 +62,8 @@ export class SSESyncProvider {
   private _connected = false;
   private updateHandler: ((update: Uint8Array, origin: unknown) => void) | null =
     null;
+  /** y-indexeddb persistence instance (set up if enablePersistence=true) */
+  private persistence: IndexeddbPersistence | null = null;
 
   // ─── Awareness / Presence state ────────────────────────────────
   /** Map of userId → UserPresence for all remote users */
@@ -73,6 +78,28 @@ export class SSESyncProvider {
     this.treeId = options.treeId;
     this.apiBase = options.apiBase ?? '';
     this.options = options;
+
+    // Set up IndexedDB persistence for offline support
+    if (options.enablePersistence) {
+      this.initPersistence();
+    }
+  }
+
+  /**
+   * Initialize y-indexeddb persistence for this tree's Y.Doc.
+   * The database name is derived from the treeId so each tree
+   * gets its own IndexedDB database.
+   */
+  private initPersistence(): void {
+    const dbName = `canopy-tree-${this.treeId}`;
+    try {
+      this.persistence = new IndexeddbPersistence(dbName, this.doc.ydoc);
+      this.persistence.on('error', (err: unknown) => {
+        console.warn(`[IndexedDB] Persistence error for ${dbName}:`, err);
+      });
+    } catch (err) {
+      console.warn(`[IndexedDB] Failed to initialize persistence for ${dbName}:`, err);
+    }
   }
 
   get connected(): boolean {

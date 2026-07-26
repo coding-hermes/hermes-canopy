@@ -5,6 +5,7 @@ import TreesPage from './pages/TreesPage'
 import NodesPage from './pages/NodesPage'
 import TopicsPage from './pages/TopicsPage'
 import CardsPage from './pages/CardsPage'
+import { OfflineIndicator } from './components/OfflineIndicator'
 
 function Dashboard() {
   return (
@@ -20,6 +21,9 @@ function Dashboard() {
 function Layout() {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Offline indicator bar */}
+      <OfflineIndicator />
+
       {/* Skip to main content link */}
       <a href="#main-content" className="skip-to-main">
         Skip to main content
