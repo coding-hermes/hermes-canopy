@@ -19,7 +19,7 @@ var ErrNoActiveTopic = errors.New("db: topic is soft-deleted or archived")
 
 // topicColumns lists all columns in the topics table for SELECT queries.
 const topicColumns = `id, tree_id, root_node_id, title, description, slug,
-    parent_topic_id, status, topic_tags, search_vector, node_count, created_at,
+    parent_topic_id, status, topic_tags, node_count, created_at,
     archived_at, deleted_at`
 
 // scanTopic scans a topic row into a Topic struct.
@@ -27,7 +27,6 @@ func scanTopic(row pgx.Row, t *Topic) error {
 	return row.Scan(
 		&t.ID, &t.TreeID, &t.RootNodeID, &t.Title, &t.Description,
 		&t.Slug, &t.ParentTopicID, &t.Status, &t.TopicTags,
-		&[]byte{}, // search_vector — ignored on read
 		&t.NodeCount, &t.CreatedAt, &t.ArchivedAt, &t.DeletedAt,
 	)
 }
@@ -80,13 +79,19 @@ func NewPGTopicRepo(pool *pgxpool.Pool) *PGTopicRepo {
 // Create inserts a new topic. Generates slug from title.
 func (r *PGTopicRepo) Create(ctx context.Context, input TopicCreateInput) (*Topic, error) {
 	slug := generateSlug(input.Title)
+	// Default topic_tags to empty slice so PostgreSQL NOT NULL constraint
+	// is satisfied even when the caller omits the field.
+	tags := input.TopicTags
+	if tags == nil {
+		tags = []string{}
+	}
 	row := r.pool.QueryRow(ctx, `
         INSERT INTO topics (tree_id, root_node_id, title, description, slug,
                             parent_topic_id, topic_tags)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING `+topicColumns,
 		input.TreeID, input.RootNodeID, input.Title, input.Description,
-		slug, input.ParentTopicID, input.TopicTags,
+		slug, input.ParentTopicID, tags,
 	)
 	var t Topic
 	if err := scanTopic(row, &t); err != nil {
@@ -328,8 +333,13 @@ func (r *PGTopicRepo) RefreshNodeCount(ctx context.Context, topicID uuid.UUID) (
 
 // GetTopicsForNode returns all topics containing the given node in their scope.
 func (r *PGTopicRepo) GetTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]Topic, error) {
+	// Use t. prefix to avoid ambiguous column references when joining
+	// with topic_member_nodes (both tables have tree_id).
 	rows, err := r.pool.Query(ctx, `
-        SELECT DISTINCT `+topicColumns+`
+        SELECT DISTINCT t.id, t.tree_id, t.root_node_id, t.title, t.description,
+            t.slug, t.parent_topic_id, t.status, t.topic_tags,
+            t.node_count, t.created_at,
+            t.archived_at, t.deleted_at
         FROM topics t
         JOIN topic_member_nodes tmn ON tmn.topic_id = t.id
         WHERE tmn.node_id = $1 AND t.deleted_at IS NULL`, nodeID)
