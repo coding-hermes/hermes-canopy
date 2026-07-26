@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS approvals (
     ),
     -- Decided fields required when not pending
     CONSTRAINT ck_decided_fields CHECK (
-        (status IN ('approved', 'denied', 'expired') AND decided_at IS NOT NULL AND decided_by IS NOT NULL)
+        (status IN ('approved', 'denied') AND decided_at IS NOT NULL AND decided_by IS NOT NULL)
+        OR (status = 'expired' AND decided_at IS NOT NULL)
         OR (status = 'pending' AND decided_at IS NULL AND decided_by IS NULL)
     ),
     -- Expired must be decided

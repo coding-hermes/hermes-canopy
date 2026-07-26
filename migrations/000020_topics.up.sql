@@ -78,7 +78,7 @@ CREATE OR REPLACE FUNCTION refresh_topic_node_count(topic_id uuid) RETURNS integ
 DECLARE
     cnt integer;
 BEGIN
-    SELECT COUNT(*) INTO cnt FROM topic_member_nodes WHERE topic_id = refresh_topic_node_count.topic_id;
+    SELECT COUNT(*) INTO cnt FROM topic_member_nodes WHERE topic_member_nodes.topic_id = refresh_topic_node_count.topic_id;
     UPDATE topics SET node_count = cnt WHERE id = topic_id;
     RETURN cnt;
 END;
