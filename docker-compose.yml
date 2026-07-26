@@ -1,12 +1,11 @@
-# Canopy integration test infrastructure
-# PostgreSQL service for integration test runs.
-# Start: docker compose up -d
-# Stop:  docker compose down
+# Canopy — Production deployment
+# Start: docker compose -f docker-compose.yml up -d
+# This requires `npm run build` in frontend/ first (or use build:docker target)
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: canopy-integration-pg
+    container_name: canopy-pg
     environment:
       POSTGRES_USER: canopy
       POSTGRES_PASSWORD: canopy
@@ -17,12 +16,33 @@ services:
       test: ["CMD-SHELL", "pg_isready -U canopy"]
       interval: 3s
       timeout: 3s
-      retries: 10
-    tmpfs:
-      - /var/lib/postgresql/data
+      retries: 15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     networks:
-      - canopy-test
+      - canopy-net
+
+  canopyd:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: canopy-server
+    ports:
+      - "8091:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      DB_URL: postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable
+      CANOPY_DEV: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - canopy-net
+    restart: unless-stopped
+
+volumes:
+  pgdata:
 
 networks:
-  canopy-test:
+  canopy-net:
     driver: bridge
