@@ -111,7 +111,20 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("NewIntegrationPool: pgxpool.NewWithConfig(%s): %v", targetURL, err)
 	}
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() {
+		pool.Close()
+		// Drop the uniquely-named test database so it doesn't accumulate.
+		// Without this, every test run leaks a database (~10MB each) —
+		// 420+ databases per full run, 25 GB over 13 ticks (BUG-012).
+		dropCtx := context.Background()
+		dropConn, dropErr := pgx.Connect(dropCtx, adminURL)
+		if dropErr != nil {
+			return
+		}
+		defer dropConn.Close(dropCtx)
+		_, _ = dropConn.Exec(dropCtx,
+			fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName))
+	})
 
 	// Ping to verify connectivity.
 	if err := pool.Ping(ctx); err != nil {
