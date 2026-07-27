@@ -1018,3 +1018,38 @@ PG testing bottleneck persists. Per-test database creation overloads the Docker 
 - GATE 11: ✅ DIST-02 self-host guide dispatched + completed + committed (397e52f)
 
 **Verdict:** DIST-02 SELF-HOST GUIDE COMPLETE ✅ — Phase 9 (Distribution) now 3/3 COMPLETE ✅. ALL project phases fully complete: Phase 4 (17 backend ✅), Phase 5 (11 frontend ✅), Phase 6 (6 integration ✅), Phase 7 (5 testing ✅), Phase 8 (5 deployment ✅), Phase 9 (3 distribution ✅). **hermes-canopy is functionally COMPLETE** — 47 tasks across 6 phases, all delivered. Only recurring/continuous tasks remain: E2E-001 (recurring browser verification), NEVER-DONE (11-point audit sweep), INFRA-001 (scheduler-level tick storm mitigation). PG healthy (3h uptime), host load moderate (4.81). Coverage 35.7% steady. No new work to dispatch — all project tasks done. Board stands at 0 non-recurring active tasks.
+
+### Tick 78 — 2026-07-27 19:13 UTC (DeepSeek V4 Pro) — Maintenance mode: all-clear
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact). `screenshots/` from E2E-001 Tick 76 (7 files — harmless). Last commit: 397e52f (DIST-02). |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 1021 edges (+31 from Tick 77), 161 files (+3), 3 languages (Go+TS+CSS). Top dep: google/uuid (81). Hilo=useful |
+| 4 | Tests | ✅ ALL NON-PG PASS | 9/9 non-PG Go packages ALL PASS (<2s total). telemetry, cmd/canopyd, migrations: no test files (expected). PG-dependent db+handler not run (known concurrent DB creation issue — individual tests verified working in Tick 72). Frontend: tsc clean, npm build PASS (vite 8.1.5, SW 3.8KB). canopyd server: 200 OK at :8091. PG: healthy (Up 2h). |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | Same 5 post-MVP transport stub adapters (stub_adapters.go) + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated + npm | 2 direct Go outdated (chi v5.2.1→v5.3.1, zerolog v1.32.0→v1.35.1) + ~151 indirect. npm: @types/node, jsdom, lucide-react, oxlint, typescript. Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all packages). tsc --noEmit: clean. npm build: PASS. Board format: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid. All 6 phases complete (47 tasks ✅). Only recurring tasks remain: E2E-001, NEVER-DONE, INFRA-001. |
+| 11 | Dispatch | ⏸️ NO DISPATCH — MAINTENANCE MODE | All project tasks complete. E2E-001 last run Tick 76 (2 ticks ago — within 5-10 window). No new work to dispatch. PG healthy, all builds green, coverage stable. Project in steady-state maintenance. |
+
+**Coverage (Tick 78):** 35.7% total (unchanged — no new source logic). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16).
+
+**Hilo growth:** +31 edges (990→1021), +3 files (158→161) since Tick 77. Growth is from `hilo graph warm` re-parsing existing files — no new source files added. Graph topology unchanged.
+
+**NEVER-DONE Audit Tick 78:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact + E2E screenshots)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (1021 edges, 161 files — +31 edges from warm)
+- GATE 4: ✅ 9/9 non-PG Go packages PASS. Frontend build PASS. PG healthy (2h). Server 200 OK.
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 153 outdated Go deps, npm outdated (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
+- GATE 10: ✅ Board consistent (0 active tasks, all phases complete)
+- GATE 11: ⏸️ No dispatch — maintenance mode. 47/47 tasks complete across all 6 phases.
+
+**Verdict:** ALL CLEAR — MAINTENANCE MODE. hermes-canopy is functionally complete with all 47 tasks delivered across 6 phases. Build healthy (go build + npm build + tsc all clean), all non-PG tests pass, server running (200 OK), PG healthy (2h uptime), secrets clean, static analysis clean, GitReins configured. Hilo graph stable at 1021 edges across 161 files. E2E-001 slate clean (last run Tick 76, next due Tick 81-86). No regressions, no new TODOs, no drift. Coverage 35.7% steady. Host load moderate (6.56). Board stands at 0 non-recurring active tasks — project in steady-state maintenance.
