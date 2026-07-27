@@ -99,7 +99,7 @@
 | DIST-03 | Open source readiness (LICENSE, CONTRIBUTING, CoC, issue templates) | Low | 1 | — | ++documentation | DeepSeek V4 Flash | Minimal | GPT-5.6 Terra |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
-| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). 🔄 Tick 48: re-dispatched (20 ticks overdue) |
+| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). 🔄 Tick 62: re-dispatched (pending) |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
@@ -663,3 +663,36 @@ Docker compose `up -d` blocked by transient Alpine mirror issue (network timeout
 ⚠️ **Infrastructure issue:** PG container at 100% tmpfs (29.8G) from 67+ ticks of integration database accumulation. Need `docker compose down && docker compose up -d` to clear. This blocks all integration + DB-dependent tests.
 
 3 workers still in flight: TEST-02 (Tick 63), E2E-001 (Tick 62), TEST-03 (Tick 66). Remaining tasks: TEST-04/05, DIST-01/02/03. Coverage 35.7%.
+
+### Tick 69 — 2026-07-27 06:06 UTC (DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact — no source changes). Last commit: TreeMembershipMiddleware fix (8474205) + Tick 68 board update (f5042f0). |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 938 edges (+12 from Tick 68 via warm), 154 files. Top dep: google/uuid (76). Hilo=useful |
+| 4 | Tests | ⚠️ PG CRASH RECOVERY — non-PG ALL PASS | **Non-PG Go (11 packages):** ALL PASS (card, config, hermes, mls, server, service, sse, sync, telemetry, testutil, transport). **Frontend Playwright (5 files, 41 tests):** ALL PASS (35.37s). **PG-dependent (db + handler):** FAIL — PG in crash recovery (SQLSTATE 57P03 "database system is in recovery mode") from Tick 68 disk-full event. PG restarted ~9h ago but WAL replay very slow on accumulated data. Docker "healthy" (TCP check) but `pg_isready` rejects connections. |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 4 outdated (@types/node, typescript, lucide-react, tailwindcss). Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. GitReins: 8 completed tasks, zero active. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks processes. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all packages). tsc --noEmit: clean. npm build: PASS (vite 8.1.5, SW 3.8KB + 647KB JS + 64KB CSS). |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid. E2E-001 updated to Tick 62 (was Tick 48). 10 active tasks remain (TEST-02→05, DIST-01/02/03, INFRA-001, E2E-001, NEVER-DONE). |
+| 11 | Dispatch | ⏸️ NO DISPATCH — PG RECOVERY + 3 WORKERS PENDING | PG crash recovery blocks all integration/DB tests. Three workers still in flight: TEST-02 (Tick 63), E2E-001 (Tick 62), TEST-03 (Tick 66). Host load moderate (9.80). Not dispatching new work. PG restart blocked by security scanner — needs manual `docker restart canopy-pg`. |
+
+**Coverage (Tick 69):** 35.7% total (no new source logic — observation tick). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓, topic_repo: ✓.
+
+**NEVER-DONE Audit Tick 69:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (938 edges, 154 files)
+- GATE 4: ⚠️ PG crash recovery blocks integration tests; ALL 11 non-PG Go packages + 41 Playwright E2E tests PASS
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 153 outdated Go deps (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
+- GATE 10: ✅ Board consistent (format valid, E2E-001 tick reference updated)
+- GATE 11: ⏸️ No dispatch — PG recovery ongoing + 3 workers pending
+
+**Verdict:** OBSERVATION TICK — Core project health strong: all 11 non-PG Go packages PASS, all 41 Playwright E2E tests PASS, frontend build clean, static analysis clean, secrets clean, GitReins configured. PG container stuck in crash recovery WAL replay from Tick 68 disk-full event (restarted ~9h ago, still replaying). Requires manual `docker restart canopy-pg`. Three workers pending: TEST-02 (Tick 63), E2E-001 (Tick 62), TEST-03 (Tick 66). Remaining tasks: TEST-02/03/04/05, DIST-01/02/03, INFRA-001, E2E-001, NEVER-DONE. Phase 8 (Deployment): 5/5 COMPLETE ✅. Coverage 35.7% steady.
