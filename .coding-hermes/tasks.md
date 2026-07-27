@@ -95,7 +95,7 @@
 || ✅ DEPLOY-05 | Migration plan (existing Hermes data -> canopy trees) | Low | 3 | BE-04 | ++planning, ++migration | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | **Phase 9: Distribution** | | | | | | | | |
 | ✅ DIST-01 | Multi-tenant + Multi-transport isolation (Tick 75: tenant.go + websocket_adapter.go — multi-tenant namespace isolation with HMAC-SHA256, gorilla/websocket adapter with tenant-scoped rooms, read/write pumps, broadcast. Real WebSocket adapter replaces stub. Remaining stubs post-MVP.) | Low | 4 | BE-09d | ++multi-tenant, ++transport | DeepSeek V4 Pro | High | GLM-5.2 |
-| DIST-02 | Self-host guide (single binary, env vars, TLS, backup) | Low | 2 | DEPLOY-01 | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
+|| ✅ DIST-02 | Self-host guide (single binary, env vars, TLS, backup) — committed 397e52f. 688-line SELF_HOST.md covering quick start, prerequisites, installation (binary/Docker/source), configuration, PG setup, TLS/HTTPS, backup/restore, monitoring, upgrading, troubleshooting. | Low | 2 | DEPLOY-01 | ++documentation | DeepSeek V4 Flash | Low | GPT-5.6 Terra |
 | ✅ DIST-03 | Open source readiness (LICENSE=MIT, CONTRIBUTING.md, CODE_OF_CONDUCT.md, issue templates, PR template) — committed 4a7cacd | Low | 1 | — | ++documentation | DeepSeek V4 Flash | Minimal | GPT-5.6 Terra |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
@@ -985,3 +985,36 @@ PG testing bottleneck persists. Per-test database creation overloads the Docker 
 - GATE 11: ✅ E2E-001 dispatched + complete — 41/41 PASS, 7 pages verified
 
 **Verdict:** TICK 76 — E2E-001 CATCH-UP. 14-ticks-overdue E2E verification completed: 41/41 Playwright tests PASS (100%). All 7 pages verified visually — no regressions, no rendering failures, no broken states. Project is functionally complete across ALL phases: Phase 4 (17 backend ✅), Phase 5 (11 frontend ✅), Phase 6 (6 integration ✅), Phase 7 (5 testing ✅), Phase 8 (5 deployment ✅), Phase 9 (2/3 distribution ✅). Only DIST-02 (self-host guide) remains as a low-priority doc task. PG healthy (2h uptime). Host load moderate. E2E-001 slate clean — next run in 5-10 ticks.
+
+### Tick 77 — 2026-07-27 13:47 UTC (DeepSeek V4 Pro)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact). Screenshots/ from E2E-001 Tick 76 (7 files — harmless). |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 990 edges, 158 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (79). Hilo=useful |
+| 4 | Tests | ✅ ALL NON-PG PASS | 10/11 non-PG packages PASS (<16s total). telemetry: no test files (expected). PG-dependent db+handler not run (known concurrent DB creation issue). Frontend: tsc clean, npm build PASS (vite 8.1.5). |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 5 post-MVP transport stub adapters (stub_adapters.go) + 1 cursor TODO (tree_service.go:442) + 3 auth test SKIPs (BE-12c — documented). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated + 5 npm outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: @types/node, jsdom, lucide-react, oxlint, typescript. Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all packages). tsc --noEmit: clean. npm build: PASS. Board format: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid. DIST-02 → ✅ (this tick). Phase 9: 3/3 COMPLETE ✅. Only recurring tasks remain (E2E-001, NEVER-DONE, INFRA-001). |
+| 11 | Dispatch | ✅ DIST-02 COMPLETE | Worker produced comprehensive SELF_HOST.md (688 lines, ~23KB). Committed 397e52f. All 10 sections covered: quick start, prerequisites, installation, configuration, PG setup, TLS/HTTPS, backup/restore, monitoring, upgrading, troubleshooting. |
+
+**Coverage (Tick 77):** 35.7% total (unchanged — documentation tick, no new source logic). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16).
+
+**NEVER-DONE Audit Tick 77:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact + E2E screenshots — harmless)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (990 edges, 158 files)
+- GATE 4: ✅ 10/11 non-PG Go packages PASS. Frontend build PASS. PG healthy (3h uptime).
+- GATE 5: ⚠️ 6 TODOs + 3 auth SKIPs (all documented, non-critical)
+- GATE 6: ⚠️ 153 outdated Go deps, 5 npm outdated (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
+- GATE 10: ✅ Board consistent (DIST-02 → ✅, Phase 9 complete)
+- GATE 11: ✅ DIST-02 self-host guide dispatched + completed + committed (397e52f)
+
+**Verdict:** DIST-02 SELF-HOST GUIDE COMPLETE ✅ — Phase 9 (Distribution) now 3/3 COMPLETE ✅. ALL project phases fully complete: Phase 4 (17 backend ✅), Phase 5 (11 frontend ✅), Phase 6 (6 integration ✅), Phase 7 (5 testing ✅), Phase 8 (5 deployment ✅), Phase 9 (3 distribution ✅). **hermes-canopy is functionally COMPLETE** — 47 tasks across 6 phases, all delivered. Only recurring/continuous tasks remain: E2E-001 (recurring browser verification), NEVER-DONE (11-point audit sweep), INFRA-001 (scheduler-level tick storm mitigation). PG healthy (3h uptime), host load moderate (4.81). Coverage 35.7% steady. No new work to dispatch — all project tasks done. Board stands at 0 non-recurring active tasks.
