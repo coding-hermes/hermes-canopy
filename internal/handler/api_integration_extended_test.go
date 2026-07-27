@@ -97,14 +97,15 @@ func TestAPI_NodeFork(t *testing.T) {
 	// Create a tree with a multi-level hierarchy.
 	tree := createTreeViaHTTP(t, srv, ownerID, "Node Fork Test")
 	child := createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "Parent for fork test")
-	grandchild := createChildNodeViaHTTP(t, srv, tree.ID, child.Node.ID, ownerID, "Grandchild for fork test")
+	_ = createChildNodeViaHTTP(t, srv, tree.ID, child.Node.ID, ownerID, "Grandchild for fork test")
 
-	// POST /api/v1/nodes/{node_id}/fork — fork from grandchild.
+	// POST /api/v1/nodes/nodes/{node_id}/fork — fork from child (which has grandchild as a child).
+	// Fork requires the parent node to have at least one child (alternative branch point).
 	forkBody := map[string]any{
-		"content": "This is a fork from grandchild",
+		"content": "This is a fork from child",
 	}
 	req := apiRequest(t, srv.Server.URL, http.MethodPost,
-		"/api/v1/nodes/nodes/"+grandchild.Node.ID.String()+"/fork", ownerID, forkBody)
+		"/api/v1/nodes/nodes/"+child.Node.ID.String()+"/fork", ownerID, forkBody)
 	resp, err := srv.Server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("POST fork: %v", err)
@@ -123,8 +124,8 @@ func TestAPI_NodeFork(t *testing.T) {
 	if result.Node == nil {
 		t.Fatal("fork result has nil Node")
 	}
-	if result.Node.Content != "This is a fork from grandchild" {
-		t.Fatalf("fork content = %q, want %q", result.Node.Content, "This is a fork from grandchild")
+	if result.Node.Content != "This is a fork from child" {
+		t.Fatalf("fork content = %q, want %q", result.Node.Content, "This is a fork from child")
 	}
 	t.Logf("fork created: node=%s, edge=%s", result.Node.ID, result.Edge.ID)
 
