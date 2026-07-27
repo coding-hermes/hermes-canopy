@@ -83,7 +83,7 @@
 | ✅ INT-06 | CLI wiring (hermes canopy tree — create/list/delete/navigate). Commit d767d54 — 455 lines in cli.go. Subcommands: tree create/list/delete/navigate. Uses CANOPY_SERVER_URL + CANOPY_TOKEN env vars. | Low | 2 | BE-04 | ++cli, ++terminal | DeepSeek V4 Flash | Low | Step 3.7 Flash |
 | **Phase 7: Testing** | | | | | | | | |
 ||| ✅ TEST-01 | Unit test coverage (target 80%+ backend, 70%+ frontend) — tree_repo ✅, node_repo ✅, edge_repo ✅, approval_repo ✅, topic_repo ✅ | Medium | 3 | BE-12b, FE-03 | ++testing, ++coverage | DeepSeek V4 Pro | Medium | Step 3.7 Flash | ✅ Tick 57: 19 approval + 16 topic tests committed (910 lines). Coverage 35.7%. Tick 57 commit: (pending).
-| TEST-02 | Integration test suite (docker-compose, full API surface) | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
+| 🔄 TEST-02 | Integration test suite (docker-compose, full API surface) — Tick 73 worker: 23 tests (1,994 lines), 21/23 PASS (graph, topic, card, approval, node, SSE, error cases). 2 health endpoint tests fail: /health route not in test router (binary-only). Committed 4e823aa. | Medium | 4 | BE-12f, INT-01 | ++testing, ++integration | Step 3.7 Flash | Medium | DeepSeek V4 Pro |
 | TEST-03 | Chaos & resilience (kill backend, network partition, DB outage) | Low | 4 | INT-01 | ++testing, ++chaos, ++resilience | DeepSeek V4 Pro | High | GLM-5.2 |
 | TEST-04 | Security audit (MLS key rotation, JWT expiry, auth bypass attempts) | Medium | 4 | BE-10d, BE-07 | ++testing, ++security, ++audit | GLM-5.2 | High | GPT-5.6 Sol |
 | ✅ TEST-05 | Accessibility audit (axe-core, manual screen reader, keyboard-only). Tick 71 worker — 7 pages audited, 20 violations (0 critical), all 7 existing a11y tests pass, 93% SR checks pass. Commit b752911. | Low | 3 | FE-10 | ++testing, ++accessibility | Step 3.7 Flash | Medium | DeepSeek V4 Flash |
@@ -99,7 +99,7 @@
 | DIST-03 | Open source readiness (LICENSE, CONTRIBUTING, CoC, issue templates) | Low | 1 | — | ++documentation | DeepSeek V4 Flash | Minimal | GPT-5.6 Terra |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
-| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). 🔄 Tick 62: re-dispatched (pending) |
+| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS (100%) — fresh PG, all pages verified. |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || ✅ BUG-012 | Test database leak: NewIntegrationPool creates unique DB per test but never drops on teardown. FIXED Tick 73 (871de1f): DROP DATABASE IF EXISTS WITH (FORCE) in t.Cleanup(). Verified: 0 leaked DBs after full 16/16 test run. | Critical | 2 | — | ++testing, ++debugging, ++sql | DeepSeek V4 Pro | Medium | DeepSeek V4 Flash |
 
