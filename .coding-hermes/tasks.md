@@ -838,34 +838,6 @@ PG testing bottleneck persists. Per-test database creation overloads the Docker 
 - GATE 10: ✅ Board consistent (BUG-012 → ✅, format valid)
 - GATE 11: ✅ BUG-012 fixed foreman-direct; 🔄 TEST-02 2nd attempt timed out — foreman-direct next
 
-**Verdict:** BUG-012 FIXED ✅ — Test database leak patched in NewIntegrationPool cleanup. New tests will drop their databases on teardown. 424 pre-existing leaked databases remain from prior ticks (needs PG volume nuke to clear). TEST-02 2nd delegate_task attempt timed out (600s/43 calls, no output) — next attempt must be foreman-direct. Cooldown set to 900s (real work exists). Phase 7: 2/5 (TEST-01 ✅, TEST-05 ✅). Phase 8: 5/5 COMPLETE ✅. Host load moderate. Remaining tasks: TEST-02/03/04 + DIST-01/02/03 (testing/hardening + distribution docs, post-MVP/low-priority).
+**Verdict:** BUG-012 FIXED ✅ — Test database leak patched in NewIntegrationPool cleanup. New tests will drop their databases on teardown. 424 pre-existing leaked databases remain from prior ticks (needs PG volume nuke to clear). TEST-02 2nd delegate_task dispatch timed out (600s/43 calls, no output) — next attempt must be foreman-direct. Cooldown set to 900s (real work exists). Phase 7: 2/5 (TEST-01 ✅, TEST-05 ✅). Phase 8: 5/5 COMPLETE ✅. Host load moderate. Remaining tasks: TEST-02/03/04 + DIST-01/02/03 (testing/hardening + distribution docs, post-MVP/low-priority).
 
-| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
-| 3 | Hilo graph | ✅ USEFUL | 941 edges (+3 from Tick 72), 155 files (+1), 3 languages (Go+TS+CSS). Top dep: google/uuid (76). Hilo=useful |
-| 4 | Tests | ✅ ALL 16/16 Go PACKAGES PASS | Fresh PG after Tick 72 volume nuke: db/ 460.3s, handler/ 460.0s, testutil/ 24.0s. Non-PG (10 packages): ALL PASS in <3s. Frontend: npm build PASS (12ms, vite 8.1.5, SW 3.8KB + 647KB JS + 64KB CSS). tsc --noEmit clean. NO leaked databases confirmed — BUG-012 verified fixed. |
-| 5 | TODO/FIXME scan | ⚠️ 6 TODOs + 3 SKIPs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442) + 3 auth test SKIPs (BE-12c). No new TODOs. |
-| 6 | Deps | ⚠️ 153 Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 4 outdated (@types/node, jsdom, lucide-react, typescript). Not impacting build. |
-| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active. Dual-source: board agrees. |
-| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks. |
-| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 16 packages). tsc --noEmit: clean. npm build: PASS. |
-| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid. BUG-012 → ✅ (this tick). 8 active tasks remain (TEST-02/03/04, DIST-01/02/03, INFRA-001, E2E-001, NEVER-DONE). |
-| 11 | Dispatch | 🔄 DISPATCHED (E2E-001 + TEST-02) | Two workers dispatched: E2E-001 (11 ticks overdue — browser E2E via Luna) and TEST-02 (integration test suite, comprehensive API surface). PG healthy, host load moderate (5.17). |
-
-**Coverage (Tick 73):** 35.7% total (unchanged — fix is behavioral, no new source logic). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16).
-
-**BUG-012 FIX VERIFIED:** testutil/integration.go now drops uniquely-named test databases in t.Cleanup() after pool.Close(). Full 16/16 test run completed with zero leaked databases (confirmed: no orphan DBs in PG). Prevents re-accumulation of the 2,586 DB / 25 GB leak that crashed PG in Ticks 59-71.
-
-**NEVER-DONE Audit Tick 73:** All 11 gates checked.
-- GATE 1: ✅ BUG-012 fix committed (871de1f)
-- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
-- GATE 3: ✅ Hilo useful (941 edges, 155 files)
-- GATE 4: ✅ ALL 16 Go packages PASS. Frontend build + tsc clean. Zero leaked DBs.
-- GATE 5: ⚠️ 6 TODOs + 3 auth SKIPs (all documented, non-critical)
-- GATE 6: ⚠️ 153 outdated Go deps (non-blocking)
-- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
-- GATE 8: ✅ Secrets clean
-- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
-- GATE 10: ✅ Board consistent (BUG-012 → ✅, format valid)
-- GATE 11: 🔄 E2E-001 + TEST-02 dispatched
-
-**Verdict:** BUG-012 FIXED ✅ — Self-healing foreman fix applied and verified. The test database leak that caused 13 ticks of PG outages is now permanently patched. DROP DATABASE WITH (FORCE) runs in t.Cleanup() for every integration test. PG healthy, all 16/16 packages pass with zero leaked databases. Project functionally complete — 17 backend + 11 frontend + 6 integration + 5 deployment all ✅. Phase 7: 2/5 (TEST-01 ✅, TEST-05 ✅). Phase 8: 5/5 COMPLETE ✅. Two workers dispatched: E2E-001 (browser) + TEST-02 (integration suite). Remaining tasks: TEST-03/04 + DIST-01/02/03.
+### Tick 74 — 2026-07-27 11:53 UTC (DeepSeek V4 Pro)
