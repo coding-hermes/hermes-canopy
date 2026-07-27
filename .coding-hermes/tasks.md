@@ -101,6 +101,7 @@
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
 | E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). 🔄 Tick 62: re-dispatched (pending) |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| 🐛 BUG-012 | Test database leak: NewIntegrationPool creates unique DB per test but never drops on teardown. 403+ DBs leaked per full run → 25 GB in 13 ticks → PG crashes. Fix: add DROP DATABASE WITH (FORCE) in t.Cleanup() or pool.Close(). Tick 72. | Critical | 2 | — | ++testing, ++debugging, ++sql | DeepSeek V4 Pro | Medium | DeepSeek V4 Flash |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
 
@@ -764,3 +765,40 @@ Docker compose `up -d` blocked by transient Alpine mirror issue (network timeout
 **Verdict:** TEST-05 ACCESSIBILITY AUDIT COMPLETE ✅ — First successful dispatch in days. Worker found 20 violations across 7 pages: 7 serious color-contrast (footer text, filter tabs), 6 moderate heading hierarchy (h1→h3 skips on CRUD pages), plus TreeView missing h1 and tab-stoppable nodes (critical UX gap). No critical axe violations — frontend is in good WCAG 2.1 AA shape. All 7 existing a11y E2E tests PASS. 93% screen reader checks pass (64/69). Audit results committed (b752911, 4 files, 4,125 lines).
 
 PG testing bottleneck persists. Per-test database creation overloads the Docker PG container — individual tests work, full suites crash PG. Recommendation: nuke PG volume (`docker compose down -v && docker compose up -d`). Phase 7: 2/5 tasks done (TEST-01 ✅, TEST-05 ✅). Phase 8: 5/5 COMPLETE ✅. Project functionally complete — 17 backend + 11 frontend + 6 integration + 5 deployment all ✅. Remaining tasks: TEST-02/03/04 + DIST-01/02/03 (testing/hardening + distribution docs, post-MVP/low-priority).
+
+### Tick 72 — 2026-07-27 10:28 UTC (DeepSeek V4 Pro)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Workdir clean. Only `.vfs/graph/edges.jsonl` modified (Hilo artifact). Last commit: 9122a10 (Tick 71 board + TEST-05 a11y results). |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 938 edges, 154 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (76). Hilo=useful |
+| 4 | Tests | ✅ ALL 16/16 Go PACKAGES PASS | PG VOLUME NUKED — docker compose down -v + up -d cleared 2,586 test databases (25 GB). Fresh PG: db/ 430.3s, handler/ 511.4s (both PASS). Non-PG (10 packages): ALL PASS in <13s. Frontend: npm build PASS (vite 8.1.5, 647KB JS + 64KB CSS + 3.8KB SW). tsc clean. Playwright: tree-rendering.test.ts has pre-existing vitest config TypeError — not a regression. |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs + 3 SKIPs | Same 5 post-MVP transport stub adapters + 1 cursor TODO (tree_service.go:442) + 3 auth test SKIPs (BE-12c). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated | Cloud SDKs (Google, Azure, AWS), cel.dev/expr, ClickHouse behind. npm: 4 outdated (@types/node, jsdom, lucide-react, typescript). Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active. Dual-source: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all 16 packages). tsc --noEmit: clean. npm build: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins: 0 active. Format valid. NEW BUG: BUG-012 — test DB leak (420 databases per full run, never dropped). 3 prior workers lost (T62/63/66). |
+| 11 | Dispatch | 🐛 BUG-012 CREATED | Not dispatching new worker — BUG-012 is a foreman-fixable self-heal (add t.Cleanup DROP DATABASE to testutil). TEST-03/TEST-04 viable next ticks. |
+
+**Coverage (Tick 72):** 35.7% total (unchanged). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16).
+
+**BREAKTHROUGH: PG BOTTLENECK RESOLVED.** 13-tick PG crisis (T59-T71) was caused by named Docker volume accumulating 2,586 test databases (25 GB). testutil creates unique DBs per test call but never drops on teardown. docker compose down -v nuked volume; fresh PG passes all 16/16 packages.
+
+**NEW BUG: BUG-012 — Test database leak.** NewIntegrationPool() creates unique DB per test (uniqueDBName → canopy_XXXX) but never drops on teardown. dropTestDBByName drops-then-recreates for idempotent re-runs only. Fix: add DROP DATABASE WITH (FORCE) in t.Cleanup() or pool.Close() hook.
+
+**NEVER-DONE Audit Tick 72:** All 11 gates checked.
+- GATE 1: ✅ Git clean (only Hilo artifact)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (938 edges, 154 files)
+- GATE 4: ✅ ALL 16 Go packages PASS (first time in 13 ticks). Frontend build + tsc clean.
+- GATE 5: ⚠️ 6 TODOs + 3 auth SKIPs (documented, non-critical)
+- GATE 6: ⚠️ 153 outdated Go deps (non-blocking)
+- GATE 7: ✅ GitReins config + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
+- GATE 10: ✅ Board consistent (BUG-012 created, format valid)
+- GATE 11: 🐛 BUG-012 self-heal: apply fix foreman-direct per self-improving loop (3+ consecutive occurrences → fix directly)
+
+**Verdict:** PG BOTTLENECK RESOLVED ✅ — First clean 16/16 test pass since Tick 58. docker compose down -v freed 25 GB. BUG-012 discovered — test DB leak will re-accumulate. Phase 7: 2/5 (TEST-01 ✅, TEST-05 ✅). Phase 8: 5/5 COMPLETE ✅. Host load 5.67 (moderate). Next: BUG-012 self-heal, then TEST-03 chaos or TEST-04 security audit dispatch.
