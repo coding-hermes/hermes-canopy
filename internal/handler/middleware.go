@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -29,15 +30,15 @@ func BodySizeLimit(maxBytes int64) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Body != nil {
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-				// Read the body once to trigger MaxBytesReader rejection early.
-				// Handlers will re-read from the same reader (which is now exhausted),
-				// so handlers that call decodeJSON must create a fresh reader.
-				_, err := io.ReadAll(r.Body)
+				// Read the body once to trigger MaxBytesReader rejection early,
+				// then replace it so downstream handlers can read it.
+				bodyBytes, err := io.ReadAll(r.Body)
 				if err != nil {
 					writeError(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE",
 						"request body exceeds maximum allowed size")
 					return
 				}
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			}
 			next.ServeHTTP(w, r)
 		})
