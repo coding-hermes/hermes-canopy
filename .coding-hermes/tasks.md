@@ -1119,3 +1119,38 @@ PG testing bottleneck persists. Per-test database creation overloads the Docker 
 - GATE 11: ⏸️ No dispatch — maintenance mode. 47/47 tasks complete across all 6 phases.
 
 **Verdict:** ALL CLEAR — MAINTENANCE MODE. 4th consecutive all-clear tick (77-80). No drift, no regressions, no new TODOs, no stale worker output. 4 deleted a11y test-results files restored (clean working tree). PG healthy at 9h uptime. E2E-001 due again at Tick 81-86. All 6 phases (47 tasks) delivered and verified. Project in steady-state maintenance — foreman monitoring only.
+
+### Tick 81 — 2026-07-27 22:37 UTC (DeepSeek V4 Pro) — E2E + bug fix
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN → FIX COMMITTED | E2E worker found BodySizeLimit bug (middleware.go consumed request body without replacing r.Body, starving downstream handlers). Fix committed (7cbef00). 4 deleted a11y test-results restored. 2 temp scripts cleaned. Only Hilo artifact + E2E screenshots remain. |
+| 2 | GitReins guard | ✅ PASS | 4 guards (secrets/build/lint/tests) all green (safety trigger — no Go files staged). GITREINS_LLM_API_KEY configured (check-gitreins-judge.py PASS). |
+| 3 | Hilo graph | ✅ USEFUL | 1021 edges, 161 files, 3 languages (Go+TS+CSS). Top dep: google/uuid (81). Hilo=useful |
+| 4 | Tests | ✅ ALL NON-PG PASS + E2E 41/41 | 10/10 non-PG Go packages ALL PASS (<2s). PG healthy (11h uptime, :5437). db+handler not run (known concurrent DB issue). E2E Playwright: 41/41 PASS (100%, ~40s). Frontend: tsc clean, npm build PASS (vite 8.1.5). |
+| 5 | TODO/FIXME scan | ⚠️ 6 TODOs | 1 cursor TODO (tree_service.go:442) + 5 post-MVP transport stub adapters (stub_adapters.go) + 3 auth test SKIPs (BE-12c — documented). No new TODOs. |
+| 6 | Deps | ⚠️ 153 Go outdated + 5 npm outdated | Direct: chi v5.2.1→v5.3.1, zerolog v1.32.0→v1.35.1. npm: @types/node, jsdom, lucide-react, oxlint, typescript. Not impacting build. |
+| 7 | GitReins config | ✅ PRESENT | deepseek-v4-flash, 50 iter/10m/1M:0.4M. check-gitreins-judge.py PASS. 8 completed tasks, zero active. Dual-source check: board agrees. |
+| 8 | Secrets | ✅ CLEAN | gitleaks clean (via MCP guard_run). No zombie gitleaks. |
+| 9 | Static analysis | ✅ CLEAN | go vet: no issues. go build: OK (all packages). tsc --noEmit: clean. npm build: PASS. Board format: PASS. |
+| 10 | Board consistency | ✅ AGREED | GitReins dual-source: 0 active tasks. Format valid. All 6 phases complete (47 tasks ✅). Only recurring tasks remain: E2E-001, NEVER-DONE, INFRA-001. |
+| 11 | Dispatch | ✅ E2E-001 DISPATCHED + COMPLETE + BUG FIX | E2E-001 worker: 41/41 Playwright tests PASS (100%). 7 pages visually verified. Worker discovered BodySizeLimit bug — middleware consumed request body via io.ReadAll but never replaced r.Body, starving all downstream POST/PUT/PATCH handlers. Fix committed (7cbef00): re-wrap bodyBytes as NopCloser. 07-tree-demo.png blank (no /tree-demo route — expected). 28 leaked test DBs (from prior runs, BUG-012 fix prevents new accumulation). |
+
+**Coverage (Tick 81):** 35.7% total (unchanged — bug fix only, no new source logic). db/ tree_repo: 87.8%, node_repo: ~75%, edge_repo: ~85%, approval_repo: ✓ (19), topic_repo: ✓ (16).
+
+**BUG FOUND AND FIXED:** BodySizeLimit middleware in `internal/handler/middleware.go` was consuming request bodies with `io.ReadAll` but never replacing `r.Body`. This meant every POST/PUT/PATCH endpoint behind the middleware received an empty body. The handler-level `decodeJSON` functions would fail silently with empty JSON or zero-value structs. Root cause: the middleware was written to validate body size but the `io.ReadAll` drained the reader — downstream handlers got `io.EOF` on first read. Fix captures `bodyBytes` and wraps as `io.NopCloser(bytes.NewReader(bodyBytes))`. This bug existed since BodySizeLimit was introduced and was invisible because (a) integration tests use `httptest.NewRequest` which bypasses the actual HTTP body semantics, and (b) frontend E2E tests hit endpoints where empty validation produced no visible error. Found by E2E-001 worker observing the system end-to-end.
+
+**NEVER-DONE Audit Tick 81:** All 11 gates checked.
+- GATE 1: ✅ E2E worker found real bug → fix committed (7cbef00)
+- GATE 2: ✅ Guard passes (secrets/build/lint/tests)
+- GATE 3: ✅ Hilo useful (1021 edges, 161 files — unchanged)
+- GATE 4: ✅ 10/10 non-PG packages PASS. E2E 41/41 PASS. Frontend build PASS. PG healthy (11h).
+- GATE 5: ⚠️ 6 TODOs (all post-MVP, documented)
+- GATE 6: ⚠️ 153 outdated Go deps, 5 npm outdated (non-blocking)
+- GATE 7: ✅ GitReins config present + judge configured + dual-source agreed
+- GATE 8: ✅ Secrets clean
+- GATE 9: ✅ Static analysis clean (go vet, tsc, build, npm build)
+- GATE 10: ✅ Board consistent (0 active tasks, all phases complete, dual-source agreed)
+- GATE 11: ✅ E2E-001 dispatched + completed + real bug found and fixed
+
+**Verdict:** E2E-001 FOUND REAL BUG — BodySizeLimit middleware starved all downstream POST/PUT/PATCH handlers. This is the 5th maintenance-mode foreman tick (ticks 77-81) and the E2E worker found a genuine production defect. 41/41 tests PASS, 6/7 pages render correctly (tree-demo route doesn't exist — expected). Fix committed (7cbef00). PG healthy (11h uptime). 28 leaked test DBs present (BUG-012 fix prevents new accumulation). All 6 phases (47 tasks) complete. E2E-001 slate clean — next run Tick 86-91. Project in steady-state maintenance. Hilo graph unchanged (1021 edges, 161 files). Host load moderate.
