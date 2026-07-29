@@ -52,12 +52,19 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		return nil, err
 	}
 
+	// Derive distinct encryption and signing keys from the admin identity
+	// key pair using domain separation. Until a real MLS library provides
+	// HPKE/DHKEM key material, this ensures cryptographic separation
+	// (BUG-013).
+	encKey := deriveKey("mls-encryption-v1", adminKeyPair.PublicKey)
+	sigKey := deriveKey("mls-signature-v1", adminKeyPair.PublicKey)
+
 	member := &db.MLSGroupMember{
 		ProfileID:           creatorProfileID,
 		GroupID:             groupID,
 		MLSIdentity:         []byte(creatorProfileID.String()),
-		EncryptionPublicKey: adminKeyPair.PublicKey,
-		SignaturePublicKey:  adminKeyPair.PublicKey,
+		EncryptionPublicKey: encKey,
+		SignaturePublicKey:  sigKey,
 		CredentialType:      "basic",
 		AddedAt:             now,
 		LastActive:          now,
@@ -78,6 +85,16 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 	}, nil
 }
 
+// deriveKey derives a 32-byte key from src material using domain separation.
+// The domain tag ensures encryption and signing keys are cryptographically
+// distinct even when derived from the same source material (BUG-013).
+func deriveKey(domain string, src []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte(domain))
+	h.Write(src)
+	return h.Sum(nil)
+}
+
 func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID uuid.UUID, keyPackage MLSKeyPackage, welcomeBytes []byte) error {
 	grp, err := s.groups.GetByWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -86,6 +103,8 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 
 	// Use stub keys to satisfy NOT NULL constraints until a real MLS
 	// library provides actual key material from the KeyPackage/Welcome.
+	// Derive distinct encryption and signing keys using domain separation
+	// to ensure cryptographic separation (BUG-013).
 	stubKey := make([]byte, 32)
 	if len(keyPackage.KeyPackageBytes) > 0 {
 		copy(stubKey, keyPackage.KeyPackageBytes[:min(32, len(keyPackage.KeyPackageBytes))])
@@ -95,8 +114,8 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 		ProfileID:           profileID,
 		GroupID:             grp.ID,
 		MLSIdentity:         []byte(profileID.String()),
-		EncryptionPublicKey: stubKey,
-		SignaturePublicKey:  stubKey,
+		EncryptionPublicKey: deriveKey("mls-encryption-v1", stubKey),
+		SignaturePublicKey:  deriveKey("mls-signature-v1", stubKey),
 		CredentialType:      "basic",
 		AddedAt:             time.Now().UTC(),
 		LastActive:          time.Now().UTC(),

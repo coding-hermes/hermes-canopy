@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 )
@@ -72,7 +73,8 @@ func (h *TopicHandler) ListTopics(w http.ResponseWriter, r *http.Request) {
 
 	topics, err := h.svc.ListTopics(r.Context(), treeID, status, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOPIC_LIST_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("topic list failed")
+		writeError(w, http.StatusInternalServerError, "TOPIC_LIST_ERROR", "internal server error")
 		return
 	}
 	writeJSON(w, http.StatusOK, topicListResponse{Topics: topics})
@@ -92,7 +94,8 @@ func (h *TopicHandler) CreateTopic(w http.ResponseWriter, r *http.Request) {
 
 	topic, err := h.svc.CreateTopic(r.Context(), req.TreeID, req.RootNodeID, req.Title, req.Description)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOPIC_CREATE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("topic create failed")
+		writeError(w, http.StatusInternalServerError, "TOPIC_CREATE_ERROR", "internal server error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, topic)
@@ -107,7 +110,7 @@ func (h *TopicHandler) GetTopic(w http.ResponseWriter, r *http.Request) {
 
 	topic, err := h.svc.GetTopic(r.Context(), topicID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", err.Error())
+		writeError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "topic not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, topic)
@@ -128,7 +131,8 @@ func (h *TopicHandler) UpdateTopic(w http.ResponseWriter, r *http.Request) {
 
 	topic, err := h.svc.UpdateTopic(r.Context(), topicID, req.Title, req.Description, req.Status)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOPIC_UPDATE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("topic update failed")
+		writeError(w, http.StatusInternalServerError, "TOPIC_UPDATE_ERROR", "internal server error")
 		return
 	}
 	writeJSON(w, http.StatusOK, topic)
@@ -142,7 +146,8 @@ func (h *TopicHandler) ArchiveTopic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.ArchiveTopic(r.Context(), topicID); err != nil {
-		writeError(w, http.StatusInternalServerError, "TOPIC_ARCHIVE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("topic archive failed")
+		writeError(w, http.StatusInternalServerError, "TOPIC_ARCHIVE_ERROR", "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

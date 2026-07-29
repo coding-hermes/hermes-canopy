@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 )
@@ -95,7 +96,8 @@ func (h *CardHandler) ListCards(w http.ResponseWriter, r *http.Request) {
 
 	cards, err := h.svc.ListCards(r.Context(), treeID, nodeID, cardType, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "CARD_LIST_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("card list failed")
+		writeError(w, http.StatusInternalServerError, "CARD_LIST_ERROR", "internal server error")
 		return
 	}
 
@@ -128,7 +130,8 @@ func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.svc.CreateCard(r.Context(), req.TreeID, req.NodeID, req.AppID, req.CardType, req.Data)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "CARD_CREATE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("card create failed")
+		writeError(w, http.StatusInternalServerError, "CARD_CREATE_ERROR", "internal server error")
 		return
 	}
 
@@ -144,7 +147,7 @@ func (h *CardHandler) GetCard(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.svc.GetCard(r.Context(), cardID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", err.Error())
+		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", "card not found")
 		return
 	}
 
@@ -170,7 +173,8 @@ func (h *CardHandler) UpdateCard(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.svc.UpdateCardData(r.Context(), cardID, req.Data)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "CARD_UPDATE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("card update failed")
+		writeError(w, http.StatusInternalServerError, "CARD_UPDATE_ERROR", "internal server error")
 		return
 	}
 
@@ -185,7 +189,8 @@ func (h *CardHandler) ArchiveCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.ArchiveCard(r.Context(), cardID); err != nil {
-		writeError(w, http.StatusInternalServerError, "CARD_ARCHIVE_ERROR", err.Error())
+		log.Ctx(r.Context()).Error().Err(err).Msg("card archive failed")
+		writeError(w, http.StatusInternalServerError, "CARD_ARCHIVE_ERROR", "internal server error")
 		return
 	}
 

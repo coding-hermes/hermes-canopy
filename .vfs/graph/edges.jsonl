@@ -1019,3 +1019,7 @@
 {"from":"internal/transport/websocket_adapter.go","to":"pkg:github.com/google/uuid","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/transport/websocket_adapter.go","to":"pkg:github.com/gorilla/websocket","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/handler/middleware.go","to":"std:bytes","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/mls/service.go","to":"std:crypto/aes","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/mls/service.go","to":"std:crypto/cipher","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/mls/service.go","to":"std:crypto/sha256","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/mls/service.go","to":"std:fmt","rel":"imports","provenance":"ast_exact","confidence":1.0}
