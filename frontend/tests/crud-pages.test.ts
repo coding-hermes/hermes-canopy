@@ -165,7 +165,7 @@ describe('CRUD Pages', () => {
 
       await tryGoto(ctx.page, '/topics');
 
-      const placeholder = ctx.page.locator('h3', { hasText: 'Select a tree' });
+      const placeholder = ctx.page.locator('h2', { hasText: 'Select a tree' });
       expect(await placeholder.isVisible()).toBe(true);
     });
   });
