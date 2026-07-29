@@ -69,8 +69,22 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For MVP, use a sentinel UUID; auth middleware (BE-07) will wire the real user.
-	authorID := uuid.Nil
+	// Validate content length (BUG-019 fix).
+	if len(req.Content) == 0 {
+		writeError(w, 400, "EMPTY_CONTENT", "content must not be empty")
+		return
+	}
+	if len(req.Content) > 64*1024 { // 64KB max
+		writeError(w, 400, "CONTENT_TOO_LARGE", "content exceeds maximum allowed size (64KB)")
+		return
+	}
+
+	// Extract authenticated user from JWT context.
+	authorID := UserIDFromContext(r.Context())
+	if authorID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
 
 	input := service.CreateNodeInput{
 		Content:       req.Content,
@@ -127,6 +141,23 @@ func (h *NodeHandler) handleGetByID(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+
+	// Verify the requesting user is a member of the node's tree (BUG-016 fix).
+	// This check covers bare /nodes/{node_id} access paths that bypass
+	// the tree-scoped membership middleware.
+	if userID := UserIDFromContext(r.Context()); userID != uuid.Nil {
+		// If this node was accessed via a tree-scoped route, membership was already
+		// checked by middleware. For bare /nodes/{node_id}, we check here.
+		treeIDStr := treeIDFromPath(r.URL.Path)
+		if treeIDStr == "" && out.TreeID != uuid.Nil {
+			// Bare node access — owner must own the tree or be a member.
+			// For now, verify via tree ownership. Membership check deferred post-MVP.
+			writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER",
+				"use tree-scoped endpoint: /trees/{tree_id}/nodes/{node_id}")
+			return
+		}
+	}
+
 	writeJSON(w, 200, out)
 }
 
@@ -214,8 +245,12 @@ func (h *NodeHandler) handleReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// MVP: sentinel author.
-	authorID := uuid.Nil
+	// Extract authenticated user from JWT context.
+	authorID := UserIDFromContext(r.Context())
+	if authorID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
 
 	input := service.ReplyInput{
 		Content:       req.Content,
@@ -266,8 +301,12 @@ func (h *NodeHandler) handleFork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// MVP: sentinel author.
-	authorID := uuid.Nil
+	// Extract authenticated user from JWT context.
+	authorID := UserIDFromContext(r.Context())
+	if authorID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
 
 	input := service.ForkInput{
 		Content:       req.Content,

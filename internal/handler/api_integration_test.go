@@ -91,7 +91,12 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 
 		// Node CRUD.
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)
+		membershipMW := TreeMembershipMiddleware(memberRepo)
 		r.Mount("/nodes", nodeHandler.Routes())
+		treeNodes := chi.NewRouter()
+		treeNodes.Use(membershipMW)
+		treeNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 
 		// Graph endpoints.
 		graphHandler := NewGraphHandler(graphSvc)

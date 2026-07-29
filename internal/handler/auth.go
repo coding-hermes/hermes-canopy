@@ -29,6 +29,10 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 			}
 
 			token, err := jwt.Parse(parts[1], func(token *jwt.Token) (any, error) {
+				// Explicitly reject unsigned tokens (BUG-014 fix).
+				if token.Method.Alg() == "none" {
+					return nil, jwt.ErrSignatureInvalid
+				}
 				return []byte(secret), nil
 			}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 			if err != nil || !token.Valid {

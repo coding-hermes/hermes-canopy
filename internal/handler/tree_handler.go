@@ -69,10 +69,12 @@ func (h *TreeHandler) CreateTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build service params — author will come from JWT context post-auth.
-	// For MVP, use a sentinel UUID; auth middleware (BE-07) will wire the
-	// real user.
-	authorID := uuid.Nil
+	// Extract authenticated user from JWT context.
+	authorID := UserIDFromContext(r.Context())
+	if authorID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
 
 	params := service.CreateTreeParams{
 		Title:       req.Title,
@@ -158,12 +160,36 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+
+	// Verify the requesting user owns this tree (BUG-016 fix).
+	userID := UserIDFromContext(r.Context())
+	if userID != uuid.Nil && out.OwnerID != uuid.Nil && out.OwnerID != userID {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
+		return
+	}
 	writeJSON(w, 200, out)
 }
 
 func (h *TreeHandler) UpdateTree(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseTreeID(w, r)
 	if !ok {
+		return
+	}
+
+	// Verify the requesting user owns this tree (BUG-016 fix).
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+	// Quick ownership pre-check: fetch tree to verify ownership before applying update.
+	existing, err := h.svc.GetTree(r.Context(), id, service.GetTreeOptions{IncludeStats: false})
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	if existing.OwnerID != uuid.Nil && existing.OwnerID != userID {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
 		return
 	}
 
@@ -196,6 +222,23 @@ func (h *TreeHandler) DeleteTree(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
+	// Verify the requesting user owns this tree (BUG-016 fix).
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+	existing, err := h.svc.GetTree(r.Context(), id, service.GetTreeOptions{IncludeStats: false})
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	if existing.OwnerID != uuid.Nil && existing.OwnerID != userID {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
+		return
+	}
+
 	if _, err := h.svc.DeleteTree(r.Context(), id); err != nil {
 		h.writeServiceError(w, r, err)
 		return
