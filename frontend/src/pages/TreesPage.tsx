@@ -117,7 +117,7 @@ function CreateTreeDialog({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4">
         <div className="px-5 py-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-200">Create Tree</h3>
+          <h2 className="text-sm font-medium text-gray-200">Create Tree</h2>
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
@@ -206,7 +206,7 @@ function DeleteConfirmDialog({
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm mx-4">
         <div className="px-5 py-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-200">Delete Tree</h3>
+          <h2 className="text-sm font-medium text-gray-200">Delete Tree</h2>
         </div>
         <div className="px-5 py-4">
           <p className="text-sm text-gray-400">
@@ -413,7 +413,7 @@ export default function TreesPage() {
       {!loading && !error && trees.length === 0 && (
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
           <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">No trees yet</h3>
+          <h2 className="text-sm font-medium text-gray-400 mb-1">No trees yet</h2>
           <p className="text-xs text-gray-600 mb-4">
             Create your first conversation tree to get started.
           </p>

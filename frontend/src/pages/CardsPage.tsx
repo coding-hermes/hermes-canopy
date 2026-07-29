@@ -156,7 +156,7 @@ function CreateCardDialog({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4">
         <div className="px-5 py-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-200">Create Card</h3>
+          <h2 className="text-sm font-medium text-gray-200">Create Card</h2>
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
@@ -453,7 +453,7 @@ export default function CardsPage() {
       {!selectedTreeId && (
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
           <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">Select a tree</h3>
+          <h2 className="text-sm font-medium text-gray-400 mb-1">Select a tree</h2>
           <p className="text-xs text-gray-600">
             Cards are attached to nodes within conversation trees. Select a tree above to browse its cards.
           </p>
@@ -529,7 +529,7 @@ export default function CardsPage() {
       {selectedTreeId && !cardsLoading && cards.length === 0 && (
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
           <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">No cards found</h3>
+          <h2 className="text-sm font-medium text-gray-400 mb-1">No cards found</h2>
           <p className="text-xs text-gray-600 mb-4">
             {typeFilter
               ? `No ${typeFilter} cards in this tree.`
@@ -574,7 +574,7 @@ export default function CardsPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteTarget(null)} />
           <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm mx-4">
             <div className="px-5 py-4 border-b border-gray-800">
-              <h3 className="text-sm font-medium text-gray-200">Archive Card</h3>
+              <h2 className="text-sm font-medium text-gray-200">Archive Card</h2>
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-gray-400">

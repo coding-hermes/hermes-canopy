@@ -450,7 +450,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
             className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
               statusFilter === f
                 ? 'bg-purple-600 text-white'
-                : 'text-gray-400 hover:text-gray-200'
+                : 'text-gray-300 hover:text-gray-100'
             }`}
           >
             {f}

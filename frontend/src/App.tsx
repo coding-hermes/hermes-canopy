@@ -135,7 +135,7 @@ function Layout() {
           </NavLink>
         </nav>
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             Hermes Canopy v0.1.0
           </p>
         </div>
@@ -152,7 +152,7 @@ function Layout() {
             Knowledge Canopy
           </h2>
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               Backend: localhost:8080
             </span>
           </div>

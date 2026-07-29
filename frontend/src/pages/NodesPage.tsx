@@ -144,7 +144,7 @@ function EditNodeDialog({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg mx-4">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-200">Edit Node</h3>
+          <h2 className="text-sm font-medium text-gray-200">Edit Node</h2>
           <button
             onClick={onClose}
             className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800"
@@ -441,7 +441,7 @@ export default function NodesPage() {
       {!selectedTreeId && (
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
           <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">No tree selected</h3>
+          <h2 className="text-sm font-medium text-gray-400 mb-1">No tree selected</h2>
           <p className="text-xs text-gray-600">
             Select a conversation tree above to browse its nodes.
           </p>
@@ -465,7 +465,7 @@ export default function NodesPage() {
       {selectedTree && !nodesLoading && nodes.length === 0 && (
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
           <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">No nodes found</h3>
+          <h2 className="text-sm font-medium text-gray-400 mb-1">No nodes found</h2>
           <p className="text-xs text-gray-600">
             This tree has no nodes yet. Use the Tree View to add messages.
           </p>
@@ -506,7 +506,7 @@ export default function NodesPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteNodeId(null)} />
           <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm mx-4">
             <div className="px-5 py-4 border-b border-gray-800">
-              <h3 className="text-sm font-medium text-gray-200">Delete Node</h3>
+              <h2 className="text-sm font-medium text-gray-200">Delete Node</h2>
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-gray-400">

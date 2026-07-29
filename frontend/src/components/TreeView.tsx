@@ -220,6 +220,10 @@ export default function TreeView() {
 
   return (
     <div className="h-full w-full flex flex-col">
+      {/* TreeView page heading for screen readers */}
+      <h1 className="sr-only">
+        Tree View: {tree.treeTitle || 'Untitled Tree'}
+      </h1>
       {/* Tree header bar */}
       <div
         className="h-10 flex items-center px-4 gap-3 border-b shrink-0"
