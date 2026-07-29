@@ -2,7 +2,11 @@ package mls
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -137,23 +141,45 @@ func (s *MLSServiceImpl) Encrypt(ctx context.Context, workspaceID, profileID uui
 		return MLSCiphertext{}, err
 	}
 
-	if _, err := s.members.GetByProfile(ctx, grp.ID, profileID); err != nil {
+	member, err := s.members.GetByProfile(ctx, grp.ID, profileID)
+	if err != nil {
 		return MLSCiphertext{}, ErrNotGroupMember
 	}
 
-	// Placeholder — no real MLS library available yet
-	ciphertext := make([]byte, len(plaintext))
-	copy(ciphertext, plaintext)
-	none := make([]byte, 12)
-	_, _ = rand.Read(none)
+	// Derive AES-256 key from the group's encryption key material.
+	// In a full MLS implementation, this would use the group's epoch secret.
+	aesKey := sha256.Sum256(append(grp.ID, member.EncryptionPublicKey...))
+
+	block, err := aes.NewCipher(aesKey[:])
+	if err != nil {
+		return MLSCiphertext{}, fmt.Errorf("mls: new cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return MLSCiphertext{}, fmt.Errorf("mls: new gcm: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return MLSCiphertext{}, err
+	}
+
+	// Encrypt: ciphertext = nonce || AES-GCM(plaintext, associated-data=groupID+epoch)
+	aad := append(grp.ID, byte(grp.Epoch>>24), byte(grp.Epoch>>16), byte(grp.Epoch>>8), byte(grp.Epoch))
+	ciphertext := gcm.Seal(nil, nonce, plaintext, aad)
+
+	// Prepend nonce to ciphertext for storage/transmission
+	out := make([]byte, len(nonce)+len(ciphertext))
+	copy(out, nonce)
+	copy(out[len(nonce):], ciphertext)
 
 	return MLSCiphertext{
 		GroupID:         grp.ID,
 		Epoch:           grp.Epoch,
 		ContentType:     "application",
-		Ciphertext:      ciphertext,
-		Nonce:           none,
-		SenderLeafIndex: 0,
+		Ciphertext:      out,
+		SenderLeafIndex: uint32(member.LeafIndex),
 		WireFormat:      "mls_ciphertext_v1",
 	}, nil
 }
@@ -168,12 +194,37 @@ func (s *MLSServiceImpl) Decrypt(ctx context.Context, workspaceID, profileID uui
 		return nil, ErrEpochMismatch
 	}
 
-	if _, err := s.members.GetByProfile(ctx, grp.ID, profileID); err != nil {
+	member, err := s.members.GetByProfile(ctx, grp.ID, profileID)
+	if err != nil {
 		return nil, ErrNotGroupMember
 	}
 
-	plaintext := make([]byte, len(ciphertext.Ciphertext))
-	copy(plaintext, ciphertext.Ciphertext)
+	// Derive the same AES-256 key from the group key material.
+	aesKey := sha256.Sum256(append(grp.ID, member.EncryptionPublicKey...))
+
+	block, err := aes.NewCipher(aesKey[:])
+	if err != nil {
+		return nil, fmt.Errorf("mls: new cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("mls: new gcm: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext.Ciphertext) < nonceSize {
+		return nil, fmt.Errorf("mls: ciphertext too short: %d bytes, need at least %d", len(ciphertext.Ciphertext), nonceSize)
+	}
+
+	nonce, ct := ciphertext.Ciphertext[:nonceSize], ciphertext.Ciphertext[nonceSize:]
+
+	aad := append(grp.ID, byte(grp.Epoch>>24), byte(grp.Epoch>>16), byte(grp.Epoch>>8), byte(grp.Epoch))
+	plaintext, err := gcm.Open(nil, nonce, ct, aad)
+	if err != nil {
+		return nil, fmt.Errorf("mls: gcm open: %w", err)
+	}
+
 	return plaintext, nil
 }
 

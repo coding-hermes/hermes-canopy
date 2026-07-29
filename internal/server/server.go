@@ -105,8 +105,8 @@ func New(
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 		r.Mount("/nodes", nodeHandler.Routes())
 
-		// Sync endpoints (SPEC-DM-02 §7).
-		r.Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
+		// Sync endpoints (SPEC-DM-02 §7) — tree-scoped, membership-gated.
+		r.With(membershipMW).Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
 
 		// SSE endpoint (SPEC-API-01).
 		sseHandler := sse.NewHandler(sseHub)

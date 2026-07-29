@@ -2,7 +2,8 @@ guards:
   secrets: true
   lint: true
   tests: true
-  test_mode: diff
+  test_mode: full
+  dead_code: true
   go:
     build: true
     lint: true
