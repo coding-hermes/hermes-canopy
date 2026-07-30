@@ -147,13 +147,13 @@ func ensureTestUser(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	ctx := context.Background()
 	userRepo := db.NewPGUserRepo(pool)
 
-	userID := uuid.MustParse("b0000000-0000-0000-0000-000000000001")
-	email := "b12c-test@canopy.dev"
+	userID := testUserID
+	email := "test@canopy.dev"
 	_, err := userRepo.Create(ctx, &db.User{
 		ID:           userID,
 		HermesUserID: userID.String(),
 		Email:        &email,
-		DisplayName:  "BE-12c Test User",
+		DisplayName:  "Test User",
 	})
 	if err != nil {
 		t.Fatalf("ensureTestUser: create user: %v", err)
