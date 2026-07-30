@@ -35,10 +35,10 @@ import (
 func newTestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, func()) {
 	t.Helper()
 
-	// Create sentinel user so FK references to uuid.Nil in handlers work.
+	// Create sentinel user so FK references to testUserID in handlers work.
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `INSERT INTO users (id, hermes_user_id, display_name)
-		VALUES ('00000000-0000-0000-0000-000000000000', 'sentinel', 'Sentinel User')
+		VALUES ('a0000000-0000-0000-0000-000000000001', 'testuser', 'Test User')
 		ON CONFLICT (id) DO NOTHING`); err != nil {
 		t.Fatalf("create sentinel user: %v", err)
 	}

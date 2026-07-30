@@ -41,9 +41,9 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 	t.Helper()
 
 	ctx := context.Background()
-	// Create sentinel user.
+	// Create sentinel user (testUserID = a0000000-...).
 	if _, err := pool.Exec(ctx, `INSERT INTO users (id, hermes_user_id, display_name)
-		VALUES ('00000000-0000-0000-0000-000000000000', 'sentinel', 'Sentinel User')
+		VALUES ('a0000000-0000-0000-0000-000000000001', 'testuser', 'Test User')
 		ON CONFLICT (id) DO NOTHING`); err != nil {
 		t.Fatalf("create sentinel user: %v", err)
 	}

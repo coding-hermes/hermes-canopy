@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all configuration for the canopyd server.
@@ -91,6 +92,54 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("METRICS_ENABLED"); v == "true" || v == "1" {
 		c.MetricsEnabled = true
+	}
+
+	// CANOPY_DB_URL overrides all individual DB_* fields when set.
+	// This matches the documented env var in SELF_HOST.md and avoids
+	// silent misconfiguration when users set CANOPY_DB_URL expecting
+	// it to take effect.
+	if v := os.Getenv("CANOPY_DB_URL"); v != "" {
+		dsn := v
+		// postgres://user:pass@host:port/dbname?sslmode=...
+		if len(dsn) > 11 && dsn[:11] == "postgres://" {
+			rest := dsn[11:]
+			// user:password@host:port/dbname?params
+			if atIdx := strings.Index(rest, "@"); atIdx > 0 {
+				userInfo := rest[:atIdx]
+				hostPart := rest[atIdx+1:]
+				if colonIdx := strings.Index(userInfo, ":"); colonIdx > 0 {
+					c.DBUser = userInfo[:colonIdx]
+					c.DBPassword = userInfo[colonIdx+1:]
+				} else {
+					c.DBUser = userInfo
+				}
+				// host:port/dbname?params
+				if slashIdx := strings.Index(hostPart, "/"); slashIdx > 0 {
+					hostPort := hostPart[:slashIdx]
+					dbPart := hostPart[slashIdx+1:]
+					if colonIdx := strings.Index(hostPort, ":"); colonIdx > 0 {
+						c.DBHost = hostPort[:colonIdx]
+						if p, err := strconv.Atoi(hostPort[colonIdx+1:]); err == nil {
+							c.DBPort = p
+						}
+					} else {
+						c.DBHost = hostPort
+					}
+					// dbname?params
+					if qIdx := strings.Index(dbPart, "?"); qIdx > 0 {
+						c.DBName = dbPart[:qIdx]
+						params := dbPart[qIdx+1:]
+						for _, pair := range strings.Split(params, "&") {
+							if kv := strings.SplitN(pair, "=", 2); len(kv) == 2 && kv[0] == "sslmode" {
+								c.DBSSLMode = kv[1]
+							}
+						}
+					} else {
+						c.DBName = dbPart
+					}
+				}
+			}
+		}
 	}
 	return c
 }
