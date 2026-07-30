@@ -1023,3 +1023,12 @@
 {"from":"internal/mls/service.go","to":"std:crypto/cipher","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/mls/service.go","to":"std:crypto/sha256","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/mls/service.go","to":"std:fmt","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/card_handler.go","to":"pkg:github.com/rs/zerolog/log","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/topic_handler.go","to":"pkg:github.com/rs/zerolog/log","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"std:context","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"std:testing","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"pkg:github.com/google/uuid","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"pkg:github.com/jackc/pgx/v5/pgxpool","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/db","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/debug_tree_test.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/service","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/config/config.go","to":"std:strings","rel":"imports","provenance":"ast_exact","confidence":1.0}
