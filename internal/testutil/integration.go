@@ -12,8 +12,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,6 +77,148 @@ func uniqueDBName() string {
 	return "canopy_" + hex.EncodeToString(b)
 }
 
+// testDBInfo describes one candidate test database for the stale sweep.
+type testDBInfo struct {
+	Name       string
+	Created    time.Time
+	HasCreated bool // false when the creation time could not be determined
+	Active     int  // number of active backends on the database
+}
+
+// staleTestDBAge is the minimum age before a leaked test database is
+// considered safe to drop. Live tests always run against databases created
+// seconds earlier by this same run, so a canopy_* database older than an
+// hour with zero connections cannot belong to a running test.
+const staleTestDBAge = time.Hour
+
+// staleTestDBs returns the subset of candidate databases that are safe to
+// drop: older than staleTestDBAge AND holding zero active connections.
+// Databases whose creation time is unknown are never returned — an
+// undeterminable age means skip, never drop.
+func staleTestDBs(cands []testDBInfo, now time.Time) []string {
+	var stale []string
+	for _, c := range cands {
+		if !c.HasCreated {
+			continue
+		}
+		if now.Sub(c.Created) <= staleTestDBAge {
+			continue
+		}
+		if c.Active > 0 {
+			continue
+		}
+		stale = append(stale, c.Name)
+	}
+	return stale
+}
+
+// sweepStaleTestDBs drops leaked test databases left behind by timed-out or
+// panicked test runs whose t.Cleanup never executed (BUG-012: 420+ DBs,
+// ~25 GB accumulated). Each leaked DB is ~10MB, so this self-healing sweep
+// is the long-term fix. It is best-effort and NON-FATAL: every error is
+// logged and ignored so a locked or unreadable database can never block
+// test setup.
+//
+// Safety: only databases matching the uniqueDBName pattern (canopy_ + 8 hex
+// chars) are candidates, and a database is dropped ONLY if BOTH
+//   - it has zero active connections (pg_stat_activity), AND
+//   - it was created more than staleTestDBAge ago. Creation time is the
+//     per-database directory mtime under $PGDATA/base/<oid> (via
+//     pg_stat_file) — PostgreSQL sets it at CREATE DATABASE and never
+//     touches it afterwards.
+//
+// The 'canopy' base database, the 'canopy_test' fallback name, and anything
+// not matching the hex pattern are never touched. Age detection runs
+// per-database so one unreadable directory only skips that database instead
+// of aborting the whole sweep.
+func sweepStaleTestDBs(ctx context.Context, adminURL string) {
+	conn, err := pgx.Connect(ctx, adminURL)
+	if err != nil {
+		log.Printf("testutil: sweepStaleTestDBs: connect: %v", err)
+		return
+	}
+	defer conn.Close(ctx)
+
+	// Candidate leaked test databases. The escaped LIKE prefix plus the
+	// hex-pattern regex confines the sweep to uniqueDBName() output only.
+	rows, err := conn.Query(ctx, `
+		SELECT datname, oid::text, dattablespace::int
+		FROM pg_database
+		WHERE datname LIKE 'canopy\_%'
+		  AND datname ~ '^canopy_[0-9a-f]{8}$'`)
+	if err != nil {
+		log.Printf("testutil: sweepStaleTestDBs: list candidates: %v", err)
+		return
+	}
+	type candidate struct {
+		name string
+		oid  string
+		spc  int
+	}
+	var cands []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.name, &c.oid, &c.spc); err != nil {
+			rows.Close()
+			log.Printf("testutil: sweepStaleTestDBs: scan candidate: %v", err)
+			return
+		}
+		cands = append(cands, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("testutil: sweepStaleTestDBs: iterate candidates: %v", err)
+		return
+	}
+	if len(cands) == 0 {
+		return
+	}
+
+	// Per-database age + connection check. Age detection is isolated
+	// per-database so one failure only skips that database (conservative).
+	infos := make([]testDBInfo, 0, len(cands))
+	for _, c := range cands {
+		if c.spc != 1663 { // pg_default tablespace
+			log.Printf("testutil: sweepStaleTestDBs: %s: non-default tablespace, skipping", c.name)
+			continue
+		}
+		var created *time.Time
+		if err := conn.QueryRow(ctx, `
+			SELECT (pg_stat_file(format('%s/base/%s',
+			         (SELECT setting FROM pg_settings WHERE name='data_directory'),
+			         $1::text))).modification`,
+			c.oid).Scan(&created); err != nil {
+			log.Printf("testutil: sweepStaleTestDBs: age(%s): %v — skipping", c.name, err)
+			continue
+		}
+		var active int
+		if err := conn.QueryRow(ctx,
+			`SELECT count(*) FROM pg_stat_activity WHERE datname = $1`,
+			c.name).Scan(&active); err != nil {
+			log.Printf("testutil: sweepStaleTestDBs: connections(%s): %v — skipping", c.name, err)
+			continue
+		}
+		infos = append(infos, testDBInfo{
+			Name:       c.name,
+			Created:    *created,
+			HasCreated: true,
+			Active:     active,
+		})
+	}
+
+	for _, name := range staleTestDBs(infos, time.Now()) {
+		// WITH (FORCE) terminates any connection that raced in between the
+		// zero-connection check and the drop. Safe here because the age gate
+		// guarantees the database cannot belong to a live test.
+		if _, err := conn.Exec(ctx,
+			fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", name)); err != nil {
+			log.Printf("testutil: sweepStaleTestDBs: drop %s: %v", name, err)
+			continue
+		}
+		log.Printf("testutil: sweepStaleTestDBs: dropped stale leaked test DB %s", name)
+	}
+}
+
 // NewIntegrationPool creates a pgxpool connected to a FRESH, uniquely-named
 // test database and runs all pending migrations. Each call creates an
 // isolated database so concurrent test packages (handler, testutil, etc.)
@@ -84,13 +228,19 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 
-	dbName := uniqueDBName()
-
 	// Admin connection URL (to the default 'postgres' database).
 	adminURL := "postgres://canopy:canopy@localhost:5437/postgres?sslmode=disable"
 	if u := os.Getenv("CANOPY_ADMIN_DB_URL"); u != "" {
 		adminURL = u
 	}
+
+	// Best-effort sweep of test databases leaked by timed-out or panicked
+	// runs (their t.Cleanup never fired). NON-FATAL: any error is logged and
+	// ignored so a locked database can never block test setup. One sweep per
+	// pool creation is enough — it is idempotent.
+	sweepStaleTestDBs(ctx, adminURL)
+
+	dbName := uniqueDBName()
 
 	// Drop (if re-running) and recreate the unique test database.
 	dropTestDBByName(ctx, adminURL, dbName)
