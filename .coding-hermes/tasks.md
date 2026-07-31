@@ -688,3 +688,31 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 63/66 tasks complete (GAP-002 closed; TEST-002 partially complete). Phase 11: 3 MVP gaps → 0. ALL MVP gaps (GAP-001 context compiler, GAP-002 plugin sandbox, GAP-004 DuckDB cards) now delivered. Scheduler daemon reachable at :9090, fleet.toml pins 900s active cadence. PG healthy at :5437, 0 leaked test DBs. E2E 41/41 green (Tick 105). Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — GAP-002 delivered end-to-end (spec → worker → verified → committed), closing the last MVP gap. TEST-002 operational fix executed (95 leaked DBs → 0, db suite unblocked). All 16 gates green. Build/vet/tsc/guard clean. gitleaks clean. 24+6+10/10 tests PASS. No regressions. Next tick: TEST-002 long-term code fix (NewIntegrationPool sweep) + E2E-001 window approaching (Tick 110-115).
+### Tick 109 — 2026-07-31 17:02 CDT (DeepSeek V4 Flash) — Scheduler Tick (COORDINATION)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY (worker in flight) | Only .gitreins/tasks.yaml modified (TEST-002-sweep task created 22:01:29Z by parallel session). No worker source files yet (internal/testutil untouched at gate time). NOT touched by this tick. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet clean. Tree compiles mid-flight. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Tests | ✅ 10/10 NON-PG PASS | card, card/duckdb, config, hermes, mls, server, service, sse, sync, transport — all PASS. (testutil skipped — worker's target package, in flight.) |
+| 5 | Hilo graph | ✅ USEFUL | 1213 edges, 184 files (up from 1133/174 at Tick 108 — plugin/context/export edges indexed). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | — | Not checked (stable vs Tick 108: 164 Go + 3 npm outdated). |
+| 8 | GitReins | ✅ 0 ACTIVE + 1 PENDING | .gitreins/tasks.yaml: all historical complete + TEST-002-sweep (pending, created 22:01:29Z by sibling). Config: deepseek-v4-flash, 50 iter/10m/1M:0.4M, tier2 stage caps 100 iter/30m/1M:400k (fixed Tick 108). |
+| 9 | Secrets | ✅ CLEAN | Guard secrets clean (last full scan Tick 108: 406 commits, 0 leaks; no code changes since). |
+| 10 | Board consistency | ✅ AGREED | Board: 63/66 complete. Open: TEST-002 (long-term fix in flight), INFRA-001 (scheduler-level, mitigated by fleet.toml 900s), handler SSE goroutine leak (TEST-03, pre-existing). |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. LastTickStarted=null. |
+| 12 | PG health | ✅ ACCEPTING + 15 LEAKED | canopy-pg at :5437 accepting. 15 leaked canopy_* test DBs (matches worker prompt premise — sibling verified ~15 at 22:00 UTC; worker will prove sweep drops them). |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 109 entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 105 (41/41 PASS). Next due Tick 110-115. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master position; 14 local commits ahead of origin — unpushed, consistent with prior ticks). Off-by-One healthy (175h uptime). |
+| 16 | Dispatch | ⛔ NONE — WORKER ALREADY ACTIVE | TEST-002-sweep worker (deepseek-v4-flash @ deepseek-foreman, PID 3281124) spawned 22:01 UTC by parallel session — 1 min before this tick fired. Worker prompt: pre-run stale-DB sweep in NewIntegrationPool (internal/testutil/integration.go), conservative 1h-age + zero-active-connections gate, non-fatal best-effort, unit test, live before/after leak verification. No duplicate dispatch. |
+
+**Coverage (Tick 109):** ~40.7% total (no new source logic this tick — worker's TEST-002-sweep files uncommitted/in flight).
+
+**Context:** This tick fired 1 min after the parallel session (17:01 CDT spawn) under fleet.toml's intentional 900s cadence. Per foreman discipline (Tick 107 precedent): did NOT touch in-flight files, did NOT re-dispatch, did NOT commit worker code. All read-only gates green: build/vet/tsc clean (tree compiles mid-flight), 10/10 non-PG packages PASS, PG healthy with 15 leaked DBs (worker's verification target), Hilo stable at 1213/184, 0 new remote commits. The parallel session owns TEST-002-sweep completion + its board entry.
+
+**Project Status:** 63/66 tasks complete. All MVP gaps (GAP-001/002/004) delivered. TEST-002: long-term fix IN FLIGHT (worker active since 22:01 UTC). INFRA-001: scheduler-level, mitigated (fleet.toml 900s). Scheduler at :9090, 15m cadence by design. PG healthy at :5437. E2E 41/41 green (Tick 105). Coverage ~40.7%.
+
+**Verdict:** COORDINATION — No dispatch (TEST-002-sweep worker already active via parallel session), no code commits (sibling owns worker files). Build/vet/tsc clean + 10/10 non-PG tests PASS + PG healthy confirm no regressions from in-flight work. Board remains consistent; parallel session writes the TEST-002-sweep completion entry when its worker lands.
