@@ -95,3 +95,25 @@ tasks:
   status: complete
   created_at: '2026-07-25T11:44:53.124184+00:00'
   completed_at: '2026-07-31T06:06:25.870112+00:00'
+- id: GAP-002
+  title: "Plugin sandbox \u2014 register/list/source/install + permission gate + sandbox\
+    \ bootstrap (commit a48020e)"
+  criteria:
+  - 'internal/plugin/ package exists: models, manifest.go (ParseManifest), permissions.go
+    (MethodToPermission + gate), repo.go (pgx), service.go, sandbox.go (BuildSrcDoc)'
+  - Migrations 000022/000023/000024 (plugin_registry, plugin_instances, plugin_audit_log)
+    applied cleanly
+  - POST /api/v1/plugins/register stores plugin with SHA-256 integrity; size cap 1MB
+  - 'Permission gate: CheckPermission(instanceID, method) enforces granted_permissions'
+  - GET /api/v1/plugins/{id}/source serves source with X-Source-SHA256 header
+  - Install/pause/resume endpoints work with per-tree scoping
+  - All 24 service tests + 6 handler tests pass (plus 6 PG-skipped repo tests)
+  - Frontend PluginSandbox.tsx renders sandboxed iframe with CSP + nonce + postMessage
+    host (build + tsc clean)
+  - go build ./..., go vet ./..., gofmt clean
+  - gitreins guard passes (secrets, build, lint, tests)
+  - No new TODOs; no changes to existing package behavior except additive server.New
+    param
+  status: complete
+  created_at: '2026-07-31T20:09:09.721727+00:00'
+  completed_at: '2026-07-31T21:08:26.913769+00:00'
