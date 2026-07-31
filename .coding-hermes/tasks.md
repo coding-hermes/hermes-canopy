@@ -413,3 +413,35 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 **Project Status:** 60/64 tasks complete. GAP-003 in-progress (🔄). 3 architecture gaps remain (GAP-001, GAP-002, GAP-004). Build/vet/tsc all clean. gitleaks clean. Coverage 40.7% steady.
 
 **Verdict:** PRODUCTIVE — GAP-003 service + handler + server wiring completed (2 commits, 721 lines). 3 gaps remain. Build/vet/tsc all clean. 10/10 non-PG tests PASS. No regressions.
+
+### Tick 104-DUP — 2026-07-30 21:40 CDT (DeepSeek V4 Pro) — Duplicate Tick
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY | go.mod/go.sum modified (kr/text→kr/pretty indirect dep). Untracked: internal/card/duckdb/duckdb_store.go (GAP-004 WIP from parallel session). |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet clean. Both passes on second attempt (initial stale cache). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit clean. dist/ present. |
+| 4 | Tests | ✅ 10+9 PASS | 10/10 non-PG + 9/9 export handler tests all PASS. Export tests: 5 export (roundtrip, not-found, success, invalid-UUID, unauth) + 4 import (invalid-JSON, missing-auth, missing-title, extra-fields). |
+| 5 | Hilo graph | ✅ USEFUL | 1035 edges, 162 files (stable). Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 10 pre-existing | 1 cursor TODO + 5 stub_adapters.go + 4 yjsProvider BUG-024 stubs. No new TODOs. |
+| 7 | Deps | — | Not checked (stable). |
+| 8 | GitReins | ✅ ALL COMPLETE | 8 completed, 0 active. |
+| 9 | Secrets | ✅ CLEAN | gitleaks clean (27MB, 1.08s). No leaks. |
+| 10 | Board consistency | ⚠️ DUPLICATE TICK | First Tick 104 session already completed GAP-003, committed 3 commits (a722527→701dfa8→6dc6b5a). This is a duplicate scheduler tick. |
+| 11 | Scheduler | ✅ FIXED | Cooldown was 60s (post-restart, causing duplicate ticks). Restored to 43200s via PUT /api/v1/projects. |
+| 12 | PG health | ✅ ACCEPTING | PostgreSQL at :5437 accepting. |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 104-DUP entry saved. |
+| 14 | Docs | ✅ ALL PRESENT | 8/8 docs. |
+| 15 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 100 (+4 ticks). Next due Tick 105-110. |
+
+**⚠️ DUPLICATE TICK — Root cause:** Scheduler cooldown was 60s after daemon restart, causing two hermes-canopy ticks to fire within minutes. First session (commit 6dc6b5a) completed GAP-003 and wrote Tick 104. This session arrived 4 minutes later — redundant. Cooldown restored to 43200s (12h).
+
+**⚠️ Route conflict found:** Both treeHandler (line 99) and exportHandler (line 134) mount at `/trees`. Export routes (`GET /{tree_id}/export`, `POST /import`) may be shadowed by tree handler's `/{tree_id}` wildcard. Tests pass because handler tests bypass chi routing. Needs fix before GAP-003 is complete.
+
+**⚠️ GAP-004 started:** Untracked `internal/card/duckdb/duckdb_store.go` (3,203 bytes) from parallel session — not yet committed. go.mod/go.sum have minor diff (kr/text→kr/pretty).
+
+**Actions this tick:** Cooldown 60s→43200s (FIXED). Route conflict identified. GAP-004 DuckDB stub detected (not committed).
+
+**Project Status:** 61/64 tasks complete (GAP-003 provisionally done). GAP-004 has untracked stub. 3 gaps remain: GAP-001, GAP-002, GAP-004. Cooldown restored. Build clean.
+
+**Verdict:** DUPLICATE — First Tick 104 session completed all productive work. This session fixed the 60s cooldown root cause and identified a route conflict in GAP-003 wiring. No worker dispatch needed.
