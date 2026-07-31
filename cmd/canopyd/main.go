@@ -26,6 +26,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/mls"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
@@ -65,6 +66,9 @@ func main() {
 
 	// Load config
 	cfg := config.FromEnv()
+	if err := cfg.Validate(); err != nil {
+		log.Fatal().Err(err).Msg("invalid configuration")
+	}
 
 	// Set log level
 	level, err := zerolog.ParseLevel(cfg.LogLevel)
@@ -189,10 +193,14 @@ func main() {
 		cfg.ContextMaxRefs,
 	)
 
+	// Plugin sandbox — GAP-002 (register/list/source/install + permission gate).
+	pluginRepo := plugin.NewPGPluginRepo(database.Pool)
+	pluginSvc := plugin.NewService(pluginRepo, cfg.PluginMaxSize)
+
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
-		ctxCompiler, cfg)
+		ctxCompiler, pluginSvc, cfg)
 
 	// Start server in background
 

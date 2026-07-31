@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +34,9 @@ type Config struct {
 	ContextMaxAncestors  int // CONTEXT_MAX_ANCESTORS, default 50
 	ContextMaxRefs       int // CONTEXT_MAX_REFS, default 5 (soft) — hard cap is 2x this
 	ContextDefaultBudget int // CONTEXT_DEFAULT_BUDGET, default 8000 tokens
+
+	// Plugin sandbox (GAP-002 §4.1)
+	PluginMaxSize int // PLUGIN_MAX_SIZE, default 1048576 (1MB)
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -62,6 +66,7 @@ func Default() *Config {
 		ContextMaxAncestors:  50,
 		ContextMaxRefs:       5,
 		ContextDefaultBudget: 8000,
+		PluginMaxSize:        1048576,
 	}
 }
 
@@ -116,6 +121,15 @@ func FromEnv() *Config {
 			c.ContextDefaultBudget = n
 		}
 	}
+	if v := os.Getenv("PLUGIN_MAX_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			// Negative values are rejected at startup (Validate); zero falls
+			// back to the 1MB default.
+			if n > 0 {
+				c.PluginMaxSize = n
+			}
+		}
+	}
 
 	// CANOPY_DB_URL overrides all individual DB_* fields when set.
 	// This matches the documented env var in SELF_HOST.md and avoids
@@ -165,4 +179,14 @@ func FromEnv() *Config {
 		}
 	}
 	return c
+}
+
+// Validate checks configuration invariants that must fail fast at startup.
+// A negative PLUGIN_MAX_SIZE is a hard error (GAP-002 §4.1); zero falls back
+// to the 1MB default in FromEnv.
+func (c *Config) Validate() error {
+	if c.PluginMaxSize < 0 {
+		return fmt.Errorf("config: PLUGIN_MAX_SIZE must not be negative (got %d)", c.PluginMaxSize)
+	}
+	return nil
 }

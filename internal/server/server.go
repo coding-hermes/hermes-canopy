@@ -17,6 +17,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
@@ -58,6 +59,7 @@ func New(
 	graphSvc service.GraphService,
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
+	pluginSvc plugin.Service,
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
@@ -143,6 +145,9 @@ func New(
 
 		// Context compiler (GAP-001) — budgeted context assembly with visible manifest.
 		r.Get("/context/{node_id}", handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).Compile)
+
+		// Plugin sandbox (GAP-002) — register/list/source/install + instances.
+		r.Mount("/plugins", handler.NewPluginHandler(pluginSvc).Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
