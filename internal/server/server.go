@@ -132,6 +132,10 @@ func New(
 		// Export/import endpoints (GAP-003).
 		exportHandler := handler.NewExportHandler(exportSvc)
 		r.Mount("/trees", exportHandler.Routes())
+
+		// MCP endpoint — programmatic agent access.
+		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)
+		r.Mount("/mcp", mcpHandler.Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).

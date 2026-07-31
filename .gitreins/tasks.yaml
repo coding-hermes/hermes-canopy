@@ -8,7 +8,7 @@ tasks:
   - A GitReins judge evaluation can be started and returns a result
   status: complete
   created_at: '2026-07-24T22:19:59.554678+00:00'
-  completed_at: '2026-07-24T22:26:30.244794+00:00'
+  completed_at: '2026-07-31T05:52:04.663490+00:00'
 - id: BUG-003
   title: Add dev JWT auto-injection for frontend dev mode
   criteria:
@@ -19,7 +19,7 @@ tasks:
   - No secrets committed (dev JWT uses a well-known or auto-generated key)
   status: complete
   created_at: '2026-07-25T06:11:03.153202+00:00'
-  completed_at: '2026-07-25T06:17:31.856904+00:00'
+  completed_at: '2026-07-31T06:04:55.526079+00:00'
 - id: BUG-006
   title: 'Fix double h1: NavigationBar logo + page titles both use h1'
   criteria:
@@ -31,7 +31,7 @@ tasks:
   - No accessibility regression (a11y check passes)
   status: complete
   created_at: '2026-07-25T08:25:48.326110+00:00'
-  completed_at: '2026-07-25T08:27:14.829747+00:00'
+  completed_at: '2026-07-31T06:05:10.587126+00:00'
 - id: BUG-008
   title: Fix approval panel E2E test failures (10/10 tests fail)
   criteria:
@@ -43,7 +43,7 @@ tasks:
   - No regression in other E2E test suites
   status: complete
   created_at: '2026-07-25T09:19:02.333522+00:00'
-  completed_at: '2026-07-25T09:28:15.427833+00:00'
+  completed_at: '2026-07-31T06:05:25.674386+00:00'
 - id: BUG-009
   title: Fix CRUD pages E2E test failures (4/4 tests fail)
   criteria:
@@ -55,7 +55,7 @@ tasks:
   - No regression in other E2E test suites
   status: complete
   created_at: '2026-07-25T09:56:22.780201+00:00'
-  completed_at: '2026-07-25T09:59:53.413914+00:00'
+  completed_at: '2026-07-31T06:05:40.720487+00:00'
 - id: INT-01
   title: "End-to-end tree flow integration (create \u2192 edit \u2192 merge \u2192\
     \ approve)"
@@ -69,7 +69,7 @@ tasks:
   - No regression in existing unit or integration tests
   status: complete
   created_at: '2026-07-25T10:29:21.517017+00:00'
-  completed_at: '2026-07-25T17:13:36.694988+00:00'
+  completed_at: '2026-07-31T06:05:55.774430+00:00'
 - id: BUG-010
   title: "Fix computeDepth CTE infinite loop \u2014 blocks GET node API (INT-01 blocked)"
   criteria:
@@ -81,7 +81,7 @@ tasks:
   - No regression in existing unit or integration tests
   status: complete
   created_at: '2026-07-25T10:43:57.565363+00:00'
-  completed_at: '2026-07-25T12:10:45.146621+00:00'
+  completed_at: '2026-07-31T06:06:10.809111+00:00'
 - id: BUG-011
   title: Fork endpoint returns 500 INTERNAL_ERROR
   criteria:
@@ -94,4 +94,4 @@ tasks:
   - TestINT01_SynthesisAndDeny step 4 should pass after fix
   status: complete
   created_at: '2026-07-25T11:44:53.124184+00:00'
-  completed_at: '2026-07-25T12:09:08.646012+00:00'
+  completed_at: '2026-07-31T06:06:25.870112+00:00'
