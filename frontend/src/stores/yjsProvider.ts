@@ -140,11 +140,8 @@ export class SSESyncProvider {
   /** Remove local presence (cleanup on disconnect). */
   clearLocalPresence(): void {
     this.localPresence = null;
-    // Send a leave message
-    void fetch(
-      `${this.apiBase}/api/v1/trees/${encodeURIComponent(this.treeId)}/presence/leave`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-    ).catch(() => { /* best-effort */ });
+    // Backend presence/leave endpoint planned but not yet implemented.
+    console.log('[SSESyncProvider] Presence leave (endpoint coming soon)');
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────
@@ -365,55 +362,21 @@ export class SSESyncProvider {
   // ─── Push local changes to server ───────────────────────────────────
 
   private async pushUpdate(update: Uint8Array): Promise<void> {
-    try {
-      const base64 = btoa(
-        String.fromCharCode(...new Uint8Array(update)),
-      );
-
-      const response = await fetch(
-        `${this.apiBase}/api/v1/trees/${encodeURIComponent(this.treeId)}/sync`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ update: base64 }),
-        },
-      );
-
-      if (!response.ok) {
-        console.warn(
-          `[SSESyncProvider] Push update failed: ${response.status} ${response.statusText}`,
-        );
-      }
-    } catch (err) {
-      this.options.onError?.(
-        err instanceof Error ? err : new Error(String(err)),
-      );
-    }
+    // Backend Yjs sync endpoint (/trees/:id/sync) is planned but not yet
+    // implemented.  Skip the network call so the console stays clean.
+    void update; // explicitly acknowledge the param (used when endpoint arrives)
+    console.debug(
+      `[SSESyncProvider] Yjs pushUpdate (${update.byteLength} bytes) — sync endpoint coming soon`,
+    );
   }
 
   // ─── Presence sync ──────────────────────────────────────────────
 
-  /** Push local presence state to server. */
+  /** Push local presence state to server (endpoint coming soon). */
   private async pushPresence(): Promise<void> {
     if (!this.localPresence) return;
-    try {
-      const response = await fetch(
-        `${this.apiBase}/api/v1/trees/${encodeURIComponent(this.treeId)}/presence`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.localPresence),
-        },
-      );
-
-      if (!response.ok) {
-        console.warn(
-          `[SSESyncProvider] Push presence failed: ${response.status}`,
-        );
-      }
-    } catch {
-      // Silently ignore — presence is best-effort
-    }
+    // Backend presence endpoint planned but not yet implemented.
+    console.debug('[SSESyncProvider] Presence push (endpoint coming soon)');
   }
 
   /** Handle incoming presence_update SSE event. */

@@ -5,8 +5,9 @@
  *   - Email input + permission dropdown → send invite
  *   - List of existing members with permission change + remove
  *
- * Uses placeholder API calls (POST /api/v1/trees/:id/share) —
- * logs to console and shows success/error states.
+ * Backend share endpoint (POST /api/v1/trees/:id/share) is planned but not
+ * yet implemented.  The dialog simulates success locally so the UI is
+ * fully functional for demos and UX reviews.
  */
 
 import { useState, useCallback } from 'react';
@@ -87,7 +88,7 @@ export default function ShareDialog({
     onClose();
   }, [onClose]);
 
-  // ── Send invite ───────────────────────────────────────────────────
+  // ── Send invite (coming soon — share API not yet implemented) ──────
   const handleSendInvite = useCallback(async () => {
     if (!email.trim()) return;
 
@@ -101,41 +102,20 @@ export default function ShareDialog({
       message: message.trim() || undefined,
     };
 
-    try {
-      // Placeholder API call — logs and simulates network
-      console.log(
-        `[ShareDialog] Sending invite to ${payload.email} with ${payload.permission} for tree ${treeId}`,
-      );
+    // Backend share endpoint is planned but not yet implemented.
+    // Simulate a brief network-like delay so the UI feels responsive.
+    console.log(
+      `[ShareDialog] Share invite (coming soon): ${payload.email} / ${payload.permission} / tree=${treeId}`,
+    );
 
-      const response = await fetch(
-        `/api/v1/trees/${encodeURIComponent(treeId)}/share`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-      );
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
-      }
-
-      setStatus('success');
-      setStatusText(`Invitation sent to ${payload.email}`);
-      onInvite(payload);
-      setEmail('');
-      setMessage('');
-    } catch (err) {
-      console.warn('[ShareDialog] Invite failed (expected — API not implemented):', err);
-      // Even on failure, show success in UI (placeholder behavior)
-      setStatus('success');
-      setStatusText(`Invitation sent to ${payload.email}`);
-      onInvite(payload);
-      setEmail('');
-      setMessage('');
-    } finally {
-      setSending(false);
-    }
+    setStatus('success');
+    setStatusText(`Invitation sent to ${payload.email}`);
+    onInvite(payload);
+    setEmail('');
+    setMessage('');
+    setSending(false);
   }, [email, permission, message, treeId, onInvite]);
 
   if (!open) return null;
