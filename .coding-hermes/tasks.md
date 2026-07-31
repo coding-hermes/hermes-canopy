@@ -113,7 +113,7 @@
 || 🔴 GAP-001 | Context compiler missing: AGENTS.md defines "Context Compiler" as a transparent, budgeted context assembly with visible manifest. No internal/context/ package exists. Every model call currently has no auditable token budget or manifest. | Critical | 5 | new module | ++architecture, ++core | | | |
 || 🔴 GAP-002 | Plugin sandbox missing: AGENTS.md specifies "Sandboxed iframes + CSP + capability-scoped APIs" for MVP. No internal/plugin/ package. Card plugins (File, Task, Code) are rendered as static React components with no sandbox isolation. | Critical | 5 | new module | ++architecture, ++core | | | |
 ||| ✅ GAP-003 | Import/export: ExportService + handler + tests + server wiring DONE (commits a722527, 701dfa8). 9 tests pass. CLI wiring deferred. | High | 3 | handler, cli | ++feature | DeepSeek V4 Pro | Medium | — |
-|| 🟡 GAP-004 | DuckDB card storage: 848 lines (duckdb_repo.go + store.go + 6 tests). 5/6 tests pass. Patch (UPDATE) broken by go-duckdb v1.8.5 parameterized UPDATE limitation — SELECT+DELETE+INSERT in same tx also fails with PK conflict. Create/Get/List/Events all work. Deferred: needs driver upgrade or UPSERT-based Patch rewrite. | Medium | 3 | card, db | ++architecture | | | |
+|| ✅ GAP-004 | DuckDB card storage: 848 lines (duckdb_repo.go + store.go + 6 tests). 6/6 tests PASS (Tick 105, commit 685a850). Root cause: DuckDB does not release PK index slot within a tx — same-tx SELECT+DELETE+INSERT AND parameterized UPDATE both hit PK constraint on indexed multi-column tables. Fix: standalone DELETE then INSERT (no tx wrapper). Create/Get/List/Events/Patch all work. | Medium | 3 | card, db | ++architecture | | | |
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
@@ -509,3 +509,38 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 **Phase 11 Summary:** 3 MVP gaps + 20 spec-defined features/stacks = 23 total items needing work.
 Post-MVP items (15) are intentionally deferred per AGENTS.md but have full specs ready.
 The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM-04) are the priority targets.
+
+### Tick 105 — 2026-07-31 15:45 UTC (DeepSeek V4 Flash) — Scheduler Tick
+
+|| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY → CLEAN | .vfs/graph/edges.jsonl modified (Hilo warm — mcp_handler.go edges from prior commit). GAP-004 fix committed 685a850. Clean after commit. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet clean. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit clean. |
+| 4 | Tests | ✅ 11/11 NON-PG PASS | card, card/duckdb (6/6 — was 5/6), config, hermes, mls, server, service, sse, sync, testutil (40.3s), transport — ALL PASS. GAP-004 Patch fixed. |
+| 5 | Hilo graph | ✅ USEFUL | 1089 edges, 169 files (up from 1035/162 — MCP handler + export + duckdb card edges now indexed). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | ⚠️ 154 Go + 3 npm outdated | Non-blocking maintenance backlog (unchanged). |
+| 8 | GitReins | ✅ GUARD PASS | Tier 1 guard: secrets clean, build/lint/tests ok. Tasks: historical complete entries. Config: deepseek-v4-flash, 50 iter/10m/1M:0.4M. |
+| 9 | Secrets | ✅ CLEAN | gitleaks clean (27.8MB scanned, 0 leaks). |
+| 10 | Board consistency | ✅ AGREED | GitReins: 0 active. Board: GAP-004 → ✅ this tick. Open: GAP-001, GAP-002 (both need specs), INFRA-001 (scheduler-level). |
+| 11 | Scheduler | ⚠️ COOLDOWN REVERTED → FIXED | CooldownS=900 (15min) — reverted after daemon restart (Tick 104-DUP set 43200). Restored to 43200 via PUT /api/v1/projects/hermes-canopy, GET-verified. Priority=10, Weight=10. |
+| 12 | PG health | ✅ ACCEPTING | PostgreSQL canopy-pg at :5437 accepting (container up 38h, healthy). |
+| 13 | E2E-001 | ✅ 41/41 PASS | Dispatched via delegate_task. 5 suites: crud-pages (13), navigation (9), approval-panel (5), accessibility (7), tree-rendering (7). 45.5s runtime. 3 screenshots saved (/tmp/e2e-screenshots/). Tick 104-DUP /trees double-mount concern: NO shadowing — tree CRUD + export routes coexist (chi path-depth disambiguation). |
+| 14 | Dispatch | ✅ 1 WORKER + FOREMAN FIX | Worker: GAP-004 Patch rewrite (DELETE+INSERT same-tx → standalone statements, all tests pass). Foreman probe (go-duckdb v1.8.5): plain UPDATE works on trivial schema but fails on real indexed multi-column schema (internal DELETE+INSERT rewrite) — worker's standalone DELETE→INSERT is the correct fix. Also probed: UPSERT works, INSERT OR REPLACE works. |
+
+**Coverage (Tick 105):** ~40.7% total (stable — GAP-004 fix is a SQL rewrite, no new source logic).
+
+**Actions this tick:**
+- GAP-004: FIXED ✅ — Patch() rewritten to standalone DELETE→INSERT (commit 685a850). All 6 duckdb tests PASS.
+- E2E-001: 41/41 PASS ✅ — full browser suite green, /trees route coexistence confirmed empirically.
+- Scheduler cooldown: restored 900→43200 (daemon-restart reversion), GET-verified.
+
+**Remaining open (2 MVP gaps + 1 infra):**
+- GAP-001: Context compiler (Critical, Cpx 5) — needs implementation spec before dispatch
+- GAP-002: Plugin sandbox (Critical, Cpx 5) — needs implementation spec before dispatch
+- INFRA-001: tick storm (mitigated at scheduler level; cooldown reversion recurred this tick — root fix is fleet.toml entry)
+
+**Project Status:** 61/64 tasks complete (GAP-004 closed). Phase 10: complete. 2 architecture gaps remain (GAP-001, GAP-002) — both blocked on implementation specs. Scheduler daemon reachable at :9090, cooldown 43200 restored. PG healthy at :5437. E2E 41/41 green.
+
+**Verdict:** PRODUCTIVE — GAP-004 Patch fixed (6/6 tests), E2E 41/41 PASS, cooldown reversion repaired. Build/vet/tsc clean. gitleaks clean. No regressions. 2 spec-blocked gaps remain for future ticks.
