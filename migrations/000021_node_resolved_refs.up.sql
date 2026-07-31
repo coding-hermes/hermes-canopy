@@ -14,7 +14,7 @@ CREATE TABLE node_resolved_refs (
     -- The context hash of the topic at the time of resolution, used for cache coherency
     context_hash    text        NOT NULL DEFAULT '',
     CONSTRAINT fk_nrr_node
-        FOREIGN KEY (node_id, tree_id) REFERENCES nodes(id, tree_id)
+        FOREIGN KEY (node_id) REFERENCES nodes(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_nrr_topic
         FOREIGN KEY (topic_id) REFERENCES topics(id)
