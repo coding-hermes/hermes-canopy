@@ -158,75 +158,72 @@ export class SSESyncProvider {
     );
     this._connected = true;
     this.options.onConnected?.();
-    return;
-
-    /* ——— Re-enable when /api/v1/events is live ———
-    if (this.eventSource) {
-      this.disconnect();
-    }
-
-    const url = `${this.apiBase}/api/v1/events?tree_id=${encodeURIComponent(this.treeId)}`;
-
-    this.eventSource = new EventSource(url);
-
-    this.eventSource.onopen = (): void => {
-      this._connected = true;
-      this.options.onConnected?.();
-    };
-    */
-
-    this.eventSource.onmessage = (event: MessageEvent): void => {
-      this.handleSSEMessage(event.data);
-    };
-
-    // SSE also supports named events via addEventListener
-    this.eventSource.addEventListener('node_added', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('node_updated', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('node_deleted', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('edge_added', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('edge_deleted', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('tree_updated', ((e: MessageEvent) => {
-      this.handleSSEMessage(e.data);
-    }) as EventListener);
-
-    // Presence/awareness events
-    this.eventSource.addEventListener('presence_update', ((e: MessageEvent) => {
-      this.handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
-    }) as EventListener);
-
-    this.eventSource.addEventListener('cursor_update', ((e: MessageEvent) => {
-      this.handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
-    }) as EventListener);
-
-    this.eventSource.onerror = (): void => {
-      this._connected = false;
-      this.options.onDisconnected?.('SSE connection error');
-      // EventSource will auto-reconnect after a delay
-    };
 
     // Listen for local Yjs changes and push to server
+    // TODO(BUG-024): pushUpdate is stubbed — sync endpoint not yet available
     this.updateHandler = (update: Uint8Array, origin: unknown): void => {
-      // Don't push updates that originated from the server
       if (origin === 'sse-provider') return;
       void this.pushUpdate(update);
     };
+    this.doc.ydoc.on('update', this.updateHandler!);
 
-    this.doc.ydoc.on('update', this.updateHandler);
+    return;
+
+    // —— Re-enable below when /api/v1/events is live ———
+    //
+    // if (this.eventSource) {
+    //   this.disconnect();
+    // }
+    //
+    // const url = `${this.apiBase}/api/v1/events?tree_id=${encodeURIComponent(this.treeId)}`;
+    //
+    // this.eventSource = new EventSource(url);
+    //
+    // this.eventSource.onopen = (): void => {
+    //   this._connected = true;
+    //   this.options.onConnected?.();
+    // };
+    //
+    // this.eventSource.onmessage = (event: MessageEvent): void => {
+    //   this.handleSSEMessage(event.data);
+    // };
+    //
+    // this.eventSource.addEventListener('node_added', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('node_updated', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('node_deleted', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('edge_added', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('edge_deleted', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('tree_updated', ((e: MessageEvent) => {
+    //   this.handleSSEMessage(e.data);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('presence_update', ((e: MessageEvent) => {
+    //   this.handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
+    // }) as EventListener);
+    //
+    // this.eventSource.addEventListener('cursor_update', ((e: MessageEvent) => {
+    //   this.handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
+    // }) as EventListener);
+    //
+    // this.eventSource.onerror = (): void => {
+    //   this._connected = false;
+    //   this.options.onDisconnected?.('SSE connection error');
+    // };
   }
 
   /** Disconnect from SSE. */
