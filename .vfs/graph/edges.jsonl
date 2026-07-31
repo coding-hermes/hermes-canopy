@@ -1211,3 +1211,10 @@
 {"from":"internal/plugin/service_test.go","to":"internal/plugin/service.go","rel":"tested_by","provenance":"heuristic","confidence":0.8}
 {"from":"internal/plugin/repo.go","to":"internal/plugin/repo_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}
 {"from":"internal/plugin/service.go","to":"internal/plugin/service_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}
+{"from":"internal/testutil/integration.go","to":"std:log","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:time","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:fmt","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:os","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:reflect","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"std:time","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration_test.go","to":"pkg:github.com/jackc/pgx/v5","rel":"imports","provenance":"ast_exact","confidence":1.0}
