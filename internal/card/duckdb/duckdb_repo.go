@@ -140,54 +140,100 @@ func (r *CardRepo) List(ctx context.Context, options card.ListCardsOptions) ([]c
 }
 
 // Patch updates selected fields and increments revision.
+//
+// DuckDB's append-only engine does not support UPDATE in all driver versions.
+// We work around this with a SELECT → DELETE → INSERT cycle inside a SQL transaction.
 func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int64, input card.PatchCardInput) (*card.Card, error) {
 	now := time.Now().UTC()
 
-	query := "UPDATE cards SET revision = revision + 1, updated_at = ?"
-	args := []any{now}
-
-	if input.Data != nil {
-		query += ", data = ?"
-		args = append(args, string(*input.Data))
-	}
-	if input.Actions != nil {
-		b, err := json.Marshal(*input.Actions)
-		if err != nil {
-			return nil, fmt.Errorf("duckdb: marshal actions: %w", err)
-		}
-		query += ", actions = ?"
-		args = append(args, string(b))
-	}
-	if input.Status != nil {
-		query += ", status = ?"
-		args = append(args, string(*input.Status))
-		if *input.Status == card.CardStatusDismissed {
-			query += ", dismissed_at = ?"
-			args = append(args, now)
-		}
-		if *input.Status == card.CardStatusArchived {
-			query += ", archived_at = ?"
-			args = append(args, now)
-		}
-	}
-	if input.ContextHash != nil {
-		query += ", context_hash = ?"
-		args = append(args, *input.ContextHash)
-	}
-
-	query += " WHERE id = ? AND revision = ?"
-	args = append(args, id.String(), expectedRevision)
-
-	res, err := r.db.ExecContext(ctx, query, args...)
+	// Start a DuckDB transaction so SELECT/DELETE/INSERT is atomic.
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("duckdb: patch: %w", err)
+		return nil, fmt.Errorf("duckdb: patch: begin tx: %w", err)
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	defer tx.Rollback()
+
+	// 1. SELECT current row to get existing values and check revision.
+	current, err := r.getInTx(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if current.Revision != expectedRevision {
 		return nil, fmt.Errorf("duckdb: patch %s: revision mismatch or not found", id)
 	}
 
+	// 2. Build the new row values.
+	newRev := current.Revision + 1
+	dataJSON := string(current.Data)
+	if input.Data != nil {
+		dataJSON = string(*input.Data)
+	}
+	actionsJSON := "[]"
+	if input.Actions != nil {
+		b, marshalErr := json.Marshal(*input.Actions)
+		if marshalErr != nil {
+			return nil, fmt.Errorf("duckdb: marshal actions: %w", marshalErr)
+		}
+		actionsJSON = string(b)
+	}
+	status := current.Status
+	dismissedAt := current.DismissedAt
+	archivedAt := current.ArchivedAt
+	if input.Status != nil {
+		status = *input.Status
+		if status == card.CardStatusDismissed {
+			dismissedAt = &now
+		}
+		if status == card.CardStatusArchived {
+			archivedAt = &now
+		}
+	}
+	ctxHash := current.ContextHash
+	if input.ContextHash != nil {
+		ctxHash = *input.ContextHash
+	}
+
+	// 3. DELETE the old row.
+	if _, delErr := tx.ExecContext(ctx, "DELETE FROM cards WHERE id = ?", id.String()); delErr != nil {
+		return nil, fmt.Errorf("duckdb: patch: delete: %w", delErr)
+	}
+
+	// 4. INSERT the updated row.
+	_, insErr := tx.ExecContext(ctx,
+		`INSERT INTO cards (id, tree_id, node_id, app_id, card_type, data, actions, status, context_hash, revision, created_at, updated_at, dismissed_at, archived_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id.String(),
+		current.TreeID.String(),
+		current.NodeID.String(),
+		current.AppID,
+		string(current.CardType),
+		dataJSON,
+		actionsJSON,
+		string(status),
+		ctxHash,
+		newRev,
+		current.CreatedAt,
+		now,
+		dismissedAt,
+		archivedAt,
+	)
+	if insErr != nil {
+		return nil, fmt.Errorf("duckdb: patch: insert: %w", insErr)
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return nil, fmt.Errorf("duckdb: patch: commit: %w", commitErr)
+	}
+
 	return r.Get(ctx, id)
+}
+
+// getInTx retrieves a card within an existing transaction.
+func (r *CardRepo) getInTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (*card.Card, error) {
+	row := tx.QueryRowContext(ctx,
+		`SELECT id, tree_id, node_id, app_id, card_type, data, actions, status, context_hash, revision, created_at, updated_at, dismissed_at, archived_at
+		 FROM cards WHERE id = ?`, id.String())
+	return scanCard(row)
 }
 
 // AppendEvent inserts a new event row and returns the created event.
