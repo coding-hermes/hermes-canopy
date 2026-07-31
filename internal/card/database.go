@@ -1,6 +1,7 @@
 package card
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -113,6 +114,27 @@ func (m *CardDBManager) Close() error {
 	m.dbs = make(map[CardType]*sql.DB)
 	m.repos = make(map[CardType]CardRepository)
 	return firstErr
+}
+
+// GetByContextHash searches all card-type databases for cards with the given
+// context hash. Satisfies the context.CardReader interface for the context compiler.
+func (m *CardDBManager) GetByContextHash(ctx context.Context, contextHash string) ([]Card, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var all []Card
+	for ctype := range ValidCardTypes {
+		repo, err := m.Repository(ctype)
+		if err != nil {
+			continue // skip types whose DB failed to open
+		}
+		cards, err := repo.GetByContextHash(ctx, contextHash)
+		if err != nil {
+			return nil, fmt.Errorf("card: get by context hash (%s): %w", ctype, err)
+		}
+		all = append(all, cards...)
+	}
+	return all, nil
 }
 
 // migrate creates the cards and events tables if they don't exist,

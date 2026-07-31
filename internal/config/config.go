@@ -28,6 +28,11 @@ type Config struct {
 
 	// Metrics
 	MetricsEnabled bool
+
+	// Context compiler
+	ContextMaxAncestors  int // CONTEXT_MAX_ANCESTORS, default 50
+	ContextMaxRefs       int // CONTEXT_MAX_REFS, default 5 (soft) — hard cap is 2x this
+	ContextDefaultBudget int // CONTEXT_DEFAULT_BUDGET, default 8000 tokens
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -44,16 +49,19 @@ func (c *Config) DSN() string {
 // Default returns a Config with sensible development defaults.
 func Default() *Config {
 	return &Config{
-		DBHost:         "localhost",
-		DBPort:         5432,
-		DBUser:         "canopy",
-		DBPassword:     "canopy",
-		DBName:         "canopy",
-		DBSSLMode:      "disable",
-		HTTPAddr:       ":8080",
-		LogLevel:       "info",
-		JWTSecret:      "dev-secret-change-me",
-		MetricsEnabled: false,
+		DBHost:               "localhost",
+		DBPort:               5432,
+		DBUser:               "canopy",
+		DBPassword:           "canopy",
+		DBName:               "canopy",
+		DBSSLMode:            "disable",
+		HTTPAddr:             ":8080",
+		LogLevel:             "info",
+		JWTSecret:            "dev-secret-change-me",
+		MetricsEnabled:       false,
+		ContextMaxAncestors:  50,
+		ContextMaxRefs:       5,
+		ContextDefaultBudget: 8000,
 	}
 }
 
@@ -92,6 +100,21 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("METRICS_ENABLED"); v == "true" || v == "1" {
 		c.MetricsEnabled = true
+	}
+	if v := os.Getenv("CONTEXT_MAX_ANCESTORS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.ContextMaxAncestors = n
+		}
+	}
+	if v := os.Getenv("CONTEXT_MAX_REFS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.ContextMaxRefs = n
+		}
+	}
+	if v := os.Getenv("CONTEXT_DEFAULT_BUDGET"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.ContextDefaultBudget = n
+		}
 	}
 
 	// CANOPY_DB_URL overrides all individual DB_* fields when set.

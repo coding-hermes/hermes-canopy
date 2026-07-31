@@ -12,6 +12,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
 
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
+	ctxpkg "github.com/totalwindupflightsystems/hermes-canopy/internal/context"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
@@ -50,11 +52,13 @@ func New(
 	eventRepo db.TransportEventRepo,
 	membersRepo db.TreeMemberRepo,
 	profileRouter *hermes.PGProfileRouter,
-	mlsHandler     *handler.MLSHandler,
-	topicSvc       service.TopicService,
-	cardSvc        service.CardService,
-	graphSvc       service.GraphService,
-	metrics        *telemetry.Metrics,
+	mlsHandler *handler.MLSHandler,
+	topicSvc service.TopicService,
+	cardSvc service.CardService,
+	graphSvc service.GraphService,
+	metrics *telemetry.Metrics,
+	ctxCompiler ctxpkg.Compiler,
+	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
 
@@ -136,6 +140,9 @@ func New(
 		// MCP endpoint — programmatic agent access.
 		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)
 		r.Mount("/mcp", mcpHandler.Routes())
+
+		// Context compiler (GAP-001) — budgeted context assembly with visible manifest.
+		r.Get("/context/{node_id}", handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).Compile)
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).

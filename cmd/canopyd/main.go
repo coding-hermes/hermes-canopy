@@ -21,6 +21,7 @@ import (
 
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/card"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
+	ctxpkg "github.com/totalwindupflightsystems/hermes-canopy/internal/context"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
@@ -179,9 +180,19 @@ func main() {
 		log.Info().Msg("prometheus metrics enabled on /metrics")
 	}
 
+	// Context compiler — GAP-001 budgeted context assembly.
+	ctxCompiler := ctxpkg.NewCompiler(
+		database.Nodes,
+		database.Topics,
+		cardDBMgr, // CardDBManager implements CardReader interface
+		ctxpkg.NewTokenEstimator(),
+		cfg.ContextMaxRefs,
+	)
+
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics)
+		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
+		ctxCompiler, cfg)
 
 	// Start server in background
 
