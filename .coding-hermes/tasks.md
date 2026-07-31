@@ -117,7 +117,7 @@
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
-| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS (100%). ✅ Tick 76: 41/41 PASS (100%) — 7 pages verified visually, all screenshots clean. |
+| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS. ✅ Tick 76: 41/41 PASS. ✅ Tick 105: 41/41 PASS (100%) — 3 screenshots saved, /trees route coexistence confirmed. |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ BUG-012 | Test database leak: NewIntegrationPool creates unique DB per test but never drops on teardown. FIXED Tick 73 (871de1f): DROP DATABASE IF EXISTS WITH (FORCE) in t.Cleanup(). Verified: 0 leaked DBs after full 16/16 test run. | Critical | 2 | — | ++testing, ++debugging, ++sql | DeepSeek V4 Pro | Medium | DeepSeek V4 Flash |
 
