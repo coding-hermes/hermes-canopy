@@ -16,11 +16,14 @@ import tailwindcss from '@tailwindcss/vite'
 // are only active inside `vite dev`).  The production backend must use a
 // real JWT secret; this dev secret never leaves the dev environment.
 
-const DEV_JWT =
+const DEV_JWT_DEFAULT =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
   'eyJleHAiOjE4MTY0OTU5ODgsImlhdCI6MTc4NDk1OTk4OCwic3ViIjoiMDAwMDAwMDAt' +
   'MDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIn0.' +
   'AeEXxMtrSsIeoqnuCf-8w8XMaVbB4qIP3oX3vgxXeMI'
+
+const DEV_JWT = process.env.VITE_DEV_JWT || DEV_JWT_DEFAULT
+const API_URL = process.env.VITE_API_URL || 'http://localhost:8091'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -28,7 +31,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8091',
+        target: API_URL,
         changeOrigin: true,
         configure(proxy) {
           proxy.on('proxyReq', (proxyReq) => {
