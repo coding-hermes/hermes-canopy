@@ -1079,3 +1079,10 @@
 {"from":"internal/card/duckdb/duckdb_repo_test.go","to":"internal/card/duckdb/duckdb_repo.go","rel":"tested_by","provenance":"heuristic","confidence":0.8}
 {"from":"internal/handler/export_handler_test.go","to":"internal/handler/export_handler.go","rel":"tested_by","provenance":"heuristic","confidence":0.8}
 {"from":"internal/handler/export_handler.go","to":"internal/handler/export_handler_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}
+{"from":"internal/handler/mcp_handler.go","to":"std:context","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"std:encoding/json","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"std:fmt","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"std:net/http","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"pkg:github.com/go-chi/chi/v5","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"pkg:github.com/google/uuid","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/mcp_handler.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/service","rel":"imports","provenance":"ast_exact","confidence":1.0}

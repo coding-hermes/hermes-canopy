@@ -141,20 +141,19 @@ func (r *CardRepo) List(ctx context.Context, options card.ListCardsOptions) ([]c
 
 // Patch updates selected fields and increments revision.
 //
-// DuckDB's append-only engine does not support UPDATE in all driver versions.
-// We work around this with a SELECT → DELETE → INSERT cycle inside a SQL transaction.
+// DuckDB does not release the PK index slot within a transaction, so a
+// SELECT→DELETE→INSERT cycle inside a single tx fails with a duplicate-key
+// error (and parameterized UPDATE is unreliable on indexed tables — it
+// internally rewrites to DELETE+INSERT and can hit the same constraint on
+// multi-column schemas). We work around this by executing DELETE and INSERT
+// as independent statements (no transaction wrapper). Since the database is
+// local/in-process, there is no risk of concurrent mutation between the two
+// statements.
 func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int64, input card.PatchCardInput) (*card.Card, error) {
 	now := time.Now().UTC()
 
-	// Start a DuckDB transaction so SELECT/DELETE/INSERT is atomic.
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("duckdb: patch: begin tx: %w", err)
-	}
-	defer tx.Rollback()
-
-	// 1. SELECT current row to get existing values and check revision.
-	current, err := r.getInTx(ctx, tx, id)
+	// Read current row to check revision and preserve immutable / unpatchable fields.
+	current, err := r.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +161,7 @@ func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int
 		return nil, fmt.Errorf("duckdb: patch %s: revision mismatch or not found", id)
 	}
 
-	// 2. Build the new row values.
+	// Merge input values on top of the current row.
 	newRev := current.Revision + 1
 	dataJSON := string(current.Data)
 	if input.Data != nil {
@@ -174,6 +173,9 @@ func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int
 		if marshalErr != nil {
 			return nil, fmt.Errorf("duckdb: marshal actions: %w", marshalErr)
 		}
+		actionsJSON = string(b)
+	} else if len(current.Actions) > 0 {
+		b, _ := json.Marshal(current.Actions)
 		actionsJSON = string(b)
 	}
 	status := current.Status
@@ -193,13 +195,13 @@ func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int
 		ctxHash = *input.ContextHash
 	}
 
-	// 3. DELETE the old row.
-	if _, delErr := tx.ExecContext(ctx, "DELETE FROM cards WHERE id = ?", id.String()); delErr != nil {
+	// DELETE the old row first (autonomous statement — releases PK slot).
+	if _, delErr := r.db.ExecContext(ctx, "DELETE FROM cards WHERE id = ?", id.String()); delErr != nil {
 		return nil, fmt.Errorf("duckdb: patch: delete: %w", delErr)
 	}
 
-	// 4. INSERT the updated row.
-	_, insErr := tx.ExecContext(ctx,
+	// INSERT the updated row (new statement — no PK conflict).
+	_, insErr := r.db.ExecContext(ctx,
 		`INSERT INTO cards (id, tree_id, node_id, app_id, card_type, data, actions, status, context_hash, revision, created_at, updated_at, dismissed_at, archived_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id.String(),
@@ -221,19 +223,7 @@ func (r *CardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevision int
 		return nil, fmt.Errorf("duckdb: patch: insert: %w", insErr)
 	}
 
-	if commitErr := tx.Commit(); commitErr != nil {
-		return nil, fmt.Errorf("duckdb: patch: commit: %w", commitErr)
-	}
-
 	return r.Get(ctx, id)
-}
-
-// getInTx retrieves a card within an existing transaction.
-func (r *CardRepo) getInTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (*card.Card, error) {
-	row := tx.QueryRowContext(ctx,
-		`SELECT id, tree_id, node_id, app_id, card_type, data, actions, status, context_hash, revision, created_at, updated_at, dismissed_at, archived_at
-		 FROM cards WHERE id = ?`, id.String())
-	return scanCard(row)
 }
 
 // AppendEvent inserts a new event row and returns the created event.
