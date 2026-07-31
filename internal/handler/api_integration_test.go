@@ -95,7 +95,7 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 		r.Mount("/nodes", nodeHandler.Routes())
 		treeNodes := chi.NewRouter()
 		treeNodes.Use(membershipMW)
-		treeNodes.Mount("/", nodeHandler.Routes())
+		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 
 		// Graph endpoints.

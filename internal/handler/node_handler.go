@@ -47,6 +47,19 @@ func (h *NodeHandler) Routes() chi.Router {
 	return r
 }
 
+// TreeRoutes returns a router with only tree-scoped node routes, suitable
+// for mounting under /api/v1/trees/{tree_id}/nodes/. The tree_id is provided
+// by the mount point, so routes use bare patterns without repeating it.
+//
+//	POST   /          — create node (tree_id from mount context)
+//	GET    /{node_id} — get node by ID (tree_id from mount context)
+func (h *NodeHandler) TreeRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Post("/", h.handleCreate)
+	r.Get("/{node_id}", h.handleGetByID)
+	return r
+}
+
 // --- Handlers ---------------------------------------------------------------
 
 func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {

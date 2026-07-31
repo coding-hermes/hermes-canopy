@@ -101,7 +101,7 @@ func New(
 		nodeHandler := handler.NewNodeHandler(nodeSvc, syncEngine)
 		treeNodes := chi.NewRouter()
 		treeNodes.Use(membershipMW)
-		treeNodes.Mount("/", nodeHandler.Routes())
+		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 		r.Mount("/nodes", nodeHandler.Routes())
 
