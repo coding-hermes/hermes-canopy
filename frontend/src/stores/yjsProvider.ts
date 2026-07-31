@@ -148,6 +148,19 @@ export class SSESyncProvider {
 
   /** Connect to the SSE endpoint and begin syncing. */
   connect(): void {
+    // TODO(BUG-024): SSE events endpoint (/api/v1/events) is not yet
+    // implemented on the backend.  The EventSource connection is skipped
+    // so the console stays clean.  Re-enable when the endpoint ships.
+    // Refs: SPEC-API-01
+    console.debug(
+      `[SSESyncProvider] SSE connect skipped for tree ${this.treeId} — ` +
+        "endpoint /api/v1/events not yet available (BUG-024)",
+    );
+    this._connected = true;
+    this.options.onConnected?.();
+    return;
+
+    /* ——— Re-enable when /api/v1/events is live ———
     if (this.eventSource) {
       this.disconnect();
     }
@@ -160,6 +173,7 @@ export class SSESyncProvider {
       this._connected = true;
       this.options.onConnected?.();
     };
+    */
 
     this.eventSource.onmessage = (event: MessageEvent): void => {
       this.handleSSEMessage(event.data);
