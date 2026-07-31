@@ -97,6 +97,14 @@ func main() {
 		database.Edges,
 		database.Pool,
 	)
+
+	// Export service — GAP-003 import/export (SPEC-API-03).
+	exportService := service.NewExportService(
+		database.Trees,
+		database.Nodes,
+		database.Edges,
+		database.Pool,
+	)
 	// SSE hub — in-memory ring buffer + per-tree subscriber map per
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
 	// 1000-event ring per tree.
@@ -171,7 +179,7 @@ func main() {
 		log.Info().Msg("prometheus metrics enabled on /metrics")
 	}
 
-	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, sseHub, syncEngine, approvalSvc,
+	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics)
 

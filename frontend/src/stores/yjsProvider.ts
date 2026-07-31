@@ -140,8 +140,8 @@ export class SSESyncProvider {
   /** Remove local presence (cleanup on disconnect). */
   clearLocalPresence(): void {
     this.localPresence = null;
-    // Backend presence/leave endpoint planned but not yet implemented.
-    console.log('[SSESyncProvider] Presence leave (endpoint coming soon)');
+    // TODO(BUG-024): Backend presence/leave endpoint planned but not yet implemented.
+    console.log('[SSESyncProvider] Presence leave (endpoint coming soon — BUG-024)');
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────
@@ -167,6 +167,12 @@ export class SSESyncProvider {
     };
     this.doc.ydoc.on('update', this.updateHandler!);
 
+    // Suppress TS6133 for members kept for BUG-024 re-enablement
+    void this.apiBase;
+    void this._handleSSEMessage;
+    void this._handlePresenceEvent;
+    void this._handleCursorEvent;
+
     return;
 
     // —— Re-enable below when /api/v1/events is live ———
@@ -185,39 +191,39 @@ export class SSESyncProvider {
     // };
     //
     // this.eventSource.onmessage = (event: MessageEvent): void => {
-    //   this.handleSSEMessage(event.data);
+    //   this._handleSSEMessage(event.data);
     // };
     //
     // this.eventSource.addEventListener('node_added', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('node_updated', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('node_deleted', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('edge_added', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('edge_deleted', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('tree_updated', ((e: MessageEvent) => {
-    //   this.handleSSEMessage(e.data);
+    //   this._handleSSEMessage(e.data);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('presence_update', ((e: MessageEvent) => {
-    //   this.handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
+    //   this._handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
     // }) as EventListener);
     //
     // this.eventSource.addEventListener('cursor_update', ((e: MessageEvent) => {
-    //   this.handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
+    //   this._handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
     // }) as EventListener);
     //
     // this.eventSource.onerror = (): void => {
@@ -251,7 +257,9 @@ export class SSESyncProvider {
 
   // ─── Message handling ───────────────────────────────────────────────
 
-  private handleSSEMessage(data: string): void {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- TODO(BUG-024): re-enable when /api/v1/events ships
+  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
+  private _handleSSEMessage(data: string): void {
     try {
       const event: SSEMessageEvent = JSON.parse(data) as SSEMessageEvent;
 
@@ -373,11 +381,11 @@ export class SSESyncProvider {
   // ─── Push local changes to server ───────────────────────────────────
 
   private async pushUpdate(update: Uint8Array): Promise<void> {
-    // Backend Yjs sync endpoint (/trees/:id/sync) is planned but not yet
-    // implemented.  Skip the network call so the console stays clean.
+    // TODO(BUG-024): Backend Yjs sync endpoint (/trees/:id/sync) is planned
+    // but not yet implemented.  Skip the network call so the console stays clean.
     void update; // explicitly acknowledge the param (used when endpoint arrives)
     console.debug(
-      `[SSESyncProvider] Yjs pushUpdate (${update.byteLength} bytes) — sync endpoint coming soon`,
+      `[SSESyncProvider] Yjs pushUpdate (${update.byteLength} bytes) — sync endpoint coming soon (BUG-024)`,
     );
   }
 
@@ -386,12 +394,13 @@ export class SSESyncProvider {
   /** Push local presence state to server (endpoint coming soon). */
   private async pushPresence(): Promise<void> {
     if (!this.localPresence) return;
-    // Backend presence endpoint planned but not yet implemented.
-    console.debug('[SSESyncProvider] Presence push (endpoint coming soon)');
+    // TODO(BUG-024): Backend presence endpoint planned but not yet implemented.
+    console.debug('[SSESyncProvider] Presence push (endpoint coming soon — BUG-024)');
   }
 
   /** Handle incoming presence_update SSE event. */
-  private handlePresenceEvent(data: Record<string, unknown>): void {
+  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
+  private _handlePresenceEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;
 
@@ -424,7 +433,8 @@ export class SSESyncProvider {
   }
 
   /** Handle incoming cursor_update SSE event (lighter variant). */
-  private handleCursorEvent(data: Record<string, unknown>): void {
+  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
+  private _handleCursorEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;
 

@@ -39,6 +39,7 @@ func New(
 	jwtSecret string,
 	treeSvc service.TreeService,
 	nodeSvc service.NodeService,
+	exportSvc service.ExportService,
 	sseHub sse.SSEHub,
 	syncEngine sync.SyncEngine,
 	approvalSvc service.ApprovalService,
@@ -127,6 +128,10 @@ func New(
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
 		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
+
+		// Export/import endpoints (GAP-003).
+		exportHandler := handler.NewExportHandler(exportSvc)
+		r.Mount("/trees", exportHandler.Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).

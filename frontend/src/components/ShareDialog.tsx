@@ -8,6 +8,8 @@
  * Backend share endpoint (POST /api/v1/trees/:id/share) is planned but not
  * yet implemented.  The dialog simulates success locally so the UI is
  * fully functional for demos and UX reviews.
+ *
+ * TODO(BUG-024): Wire up real POST /api/v1/trees/:id/share when backend ships.
  */
 
 import { useState, useCallback } from 'react';
