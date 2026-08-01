@@ -227,6 +227,15 @@ func NodeAccessMiddleware(svc service.NodeService, checker TreeMemberChecker) fu
 					return
 				}
 				treeID = tid
+				// Validate node_id when present (parts[5]) BEFORE the membership
+				// check — a malformed node_id must yield 400 INVALID_NODE_ID,
+				// not 403 NOT_TREE_MEMBER (API contract, TestBE12_ValidationErrors).
+				if len(parts) >= 6 {
+					if _, err := uuid.Parse(parts[5]); err != nil {
+						writeError(w, http.StatusBadRequest, "INVALID_NODE_ID", "node_id must be a valid UUID")
+						return
+					}
+				}
 			} else {
 				// Bare node form: /api/v1/nodes/nodes/{node_id}[/reply|/fork]
 				// (literal "nodes" segment at parts[3], node_id at parts[4]) or
