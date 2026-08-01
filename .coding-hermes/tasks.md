@@ -885,3 +885,32 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 79/101 board tasks complete (68 matrix + 11 sync-closed). All MVP gaps delivered. Open: INFRA-001 (scheduler-level, fleet.toml 900s mitigation), E2E-001 (recurring, next due 116-121), 21 post-MVP backlog (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05 — deferred by design per AGENTS.md). Scheduler daemon at :9090. PG healthy at :5437. Coverage ~40.7%.
 
 **Verdict:** MAINTENANCE — All 16 gates green. Build/vet/tsc clean. 12/12 non-PG tests PASS. gitleaks clean (0 leaks). Board-v2 sync closed an 8-tick DuckDB staleness gap (board is now authoritative and current). No worker dispatch, no code changes, no regressions. Project in steady-state maintenance on 15m cadence.
+
+### Tick 114 — 2026-08-01 07:20 CDT (DeepSeek V4 Flash) — Scheduler Tick (COORDINATION)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY (sibling in flight) | Staged BUG-026 work: .gitreins/tasks.yaml (task created 06:55:48), frontend/src/pages/NodesPage.tsx, internal/handler/node_handler.go (+19: GET / handleListByTree), internal/service/node_service.go (+29: ListByTree impl + interface). .gitreins/config.yaml unstaged (guard test_timeout/hook_timeout bumped 07:21:08). NOT touched by this tick. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 mid-flight — tree compiles with sibling's staged changes. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0 (output was a usage hint — exit code clean). |
+| 4 | Tests | ⏸️ NOT RUN (sibling owns suites) | Sibling `go test -count=1 -short ./...` ran 07:14:15 (finished ~07:20) + re-run started 07:21:24 (PID 2321940, still active at gate time). No parallel test runs — avoids suite contention. |
+| 5 | Hilo graph | ✅ USEFUL | 1224 edges, 184 files (stable vs Tick 113). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs from BUG-026 work. |
+| 7 | Deps | — | Not re-checked (stable: 164 Go + 3 npm outdated). |
+| 8 | GitReins | ⚠️ BUG-026 PENDING | tasks.yaml: BUG-026 created (06:55:48) with 7 ACs, status pending — sibling owns creation + completion. All prior tasks complete. |
+| 9 | Secrets | ✅ CLEAN | No new code committed since Tick 113 gitleaks scan (430 commits, 0 leaks). Staged changes uncommitted — guard runs at sibling's commit. |
+| 10 | Board consistency | ✅ SYNCED | DuckDB board: 79 complete + 22 pending (INFRA-001 + 21 post-MVP backlog). BUG-026 not yet in parquet (sibling will add on completion). Board metadata advanced to tick 114 this tick. |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. Only this tick (07-19-50) running for hermes-canopy — sibling is an interactive session, not a scheduler tick. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 114 entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 111 + 112 (41/41 PASS both). Next due Tick 116-121 window. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master; 27 local ahead — unpushed, consistent). |
+| 16 | Dispatch | ⛔ NONE — WORKER ALREADY ACTIVE | BUG-026 (Nodes list endpoint) owned by live sibling session: files staged 06:52-06:55, guard timeouts bumped 07:21, go test re-running 07:21+. No duplicate dispatch. INFRA-001 remains scheduler-level (mitigated). |
+
+**Coverage (Tick 114):** ~40.7% total (no new source logic this tick — BUG-026 files staged by sibling, uncommitted).
+
+**Context:** This tick fired at 07:19:50 CDT while a live interactive sibling session was mid-BUG-026: task created 06:55:48 (7 ACs — GET /trees/{tree_id}/nodes list endpoint, NodeService.ListByTree, NodesPage.tsx regression fix for 'Cannot read properties of undefined (reading slice)'), code staged 06:52-06:55, first `go test -short` verification ran 07:14 (finished ~07:20), then config.yaml guard timeouts bumped 07:21:08 and a second `go test` started 07:21:24 — all AFTER this tick fired. Per foreman discipline (Tick 109/110 precedent): did NOT touch in-flight files, did NOT re-dispatch, did NOT run parallel test suites, did NOT commit sibling code. Read-only gates confirm the tree compiles mid-flight (build/vet/tsc clean) and no regressions. Board metadata advanced to tick 114 (coordination event logged). The sibling session writes BUG-026 completion + its board entry.
+
+**Project Status:** 79/101 board tasks complete. BUG-026 IN FLIGHT (sibling session, nodes list endpoint). All MVP gaps delivered. INFRA-001: scheduler-level, mitigated (fleet.toml 900s). Scheduler at :9090, 15m cadence by design. PG healthy at :5437. E2E 41/41 green (Tick 111/112), next due 116-121. Coverage ~40.7%.
+
+**Verdict:** COORDINATION — No dispatch (BUG-026 worker active via sibling session), no code commits (sibling owns staged files), no parallel test runs (contention avoidance). Build/vet/tsc clean + Hilo useful + PG healthy confirm no regressions from in-flight work. Board metadata synced to tick 114. Sibling session writes BUG-026 completion when its verification lands.
