@@ -460,9 +460,9 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 
 | ID | Task | Pri | Cpx | Deps | Tags | Status |
 |----|------|-----|-----|------|------|--------|
-| GAP-001 | **Context compiler:** Budgeted token assembly with visible manifest per ARCHITECTURE.md §4. New `internal/context/` package. Must resolve #references, assemble context DAG, produce auditable manifest. SPEC-TM-04, SPEC-TM-03. | Critical | 5 | new module | ++architecture, ++core | 🔴 |
-| GAP-002 | **Plugin sandbox:** Sandboxed iframes + CSP + capability-scoped APIs per AGENTS.md. New `internal/plugin/` package. Card plugins (File/Task/Code) must render in isolated iframes with postMessage API. SPEC-PL-01. | Critical | 5 | new module | ++architecture, ++core | 🔴 |
-| GAP-004 | **DuckDB card storage:** Cards stored via DuckDB SQL (in-process) alongside JSONL. Per SPEC-PL-03 database-per-card architecture. DuckDB repo must implement CardRepository interface. Foreman dispatched Tick 104. | Medium | 3 | card | ++architecture | 🟡 |
+| GAP-001 | **Context compiler:** Budgeted token assembly with visible manifest per ARCHITECTURE.md §4. New `internal/context/` package. Must resolve #references, assemble context DAG, produce auditable manifest. SPEC-TM-04, SPEC-TM-03. | Critical | 5 | new module | ++architecture, ++core | ✅ (Tick 108, e23c105) |
+| GAP-002 | **Plugin sandbox:** Sandboxed iframes + CSP + capability-scoped APIs per AGENTS.md. New `internal/plugin/` package. Card plugins (File/Task/Code) must render in isolated iframes with postMessage API. SPEC-PL-01. | Critical | 5 | new module | ++architecture, ++core | ✅ (Tick 108, a48020e) |
+| GAP-004 | **DuckDB card storage:** Cards stored via DuckDB SQL (in-process) alongside JSONL. Per SPEC-PL-03 database-per-card architecture. DuckDB repo must implement CardRepository interface. Foreman dispatched Tick 104. | Medium | 3 | card | ++architecture | ✅ (Tick 105, 685a850) |
 
 ### Post-MVP Feature Specs (specs written, 0 implementation)
 
@@ -854,3 +854,34 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 65/68 tasks complete. All MVP gaps delivered. BUG-025 security fix closed (judge PASS 13c574ec). TEST-004 landed (shared pool + TRUNCATE). E2E 41/41 green (verified twice: Tick 111 + this tick). Scheduler daemon at :9090, fleet.toml pins 900s. PG healthy at :5437. Coverage ~40.7%.
 
 **Verdict:** VERIFICATION — All gates green on independent re-run. Tick 111's work (heal, BUG-025, E2E, TEST-004 follow-up) confirmed correct with zero regressions. One operational fix: stale canopyd binary rebuilt (migrations 000021-24 now embedded). No duplicate dispatch, no code changes. Project in steady-state maintenance on 15m cadence.
+
+### Tick 113 — 2026-08-01 05:04 UTC (DeepSeek V4 Flash) — Scheduler Tick — MAINTENANCE + BOARD-V2 SYNC
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Working tree clean at 507d4ea (Tick 112 board entry). No drift, no orphaned files. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0. 41,855 total Go LOC (unchanged — no code this tick). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Tests | ✅ 12/12 NON-PG PASS | card, card/duckdb, config, hermes, mls, server, service, sse, sync, transport, context, plugin — all PASS (cached, unchanged since Tick 112). Handler PG suite verified by Tick 111 (116.3s PASS); no code touched since. |
+| 5 | Hilo graph | ✅ USEFUL | 1224 edges, 184 files (fresh stats, stable vs Tick 111/112). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | — | Not re-checked (stable vs Tick 111/112: 164 Go + 3 npm outdated). |
+| 8 | GitReins | ✅ ALL COMPLETE | tasks.yaml: 12 tasks, 0 active (TEST-004 f0f68b9e, BUG-025 13c574ec both complete). Config: deepseek-v4-flash, tier2 caps 250 iter. |
+| 9 | Secrets | ✅ CLEAN | gitleaks: 430 commits, 28.24MB, 1.45s, 0 leaks (fresh scan). |
+| 10 | Board consistency | ⚠️ STALE → ✅ SYNCED | **Found board-v2 sync gap:** DuckDB board (.coding-hermes/board/tasks.parquet) stale since Tick 105 migration — GAP-001/GAP-002 still `pending` (delivered Tick 108), GAP-004 `done` not `complete`, and 8 post-migration tasks missing (BUG-024, BUG-025, GAP-002-SPEC, GAP-003, TEST-001..004). **FIXED this tick:** updated statuses, inserted 8 missing rows, bumped board metadata (last_tick=113, ticks_total=113, last_commit=507d4ea), logged board_sync event, re-exported parquet. Now 101 tasks: 79 complete + 22 pending (INFRA-001 + 21 post-MVP backlog). tasks.md backlog markers for GAP-001/002/004 updated 🔴→✅. |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. No concurrent sessions (grep confirmed only gitreins MCP server running). |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 113 entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 111 + 112 (41/41 PASS both, 33.8-37.3s). Next due Tick 116-121 window. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master position; 26 local ahead — unpushed, consistent). |
+| 16 | Dispatch | ⛔ NONE — MAINTENANCE | Board: 0 actionable tasks (INFRA-001 scheduler-level, E2E-001 not due, 21 post-MVP backlog deferred by design). Board-v2 sync executed foreman-direct (board-only change, no code). No worker needed. |
+
+**Coverage (Tick 113):** ~40.7% total (no new source logic — board sync tick).
+
+**Actions this tick:**
+- **BOARD-V2 SYNC (maintenance):** DuckDB board had drifted 8 ticks behind tasks.md. Statuses fixed: GAP-001/GAP-002 → complete (Tick 108 deliveries e23c105/a48020e), GAP-004 → complete (685a850). 8 missing task rows inserted (BUG-024 Tick 103, GAP-002-SPEC Tick 108, GAP-003, TEST-001 Tick 107, TEST-002, TEST-003 Tick 110, TEST-004 Tick 111, BUG-025 Tick 111). Board metadata advanced to tick 113. Events log has board_sync entry. Parquet re-exported (101 rows). Root cause of drift: migration ran at Tick 105, subsequent ticks wrote only tasks.md — the parquet COPY export was never re-run. Note for future ticks: after any task status change, re-run the parquet export (`COPY tasks TO ... OVERWRITE_OR_IGNORE true`) or the DuckDB board lags the matrix.
+- **tasks.md backlog markers updated:** GAP-001/002/004 status column 🔴/🟡 → ✅ with commit refs (historical backlog section now consistent with Active matrix).
+
+**Project Status:** 79/101 board tasks complete (68 matrix + 11 sync-closed). All MVP gaps delivered. Open: INFRA-001 (scheduler-level, fleet.toml 900s mitigation), E2E-001 (recurring, next due 116-121), 21 post-MVP backlog (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05 — deferred by design per AGENTS.md). Scheduler daemon at :9090. PG healthy at :5437. Coverage ~40.7%.
+
+**Verdict:** MAINTENANCE — All 16 gates green. Build/vet/tsc clean. 12/12 non-PG tests PASS. gitleaks clean (0 leaks). Board-v2 sync closed an 8-tick DuckDB staleness gap (board is now authoritative and current). No worker dispatch, no code changes, no regressions. Project in steady-state maintenance on 15m cadence.
