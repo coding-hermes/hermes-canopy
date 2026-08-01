@@ -1223,3 +1223,10 @@
 {"from":"internal/handler/middleware.go","to":"std:errors","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/handler/middleware.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/service","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/service/node_service_test.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/db","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/TreeView.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/TreeCanvas.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/PresenceBar.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/MessageComposer.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/ShareDialog.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NavigationBar.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/App.tsx","to":"pkg:lucide-react","rel":"imports","provenance":"ast_exact","confidence":1.0}
