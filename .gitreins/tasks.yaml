@@ -36,8 +36,7 @@ tasks:
   title: Fix approval panel E2E test failures (10/10 tests fail)
   criteria:
   - Root cause of 10/10 approval-panel.test.ts failures identified
-  - All approval-panel Playwright tests pass when run against a canopyd server with
-    seeded data
+  - All approval-panel Playwright tests pass when run against a canopyd server with seeded data
   - Approval panel tests properly seed test data or mock API responses
   - npm run build passes, tsc --noEmit clean
   - No regression in other E2E test suites
@@ -48,8 +47,7 @@ tasks:
   title: Fix CRUD pages E2E test failures (4/4 tests fail)
   criteria:
   - Root cause of 4/4 crud-pages.test.ts failures identified
-  - All crud-pages Playwright tests pass against running canopyd server with seeded
-    data
+  - All crud-pages Playwright tests pass against running canopyd server with seeded data
   - CRUD pages properly seed or mock data for E2E test environment
   - npm run build passes, tsc --noEmit clean
   - No regression in other E2E test suites
@@ -57,14 +55,13 @@ tasks:
   created_at: '2026-07-25T09:56:22.780201+00:00'
   completed_at: '2026-07-31T06:05:40.720487+00:00'
 - id: INT-01
-  title: "End-to-end tree flow integration (create \u2192 edit \u2192 merge \u2192\
-    \ approve)"
+  title: "End-to-end tree flow integration (create \u2192 edit \u2192 merge \u2192 approve)"
   criteria:
-  - Start canopyd with PG, create a tree via API, add nodes via API, edit node content,
-    verify CRDT merge, create approval, approve, verify audit trail
+  - Start canopyd with PG, create a tree via API, add nodes via API, edit node content, verify CRDT merge,
+    create approval, approve, verify audit trail
   - All integration tests pass against a running canopyd server with real PostgreSQL
-  - "Tree flow end-to-end works: POST /api/v1/trees \u2192 POST /api/v1/nodes \u2192\
-    \ PATCH /api/v1/nodes/{id} \u2192 POST /api/v1/approvals \u2192 POST /api/v1/approvals/{id}/approve"
+  - "Tree flow end-to-end works: POST /api/v1/trees \u2192 POST /api/v1/nodes \u2192 PATCH /api/v1/nodes/{id}\
+    \ \u2192 POST /api/v1/approvals \u2192 POST /api/v1/approvals/{id}/approve"
   - npm run build passes, tsc --noEmit clean
   - No regression in existing unit or integration tests
   status: complete
@@ -73,8 +70,8 @@ tasks:
 - id: BUG-010
   title: "Fix computeDepth CTE infinite loop \u2014 blocks GET node API (INT-01 blocked)"
   criteria:
-  - "computeDepth CTE in node_service.go:814 no longer hangs \u2014 recursive step\
-    \ follows parent chain instead of reusing $1 parameter"
+  - "computeDepth CTE in node_service.go:814 no longer hangs \u2014 recursive step follows parent chain\
+    \ instead of reusing $1 parameter"
   - TestINT01_FullTreeFlow passes step 2 (GET node) without timeout
   - TestINT01_TreeFlowWithBranching passes full flow without timeout
   - go build + go vet clean
@@ -85,155 +82,128 @@ tasks:
 - id: BUG-011
   title: Fork endpoint returns 500 INTERNAL_ERROR
   criteria:
-  - POST /api/v1/nodes/nodes/{node_id}/fork returns 500 INTERNAL_ERROR when parent
-    has children
-  - "Root cause: GetChildren error wrapping falls through to default error case \u2014\
-    \ ErrDatabaseUnavailable not mapped in writeServiceError"
-  - 'Fix: add ErrDatabaseUnavailable to error mapping (503 SERVICE_UNAVAILABLE) AND
-    investigate why GetChildren fails in test context'
+  - POST /api/v1/nodes/nodes/{node_id}/fork returns 500 INTERNAL_ERROR when parent has children
+  - "Root cause: GetChildren error wrapping falls through to default error case \u2014 ErrDatabaseUnavailable\
+    \ not mapped in writeServiceError"
+  - 'Fix: add ErrDatabaseUnavailable to error mapping (503 SERVICE_UNAVAILABLE) AND investigate why GetChildren
+    fails in test context'
   - TestINT01_SynthesisAndDeny step 4 should pass after fix
   status: complete
   created_at: '2026-07-25T11:44:53.124184+00:00'
   completed_at: '2026-07-31T06:06:25.870112+00:00'
 - id: GAP-002
-  title: "Plugin sandbox \u2014 register/list/source/install + permission gate + sandbox\
-    \ bootstrap (commit a48020e)"
+  title: "Plugin sandbox \u2014 register/list/source/install + permission gate + sandbox bootstrap (commit\
+    \ a48020e)"
   criteria:
-  - 'internal/plugin/ package exists: models, manifest.go (ParseManifest), permissions.go
-    (MethodToPermission + gate), repo.go (pgx), service.go, sandbox.go (BuildSrcDoc)'
-  - Migrations 000022/000023/000024 (plugin_registry, plugin_instances, plugin_audit_log)
-    applied cleanly
+  - 'internal/plugin/ package exists: models, manifest.go (ParseManifest), permissions.go (MethodToPermission
+    + gate), repo.go (pgx), service.go, sandbox.go (BuildSrcDoc)'
+  - Migrations 000022/000023/000024 (plugin_registry, plugin_instances, plugin_audit_log) applied cleanly
   - POST /api/v1/plugins/register stores plugin with SHA-256 integrity; size cap 1MB
   - 'Permission gate: CheckPermission(instanceID, method) enforces granted_permissions'
   - GET /api/v1/plugins/{id}/source serves source with X-Source-SHA256 header
   - Install/pause/resume endpoints work with per-tree scoping
   - All 24 service tests + 6 handler tests pass (plus 6 PG-skipped repo tests)
-  - Frontend PluginSandbox.tsx renders sandboxed iframe with CSP + nonce + postMessage
-    host (build + tsc clean)
+  - Frontend PluginSandbox.tsx renders sandboxed iframe with CSP + nonce + postMessage host (build + tsc
+    clean)
   - go build ./..., go vet ./..., gofmt clean
   - gitreins guard passes (secrets, build, lint, tests)
-  - No new TODOs; no changes to existing package behavior except additive server.New
-    param
+  - No new TODOs; no changes to existing package behavior except additive server.New param
   status: complete
   created_at: '2026-07-31T20:09:09.721727+00:00'
   completed_at: '2026-07-31T21:08:26.913769+00:00'
 - id: TEST-002-sweep
   title: 'TEST-002 long-term fix: pre-run stale-DB sweep in NewIntegrationPool'
   criteria:
-  - NewIntegrationPool (internal/testutil/integration.go) runs a sweep on startup
-    that drops stale canopy_* test databases older than 1 hour
+  - NewIntegrationPool (internal/testutil/integration.go) runs a sweep on startup that drops stale canopy_*
+    test databases older than 1 hour
   - Sweep connects via the admin URL (CANOPY_ADMIN_DB_URL, default postgres://canopy:canopy@localhost:5437/postgres)
     and only touches databases matching the canopy_% prefix
-  - "Age detection is conservative: active/young databases (used by concurrent test\
-    \ packages) are never dropped \u2014 only DBs with no active connections and creation\
-    \ time older than 1h"
+  - "Age detection is conservative: active/young databases (used by concurrent test packages) are never\
+    \ dropped \u2014 only DBs with no active connections and creation time older than 1h"
   - Sweep failure is non-fatal (logged/ignored) so a locked DB never blocks test setup
   - Existing testutil tests pass; go build + go vet + gofmt clean; no unrelated changes
-  - 'Sweep verified live: after running the test suite, leftover canopy_* count stays
-    near 0 (no new leaks accumulate within a single run)'
+  - 'Sweep verified live: after running the test suite, leftover canopy_* count stays near 0 (no new leaks
+    accumulate within a single run)'
   status: complete
   created_at: '2026-07-31T22:01:29.604747+00:00'
   completed_at: '2026-07-31T22:38:57.770468+00:00'
 - id: TEST-004
-  title: 'PG test architecture: package-level shared integration pool + single-statement
-    TRUNCATE (~10x faster suites)'
+  title: 'PG test architecture: package-level shared integration pool + single-statement TRUNCATE (~10x
+    faster suites)'
   criteria:
-  - NewSharedIntegrationPool exists in internal/testutil/integration.go (sync.Once
-    singleton, one migrated DB per test binary, TruncateAll between tests, DB reclaimed
-    by stale-DB sweep)
-  - 'TruncateAll truncates ALL PG tables in one statement (verified: 28 tables incl.
-    plugin_registry/plugin_instances/plugin_audit_log/node_resolved_refs/approval_rules/profile_invites/tree_event_seq/tree_members)'
-  - All handler+db integration tests migrated NewIntegrationPool -> NewSharedIntegrationPool
-    (chaos DBOutage test intentionally keeps direct connections during outage)
-  - 'Recursive CTE alias fixes committed: node_repo.go GetAncestors JOIN chain, topic_repo.go
-    GetParentTopics SELECT t.* (db suite PASS proves correctness)'
-  - 'Test contract fixes: TestAPI_GraphStats asserts total_nodes/total_edges, TestAPI_TopicCRUD
-    asserts archive->GET 200+status=archived, TestAPI_ApprovalDenyAndAuditTrail asserts
-    AuditActionApprovalDenied'
+  - NewSharedIntegrationPool exists in internal/testutil/integration.go (sync.Once singleton, one migrated
+    DB per test binary, TruncateAll between tests, DB reclaimed by stale-DB sweep)
+  - 'TruncateAll truncates ALL PG tables in one statement (verified: 28 tables incl. plugin_registry/plugin_instances/plugin_audit_log/node_resolved_refs/approval_rules/profile_invites/tree_event_seq/tree_members)'
+  - All handler+db integration tests migrated NewIntegrationPool -> NewSharedIntegrationPool (chaos DBOutage
+    test intentionally keeps direct connections during outage)
+  - 'Recursive CTE alias fixes committed: node_repo.go GetAncestors JOIN chain, topic_repo.go GetParentTopics
+    SELECT t.* (db suite PASS proves correctness)'
+  - 'Test contract fixes: TestAPI_GraphStats asserts total_nodes/total_edges, TestAPI_TopicCRUD asserts
+    archive->GET 200+status=archived, TestAPI_ApprovalDenyAndAuditTrail asserts AuditActionApprovalDenied'
   - go test ./internal/db/... PASS with PG on shared pool
-  - go test ./internal/handler/... (skip TEST03|Chaos|DBOutage) PASS with PG on shared
-    pool
+  - go test ./internal/handler/... (skip TEST03|Chaos|DBOutage) PASS with PG on shared pool
   - go build + go vet + gofmt clean
   - gitreins guard Tier 1 PASS (secrets, build, lint, tests)
   status: complete
   created_at: '2026-08-01T02:33:31.548749+00:00'
   completed_at: '2026-08-01T04:35:09.039775+00:00'
 - id: BUG-025
-  title: "Flat /nodes mount allows any authenticated user to read/mutate any node\
-    \ by UUID \u2014 enforce tree membership (NodeAccessMiddleware)"
+  title: "Flat /nodes mount allows any authenticated user to read/mutate any node by UUID \u2014 enforce\
+    \ tree membership (NodeAccessMiddleware)"
   criteria:
-  - NodeAccessMiddleware exists in internal/handler/middleware.go and is wired on
-    the flat /nodes mount in internal/server/server.go (commit 9fe210b)
-  - Flat /nodes routes (create/update/delete/reply/fork) resolve the node's tree and
-    return 403 NOT_TREE_MEMBER for non-members; bare-form path /api/v1/nodes/nodes/{node_id}
-    parses node_id at parts[4] correctly
+  - NodeAccessMiddleware exists in internal/handler/middleware.go and is wired on the flat /nodes mount
+    in internal/server/server.go (commit 9fe210b)
+  - Flat /nodes routes (create/update/delete/reply/fork) resolve the node's tree and return 403 NOT_TREE_MEMBER
+    for non-members; bare-form path /api/v1/nodes/nodes/{node_id} parses node_id at parts[4] correctly
   - Tree-scoped mount /trees/{tree_id}/nodes still uses TreeMembershipMiddleware (unchanged)
-  - "Export routes registered directly (r.Get /trees/{tree_id}/export, r.Post /trees/import)\
-    \ \u2014 no chi mount conflict with TreeHandler"
-  - TestAPI_NodeReply and TestAPI_NodeFork PASS with PG (regression for bare-form
-    path parsing)
+  - "Export routes registered directly (r.Get /trees/{tree_id}/export, r.Post /trees/import) \u2014 no\
+    \ chi mount conflict with TreeHandler"
+  - TestAPI_NodeReply and TestAPI_NodeFork PASS with PG (regression for bare-form path parsing)
   - Handler integration suite PASS (TestAPI|TestAuth|TestApproval|TestTree|TestMLS|TestMulti|TestSecurity|TestContext|TestPlugin|TestGraph|TestTopic|TestCard|TestExport|TestSSE|TestInteg)
   - go build + go vet + gofmt clean on changed files
   - gitreins guard Tier 1 PASS (secrets, build, lint, tests)
   status: complete
   created_at: '2026-08-01T06:51:09.508993+00:00'
   completed_at: '2026-08-01T07:15:18.814713+00:00'
-- id: UI-01-PARITY
-  title: "Mockup parity: vision-brief v2.0 UI (UI-01\u2192UI-09)"
+- id: UI-01
+  title: 'Mockup parity UI-01: design token system + dark theme (vision-brief v2.0)'
   criteria:
-  - 'Dark theme applied app-wide using the vision-brief token system (navy #0B0D17/#121424
-    surfaces, neon cyan/purple/magenta accents, rounded geometry)'
-  - All existing pages keep WCAG AA contrast and pass existing a11y tests
-  - Topics sidebar rail renders persistent left navigation with topic pills (icon
-    + name + count badge), New topic button, settings/refresh
-  - Topic rail selection filters the current tree view to that topic
-  - Header shows context title + count badge + Tree/Detail/Merge segmented view selector
-  - View selector switches between tree canvas and detail list modes
-  - Branching tree canvas renders horizontal tree with bezier connectors, joint dots,
-    expand/collapse chevrons, ghost placeholder nodes, color-coded circular avatars,
-    reply-count badges, active-node glow
-  - 'Node cards show avatar initials + per-author color, timestamp, content, #topic
-    pill, overflow menu, hover states'
-  - 'Composer bar floats at bottom: attach, placeholder ''Message... use @mention
-    or #topic'', @/#/emoji buttons, Send with cmd-enter badge; POSTs to /trees/{tree_id}/nodes
-    and refreshes list'
-  - Keyboard shortcuts j/k/h/l/m/? work and footer strip shows them
-  - Node list shows hierarchy indentation/branch lines; checkboxes reveal bulk-action
-    bar
-  - "Screenshot findings fixed: '(1 nodes)'\u2192'(1 node)', demo tree duplicate node\
-    \ IDs deduped, placeholder author 00000000 replaced"
-  - Visual regression golden images captured for all 4 mockups and pixel-diff wired
-    into E2E loop
-  - go build + go vet + tsc --noEmit clean; existing 14/14 crud-pages E2E tests still
+  - 'Dark theme applied app-wide using vision-brief token system: navy #0B0D17 / #121424 surfaces, neon
+    cyan/purple/magenta accents, glassy borders, rounded 8-16px geometry, Inter/SF typography scale'
+  - "Tokens defined Tailwind v4 CSS-first style (@theme in frontend/src/index.css \u2014 no tailwind.config.js;\
+    \ the repo uses @import \"tailwindcss\" + @tailwindcss/vite)"
+  - 'App migrated off the light-gray + dark-island look: App.tsx Layout, NavigationBar, all 4 pages (Trees/Nodes/Topics/Cards),
+    TreeView, MessageComposer use the new tokens'
+  - All existing pages keep WCAG AA contrast; existing a11y tests (tests/accessibility.test.ts) still
     pass
+  - Focus-visible outline, skip-to-main, reduced-motion, sr-only utilities from index.css preserved
+  - npm run build passes (tsc -b && vite build && vite build --config vite.sw.config.ts)
+  - npm run lint (oxlint) passes with no new errors
+  - "vitest run passes \u2014 existing tests (accessibility, approval-panel, crud-pages, navigation, tree-rendering)\
+    \ stay green"
   status: pending
   created_at: '2026-08-01T14:03:33.553798+00:00'
 - id: BUG-026
   title: 'Fix Nodes page crash: add GET /trees/{tree_id}/nodes list endpoint'
   criteria:
-  - GET /api/v1/trees/{tree_id}/nodes returns all active nodes as full NodeDetail
-    objects (content, authorId, depth, childCount, etc.), ordered by sequence_num
+  - GET /api/v1/trees/{tree_id}/nodes returns all active nodes as full NodeDetail objects (content, authorId,
+    depth, childCount, etc.), ordered by sequence_num
   - 'Empty/unknown tree returns {"nodes": []} with 200, not an error'
-  - NodeService.ListByTree exists in the interface and implementation, reusing nodeToDetail
-    mapper
-  - NodesPage.tsx fetches from /trees/{treeId}/nodes instead of the graph subtree
-    endpoint
-  - 'NodesPage renders node list without crashing (regression: ''Cannot read properties
-    of undefined (reading slice)'' is gone)'
+  - NodeService.ListByTree exists in the interface and implementation, reusing nodeToDetail mapper
+  - NodesPage.tsx fetches from /trees/{treeId}/nodes instead of the graph subtree endpoint
+  - 'NodesPage renders node list without crashing (regression: ''Cannot read properties of undefined (reading
+    slice)'' is gone)'
   - 'REG: service test TestListByTree_ReturnsFullNodeDetails asserts authorId/content/contentFormat/nodeType
     present on every node'
-  - 'REG: service tests assert empty-tree and nil-tree return empty non-nil slices
-    ({"nodes": []} contract)'
-  - 'REG: handler test TestAPI_ListNodes_ReturnsFullNodeDetails asserts full fields
-    + root depth=0/childCount=1 via HTTP'
-  - 'REG: handler test TestAPI_ListNodes_EmptyTree_ReturnsEmptyArray asserts 200 +
-    non-nil []'
-  - 'REG: frontend E2E test ''renders nodes without crashing when a tree with data
-    is selected'' passes (selects real tree, asserts body content)'
-  - 'SEC: approval_handler.go no longer echoes raw tree_id in INVALID_TREE_ID error
-    (TestSEC12b passes)'
-  - "RACE FIX: sse_handler.go subscribes BEFORE writing the 200 header flush \u2014\
-    \ closes the missed-broadcast race that hung internal/sse under parallel load"
+  - 'REG: service tests assert empty-tree and nil-tree return empty non-nil slices ({"nodes": []} contract)'
+  - 'REG: handler test TestAPI_ListNodes_ReturnsFullNodeDetails asserts full fields + root depth=0/childCount=1
+    via HTTP'
+  - 'REG: handler test TestAPI_ListNodes_EmptyTree_ReturnsEmptyArray asserts 200 + non-nil []'
+  - 'REG: frontend E2E test ''renders nodes without crashing when a tree with data is selected'' passes
+    (selects real tree, asserts body content)'
+  - 'SEC: approval_handler.go no longer echoes raw tree_id in INVALID_TREE_ID error (TestSEC12b passes)'
+  - "RACE FIX: sse_handler.go subscribes BEFORE writing the 200 header flush \u2014 closes the missed-broadcast\
+    \ race that hung internal/sse under parallel load"
   - go build + go vet + tsc --noEmit clean
   - go test ./internal/service/ + handler node/graph/security tests pass
   - Full suite `go test -count=1 -short ./...` passes without package timeout
