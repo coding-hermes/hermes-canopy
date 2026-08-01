@@ -1062,3 +1062,34 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 82/112 board tasks complete (UI-01 delivered this tick). Phase 11 mockup parity in progress: UI-01 ✅, UI-02 IN FLIGHT (Hy3), UI-03..09 pending sequential. Open: INFRA-001 (scheduler-level, fleet.toml 900s), E2E-001 (recurring, deferred to post-UI-02), 21 post-MVP backlog. Scheduler at :9090, 15m cadence. PG healthy at :5437. Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — UI-01 (design tokens + dark theme, 15 files) stewarded through guard + judge (PASS d0bcbd3f) and closed; board-v2 synced (fixed UI-02..09 parquet gap); UI-02 dispatched to Hy3 with full context. No regressions, no duplicate dispatch. Next tick: steward UI-02 worker to completion.
+
+### Tick 117-CONCURRENT — 2026-08-01 15:46 CDT spawn (DeepSeek V4 Flash) — COORDINATION (verify sibling T117 + stand down)
+
+> **Reconciliation note:** Sibling tick (15-26-50 spawn) wrote Tick 117 — stewarded UI-01 through judge PASS (d0bcbd3f, verdict dir 00fa431d, 8/8 ACs), synced board-v2 (UI-02..09 parquet rows inserted, ticks_total 115→117), and dispatched UI-02 (hy3 @ opencode-go, PID 3246966, spawned 15:47). This tick (15-46-19) fired 20 min later under fleet.toml's intentional 900s cadence and independently verified those claims — all held. No duplicate dispatch, no code commits, no parallel test suites (UI-02 worker owns frontend/).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN at c7c7ea7 | Sibling committed Tick 117 board entry (c7c7ea7, 15:49) — parquet + tasks.md + tasks.yaml (UI-01 complete, UI-02 pending). No drift, no orphaned files. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 (independent re-run over c7c7ea7 tree). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0 (independent re-run). UI-02 worker mid-flight owns frontend/ now — no frontend gates beyond tsc (build/lint run by worker). |
+| 4 | Tests | ⏸️ SIBLING VERIFIED | Sibling's guard tier1 full PASS (689s, go_tests ok) + judge tier2 PASS (d0bcbd3f). No parallel test runs (UI-02 worker in flight; PG contention avoidance). |
+| 5 | Hilo graph | ✅ USEFUL | 1232 edges, 184 files (fresh stats — matches sibling T117; +7 from UI-01 theme.ts). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | — | Stable (164 Go + 3 npm outdated, unchanged since Tick 113). |
+| 8 | GitReins | ✅ UI-01 COMPLETE VERIFIED | Verdict on disk at .gitreins/history/2026-08-01/00fa431d/verdict.json: passed:true, tier1 PASS + tier2 PASS, all 8 UI-01 ACs verified with file:line evidence. tasks.yaml UI-01 status=complete, UI-02 pending (created 20:40:56Z). Config: 1M/0.4M caps, 250 iter. |
+| 9 | Secrets | ✅ CLEAN | Guard tier1 full (sibling run): secrets clean, gitleaks 0 leaks. No new code committed since. |
+| 10 | Board consistency | ✅ AGREED | Board at Tick 117 (82 complete + 30 pending). UI-01 ✅ w/ a946837, UI-02..09 rows present in parquet (sibling's sync). Open: UI-02 IN FLIGHT, UI-03..09 pending sequential, INFRA-001 (scheduler-level). |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. Two ticks this window (15-26-50, 15-46-19) — expected at 15m cadence. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 117-CONCURRENT entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 111/112 (41/41 PASS). Due window 116-121 — deferred by sibling T117 (UI-02 worker owns frontend tree; browser E2E against mid-refactor is noise). Agreed. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master; 38 local ahead unpushed — consistent with fleet, push deferred). |
+| 16 | Dispatch | ⛔ NONE — WORKER ALREADY ACTIVE | UI-02 (hy3 @ opencode-go, PID 3246966) spawned 15:47 by sibling T117 — verified alive (3m26s elapsed at gate time). No duplicate dispatch. INFRA-001 remains scheduler-level (mitigated by fleet.toml 900s). |
+
+**Coverage (Tick 117-CONCURRENT):** ~40.7% total (no source logic this tick — coordination).
+
+**Context:** This tick fired 20 min after the sibling T117 session under fleet.toml's intentional 900s cadence. Per foreman discipline (Tick 107/109/110/114/116-CONCURRENT precedent): did NOT touch in-flight files (frontend/ owned by UI-02 worker), did NOT re-dispatch, did NOT run parallel test suites, did NOT commit sibling code. All read-only gates green and sibling claims verified independently: UI-01 verdict on disk (passed:true, 8/8 ACs), build/vet/tsc clean, Hilo 1232/184 matches, PG healthy, 0 new remote commits, tree clean at c7c7ea7.
+
+**Project Status:** 82/112 board tasks complete. UI-01 ✅ (dark theme + tokens, a946837, judge PASS d0bcbd3f). UI-02 IN FLIGHT (hy3, topics sidebar rail). UI-03..09 pending sequential. INFRA-001: scheduler-level, mitigated (fleet.toml 900s). E2E-001 deferred to post-UI-02. Scheduler at :9090, 15m cadence. PG healthy at :5437. Coverage ~40.7%.
+
+**Verdict:** COORDINATION — Sibling T117's claims independently verified (all held: UI-01 judge PASS on disk, board-v2 synced, UI-02 worker alive). No dispatch, no code commits, no parallel test suites. Build/vet/tsc clean + Hilo useful + PG healthy confirm no regressions from in-flight UI-02 work. Board remains consistent; sibling owns UI-02 completion entry. Next tick: steward UI-02 worker to completion (verify + judge + board).
