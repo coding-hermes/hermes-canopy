@@ -160,7 +160,28 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7. SSE headers.
+	// 7. Subscribe BEFORE writing the 200 + flushing. The client buffers
+	// to an outbox (writes only happen in Flush), so no bytes reach the
+	// network before the headers are written — but the subscription is
+	// already registered by the time the client's GET returns. This
+	// closes the race where a broadcast landing between the header flush
+	// and a post-flush Subscribe is missed by this client, causing
+	// block-reading clients to hang forever (seen as package-level test
+	// timeouts under `go test ./...` parallel load).
+	client := h.hubFactory(userID, treeID, w, flusher)
+	if err := h.hub.Subscribe(ctx, treeID, client); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("subscribe failed")
+		// Headers not yet written on this path — send a real HTTP error
+		// rather than an SSE frame the client can't parse.
+		writeHTTPError(w, http.StatusInternalServerError,
+			"SUBSCRIPTION_FAILED", "failed to subscribe to tree events",
+			map[string]any{"error": err.Error()})
+		_ = client.Close()
+		return
+	}
+	defer h.hub.Unsubscribe(treeID, client.ID())
+
+	// 8. SSE headers.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -168,17 +189,6 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
-
-	// 8. Subscribe.
-	client := h.hubFactory(userID, treeID, w, flusher)
-	if err := h.hub.Subscribe(ctx, treeID, client); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("subscribe failed")
-		// Best-effort error event before close (SPEC-API-01 §10.2).
-		_ = client.SendRaw(formatErrorEvent(treeID, "SUBSCRIPTION_FAILED", err.Error()))
-		_ = client.Close()
-		return
-	}
-	defer h.hub.Unsubscribe(treeID, client.ID())
 
 	// Drain anything the hub already sent for this client during
 	// Subscribe before yielding to the event loop.

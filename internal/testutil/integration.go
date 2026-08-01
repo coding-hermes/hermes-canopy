@@ -337,6 +337,13 @@ func NewSharedIntegrationPool(t *testing.T) *pgxpool.Pool {
 			sharedPoolAdmin = u
 		}
 
+		// Same best-effort stale-DB sweep as NewIntegrationPool — the
+		// shared pool is used by most handler tests, so crashed runs
+		// leak DBs through this path too (BUG-027: 12 leaked DBs,
+		// ~120MB, slowing every CREATE DATABASE and turning fast tests
+		// into parallel-suite timeouts).
+		sweepStaleTestDBs(ctx, sharedPoolAdmin)
+
 		// Drop any prior run's shared DB for this binary, then recreate.
 		if err := dropTestDBByName(ctx, sharedPoolAdmin, sharedPoolName); err != nil {
 			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: drop/recreate %s: %w", sharedPoolName, err)
