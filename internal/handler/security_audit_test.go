@@ -79,7 +79,9 @@ type secMemberStub struct {
 	members map[string][]*db.MLSGroupMember
 }
 
-func newSecMemberStub() *secMemberStub { return &secMemberStub{members: make(map[string][]*db.MLSGroupMember)} }
+func newSecMemberStub() *secMemberStub {
+	return &secMemberStub{members: make(map[string][]*db.MLSGroupMember)}
+}
 func (s *secMemberStub) Add(_ context.Context, gid []byte, m *db.MLSGroupMember) error {
 	k := hex.EncodeToString(gid)
 	s.members[k] = append(s.members[k], m)
@@ -116,15 +118,19 @@ func (s *secMemberStub) GetByProfile(_ context.Context, gid []byte, pid uuid.UUI
 
 type secKPStub struct{}
 
-func (s *secKPStub) Create(_ context.Context, _ *db.MLSKeyPackage) error             { return nil }
-func (s *secKPStub) GetLatest(_ context.Context, _ uuid.UUID) (*db.MLSKeyPackage, error) { return nil, db.ErrNotFound }
-func (s *secKPStub) Expire(_ context.Context, _ uuid.UUID) error                       { return nil }
+func (s *secKPStub) Create(_ context.Context, _ *db.MLSKeyPackage) error { return nil }
+func (s *secKPStub) GetLatest(_ context.Context, _ uuid.UUID) (*db.MLSKeyPackage, error) {
+	return nil, db.ErrNotFound
+}
+func (s *secKPStub) Expire(_ context.Context, _ uuid.UUID) error { return nil }
 
 type secPropStub struct {
 	props map[string][]*db.MLSPendingProposal
 }
 
-func newSecPropStub() *secPropStub { return &secPropStub{props: make(map[string][]*db.MLSPendingProposal)} }
+func newSecPropStub() *secPropStub {
+	return &secPropStub{props: make(map[string][]*db.MLSPendingProposal)}
+}
 func (s *secPropStub) Create(_ context.Context, gid []byte, pt string, pid uuid.UUID, pb []byte) error {
 	k := hex.EncodeToString(gid)
 	s.props[k] = append(s.props[k], &db.MLSPendingProposal{ID: uuid.New(), GroupID: gid, ProposalBytes: pb, ProposalType: pt, ProposerID: pid, CreatedAt: time.Now().UTC()})

@@ -385,7 +385,10 @@ func TestTEST03_DBOutage(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 
 	t.Run("db_unavailable_returns_proper_error_code", func(t *testing.T) {
-		pool := testutil.NewSharedIntegrationPool(t)
+		// Isolated per-test pool: this subtest CLOSES the pool to simulate
+		// an outage — closing the package-level shared pool (TEST-004)
+		// would poison every remaining test in the binary.
+		pool := testutil.NewIntegrationPool(t)
 
 		srv, cleanup := newTestServer(t, pool)
 		defer cleanup()
@@ -434,8 +437,9 @@ func TestTEST03_DBOutage(t *testing.T) {
 			t.Skip("PG container not running via docker compose — skipping live stop test")
 		}
 
-		// Verify PG works before the outage.
-		pool := testutil.NewSharedIntegrationPool(t)
+		// Verify PG works before the outage. Isolated per-test pool — this
+		// subtest closes the pool (and stops PG) to simulate an outage.
+		pool := testutil.NewIntegrationPool(t)
 		// Don't use pooled cleanups so we can stop/start PG independently.
 		testutil.TruncateAll(t, pool)
 		srv, cleanup := newTestServer(t, pool)
@@ -498,7 +502,8 @@ func TestTEST03_DBOutage(t *testing.T) {
 	t.Run("pg_recovery_after_restart", func(t *testing.T) {
 		// After PG comes back, verify normal operations resume.
 		// This pairs with the previous test's defer that restarts PG.
-		pool := testutil.NewSharedIntegrationPool(t)
+		// Isolated per-test pool (sibling subtests closed theirs).
+		pool := testutil.NewIntegrationPool(t)
 		defer testutil.TruncateAll(t, pool)
 
 		srv, cleanup := newTestServer(t, pool)
@@ -722,7 +727,7 @@ func TestTEST03_SSEDisconnectReconnect(t *testing.T) {
 			attempt  int
 			expected time.Duration
 		}{
-			{0, 0},     // first attempt is immediate
+			{0, 0}, // first attempt is immediate
 			{1, 1 * time.Second},
 			{2, 2 * time.Second},
 			{3, 4 * time.Second},
@@ -1080,7 +1085,9 @@ func TestTEST03_CombinedChaos(t *testing.T) {
 
 	t.Run("db_unavailable_with_sse_subscribers", func(t *testing.T) {
 		testutil.SkipIfNoDB(t)
-		pool := testutil.NewSharedIntegrationPool(t)
+		// Isolated per-test pool: this subtest CLOSES the pool to simulate
+		// an outage — must never touch the package-level shared pool.
+		pool := testutil.NewIntegrationPool(t)
 
 		srv, cleanup := newTestServer(t, pool)
 		defer cleanup()
@@ -1160,5 +1167,3 @@ func decodeResponse(resp *http.Response, v any) error {
 	}
 	return json.Unmarshal(body, v)
 }
-
-

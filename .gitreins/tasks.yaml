@@ -134,3 +134,27 @@ tasks:
   status: complete
   created_at: '2026-07-31T22:01:29.604747+00:00'
   completed_at: '2026-07-31T22:38:57.770468+00:00'
+- id: TEST-004
+  title: 'PG test architecture: package-level shared integration pool + single-statement
+    TRUNCATE (~10x faster suites)'
+  criteria:
+  - NewSharedIntegrationPool exists in internal/testutil/integration.go (sync.Once
+    singleton, one migrated DB per test binary, TruncateAll between tests, DB reclaimed
+    by stale-DB sweep)
+  - 'TruncateAll truncates ALL PG tables in one statement (verified: 28 tables incl.
+    plugin_registry/plugin_instances/plugin_audit_log/node_resolved_refs/approval_rules/profile_invites/tree_event_seq/tree_members)'
+  - All handler+db integration tests migrated NewIntegrationPool -> NewSharedIntegrationPool
+    (chaos DBOutage test intentionally keeps direct connections during outage)
+  - 'Recursive CTE alias fixes committed: node_repo.go GetAncestors JOIN chain, topic_repo.go
+    GetParentTopics SELECT t.* (db suite PASS proves correctness)'
+  - 'Test contract fixes: TestAPI_GraphStats asserts total_nodes/total_edges, TestAPI_TopicCRUD
+    asserts archive->GET 200+status=archived, TestAPI_ApprovalDenyAndAuditTrail asserts
+    AuditActionApprovalDenied'
+  - go test ./internal/db/... PASS with PG on shared pool
+  - go test ./internal/handler/... (skip TEST03|Chaos|DBOutage) PASS with PG on shared
+    pool
+  - go build + go vet + gofmt clean
+  - gitreins guard Tier 1 PASS (secrets, build, lint, tests)
+  status: complete
+  created_at: '2026-08-01T02:33:31.548749+00:00'
+  completed_at: '2026-08-01T04:35:09.039775+00:00'

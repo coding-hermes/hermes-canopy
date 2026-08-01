@@ -488,8 +488,8 @@ func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 	// 2. POST /encrypt — encrypt a plaintext message.
 	plaintext := []byte("hello canopy mls integration test")
 	encryptBody := map[string]any{
-		"workspace_id":    workspaceID.String(),
-		"profile_id":      profileID.String(),
+		"workspace_id":     workspaceID.String(),
+		"profile_id":       profileID.String(),
 		"plaintext_base64": plaintext,
 	}
 	req = mlsRequest(t, srv.URL, http.MethodPost, basePath+"/encrypt", encryptBody)
@@ -601,8 +601,8 @@ func TestBE12d_MLSErrorCases(t *testing.T) {
 
 	// --- 1. Encrypt as non-member → 404 (because non-member lookup fails with ErrNotFound) ---
 	encryptBody := map[string]any{
-		"workspace_id":    workspaceID.String(),
-		"profile_id":      nonMemberID.String(),
+		"workspace_id":     workspaceID.String(),
+		"profile_id":       nonMemberID.String(),
 		"plaintext_base64": []byte("test"),
 	}
 	req = mlsRequest(t, srv.URL, http.MethodPost, basePath+"/encrypt", encryptBody)
@@ -881,8 +881,8 @@ func TestBE12d_MLSProposals(t *testing.T) {
 
 	// 4. POST /encrypt and verify it still works.
 	encryptBody := map[string]any{
-		"workspace_id":    workspaceID.String(),
-		"profile_id":      profileID.String(),
+		"workspace_id":     workspaceID.String(),
+		"profile_id":       profileID.String(),
 		"plaintext_base64": []byte("test message after empty commit"),
 	}
 	req = mlsRequest(t, srv.URL, http.MethodPost, basePath+"/encrypt", encryptBody)

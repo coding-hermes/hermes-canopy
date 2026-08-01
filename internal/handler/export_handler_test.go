@@ -62,8 +62,12 @@ func newStubExportNodeRepo() *stubExportNodeRepo {
 func (s *stubExportNodeRepo) GetByTree(_ context.Context, treeID uuid.UUID) ([]db.Node, error) {
 	return s.nodesByTree[treeID], nil
 }
-func (s *stubExportNodeRepo) Create(_ context.Context, _ *db.Node) (*db.Node, error)  { panic("not used") }
-func (s *stubExportNodeRepo) GetByID(_ context.Context, _ uuid.UUID) (*db.Node, error) { panic("not used") }
+func (s *stubExportNodeRepo) Create(_ context.Context, _ *db.Node) (*db.Node, error) {
+	panic("not used")
+}
+func (s *stubExportNodeRepo) GetByID(_ context.Context, _ uuid.UUID) (*db.Node, error) {
+	panic("not used")
+}
 func (s *stubExportNodeRepo) GetChildren(_ context.Context, _ uuid.UUID) ([]db.Node, error) {
 	panic("not used")
 }
@@ -96,8 +100,12 @@ func newStubExportEdgeRepo() *stubExportEdgeRepo {
 func (s *stubExportEdgeRepo) GetByTree(_ context.Context, treeID uuid.UUID) ([]db.Edge, error) {
 	return s.edgesByTree[treeID], nil
 }
-func (s *stubExportEdgeRepo) Create(_ context.Context, _ *db.Edge) (*db.Edge, error) { panic("not used") }
-func (s *stubExportEdgeRepo) GetByID(_ context.Context, _ uuid.UUID) (*db.Edge, error) { panic("not used") }
+func (s *stubExportEdgeRepo) Create(_ context.Context, _ *db.Edge) (*db.Edge, error) {
+	panic("not used")
+}
+func (s *stubExportEdgeRepo) GetByID(_ context.Context, _ uuid.UUID) (*db.Edge, error) {
+	panic("not used")
+}
 func (s *stubExportEdgeRepo) GetBySource(_ context.Context, _ uuid.UUID) ([]db.Edge, error) {
 	panic("not used")
 }

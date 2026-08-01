@@ -110,7 +110,12 @@ func New(
 		treeNodes.Use(membershipMW)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
-		r.Mount("/nodes", nodeHandler.Routes())
+		// Flat mount — membership-enforced (BUG-025): previously ANY
+		// authenticated user could read/mutate any node by UUID.
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(handler.NodeAccessMiddleware(nodeSvc, membersRepo))
+		flatNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/nodes", flatNodes)
 
 		// Sync endpoints (SPEC-DM-02 §7) — tree-scoped, membership-gated.
 		r.With(membershipMW).Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
@@ -136,8 +141,11 @@ func New(
 		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 
 		// Export/import endpoints (GAP-003).
+		// Registered directly (not via Mount) because /trees is already
+		// occupied by the TreeHandler router above.
 		exportHandler := handler.NewExportHandler(exportSvc)
-		r.Mount("/trees", exportHandler.Routes())
+		r.Get("/trees/{tree_id}/export", exportHandler.ExportTree)
+		r.Post("/trees/import", exportHandler.ImportTree)
 
 		// MCP endpoint — programmatic agent access.
 		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)

@@ -49,6 +49,7 @@ func newTestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, func()) 
 	edgeRepo := db.NewPGEdgeRepo(pool)
 	eventRepo := db.NewEventRepo(pool)
 	snapshotRepo := db.NewSnapshotRepo(pool)
+	memberRepo := db.NewPGTreeMemberRepo(pool)
 
 	// Build services.
 	treeSvc := service.NewTreeService(treeRepo, nodeRepo, edgeRepo, pool)
@@ -69,9 +70,12 @@ func newTestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, func()) 
 		treeHandler := NewTreeHandler(treeSvc, syncEngine)
 		r.Mount("/trees", treeHandler.Routes())
 
-		// Node CRUD — mounted at /nodes (no membership check).
+		// Node CRUD — flat mount now membership-enforced (BUG-025).
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)
-		r.Mount("/nodes", nodeHandler.Routes())
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(NodeAccessMiddleware(nodeSvc, memberRepo))
+		flatNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/nodes", flatNodes)
 
 		// Graph endpoints (for subtree queries, edge listing).
 		graphHandler := NewGraphHandler(graphSvc)

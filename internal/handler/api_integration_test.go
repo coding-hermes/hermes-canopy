@@ -82,6 +82,15 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 	r := chi.NewRouter()
 	authMW := AuthMiddleware("canopy-dev-secret")
 
+	// Health endpoints (unauthenticated, top-level — mirrors server.New).
+	healthTestHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","service":"canopyd"}`))
+	}
+	r.Get("/health", healthTestHandler)
+	r.Get("/healthz", healthTestHandler)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
@@ -91,8 +100,11 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 
 		// Node CRUD.
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(NodeAccessMiddleware(nodeSvc, memberRepo))
+		flatNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/nodes", flatNodes)
 		membershipMW := TreeMembershipMiddleware(memberRepo)
-		r.Mount("/nodes", nodeHandler.Routes())
 		treeNodes := chi.NewRouter()
 		treeNodes.Use(membershipMW)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
@@ -119,9 +131,9 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 	srv := httptest.NewServer(r)
 
 	return &approvalTestServer{
-		Server:  srv,
-		Pool:    pool,
-		UserID:  testUserID,
+		Server: srv,
+		Pool:   pool,
+		UserID: testUserID,
 		Cleanup: func() {
 			srv.Close()
 			cardDBMgr.Close()
@@ -335,16 +347,16 @@ func TestAPI_GraphStats(t *testing.T) {
 	}
 
 	// We created 1 root + 3 children = 4 nodes total. Edges = 3.
-	nodeCount, hasNodes := stats["node_count"]
+	nodeCount, hasNodes := stats["total_nodes"]
 	if !hasNodes {
-		t.Fatal("stats missing node_count")
+		t.Fatal("stats missing total_nodes")
 	}
 	if nodeCount != 4 {
-		t.Fatalf("node_count = %d, want 4", nodeCount)
+		t.Fatalf("total_nodes = %d, want 4", nodeCount)
 	}
-	edgeCount, hasEdges := stats["edge_count"]
+	edgeCount, hasEdges := stats["total_edges"]
 	if hasEdges && edgeCount != 3 {
-		t.Fatalf("edge_count = %d, want 3", edgeCount)
+		t.Fatalf("total_edges = %d, want 3", edgeCount)
 	}
 	t.Logf("graph stats: %+v", stats)
 }
@@ -482,7 +494,9 @@ func TestAPI_TopicCRUD(t *testing.T) {
 		t.Fatalf("DELETE topic: status=%d, want %d", resp.StatusCode, http.StatusNoContent)
 	}
 
-	// GET archived topic → 404.
+	// GET archived topic → 200 with status=archived (archive is a
+	// restorable status change, not a hard delete — Archive/Restore
+	// endpoints exist; GetByID filters deleted_at, not status).
 	req = apiRequest(t, srv.Server.URL, http.MethodGet,
 		"/api/v1/topics/"+topic.ID.String(), ownerID, nil)
 	resp, err = srv.Server.Client().Do(req)
@@ -491,8 +505,15 @@ func TestAPI_TopicCRUD(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("GET archived topic: status=%d, want %d", resp.StatusCode, http.StatusNotFound)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET archived topic: status=%d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var archived service.TopicSummary
+	if err := json.NewDecoder(resp.Body).Decode(&archived); err != nil {
+		t.Fatalf("decode archived topic: %v", err)
+	}
+	if archived.Status != "archived" {
+		t.Fatalf("archived topic status = %q, want %q", archived.Status, "archived")
 	}
 }
 
@@ -741,10 +762,10 @@ func TestAPI_ApprovalDenyAndAuditTrail(t *testing.T) {
 		t.Fatal("audit history is empty, expected at least a denied entry")
 	}
 
-	// Verify a "denied" entry exists.
+	// Verify a "denied" entry exists (canonical action enum value).
 	foundDenied := false
 	for _, entry := range history.Entries {
-		if entry.Action == "denied" {
+		if entry.Action == db.AuditActionApprovalDenied {
 			foundDenied = true
 			break
 		}
@@ -823,10 +844,11 @@ func TestAPI_SSEEvents(t *testing.T) {
 	t.Logf("SSE connected: Content-Type=%s", ct)
 
 	// Perform a tree operation to trigger an SSE event (create a node).
-	done := make(chan error, 1)
+	created := make(chan struct{}, 1)
 	go func() {
 		time.Sleep(200 * time.Millisecond) // Give SSE connection a moment.
 		createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "SSE-triggered node")
+		created <- struct{}{}
 	}()
 
 	// Read SSE events with a timeout.
@@ -834,7 +856,7 @@ func TestAPI_SSEEvents(t *testing.T) {
 	eventReceived := false
 	deadline := time.After(10 * time.Second)
 
-	readLoop:
+readLoop:
 	for {
 		select {
 		case <-deadline:
@@ -845,8 +867,8 @@ func TestAPI_SSEEvents(t *testing.T) {
 				if err == io.EOF {
 					break readLoop
 				}
-				done <- fmt.Errorf("read SSE: %v", err)
-				return
+				t.Logf("read SSE: %v", err)
+				break readLoop
 			}
 			line = strings.TrimSpace(line)
 			if line != "" {
@@ -858,7 +880,17 @@ func TestAPI_SSEEvents(t *testing.T) {
 			}
 		}
 	}
-	<-done // Drain goroutine.
+
+	// Wait for the create goroutine to finish — BOUNDED. The previous
+	// `<-done` hung the entire handler suite forever: the goroutine only
+	// signaled on read error, never on success, so once an event arrived
+	// the drain blocked indefinitely (root cause of the recurring
+	// "SSE goroutine leak" 600s/900s handler-suite timeouts, TEST-02 era).
+	select {
+	case <-created:
+	case <-time.After(15 * time.Second):
+		t.Fatal("SSE-triggered node create goroutine did not finish within 15s")
+	}
 
 	if !eventReceived {
 		// SSE events may not arrive depending on hub wiring.

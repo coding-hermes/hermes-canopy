@@ -98,7 +98,10 @@ func newTestServerWithProfiles(t *testing.T, pool *pgxpool.Pool) *profileTestSer
 
 		// Node CRUD.
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)
-		r.Mount("/nodes", nodeHandler.Routes())
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(NodeAccessMiddleware(nodeSvc, memberRepo))
+		flatNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/nodes", flatNodes)
 
 		// Graph endpoints.
 		graphHandler := NewGraphHandler(graphSvc)

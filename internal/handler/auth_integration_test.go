@@ -45,9 +45,14 @@ func newTestServerWithApprovals(t *testing.T, pool *pgxpool.Pool) *approvalTestS
 	t.Helper()
 
 	ctx := context.Background()
-	// Create sentinel user.
+	// Create sentinel user. MUST be testUserID (a0000000-...): the JWT sub
+	// used by approvalRequest is testUserID, and CreateTree inserts a
+	// tree_members row referencing it (FK users.id). The old sentinel
+	// 00000000-... left the FK unsatisfied → tree create 503. (userRepo.Create
+	// ignores the ID field — uuidv7 default — so only an explicit
+	// INSERT with id works here.)
 	if _, err := pool.Exec(ctx, `INSERT INTO users (id, hermes_user_id, display_name)
-		VALUES ('00000000-0000-0000-0000-000000000000', 'sentinel', 'Sentinel User')
+		VALUES ('a0000000-0000-0000-0000-000000000001', 'testuser', 'Test User')
 		ON CONFLICT (id) DO NOTHING`); err != nil {
 		t.Fatalf("create sentinel user: %v", err)
 	}
@@ -87,13 +92,16 @@ func newTestServerWithApprovals(t *testing.T, pool *pgxpool.Pool) *approvalTestS
 
 		// Node CRUD.
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)
-		r.Mount("/nodes", nodeHandler.Routes())
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(NodeAccessMiddleware(nodeSvc, memberRepo))
+		flatNodes.Mount("/", nodeHandler.Routes())
+		r.Mount("/nodes", flatNodes)
 
 		// Graph endpoints.
 		graphHandler := NewGraphHandler(graphSvc)
 		r.Mount("/graph", graphHandler.Routes())
 
-		// Approval endpoints (SPEC-API-05).
+		// Approval endpoints.
 		r.Mount("/approvals", NewApprovalHandler(approvalSvc).Routes())
 	})
 
