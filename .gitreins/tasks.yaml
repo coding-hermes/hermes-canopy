@@ -197,8 +197,9 @@ tasks:
   - npm run lint (oxlint) passes with no new errors
   - "vitest run passes \u2014 existing tests (accessibility, approval-panel, crud-pages,\
     \ navigation, tree-rendering) stay green"
-  status: pending
+  status: complete
   created_at: '2026-08-01T14:03:33.553798+00:00'
+  completed_at: '2026-08-01T20:40:56.132352+00:00'
 - id: BUG-026
   title: 'Fix Nodes page crash: add GET /trees/{tree_id}/nodes list endpoint'
   criteria:
@@ -247,3 +248,24 @@ tasks:
   status: complete
   created_at: '2026-08-01T18:52:27.595346+00:00'
   completed_at: '2026-08-01T18:52:42.277302+00:00'
+- id: UI-02
+  title: 'Mockup parity UI-02: Topics sidebar rail (vision-brief v2.0)'
+  criteria:
+  - 'Persistent left sidebar rail shows topic pills: semantic icon + name + count
+    badge per topic, styled with UI-01 design tokens (navy surfaces, glassy borders,
+    rounded)'
+  - '''New topic'' button at top of rail opens the create-topic flow (existing CreateTopicDialog
+    in TopicsPage.tsx can be reused or moved)'
+  - Rail has settings + refresh controls pinned at the bottom
+  - "Topics rail is visible across app routes (Layout-level), not only on the /topics\
+    \ page \u2014 active topic pill highlights current selection"
+  - Clicking a topic pill navigates to the topic's view (at minimum /topics, topic
+    detail or filter if endpoint exists)
+  - "Count badge reflects real topic data (topics list endpoint GET /api/v1/topics)\
+    \ \u2014 no hardcoded numbers"
+  - 'Responsive: rail collapses to icon-only on narrow screens, WCAG AA contrast maintained
+    (UI-01 tokens already AA-verified)'
+  - npm run build passes, tsc --noEmit clean, existing Playwright suite tests still
+    pass (no regressions)
+  status: pending
+  created_at: '2026-08-01T20:40:56.815266+00:00'
