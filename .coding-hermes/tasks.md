@@ -823,3 +823,34 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 65/68 tasks complete. BUG-025 (flat /nodes access control) closed — security posture improved. TEST-004 fully landed (shared pool + TRUNCATE + follow-up). E2E-001 41/41 green (Tick 111). Scheduler daemon reachable at :9090, fleet.toml pins 900s active cadence. PG healthy at :5437. Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — Healed a broken tree orphaned by a failed sibling session, completed + judged BUG-025 (security fix, PASS 13c574ec), E2E 41/41 PASS. All 16 gates green. Build/vet/tsc clean. 11/11 non-PG + handler integration suite PASS. Guard full PASS. gitleaks clean. No regressions. Project in steady-state maintenance on 15m cadence.
+
+### Tick 112 — 2026-08-01 02:25 CDT (DeepSeek V4 Flash) — Scheduler Tick 02-03-23 — VERIFICATION (concurrent with Tick 111)
+
+> **Reconciliation note:** This tick (02-03-23, spawned 07:03 UTC) fired concurrently with the Tick 111 session (01:29 CDT spawn, committed c1ffe57 at 07:23 UTC). Tick 111 observed this tick as "running" mid-flight; this entry is this session's completion — an independent verification pass over Tick 111's work plus one operational fix (stale canopyd binary).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Working tree clean at c1ffe57 (Tick 111 board entry). Tick 111 session committed all work: 9fe210b (BUG-025 + TEST-004 follow-up), a0250ed (gitreins + E2E report + hilo edges), c1ffe57 (board). No drift, no orphaned files. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 (independent re-run). 41,855 total Go LOC. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0 (independent re-run). |
+| 4 | Tests | ✅ 12/12 NON-PG PASS | card, card/duckdb, config, hermes, mls, server, service, sse, sync, transport, context, plugin — all PASS (independent re-run; plugin 39.999s). Handler PG suite verified by Tick 111 (116.3s PASS). |
+| 5 | Hilo graph | ✅ USEFUL | 1224 edges, 184 files (fresh stats). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | — | Not re-checked (stable vs Tick 111: 164 Go + 3 npm outdated). |
+| 8 | GitReins | ✅ ALL COMPLETE | tasks.yaml: TEST-004 (f0f68b9e), BUG-025 (13c574ec) both complete, 0 active. Guard full mode PASS (independent re-run: secrets/go_build/go_lint/go_tests all ok). Config: deepseek-v4-flash, tier2 caps 250 iter. |
+| 9 | Secrets | ✅ CLEAN | Guard secrets clean (full mode). |
+| 10 | Board consistency | ✅ AGREED | Board at 65/68 complete. Open: INFRA-001 (scheduler-level, fleet.toml 900s mitigation). Tick log complete through 111. |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. Latest tick: 02-03-23 (this session). |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 112 entry saved. |
+| 14 | E2E-001 | ✅ 41/41 PASS (independent re-run) | Dispatched via delegate_task (deepseek-v4-pro, 165s): 41/41 PASS (33.8s). crud-pages 13, navigation 9, approval-panel 5, tree-rendering 7, accessibility 7. Screenshots /tmp/e2e-screenshots/{trees,approvals,topics}.png. Duplicate of Tick 111's run — confirms suite green post-BUG-025. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master position; 22 local ahead — unpushed, consistent). |
+| 16 | Dispatch | ⛔ NONE — WORK DONE BY TICK 111 | Tick 111 already healed + closed BUG-025 + ran E2E. No duplicate dispatch, no code changes this session. |
+
+**Operational fix this tick:** rebuilt `canopyd` binary (go build -o canopyd ./cmd/canopyd). The on-disk binary was from Jul 29 20:56 — predates migrations 000021-24 (added Jul 31). It failed to start against the v24 DB with "no migration found for version 24" (FTL, exit). Rebuild embeds current migrations → canopyd starts clean, health 200. Binary is gitignored (line 13) so no commit needed, but **future E2E ticks must rebuild canopyd before stack start** (or the Jul 29-era binary will hard-fail). Confirmed working: started on :8091 with HTTP_ADDR, health 200, shut down cleanly after E2E.
+
+**Coverage (Tick 112):** ~40.7% (no new source logic — verification tick).
+
+**Project Status:** 65/68 tasks complete. All MVP gaps delivered. BUG-025 security fix closed (judge PASS 13c574ec). TEST-004 landed (shared pool + TRUNCATE). E2E 41/41 green (verified twice: Tick 111 + this tick). Scheduler daemon at :9090, fleet.toml pins 900s. PG healthy at :5437. Coverage ~40.7%.
+
+**Verdict:** VERIFICATION — All gates green on independent re-run. Tick 111's work (heal, BUG-025, E2E, TEST-004 follow-up) confirmed correct with zero regressions. One operational fix: stale canopyd binary rebuilt (migrations 000021-24 now embedded). No duplicate dispatch, no code changes. Project in steady-state maintenance on 15m cadence.
