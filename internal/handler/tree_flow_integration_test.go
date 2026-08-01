@@ -34,7 +34,7 @@ import (
 
 func TestINT01_FullTreeFlow(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -508,7 +508,7 @@ func TestINT01_FullTreeFlow(t *testing.T) {
 // branching nodes and verifies the graph remains consistent.
 func TestINT01_TreeFlowWithBranching(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -696,7 +696,7 @@ func createChildNodeForFlow(t *testing.T, srv *approvalTestServer,
 
 func TestINT01_SynthesisAndDeny(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)

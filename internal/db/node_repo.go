@@ -147,7 +147,7 @@ func (r *PGNodeRepo) GetAncestors(ctx context.Context, nodeID uuid.UUID) ([]Node
                    n.content_format, n.node_type, n.sequence_num, n.metadata,
                    n.created_at, n.edited_at, n.deleted_at, chain.depth + 1
             FROM nodes n
-            JOIN chain c ON n.id = c.parent_id
+            JOIN chain ON n.id = chain.parent_id
             WHERE n.deleted_at IS NULL
               AND chain.depth < 10000
         )

@@ -389,7 +389,7 @@ func getTreeForProfile(t *testing.T, srv *profileTestServer, treeID, userID uuid
 
 func TestINT03_MultipleProfiles(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithProfiles(t, pool)
@@ -490,7 +490,7 @@ func TestINT03_MultipleProfiles(t *testing.T) {
 
 func TestINT03_ProfileSwitching(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithProfiles(t, pool)
@@ -581,7 +581,7 @@ func TestINT03_ProfileSwitching(t *testing.T) {
 
 func TestINT03_ProfileRouting(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithProfiles(t, pool)
@@ -681,7 +681,7 @@ func TestINT03_ProfileRouting(t *testing.T) {
 
 func TestINT03_ProfileIsolation(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithProfiles(t, pool)

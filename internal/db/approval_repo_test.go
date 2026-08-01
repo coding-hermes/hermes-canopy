@@ -61,7 +61,7 @@ func createTreeAndNode(t *testing.T, pool *pgxpool.Pool) (tree *db.Tree, node *d
 
 func TestPGApprovalRepo_Create(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -86,7 +86,7 @@ func TestPGApprovalRepo_Create(t *testing.T) {
 
 func TestPGApprovalRepo_Create_Nil(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -98,7 +98,7 @@ func TestPGApprovalRepo_Create_Nil(t *testing.T) {
 
 func TestPGApprovalRepo_Create_DuplicateNodeID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -121,7 +121,7 @@ func TestPGApprovalRepo_Create_DuplicateNodeID(t *testing.T) {
 
 func TestPGApprovalRepo_GetByID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -138,7 +138,7 @@ func TestPGApprovalRepo_GetByID(t *testing.T) {
 
 func TestPGApprovalRepo_GetByID_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -153,7 +153,7 @@ func TestPGApprovalRepo_GetByID_NotFound(t *testing.T) {
 
 func TestPGApprovalRepo_GetByNodeID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -169,7 +169,7 @@ func TestPGApprovalRepo_GetByNodeID(t *testing.T) {
 
 func TestPGApprovalRepo_GetByNodeID_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -184,7 +184,7 @@ func TestPGApprovalRepo_GetByNodeID_NotFound(t *testing.T) {
 
 func TestPGApprovalRepo_ListPending(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -217,7 +217,7 @@ func TestPGApprovalRepo_ListPending(t *testing.T) {
 
 func TestPGApprovalRepo_ListPending_ByTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -243,7 +243,7 @@ func TestPGApprovalRepo_ListPending_ByTree(t *testing.T) {
 
 func TestPGApprovalRepo_ListPending_Empty(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -259,7 +259,7 @@ func TestPGApprovalRepo_ListPending_Empty(t *testing.T) {
 
 func TestPGApprovalRepo_ListAll(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -282,7 +282,7 @@ func TestPGApprovalRepo_ListAll(t *testing.T) {
 
 func TestPGApprovalRepo_ListByTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -302,7 +302,7 @@ func TestPGApprovalRepo_ListByTree(t *testing.T) {
 
 func TestPGApprovalRepo_Approve(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -322,7 +322,7 @@ func TestPGApprovalRepo_Approve(t *testing.T) {
 
 func TestPGApprovalRepo_Approve_Twice(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -341,7 +341,7 @@ func TestPGApprovalRepo_Approve_Twice(t *testing.T) {
 
 func TestPGApprovalRepo_Approve_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -355,7 +355,7 @@ func TestPGApprovalRepo_Approve_NotFound(t *testing.T) {
 
 func TestPGApprovalRepo_Deny(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -377,7 +377,7 @@ func TestPGApprovalRepo_Deny(t *testing.T) {
 
 func TestPGApprovalRepo_Deny_EmptyReason(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -396,7 +396,7 @@ func TestPGApprovalRepo_Deny_EmptyReason(t *testing.T) {
 
 func TestPGApprovalRepo_ExpirePending(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 
@@ -426,7 +426,7 @@ func TestPGApprovalRepo_ExpirePending(t *testing.T) {
 
 func TestPGApprovalRepo_ExpirePending_None(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGApprovalRepo(pool)
 

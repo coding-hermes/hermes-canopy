@@ -69,7 +69,7 @@ func createTreeWithNodes(t *testing.T, pool *pgxpool.Pool) (tree *db.Tree, root,
 
 func TestPGEdgeRepo_Create(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -91,7 +91,7 @@ func TestPGEdgeRepo_Create(t *testing.T) {
 
 func TestPGEdgeRepo_Create_Nil(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -103,7 +103,7 @@ func TestPGEdgeRepo_Create_Nil(t *testing.T) {
 
 func TestPGEdgeRepo_Create_SelfEdge(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -121,7 +121,7 @@ func TestPGEdgeRepo_Create_SelfEdge(t *testing.T) {
 
 func TestPGEdgeRepo_Create_MultipleParents_Blocked(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -147,7 +147,7 @@ func TestPGEdgeRepo_Create_MultipleParents_Blocked(t *testing.T) {
 
 func TestPGEdgeRepo_Create_SynthesisAllowsMultipleParents(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -190,7 +190,7 @@ func TestPGEdgeRepo_Create_SynthesisAllowsMultipleParents(t *testing.T) {
 
 func TestPGEdgeRepo_Create_InvalidTarget(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -212,7 +212,7 @@ func TestPGEdgeRepo_Create_InvalidTarget(t *testing.T) {
 
 func TestPGEdgeRepo_GetByID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -228,7 +228,7 @@ func TestPGEdgeRepo_GetByID(t *testing.T) {
 
 func TestPGEdgeRepo_GetByID_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -243,7 +243,7 @@ func TestPGEdgeRepo_GetByID_NotFound(t *testing.T) {
 
 func TestPGEdgeRepo_GetBySource(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -259,7 +259,7 @@ func TestPGEdgeRepo_GetBySource(t *testing.T) {
 
 func TestPGEdgeRepo_GetByTarget(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -275,7 +275,7 @@ func TestPGEdgeRepo_GetByTarget(t *testing.T) {
 
 func TestPGEdgeRepo_GetByTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 	nodeRepo := db.NewPGNodeRepo(pool)
@@ -306,7 +306,7 @@ func TestPGEdgeRepo_GetByTree(t *testing.T) {
 
 func TestPGEdgeRepo_SoftDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -323,7 +323,7 @@ func TestPGEdgeRepo_SoftDelete(t *testing.T) {
 
 func TestPGEdgeRepo_SoftDelete_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -337,7 +337,7 @@ func TestPGEdgeRepo_SoftDelete_NotFound(t *testing.T) {
 
 func TestPGEdgeRepo_GetParents(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -353,7 +353,7 @@ func TestPGEdgeRepo_GetParents(t *testing.T) {
 
 func TestPGEdgeRepo_GetSiblings(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 	nodeRepo := db.NewPGNodeRepo(pool)
@@ -384,7 +384,7 @@ func TestPGEdgeRepo_GetSiblings(t *testing.T) {
 
 func TestPGEdgeRepo_GetEdgeCounts(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 
@@ -407,7 +407,7 @@ func TestPGEdgeRepo_GetEdgeCounts(t *testing.T) {
 
 func TestPGEdgeRepo_Move(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 	nodeRepo := db.NewPGNodeRepo(pool)
@@ -433,7 +433,7 @@ func TestPGEdgeRepo_Move(t *testing.T) {
 
 func TestPGEdgeRepo_Move_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	edgeRepo := db.NewPGEdgeRepo(pool)
 

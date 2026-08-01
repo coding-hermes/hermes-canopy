@@ -30,7 +30,7 @@ import (
 
 func TestINT05_2000NodeTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
@@ -100,7 +100,7 @@ func TestINT05_2000NodeTree(t *testing.T) {
 
 func TestINT05_LatencyP99(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)

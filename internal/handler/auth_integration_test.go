@@ -207,7 +207,7 @@ func createTestTree(t *testing.T, srv *approvalTestServer) *service.Tree {
 
 func TestBE12c_UserRegistration(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -232,7 +232,7 @@ func TestBE12c_UserRegistration(t *testing.T) {
 
 func TestBE12c_UserLogin(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -259,7 +259,7 @@ func TestBE12c_UserLogin(t *testing.T) {
 
 func TestBE12c_TokenRefresh(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -287,7 +287,7 @@ func TestBE12c_TokenRefresh(t *testing.T) {
 
 func TestBE12c_ApprovalCreate(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -435,7 +435,7 @@ func TestBE12c_ApprovalCreate(t *testing.T) {
 
 func TestBE12c_ApprovalApproveDeny(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -623,7 +623,7 @@ func TestBE12c_ApprovalApproveDeny(t *testing.T) {
 
 func TestBE12c_ApprovalAuditTrail(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -762,7 +762,7 @@ func TestBE12c_ApprovalAuditTrail(t *testing.T) {
 
 func TestBE12c_AuthIntegration(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)

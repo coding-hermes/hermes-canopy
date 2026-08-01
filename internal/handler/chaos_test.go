@@ -385,7 +385,7 @@ func TestTEST03_DBOutage(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 
 	t.Run("db_unavailable_returns_proper_error_code", func(t *testing.T) {
-		pool := testutil.NewIntegrationPool(t)
+		pool := testutil.NewSharedIntegrationPool(t)
 
 		srv, cleanup := newTestServer(t, pool)
 		defer cleanup()
@@ -435,7 +435,7 @@ func TestTEST03_DBOutage(t *testing.T) {
 		}
 
 		// Verify PG works before the outage.
-		pool := testutil.NewIntegrationPool(t)
+		pool := testutil.NewSharedIntegrationPool(t)
 		// Don't use pooled cleanups so we can stop/start PG independently.
 		testutil.TruncateAll(t, pool)
 		srv, cleanup := newTestServer(t, pool)
@@ -498,7 +498,7 @@ func TestTEST03_DBOutage(t *testing.T) {
 	t.Run("pg_recovery_after_restart", func(t *testing.T) {
 		// After PG comes back, verify normal operations resume.
 		// This pairs with the previous test's defer that restarts PG.
-		pool := testutil.NewIntegrationPool(t)
+		pool := testutil.NewSharedIntegrationPool(t)
 		defer testutil.TruncateAll(t, pool)
 
 		srv, cleanup := newTestServer(t, pool)
@@ -528,7 +528,7 @@ func TestTEST03_DBOutage(t *testing.T) {
 
 	t.Run("db_pool_exhaustion_handled_gracefully", func(t *testing.T) {
 		// Test what happens when the connection pool is exhausted.
-		pool := testutil.NewIntegrationPool(t)
+		pool := testutil.NewSharedIntegrationPool(t)
 		defer testutil.TruncateAll(t, pool)
 
 		srv, cleanup := newTestServer(t, pool)
@@ -1080,7 +1080,7 @@ func TestTEST03_CombinedChaos(t *testing.T) {
 
 	t.Run("db_unavailable_with_sse_subscribers", func(t *testing.T) {
 		testutil.SkipIfNoDB(t)
-		pool := testutil.NewIntegrationPool(t)
+		pool := testutil.NewSharedIntegrationPool(t)
 
 		srv, cleanup := newTestServer(t, pool)
 		defer cleanup()

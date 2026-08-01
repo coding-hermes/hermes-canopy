@@ -86,7 +86,7 @@ func (c *transportTestClient) eventCount() int {
 
 func TestBE12e_SSEHubLifecycle(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 	_ = pool // no DB needed for in-memory SSE hub tests
 
@@ -233,7 +233,7 @@ func TestBE12e_SSEHubLifecycle(t *testing.T) {
 
 func TestBE12e_ConnectionLifecycle(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 	_ = pool
 
@@ -474,7 +474,7 @@ func TestBE12e_ConnectionLifecycle(t *testing.T) {
 
 func TestBE12e_RateLimiting(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 	_ = pool
 

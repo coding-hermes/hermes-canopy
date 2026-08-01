@@ -225,7 +225,7 @@ func createChildNodeViaHTTP(t *testing.T, srv *approvalTestServer, treeID, paren
 
 func TestAPI_GraphAncestors(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -300,7 +300,7 @@ func TestAPI_GraphAncestors(t *testing.T) {
 
 func TestAPI_GraphStats(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -355,7 +355,7 @@ func TestAPI_GraphStats(t *testing.T) {
 
 func TestAPI_TopicCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -502,7 +502,7 @@ func TestAPI_TopicCRUD(t *testing.T) {
 
 func TestAPI_CardCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -657,7 +657,7 @@ func TestAPI_CardCRUD(t *testing.T) {
 
 func TestAPI_ApprovalDenyAndAuditTrail(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -782,7 +782,7 @@ func TestAPI_ApprovalDenyAndAuditTrail(t *testing.T) {
 
 func TestAPI_SSEEvents(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -877,7 +877,7 @@ func TestAPI_HealthEndpoint(t *testing.T) {
 	// No DB needed for health endpoint on real server, but we use the full
 	// API test server to exercise the router stack.
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -915,7 +915,7 @@ func TestAPI_HealthEndpoint(t *testing.T) {
 
 func TestAPI_ApprovalListAll(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -985,7 +985,7 @@ func TestAPI_ApprovalListAll(t *testing.T) {
 
 func TestAPI_GraphSubtreeWithDepth(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -1032,7 +1032,7 @@ func TestAPI_GraphSubtreeWithDepth(t *testing.T) {
 
 func TestAPI_ErrorCases(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -1140,7 +1140,7 @@ func TestAPI_ErrorCases(t *testing.T) {
 
 func TestAPI_SSECORSHeaders(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)

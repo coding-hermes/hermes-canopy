@@ -24,7 +24,7 @@ import (
 
 func TestAPI_NodeReply(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -86,7 +86,7 @@ func TestAPI_NodeReply(t *testing.T) {
 
 func TestAPI_NodeFork(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -149,7 +149,7 @@ func TestAPI_NodeFork(t *testing.T) {
 
 func TestAPI_CardListFilters(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -259,7 +259,7 @@ func TestAPI_CardListFilters(t *testing.T) {
 
 func TestAPI_CardUpdateValidation(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -321,7 +321,7 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 
 func TestAPI_TopicListPagination(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -427,7 +427,7 @@ func TestAPI_TopicListPagination(t *testing.T) {
 
 func TestAPI_ApprovalDenyWithoutReason(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -506,7 +506,7 @@ func TestAPI_ApprovalDenyWithoutReason(t *testing.T) {
 
 func TestAPI_ApprovalErrorCases(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -619,7 +619,7 @@ func TestAPI_ApprovalErrorCases(t *testing.T) {
 
 func TestAPI_TreeListPagination(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -680,7 +680,7 @@ func TestAPI_TreeListPagination(t *testing.T) {
 
 func TestAPI_GraphSubtreeNotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -709,7 +709,7 @@ func TestAPI_GraphSubtreeNotFound(t *testing.T) {
 
 func TestAPI_GraphAncestorsNotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -738,7 +738,7 @@ func TestAPI_GraphAncestorsNotFound(t *testing.T) {
 
 func TestAPI_ApprovalAlreadyDecided(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -795,7 +795,7 @@ func TestAPI_ApprovalAlreadyDecided(t *testing.T) {
 
 func TestAPI_HealthNoAuth(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)

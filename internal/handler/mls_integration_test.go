@@ -179,7 +179,7 @@ func ensureProfile(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 // through HTTP endpoints: create, retrieve, and get full state.
 func TestBE12d_MLSGroupCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -288,7 +288,7 @@ func TestBE12d_MLSGroupCRUD(t *testing.T) {
 // flows through HTTP endpoints.
 func TestBE12d_MLSMemberManagement(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -454,7 +454,7 @@ func TestBE12d_MLSMemberManagement(t *testing.T) {
 // HTTP endpoints for a group member.
 func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -555,7 +555,7 @@ func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 // HTTP endpoints: group not found, epoch mismatch, non-member access.
 func TestBE12d_MLSErrorCases(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -691,7 +691,7 @@ func TestBE12d_MLSErrorCases(t *testing.T) {
 // endpoints: bad workspace ID, workspace ID mismatch, invalid keys.
 func TestBE12d_MLSValidationErrors(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -813,7 +813,7 @@ func TestBE12d_MLSValidationErrors(t *testing.T) {
 // through HTTP endpoints.
 func TestBE12d_MLSProposals(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -906,7 +906,7 @@ func TestBE12d_MLSProposals(t *testing.T) {
 // can each have their own independent MLS group.
 func TestBE12d_MLSMultipleGroups(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
@@ -1008,7 +1008,7 @@ func TestBE12d_MLSMultipleGroups(t *testing.T) {
 // TestBE12d_MLSAuthRejection tests that MLS endpoints require auth.
 func TestBE12d_MLSAuthRejection(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)

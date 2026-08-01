@@ -20,7 +20,7 @@ import (
 
 func TestPGTopicRepo_Create(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -49,7 +49,7 @@ func TestPGTopicRepo_Create(t *testing.T) {
 
 func TestPGTopicRepo_Create_WithTags(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -69,7 +69,7 @@ func TestPGTopicRepo_Create_WithTags(t *testing.T) {
 
 func TestPGTopicRepo_Create_WithParentTopic(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -103,7 +103,7 @@ func TestPGTopicRepo_Create_WithParentTopic(t *testing.T) {
 
 func TestPGTopicRepo_GetByID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -125,7 +125,7 @@ func TestPGTopicRepo_GetByID(t *testing.T) {
 
 func TestPGTopicRepo_GetByID_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -136,7 +136,7 @@ func TestPGTopicRepo_GetByID_NotFound(t *testing.T) {
 
 func TestPGTopicRepo_GetByID_SoftDeleted(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -164,7 +164,7 @@ func TestPGTopicRepo_GetByID_SoftDeleted(t *testing.T) {
 
 func TestPGTopicRepo_GetByTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -189,7 +189,7 @@ func TestPGTopicRepo_GetByTree(t *testing.T) {
 
 func TestPGTopicRepo_GetBySlug(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -210,7 +210,7 @@ func TestPGTopicRepo_GetBySlug(t *testing.T) {
 
 func TestPGTopicRepo_GetBySlug_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -225,7 +225,7 @@ func TestPGTopicRepo_GetBySlug_NotFound(t *testing.T) {
 
 func TestPGTopicRepo_Update(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -257,7 +257,7 @@ func TestPGTopicRepo_Update(t *testing.T) {
 
 func TestPGTopicRepo_ArchiveAndRestore(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -295,7 +295,7 @@ func TestPGTopicRepo_ArchiveAndRestore(t *testing.T) {
 
 func TestPGTopicRepo_SoftDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -322,7 +322,7 @@ func TestPGTopicRepo_SoftDelete(t *testing.T) {
 
 func TestPGTopicRepo_HardDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -348,7 +348,7 @@ func TestPGTopicRepo_HardDelete(t *testing.T) {
 
 func TestPGTopicRepo_ParentChildTopics(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -390,7 +390,7 @@ func TestPGTopicRepo_ParentChildTopics(t *testing.T) {
 
 func TestPGTopicRepo_Search(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -417,7 +417,7 @@ func TestPGTopicRepo_Search(t *testing.T) {
 
 func TestPGTopicRepo_RefreshNodeCount(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 
@@ -441,7 +441,7 @@ func TestPGTopicRepo_RefreshNodeCount(t *testing.T) {
 
 func TestPGTopicRepo_GetTopicsForNode(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGTopicRepo(pool)
 

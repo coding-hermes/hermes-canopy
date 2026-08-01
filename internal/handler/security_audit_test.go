@@ -405,7 +405,7 @@ func TestSEC06b_JWT_UserIdFallback(t *testing.T) {
 // TestSEC07_AuthBypass_NoTokenAccess proves unauthenticated requests are rejected.
 func TestSEC07_AuthBypass_NoTokenAccess(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
@@ -438,7 +438,7 @@ func TestSEC07_AuthBypass_NoTokenAccess(t *testing.T) {
 // SEVERITY: HIGH
 func TestSEC08_AuthBypass_CrossUserTreeAccess(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -497,7 +497,7 @@ func TestSEC08_AuthBypass_CrossUserTreeAccess(t *testing.T) {
 // SEVERITY: HIGH
 func TestSEC09_AuthBypass_AuthorNotFromContext(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -532,7 +532,7 @@ func TestSEC09_AuthBypass_AuthorNotFromContext(t *testing.T) {
 // so any authenticated user can access any tree's nodes.
 func TestSEC09b_AuthBypass_TreeMembershipNotEnforced(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -584,7 +584,7 @@ func TestSEC09b_AuthBypass_TreeMembershipNotEnforced(t *testing.T) {
 // queries properly use parameterized placeholders.
 func TestSEC10_SQLInjection_ParameterizedQueries(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
@@ -622,7 +622,7 @@ func TestSEC10_SQLInjection_ParameterizedQueries(t *testing.T) {
 // TestSEC11_InputValidation_ExtremeContentLength tests handling of very large content.
 func TestSEC11_InputValidation_ExtremeContentLength(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -663,7 +663,7 @@ func TestSEC11_InputValidation_ExtremeContentLength(t *testing.T) {
 // TestSEC11b_InputValidation_EmptyContent tests empty content handling.
 func TestSEC11b_InputValidation_EmptyContent(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -700,7 +700,7 @@ func TestSEC11b_InputValidation_EmptyContent(t *testing.T) {
 // TestSEC11c_InputValidation_InvalidUUID tests UUID format rejection.
 func TestSEC11c_InputValidation_InvalidUUID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
@@ -728,7 +728,7 @@ func TestSEC11c_InputValidation_InvalidUUID(t *testing.T) {
 // TestSEC12_ErrorLeakage_NoInternalInfo proves error responses don't leak internals.
 func TestSEC12_ErrorLeakage_NoInternalInfo(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
@@ -789,7 +789,7 @@ func TestSEC12_ErrorLeakage_NoInternalInfo(t *testing.T) {
 // doesn't echo unsanitized user input in error messages.
 func TestSEC12b_ErrorLeakage_ApprovalHandlerEcho(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)

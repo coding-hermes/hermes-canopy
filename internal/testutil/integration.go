@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -295,6 +297,92 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// ---------------------------------------------------------------------------
+// Shared integration pool (TEST-004): one migrated database per test binary,
+// truncated between tests. Cuts PG suite time from ~15s/test to ~0.1s/test.
+// ---------------------------------------------------------------------------
+
+var (
+	sharedPoolOnce  sync.Once
+	sharedPool      *pgxpool.Pool
+	sharedPoolErr   error
+	sharedPoolName  string
+	sharedPoolAdmin string
+)
+
+// NewSharedIntegrationPool returns a pool to a package-level test database
+// that is created and migrated ONCE per test binary, then reused by every
+// test in the package. Each call truncates all tables first, so every test
+// still starts from an empty schema — the same isolation contract as
+// NewIntegrationPool, without paying CREATE DATABASE + 21 migrations per
+// test (~10-15s each). With 224 PG tests across db+handler, this turns a
+// ~35-minute suite into ~3 minutes.
+//
+// The shared database is intentionally NOT dropped per test (it must
+// outlive the first test that created it). It is reclaimed by the
+// stale-DB sweep (sweepStaleTestDBs, TEST-002) once the run ends: the DB
+// name matches the canopy_[0-9a-f]{8} pattern, and after the process exits
+// it is >1h old with zero connections — exactly the sweep's drop criteria.
+//
+// Callers MUST NOT close the returned pool; it is owned by the package.
+func NewSharedIntegrationPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	SkipIfNoDB(t)
+	ctx := context.Background()
+
+	sharedPoolOnce.Do(func() {
+		sharedPoolName = uniqueDBName()
+		sharedPoolAdmin = "postgres://canopy:canopy@localhost:5437/postgres?sslmode=disable"
+		if u := os.Getenv("CANOPY_ADMIN_DB_URL"); u != "" {
+			sharedPoolAdmin = u
+		}
+
+		// Drop any prior run's shared DB for this binary, then recreate.
+		if err := dropTestDBByName(ctx, sharedPoolAdmin, sharedPoolName); err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: drop/recreate %s: %w", sharedPoolName, err)
+			return
+		}
+
+		targetURL := fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", sharedPoolName)
+		if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
+			targetURL = u
+		}
+
+		cfg, err := pgxpool.ParseConfig(targetURL)
+		if err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: parse %s: %w", targetURL, err)
+			return
+		}
+		cfg.MaxConns = 10
+		pool, err := pgxpool.NewWithConfig(ctx, cfg)
+		if err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: connect: %w", err)
+			return
+		}
+		if err := pool.Ping(ctx); err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: ping: %w", err)
+			return
+		}
+		if err := ensureCanopyRole(ctx, pool); err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: ensureCanopyRole: %w", err)
+			return
+		}
+		if err := db.MigrateUp(targetURL); err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: MigrateUp(%s): %w", targetURL, err)
+			return
+		}
+		sharedPool = pool
+	})
+
+	if sharedPoolErr != nil {
+		t.Fatalf("%v", sharedPoolErr)
+	}
+
+	// Fresh empty schema for this test, like NewIntegrationPool provides.
+	TruncateAll(t, sharedPool)
+	return sharedPool
+}
+
 // TruncateAll drops all rows from every table (in dependency-safe
 // order) so each test starts with a clean database. Runs in a single
 // transaction. MUST be called after NewIntegrationPool.
@@ -331,10 +419,18 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 	}
 	defer tx.Rollback(ctx)
 
-	for _, name := range tables {
-		if _, err := tx.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", name)); err != nil {
-			t.Fatalf("TruncateAll: truncate %s: %v", name, err)
-		}
+	// Single TRUNCATE statement listing ALL tables: PostgreSQL resolves
+	// the FK dependency graph ONCE instead of per-statement. Per-table
+	// TRUNCATE ... CASCADE costs ~0.3-0.9s each (each cascade re-scans
+	// pg_constraint/pg_trigger for the full dependency closure), so 20
+	// separate cascades ≈ 7s; one combined statement ≈ 3ms (TEST-004).
+	quoted := make([]string, len(tables))
+	for i, name := range tables {
+		quoted[i] = fmt.Sprintf("%q", name)
+	}
+	stmt := "TRUNCATE TABLE " + strings.Join(quoted, ", ") + " CASCADE"
+	if _, err := tx.Exec(ctx, stmt); err != nil {
+		t.Fatalf("TruncateAll: %s: %v", stmt, err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

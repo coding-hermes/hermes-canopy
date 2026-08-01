@@ -50,7 +50,7 @@ func testNode(treeID, authorID uuid.UUID) *db.Node {
 
 func TestPGNodeRepo_Create(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -75,7 +75,7 @@ func TestPGNodeRepo_Create(t *testing.T) {
 
 func TestPGNodeRepo_Create_Nil(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -87,7 +87,7 @@ func TestPGNodeRepo_Create_Nil(t *testing.T) {
 
 func TestPGNodeRepo_Create_WithDefaults(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -112,7 +112,7 @@ func TestPGNodeRepo_Create_WithDefaults(t *testing.T) {
 
 func TestPGNodeRepo_GetByID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -129,7 +129,7 @@ func TestPGNodeRepo_GetByID(t *testing.T) {
 
 func TestPGNodeRepo_GetByID_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -140,7 +140,7 @@ func TestPGNodeRepo_GetByID_NotFound(t *testing.T) {
 
 func TestPGNodeRepo_GetByID_AfterSoftDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -162,7 +162,7 @@ func TestPGNodeRepo_GetByID_AfterSoftDelete(t *testing.T) {
 
 func TestPGNodeRepo_GetByTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -185,7 +185,7 @@ func TestPGNodeRepo_GetByTree(t *testing.T) {
 
 func TestPGNodeRepo_GetByTree_Empty(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -200,7 +200,7 @@ func TestPGNodeRepo_GetByTree_Empty(t *testing.T) {
 
 func TestPGNodeRepo_GetChildren(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	nodeRepo := db.NewPGNodeRepo(pool)
 	edgeRepo := db.NewPGEdgeRepo(pool)
@@ -236,7 +236,7 @@ func TestPGNodeRepo_GetChildren(t *testing.T) {
 
 func TestPGNodeRepo_GetChildren_Empty(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -251,7 +251,7 @@ func TestPGNodeRepo_GetChildren_Empty(t *testing.T) {
 
 func TestPGNodeRepo_GetAncestors(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	nodeRepo := db.NewPGNodeRepo(pool)
 
@@ -283,7 +283,7 @@ func TestPGNodeRepo_GetAncestors(t *testing.T) {
 
 func TestPGNodeRepo_GetAncestors_Root(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -307,7 +307,7 @@ func TestPGNodeRepo_GetAncestors_Root(t *testing.T) {
 
 func TestPGNodeRepo_GetSubtree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	nodeRepo := db.NewPGNodeRepo(pool)
 	edgeRepo := db.NewPGEdgeRepo(pool)
@@ -352,7 +352,7 @@ func TestPGNodeRepo_GetSubtree(t *testing.T) {
 
 func TestPGNodeRepo_Update(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -370,7 +370,7 @@ func TestPGNodeRepo_Update(t *testing.T) {
 
 func TestPGNodeRepo_Update_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -385,7 +385,7 @@ func TestPGNodeRepo_Update_NotFound(t *testing.T) {
 
 func TestPGNodeRepo_SoftDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -402,7 +402,7 @@ func TestPGNodeRepo_SoftDelete(t *testing.T) {
 
 func TestPGNodeRepo_SoftDelete_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -412,7 +412,7 @@ func TestPGNodeRepo_SoftDelete_NotFound(t *testing.T) {
 
 func TestPGNodeRepo_HardDelete(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -429,7 +429,7 @@ func TestPGNodeRepo_HardDelete(t *testing.T) {
 
 func TestPGNodeRepo_HardDelete_NotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 
@@ -443,7 +443,7 @@ func TestPGNodeRepo_HardDelete_NotFound(t *testing.T) {
 
 func TestPGNodeRepo_GetCounts(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	nodeRepo := db.NewPGNodeRepo(pool)
 
@@ -467,7 +467,7 @@ func TestPGNodeRepo_GetCounts(t *testing.T) {
 
 func TestPGNodeRepo_GetCounts_EmptyTree(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	ctx := context.Background()
 	repo := db.NewPGNodeRepo(pool)
 

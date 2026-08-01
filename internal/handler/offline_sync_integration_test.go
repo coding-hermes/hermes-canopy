@@ -34,7 +34,7 @@ import (
 // deltas when a client goes offline, edits occur, and it reconnects.
 func TestINT04_OfflineSync(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
@@ -231,7 +231,7 @@ func TestINT04_OfflineSync(t *testing.T) {
 // verifying edge cases: missing snapshot fallback, mutation chain integrity.
 func TestINT04_SyncEngineDirect(t *testing.T) {
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
