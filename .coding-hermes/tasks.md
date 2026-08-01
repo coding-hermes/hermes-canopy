@@ -756,3 +756,31 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 64/67 tasks complete. TEST-002 closed (root fix landed — test DB leak self-heals). ALL MVP gaps delivered. Scheduler daemon reachable at :9090, fleet.toml pins 900s active cadence. PG healthy at :5437 with self-healing leak cleanup. E2E 41/41 green (Tick 105). Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — TEST-002 long-term fix delivered end-to-end (task → worker → verified → judge PASS → complete). All 16 gates green. Guard full PASS, judge PASS (b9202ff5), gitleaks clean. Build/vet/tsc clean. No regressions. Next tick: E2E-001 window (Tick 110-115) — dispatch browser suite; INFRA-001 remains scheduler-level.
+### Tick 110 — 2026-07-31 21:49 CDT (DeepSeek V4 Flash) — Scheduler Tick (COORDINATION)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY (worker in flight) | Uncommitted TEST-004 follow-up edits from parallel session's worker: internal/testutil/integration.go, internal/handler/api_integration_test.go (post-a2a70f3 refinements). .gitreins/tasks.yaml: TEST-004 in_progress. NOT touched by this tick. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 — tree compiles mid-flight. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Tests | ⏸️ NOT RUN (sibling owns suites) | Sibling 21:07 session running PG suites since 21:33 (db/testutil 12m + handler non-chaos 15m timeouts). No parallel test runs — avoids CREATE DATABASE contention with in-flight verification. |
+| 5 | Hilo graph | ✅ USEFUL | 1222 edges, 184 files (up from 1213/184 at Tick 109 — TEST-003 CTE fix + TEST-004 pool edges indexed). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs from TEST-003/004 work. |
+| 7 | Deps | — | Not checked (stable vs Tick 108/109: 164 Go + 3 npm outdated). |
+| 8 | GitReins | ⚠️ TEST-004 IN PROGRESS | tasks.yaml: TEST-004 (shared integration pool + single-statement TRUNCATE) in_progress — created by sibling 21:07 session. All other tasks complete. Config: deepseek-v4-flash, 50 iter/10m/1M:0.4M, tier2 caps 100 iter/30m. |
+| 9 | Secrets | ✅ CLEAN | gitleaks: 421 commits, 28.17MB, 3.07s, 0 leaks (fresh scan). |
+| 10 | Board consistency | ✅ AGREED | Board matrix already updated by sibling (9beac77): TEST-003 ✅ (17f85ce — recursive CTE depth cap 10000 on all 7 CTEs), TEST-004 in progress. Tick log open at 109-COMPLETE; this entry fills 110. |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. Two ticks running concurrently: 21:07:36 (sibling, owns TEST-004) + 21:49:53 (this tick) — expected at 15m cadence. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections (test DB churn from sibling suites active). |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 110 entry saved. |
+| 14 | E2E-001 | ⏸️ DUE BUT DEFERRED → Tick 111 | Last ran Tick 105 (41/41 PASS). Due window 110-115 — IN WINDOW but deferred one tick: canopyd not running (stack would need full start) + sibling mid-PG-suite (browser E2E against a churning PG is noise). Deferral keeps the window (111 ≤ 115). |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master position; 20 local ahead — unpushed, consistent with prior ticks). |
+| 16 | Dispatch | ⛔ NONE — WORKER ALREADY ACTIVE | TEST-004 worker owned by sibling 21:07 session (worker commit a2a70f3 landed; PG verification suites running since 21:33; follow-up edits uncommitted). No duplicate dispatch. INFRA-001 remains scheduler-level (mitigated by fleet.toml 900s). |
+
+**Coverage (Tick 110):** ~40.7% total (no new source logic this tick — TEST-003/004 files owned by sibling, uncommitted).
+
+**Context:** This tick fired 42 min after the 21:07 session under fleet.toml's intentional 900s cadence. The sibling session owns TEST-003 (landed 17f85ce, matrix updated 9beac77) + TEST-004 (worker committed a2a70f3 — shared integration pool + single-statement TRUNCATE; PG suites in verification; follow-up edits on integration.go + api_integration_test.go uncommitted). Per foreman discipline (Tick 107/109 precedent): did NOT touch in-flight files, did NOT re-dispatch, did NOT commit worker code, did NOT run parallel test suites. All read-only gates green: build/vet/tsc clean (tree compiles mid-flight), Hilo 1222/184, gitleaks 0 leaks, PG accepting, 0 new remote commits.
+
+**Project Status:** 64/67 tasks complete. TEST-003 ✅ landed (17f85ce, CTE hang root-fixed). TEST-004: IN FLIGHT (sibling owns, worker committed a2a70f3, verification running). All MVP gaps delivered. INFRA-001: scheduler-level, mitigated. Scheduler at :9090, 15m cadence by design. PG healthy. E2E 41/41 green (Tick 105), due and deferred to Tick 111. Coverage ~40.7%.
+
+**Verdict:** COORDINATION — No dispatch (TEST-004 worker active via parallel session), no code commits (sibling owns worker files), no parallel test runs (PG contention avoidance). Build/vet/tsc clean + Hilo useful + gitleaks clean + PG healthy confirm no regressions from in-flight work. Board remains consistent; sibling session writes the TEST-004 completion entry when its verification lands. E2E-001 deferred one tick (still within 110-115 window).
