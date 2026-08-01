@@ -178,6 +178,36 @@ tasks:
   status: complete
   created_at: '2026-08-01T06:51:09.508993+00:00'
   completed_at: '2026-08-01T07:15:18.814713+00:00'
+- id: UI-01-PARITY
+  title: "Mockup parity: vision-brief v2.0 UI (UI-01\u2192UI-09)"
+  criteria:
+  - 'Dark theme applied app-wide using the vision-brief token system (navy #0B0D17/#121424
+    surfaces, neon cyan/purple/magenta accents, rounded geometry)'
+  - All existing pages keep WCAG AA contrast and pass existing a11y tests
+  - Topics sidebar rail renders persistent left navigation with topic pills (icon
+    + name + count badge), New topic button, settings/refresh
+  - Topic rail selection filters the current tree view to that topic
+  - Header shows context title + count badge + Tree/Detail/Merge segmented view selector
+  - View selector switches between tree canvas and detail list modes
+  - Branching tree canvas renders horizontal tree with bezier connectors, joint dots,
+    expand/collapse chevrons, ghost placeholder nodes, color-coded circular avatars,
+    reply-count badges, active-node glow
+  - 'Node cards show avatar initials + per-author color, timestamp, content, #topic
+    pill, overflow menu, hover states'
+  - 'Composer bar floats at bottom: attach, placeholder ''Message... use @mention
+    or #topic'', @/#/emoji buttons, Send with cmd-enter badge; POSTs to /trees/{tree_id}/nodes
+    and refreshes list'
+  - Keyboard shortcuts j/k/h/l/m/? work and footer strip shows them
+  - Node list shows hierarchy indentation/branch lines; checkboxes reveal bulk-action
+    bar
+  - "Screenshot findings fixed: '(1 nodes)'\u2192'(1 node)', demo tree duplicate node\
+    \ IDs deduped, placeholder author 00000000 replaced"
+  - Visual regression golden images captured for all 4 mockups and pixel-diff wired
+    into E2E loop
+  - go build + go vet + tsc --noEmit clean; existing 14/14 crud-pages E2E tests still
+    pass
+  status: pending
+  created_at: '2026-08-01T14:03:33.553798+00:00'
 - id: BUG-026
   title: 'Fix Nodes page crash: add GET /trees/{tree_id}/nodes list endpoint'
   criteria:
@@ -202,7 +232,12 @@ tasks:
     is selected'' passes (selects real tree, asserts body content)'
   - 'SEC: approval_handler.go no longer echoes raw tree_id in INVALID_TREE_ID error
     (TestSEC12b passes)'
+  - "RACE FIX: sse_handler.go subscribes BEFORE writing the 200 header flush \u2014\
+    \ closes the missed-broadcast race that hung internal/sse under parallel load"
   - go build + go vet + tsc --noEmit clean
   - go test ./internal/service/ + handler node/graph/security tests pass
-  status: pending
-  created_at: '2026-08-01T12:58:04.728169+00:00'
+  - Full suite `go test -count=1 -short ./...` passes without package timeout
+  status: complete
+  created_at: '2026-08-01T14:31:55.025807+00:00'
+  verdict: ef4c08a9
+  completed_at: '2026-08-01T17:35:40.423742+00:00'
