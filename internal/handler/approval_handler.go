@@ -72,7 +72,9 @@ func (h *ApprovalHandler) ListPending(w http.ResponseWriter, r *http.Request) {
 	if treeIDStr != "" {
 		parsed, err := uuid.Parse(treeIDStr)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "INVALID_TREE_ID", "tree_id is not a valid UUID: "+treeIDStr)
+			// SEC12b: do NOT echo the raw input back — it may contain
+			// path traversal / XSS payloads. Return a static message.
+			writeError(w, http.StatusBadRequest, "INVALID_TREE_ID", "tree_id is not a valid UUID")
 			return
 		}
 		treeID = &parsed

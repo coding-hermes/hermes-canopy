@@ -307,6 +307,138 @@ func TestAPI_GraphAncestors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// BUG-026 regression: GET /trees/{tree_id}/nodes must return FULL NodeDetail
+// ---------------------------------------------------------------------------
+//
+// The Nodes page crashed with "Cannot read properties of undefined (reading
+// 'slice')" because it fetched the graph subtree endpoint (minimal summaries)
+// but rendered node.authorId.slice(0, 8) / node.content. This test locks in
+// the list endpoint contract: every node MUST carry authorId, content,
+// contentFormat, nodeType, sequenceNum, depth, childCount — the fields the
+// UI renders. A regression to minimal summaries fails here.
+
+func TestAPI_ListNodes_ReturnsFullNodeDetails(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	defer testutil.TruncateAll(t, pool)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+
+	// Seed a tree with a root + one reply (content-bearing nodes).
+	tree := createTreeViaHTTP(t, srv, ownerID, "BUG-026 List Nodes Regression")
+	child := createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "Regression reply content")
+
+	// GET /api/v1/trees/{tree_id}/nodes
+	url := fmt.Sprintf("/api/v1/trees/%s/nodes", tree.ID)
+	req := apiRequest(t, srv.Server.URL, http.MethodGet, url, ownerID, nil)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET list nodes: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errBody apiErrorBody
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		t.Fatalf("GET list nodes: status=%d, error=%+v", resp.StatusCode, errBody)
+	}
+
+	var body struct {
+		Nodes []service.NodeDetail `json:"nodes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode list nodes: %v", err)
+	}
+	if len(body.Nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(body.Nodes))
+	}
+
+	// BUG-026 regression: every node must carry the full detail fields.
+	for i, n := range body.Nodes {
+		if n.AuthorID == uuid.Nil {
+			t.Errorf("node[%d].authorId is nil/zero — frontend does authorId.slice(0,8), would crash", i)
+		}
+		if n.Content == "" {
+			t.Errorf("node[%d].content is empty — NodesPage renders content", i)
+		}
+		if n.ContentFormat == "" {
+			t.Errorf("node[%d].contentFormat is empty", i)
+		}
+		if n.NodeType == "" {
+			t.Errorf("node[%d].nodeType is empty", i)
+		}
+	}
+
+	// Root node: depth 0, childCount 1 (the reply).
+	rootFound, childFound := false, false
+	for _, n := range body.Nodes {
+		if n.ID == tree.RootNodeID {
+			rootFound = true
+			if n.Depth != 0 {
+				t.Errorf("root depth = %d, want 0", n.Depth)
+			}
+			if n.ChildCount != 1 {
+				t.Errorf("root childCount = %d, want 1", n.ChildCount)
+			}
+		}
+		if n.ID == child.Node.ID {
+			childFound = true
+			if n.Content != "Regression reply content" {
+				t.Errorf("child content = %q, want full content", n.Content)
+			}
+		}
+	}
+	if !rootFound {
+		t.Error("root node missing from list")
+	}
+	if !childFound {
+		t.Error("child node missing from list")
+	}
+}
+
+// The empty-tree contract: {"nodes": []} with 200 — the frontend's
+// empty-state depends on it (a 404 or null would break the page).
+func TestAPI_ListNodes_EmptyTree_ReturnsEmptyArray(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	defer testutil.TruncateAll(t, pool)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+	tree := createTreeViaHTTP(t, srv, ownerID, "BUG-026 Empty Tree") // root node exists, no replies
+
+	url := fmt.Sprintf("/api/v1/trees/%s/nodes", tree.ID)
+	req := apiRequest(t, srv.Server.URL, http.MethodGet, url, ownerID, nil)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET list nodes: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET list nodes (empty): status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Nodes []service.NodeDetail `json:"nodes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Nodes == nil {
+		t.Fatal("nodes must be [] (non-nil) — frontend does Array.isArray(result.nodes)")
+	}
+	if len(body.Nodes) != 1 {
+		t.Fatalf("expected 1 node (root), got %d", len(body.Nodes))
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TEST-02: Graph — Stats
 // ---------------------------------------------------------------------------
 

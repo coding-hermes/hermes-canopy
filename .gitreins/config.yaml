@@ -4,6 +4,8 @@ guards:
   tests: true
   test_mode: full
   dead_code: true
+  test_timeout: 600
+  hook_timeout: 700
   go:
     build: true
     lint: true

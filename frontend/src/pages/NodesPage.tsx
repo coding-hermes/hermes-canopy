@@ -54,9 +54,8 @@ interface NodeDetail {
   deletedAt: string | null;
 }
 
-interface SubtreeResult {
+interface ListNodesResult {
   nodes: NodeDetail[];
-  edges: unknown[];
 }
 
 interface ListTreesResponse {
@@ -299,16 +298,7 @@ export default function NodesPage() {
     setNodesLoading(true);
     setError(null);
     try {
-      // Get tree detail first to find root node
-      const tree = await apiGet<TreeSummary>(`/trees/${treeId}?include_stats=false`);
-      if (!tree.root_node_id) {
-        setNodes([]);
-        return;
-      }
-      // Use graph subtree endpoint to get all nodes
-      const result = await apiGet<SubtreeResult>(
-        `/graph/trees/${treeId}/subtree/${tree.root_node_id}?max_depth=0`,
-      );
+      const result = await apiGet<ListNodesResult>(`/trees/${treeId}/nodes`);
       setNodes(Array.isArray(result.nodes) ? result.nodes : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load nodes');

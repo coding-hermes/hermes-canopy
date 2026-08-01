@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Define the exact REST endpoint contracts for Canopy node lifecycle operations: create, update, soft-delete, reply, and fork. Nodes are messages in the conversation DAG — this is the primary interaction surface for both human users and Hermes profiles. A Go worker reading this spec must produce a correct `NodeService` and `NodeHandler` implementation with zero clarifying questions. A TypeScript worker reading this spec must produce a correct API client with Zod-validated types.
+Define the exact REST endpoint contracts for Canopy node lifecycle operations: **list, get-by-ID, create, update, soft-delete, reply, and fork**. Nodes are messages in the conversation DAG — this is the primary interaction surface for both human users and Hermes profiles. A Go worker reading this spec must produce a correct `NodeService` and `NodeHandler` implementation with zero clarifying questions. A TypeScript worker reading this spec must produce a correct API client with Zod-validated types.
 
 Nodes are the atomic unit of conversation in Canopy. Every message typed by a user, every response from an agent, every system event — all are nodes. The node CRUD endpoints are the write path for everything that happens in a tree. The read path is the SSE event stream (SPEC-API-01).
 
@@ -190,6 +190,150 @@ data: {full edge JSON as above}
 ```
 
 These are broadcast to all clients subscribed to `trees/{tree_id}/events`. The creating client receives them like everyone else — the SSE stream is the source of truth for tree state.
+
+---
+
+## 3A. GET /trees/{tree_id}/nodes — List Nodes
+
+### 3A.1 Route
+
+```
+GET /trees/{tree_id}/nodes
+```
+
+| Field | Value |
+|-------|-------|
+| Method | GET |
+| Path | `/trees/{tree_id}/nodes` |
+| tree_id | UUIDv7 |
+| Auth | Required (Bearer token) |
+| Content-Type (response) | `application/json; charset=utf-8` |
+| Query params | None. Full listing — nodes are per-tree and bounded (max_depth ≤ tree size); no pagination in MVP. |
+
+### 3A.2 Response — 200 OK
+
+```json
+{
+  "nodes": [
+    {
+      "id": "0191a8b2-7fff-7000-9000-000000000101",
+      "treeId": "0191a8b2-7fff-7000-9000-000000000001",
+      "parentId": null,
+      "authorId": "00000000-0000-0000-0000-000000000001",
+      "authorDisplayName": "",
+      "content": "# Welcome to Hermes Canopy",
+      "contentFormat": "markdown",
+      "nodeType": "message",
+      "sequenceNum": 1,
+      "metadata": {},
+      "depth": 0,
+      "childCount": 5,
+      "createdAt": "2026-07-29T20:56:35.40259-05:00",
+      "editedAt": null,
+      "deletedAt": null
+    }
+  ]
+}
+```
+
+The response body is a JSON object with a single `nodes` array. Each element is a full `NodeDetail` (camelCase field names — see §3A.3 and §9.1 for the canonical schema). Nodes are ordered by `sequence_num` ascending (insertion order within the tree).
+
+### 3A.3 Response Fields (NodeDetail)
+
+Same shape as §3.7 with camelCase JSON keys, plus computed fields:
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `id` | UUIDv7 | `nodes.id` | Node ID |
+| `treeId` | UUIDv7 | `nodes.tree_id` | Owning tree |
+| `parentId` | UUIDv7 \| null | `nodes.parent_id` | Parent node (null for root) |
+| `authorId` | UUIDv7 | `nodes.author_id` | Author from JWT subject |
+| `authorDisplayName` | string | JOIN profiles | Cached display name (may be empty in MVP) |
+| `content` | string | `nodes.content` | Message body |
+| `contentFormat` | string | `nodes.content_format` | Rendering format |
+| `nodeType` | string | `nodes.node_type` | Node classification |
+| `sequenceNum` | integer | `nodes.sequence_num` | Monotonic position in tree |
+| `metadata` | object | `nodes.metadata` | Arbitrary metadata (base64 JSON in wire encoding) |
+| `depth` | integer | Computed | Distance from root (root=0) |
+| `childCount` | integer | Computed | Number of direct children (edges WHERE source_node_id = id AND target active) |
+| `createdAt` | ISO 8601 | `nodes.created_at` | Creation timestamp |
+| `editedAt` | ISO 8601 \| null | `nodes.edited_at` | Last edit (null if never edited) |
+| `deletedAt` | ISO 8601 \| null | `nodes.deleted_at` | Soft-delete timestamp (null = active) |
+
+### 3A.4 Semantics
+
+- **Scope:** Returns only active nodes (`deleted_at IS NULL`) in the given tree. Soft-deleted nodes are excluded.
+- **Empty tree:** Returns `{ "nodes": [] }` with 200 — not an error. This is the empty-state contract the frontend list pages rely on.
+- **Unknown tree:** Returns `{ "nodes": [] }` with 200. Tree existence is validated by the tree-scoped route mount / membership middleware; the list itself never 404s on a missing tree.
+- **Ordering:** `sequence_num ASC` — deterministic, matches insertion order.
+- **Computed fields:** `depth` and `childCount` are computed per node (same recursive-CTE depth walk and child-count query as §3.4). For a tree with N nodes this is O(N) depth walks; acceptable for MVP tree sizes (<10k nodes).
+
+### 3A.5 Why Not the Graph Subtree Endpoint?
+
+`GET /graph/trees/{tree_id}/subtree/{node_id}` (SPEC-API-04) returns **minimal** node summaries — only `id`, `tree_id`, `parent_id`, `type`, `depth`, `created_at` — because it feeds the canvas renderer where payload size matters. List pages (Nodes page) need full content + author + computed counts. Using the subtree endpoint for listing caused the BUG-026 crash (`authorId.slice` on `undefined`). The list endpoint is the correct contract for full-detail enumeration; the subtree endpoint stays minimal for the graph.
+
+### 3A.6 Errors
+
+| Code | HTTP Status | Trigger | Details |
+|------|------------|---------|---------|
+| `INVALID_TREE_ID` | 400 | `tree_id` path param is not a valid UUID | `{ "tree_id": "<bad value>" }` |
+| `NODES_LIST_ERROR` | 500 | Repository failure while listing nodes | `{ "error": "<db error>" }` |
+| `NOT_TREE_MEMBER` | 403 | User is not a member of the tree (middleware) | `{ "tree_id": "<tree_id>", "user_id": "<user_id>" }` |
+
+### 3A.7 SSE Events
+
+None. Listing is a read operation; no events are broadcast.
+
+---
+
+## 3B. GET /trees/{tree_id}/nodes/{node_id} — Get Node by ID
+
+### 3B.1 Route
+
+```
+GET /trees/{tree_id}/nodes/{node_id}
+```
+
+| Field | Value |
+|-------|-------|
+| Method | GET |
+| Path | `/trees/{tree_id}/nodes/{node_id}` |
+| tree_id | UUIDv7 |
+| node_id | UUIDv7 |
+| Auth | Required (Bearer token) |
+| Content-Type (response) | `application/json; charset=utf-8` |
+
+### 3B.2 Response — 200 OK
+
+Single `NodeDetail` object (same schema as §3A.3), with `depth` and `childCount` computed:
+
+```json
+{
+  "id": "0191a8b2-7fff-7000-9000-000000000101",
+  "treeId": "0191a8b2-7fff-7000-9000-000000000001",
+  "parentId": "0191a8b2-7fff-7000-9000-000000000100",
+  "authorId": "00000000-0000-0000-0000-000000000001",
+  "content": "Reply content",
+  "nodeType": "message",
+  "depth": 1,
+  "childCount": 0,
+  "...": "..."
+}
+```
+
+### 3B.3 Errors
+
+| Code | HTTP Status | Trigger | Details |
+|------|------------|---------|---------|
+| `INVALID_TREE_ID` | 400 | `tree_id` not a valid UUID | `{ "tree_id": "<bad value>" }` |
+| `INVALID_NODE_ID` | 400 | `node_id` not a valid UUID | `{ "node_id": "<bad value>" }` |
+| `NODE_NOT_FOUND` | 404 | Node does not exist in tree | `{ "node_id": "<node_id>" }` |
+| `NODE_DELETED` | 410 | Node is soft-deleted (distinguished in service) | `{ "node_id": "<node_id>", "deleted_at": "<iso8601>" }` |
+| `NOT_TREE_MEMBER` | 403 | User is not a member of the tree | `{ "tree_id": "<tree_id>", "user_id": "<user_id>" }` |
+
+### 3B.4 SSE Events
+
+None. Read operation.
 
 ---
 
@@ -537,6 +681,10 @@ type NodeService interface {
 
     // GetByID retrieves a node with computed fields.
     GetByID(ctx context.Context, nodeID uuid.UUID) (*Node, error)
+
+    // ListByTree returns all active nodes in a tree as NodeDetails,
+    // ordered by sequence_num. Empty/unknown tree → empty slice, nil error.
+    ListByTree(ctx context.Context, treeID uuid.UUID) ([]NodeDetail, error)
 }
 ```
 
@@ -557,6 +705,16 @@ func (h *NodeHandler) Register(r chi.Router) {
     r.Delete("/nodes/{nodeID}", h.handleDelete)
     r.Post("/nodes/{nodeID}/reply", h.handleReply)
     r.Post("/nodes/{nodeID}/fork", h.handleFork)
+}
+
+// TreeRoutes returns tree-scoped node routes mounted at
+// /api/v1/trees/{tree_id}/nodes (server.go: r.Mount("/trees/{tree_id}/nodes", treeNodes)).
+func (h *NodeHandler) TreeRoutes() chi.Router {
+    r := chi.NewRouter()
+    r.Get("/", h.handleListByTree)          // GET  /trees/{tree_id}/nodes
+    r.Post("/", h.handleCreate)             // POST /trees/{tree_id}/nodes
+    r.Get("/{node_id}", h.handleGetByID)    // GET  /trees/{tree_id}/nodes/{node_id}
+    return r
 }
 ```
 
@@ -663,6 +821,19 @@ export const EdgeSchema = z.object({
 
 export type Edge = z.infer<typeof EdgeSchema>
 ```
+
+### 9.2b List Nodes Response
+
+```typescript
+// Response body for GET /trees/{tree_id}/nodes
+export const ListNodesResponseSchema = z.object({
+  nodes: z.array(NodeSchema),
+})
+
+export type ListNodesResponse = z.infer<typeof ListNodesResponseSchema>
+```
+
+The `NodeSchema` used here is the camelCase NodeDetail shape (§9.1 describes the wire schema; the frontend `NodeDetail` interface in `NodesPage.tsx` mirrors it: `id`, `treeId`, `parentId`, `authorId`, `authorDisplayName`, `content`, `contentFormat`, `nodeType`, `sequenceNum`, `metadata`, `depth`, `childCount`, `createdAt`, `editedAt`, `deletedAt`).
 
 ### 9.3 Request Schemas
 
@@ -859,6 +1030,8 @@ All errors follow the standard format from SPEC-API-02 §12:
 | `TREE_DELETED` | 410 | Tree is soft-deleted | `{ "tree_id": "<tree_id>", "deleted_at": "<iso8601>" }` |
 | `FORK_REQUIRES_CHILDREN` | 400 | Fork target has zero children — use reply | `{ "node_id": "<node_id>" }` |
 | `RATE_LIMITED` | 429 | User exceeded rate limit | `{ "retry_after_seconds": 30 }` |
+| `INVALID_TREE_ID` | 400 | `tree_id` path param is not a valid UUID (GET list / by-ID) | `{ "tree_id": "<bad value>" }` |
+| `NODES_LIST_ERROR` | 500 | Repository failure while listing nodes (GET list) | `{ "error": "<db error>" }` |
 
 ---
 
@@ -1011,6 +1184,15 @@ Per-user, per-endpoint rate limits (see §14). 429 responses include `Retry-Afte
 | 43 | Request body > 1MB | 413, REQUEST_TOO_LARGE |
 | 44 | Reply convenience — content validation | Same as create validation |
 | 45 | Fork convenience — content validation | Same as create validation |
+| 46 | List nodes — tree with 6 nodes | 200, `nodes` array has 6 full NodeDetails ordered by sequence_num, each with content/authorId/depth/childCount |
+| 47 | List nodes — empty tree | 200, `{ "nodes": [] }` |
+| 48 | List nodes — unknown tree ID | 200, `{ "nodes": [] }` (no 404) |
+| 49 | List nodes — soft-deleted nodes excluded | Deleted node absent from `nodes` array |
+| 50 | List nodes — invalid tree_id | 400, INVALID_TREE_ID |
+| 51 | Get node by ID — valid | 200, NodeDetail with computed depth + childCount |
+| 52 | Get node by ID — not found | 404, NODE_NOT_FOUND |
+| 53 | Get node by ID — soft-deleted | 410, NODE_DELETED (service distinguishes from not-found) |
+| 54 | List nodes — regression: full fields present | No `undefined` on authorId/content (BUG-026: subtree endpoint returns minimal summaries — list must use full NodeDetail) |
 
 ### 16.2 Frontend Tests (TypeScript/Vitest)
 
@@ -1031,6 +1213,9 @@ Per-user, per-endpoint rate limits (see §14). 429 responses include `Retry-Afte
 | 13 | Zod schema rejects update with no fields | `UpdateNodeRequestSchema.parse({})` throws |
 | 14 | Zod schema validates metadata size | Rejects if JSON.stringify(metadata).length > 16384 |
 | 15 | Zod schema parses valid create request | All defaults applied correctly |
+| 16 | `fetchNodes(treeId)` sends GET to correct URL | Fetch called with `GET /api/trees/{id}/nodes` |
+| 17 | `fetchNodes` renders 6 nodes without crash | NodesPage shows all 6 entries with content; no `undefined.slice` TypeError (BUG-026 regression) |
+| 18 | `fetchNodes` empty tree renders empty state | `{ "nodes": [] }` → "No nodes" empty state, no error |
 
 ---
 
@@ -1126,14 +1311,14 @@ sequenceDiagram
 
 Per coding-hermes-specs quality gate: "A worker reading this spec must produce correct, compilable code without asking a single clarifying question."
 
-- [x] Every interface has exact signatures (NodeRepo 13 methods, EdgeRepo 5, NodeService 6, NodeHandler.Register)
-- [x] Every function lists its error conditions (§3.3, §4.3, §5.3, §6, §7.3)
+- [x] Every interface has exact signatures (NodeRepo 13 methods, EdgeRepo 5, NodeService 7, NodeHandler.Register + TreeRoutes)
+- [x] Every function lists its error conditions (§3.3, §3A.6, §3B.3, §4.3, §5.3, §6, §7.3)
 - [x] Every DB query has exact SQL or parameterized form (§3.4, §3.5, §4.4, §5.2, §8.1)
 - [x] Every config value has exact env var name + type + default (rate limits in §14)
 - [x] Every edge case is documented (15 edge cases, §12)
 - [x] Wiring section connects to HTTP routes (§8.4), middleware chain (§13)
 - [x] No "TBD", "Phase 2", "future", "consider"
-- [x] Testing section lists exact test scenarios (45 backend + 15 frontend, §16)
+- [x] Testing section lists exact test scenarios (54 backend + 18 frontend, §16)
 - [x] Mermaid diagram shows complete flow (§19)
 - [x] Architecture cascade traces every decision to source (§17)
 - [x] TypeScript types include Zod validation with field-level refinements (§9)

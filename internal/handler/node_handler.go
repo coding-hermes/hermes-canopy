@@ -51,16 +51,35 @@ func (h *NodeHandler) Routes() chi.Router {
 // The tree_id is provided by the mount point; routes use bare patterns without
 // duplicating the tree_id parameter.
 //
+//	GET    /          — list nodes in tree
 //	POST   /          — create node
 //	GET    /{node_id} — get node by ID
 func (h *NodeHandler) TreeRoutes() chi.Router {
 	r := chi.NewRouter()
+	r.Get("/", h.handleListByTree)
 	r.Post("/", h.handleCreate)
 	r.Get("/{node_id}", h.handleGetByID)
 	return r
 }
 
 // --- Handlers ---------------------------------------------------------------
+
+// handleListByTree returns all active nodes in the tree as NodeDetails,
+// ordered by sequence_num.
+func (h *NodeHandler) handleListByTree(w http.ResponseWriter, r *http.Request) {
+	treeID, err := uuid.Parse(chi.URLParam(r, "tree_id"))
+	if err != nil {
+		writeError(w, 400, "INVALID_TREE_ID", "tree_id must be a valid UUID")
+		return
+	}
+
+	nodes, err := h.svc.ListByTree(r.Context(), treeID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "NODES_LIST_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
+}
 
 func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	treeID, err := uuid.Parse(chi.URLParam(r, "tree_id"))

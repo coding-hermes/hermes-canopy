@@ -178,3 +178,31 @@ tasks:
   status: complete
   created_at: '2026-08-01T06:51:09.508993+00:00'
   completed_at: '2026-08-01T07:15:18.814713+00:00'
+- id: BUG-026
+  title: 'Fix Nodes page crash: add GET /trees/{tree_id}/nodes list endpoint'
+  criteria:
+  - GET /api/v1/trees/{tree_id}/nodes returns all active nodes as full NodeDetail
+    objects (content, authorId, depth, childCount, etc.), ordered by sequence_num
+  - 'Empty/unknown tree returns {"nodes": []} with 200, not an error'
+  - NodeService.ListByTree exists in the interface and implementation, reusing nodeToDetail
+    mapper
+  - NodesPage.tsx fetches from /trees/{treeId}/nodes instead of the graph subtree
+    endpoint
+  - 'NodesPage renders node list without crashing (regression: ''Cannot read properties
+    of undefined (reading slice)'' is gone)'
+  - 'REG: service test TestListByTree_ReturnsFullNodeDetails asserts authorId/content/contentFormat/nodeType
+    present on every node'
+  - 'REG: service tests assert empty-tree and nil-tree return empty non-nil slices
+    ({"nodes": []} contract)'
+  - 'REG: handler test TestAPI_ListNodes_ReturnsFullNodeDetails asserts full fields
+    + root depth=0/childCount=1 via HTTP'
+  - 'REG: handler test TestAPI_ListNodes_EmptyTree_ReturnsEmptyArray asserts 200 +
+    non-nil []'
+  - 'REG: frontend E2E test ''renders nodes without crashing when a tree with data
+    is selected'' passes (selects real tree, asserts body content)'
+  - 'SEC: approval_handler.go no longer echoes raw tree_id in INVALID_TREE_ID error
+    (TestSEC12b passes)'
+  - go build + go vet + tsc --noEmit clean
+  - go test ./internal/service/ + handler node/graph/security tests pass
+  status: pending
+  created_at: '2026-08-01T12:58:04.728169+00:00'

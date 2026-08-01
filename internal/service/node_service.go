@@ -225,6 +225,10 @@ type NodeService interface {
 	Create(ctx context.Context, treeID uuid.UUID, input CreateNodeInput) (*CreateNodeResult, error)
 	// GetByID retrieves a node with computed depth and child_count.
 	GetByID(ctx context.Context, nodeID uuid.UUID) (*NodeDetail, error)
+	// ListByTree returns all active nodes in a tree as NodeDetails,
+	// ordered by sequence_num. Returns empty slice (not error) for an
+	// empty or unknown tree.
+	ListByTree(ctx context.Context, treeID uuid.UUID) ([]NodeDetail, error)
 	// Update applies a partial update with COALESCE semantics.
 	Update(ctx context.Context, nodeID uuid.UUID, input UpdateNodeInput) (*NodeDetail, error)
 	// SoftDelete marks the node as deleted and erases content/metadata.
@@ -470,6 +474,31 @@ func (s *NodeServiceImpl) GetByID(ctx context.Context, nodeID uuid.UUID) (*NodeD
 	detail.Depth = s.computeDepth(ctx, nodeID, node.ParentID)
 	detail.ChildCount = s.computeChildCount(ctx, nodeID)
 	return detail, nil
+}
+
+// --- ListByTree ------------------------------------------------------------
+
+// ListByTree returns all active nodes in a tree as NodeDetails, ordered
+// by sequence_num. An empty or unknown tree yields an empty slice (nil
+// error) so list pages can render an empty state without special-casing.
+func (s *NodeServiceImpl) ListByTree(ctx context.Context, treeID uuid.UUID) ([]NodeDetail, error) {
+	if treeID == uuid.Nil {
+		return []NodeDetail{}, nil
+	}
+
+	nodes, err := s.nodeRepo.GetByTree(ctx, treeID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: list nodes by tree: %v", ErrDatabaseUnavailable, err)
+	}
+
+	details := make([]NodeDetail, 0, len(nodes))
+	for i := range nodes {
+		detail := nodeToDetail(nodes[i])
+		detail.Depth = s.computeDepth(ctx, nodes[i].ID, nodes[i].ParentID)
+		detail.ChildCount = s.computeChildCount(ctx, nodes[i].ID)
+		details = append(details, *detail)
+	}
+	return details, nil
 }
 
 // --- Update ----------------------------------------------------------------

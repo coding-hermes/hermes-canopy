@@ -127,6 +127,41 @@ describe('CRUD Pages', () => {
       const placeholder = ctx.page.locator('text=No tree selected');
       expect(await placeholder.isVisible()).toBe(true);
     });
+
+    // BUG-026 regression: selecting a tree with nodes must render the
+    // node list WITHOUT crashing. The page previously fetched the graph
+    // subtree endpoint (minimal summaries lacking authorId/content) and
+    // rendered node.authorId.slice(0, 8) → TypeError "Cannot read
+    // properties of undefined (reading 'slice')" → blank page.
+    it('renders nodes without crashing when a tree with data is selected', async () => {
+      if (!serverAvailable) {
+        console.warn('⚠ Dev server not running — skipping integration test');
+        return;
+      }
+
+      await tryGoto(ctx.page, '/nodes');
+
+      const select = ctx.page.locator('#nodes-tree-select');
+      await select.waitFor({ state: 'visible', timeout: 10_000 });
+
+      // Pick the first REAL tree (skip the "Choose a tree..." placeholder
+      // option which is index 0 with an empty value).
+      const optionValues = await select.locator('option').evaluateAll(
+        (opts) => opts.map((o) => (o as HTMLOptionElement).value).filter((v) => v !== ''),
+      );
+      if (optionValues.length === 0) {
+        console.warn('⚠ No trees available to select — skipping populated-state assertion');
+        return;
+      }
+
+      await select.selectOption(optionValues[0]);
+      await ctx.page.waitForTimeout(1500);
+
+      // Regression: the crash left a blank page. Assert real content rendered.
+      const bodyText = await ctx.page.locator('body').innerText();
+      expect(bodyText.length).toBeGreaterThan(50);
+      expect(bodyText).not.toContain('No tree selected');
+    });
   });
 
   // ── TopicsPage ──────────────────────────────────────────────────────
