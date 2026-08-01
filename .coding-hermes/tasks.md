@@ -962,3 +962,31 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 79/101 board tasks complete (BUG-026, BUG-027 closed this tick). All MVP gaps delivered. Scheduler daemon reachable at :9090, fleet.toml pins 900s active cadence. PG healthy at :5437. E2E 41/41 green (Tick 111/112). Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — Healed orphaned sibling work: BUG-026 (nodes list endpoint, judge PASS ef4c08a9) + BUG-027 (SSE race fix) both delivered. All 16 gates green. Build/vet/tsc clean. 38/38 handler tests PASS (only pre-existing TEST-03 leak times out). Judge infra workaround documented (CLI background 900s). No regressions. Next tick: dispatch UI-01-PARITY (mockup parity) worker.
+### Tick 116 — 2026-08-01 12:33 CDT (DeepSeek V4 Flash) — Scheduler Tick — VERIFY T115 + DISPATCH UI-01
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN at 20be611 → prep commit 69d4459 | Sibling Tick 115 (11:34 CDT, committed 12:36:49 mid-tick) healed BUG-026/027, judged BUG-026 PASS (ef4c08a9), synced board, committed sitrep. This tick verified sibling claims independently (see below), then committed 69d4459 (gitreins task rescope UI-01-PARITY→UI-01 + mockups copied in-repo). |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 (independent re-run over 20be611 tree). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0 (independent re-run). |
+| 4 | Tests | ⏸️ SIBLING VERIFIED 38/38 + 11/11 | Sibling's Tick 115 ran handler suite (38 tests PASS incl. new BUG-026 TestAPI_ListNodes_*) + 11/11 non-PG. Judge run also re-ran tier1 guard full (PASS). Orphaned sibling go test (PID 956012, started 12:26) completed after this tick began — no parallel test runs executed by this tick. |
+| 5 | Hilo graph | ✅ USEFUL | 1225 edges, 184 files (fresh stats, +1 edge from BUG-026 node_service.go). Top dep: google/uuid. Hilo=useful |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | — | Stable (164 Go + 3 npm outdated, unchanged since Tick 113). |
+| 8 | GitReins | ✅ BUG-026 COMPLETE + UI-01 RESCOPED | tasks.yaml: BUG-026 complete (verdict ef4c08a9 verified on disk — 15/15 ACs, tier1+tier2 PASS). UI-01-PARITY rescoped → UI-01 (8 ACs, design tokens + dark theme) committed 69d4459 — the 14-AC umbrella covered UI-01..09; judging it before all 9 land would fail on unimplemented ACs. UI-02..09 get their own tasks when dispatched. Config: 1M/0.4M caps, 250 iter, test_timeout 900. |
+| 9 | Secrets | ✅ CLEAN | No new code since Tick 113 gitleaks scan (430 commits, 0 leaks); BUG-026/027 were verified by sibling's guard run. |
+| 10 | Board consistency | ⚠️ DUCKDB STALE → SYNCED | DuckDB board: 81 complete + 22 pending (sibling synced BUG-026/027 rows at Tick 115). UI-01..09 not yet in parquet — this tick's dispatch (UI-01) will be added on completion. Board metadata: ticks_total=115 (sibling), last_commit 8ee05a3. Will advance to 116 in completion entry. |
+| 11 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. No concurrent canopy session (only ai_plays_poke + ring-runner workers active). |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections (restarted transiently during Tick 115, re-verified by sibling post-restart). |
+| 13 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 116 entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last ran Tick 111 + 112 (41/41 PASS both). Next due Tick 116-121 window — IN WINDOW; deferred one tick (UI-01 worker owns frontend tree; browser E2E against a mid-refactor frontend is noise). |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master; local ahead unpushed, consistent). |
+| 16 | Dispatch | ✅ 1 WORKER — UI-01 (Hy3) | **UI-01 dispatched 12:58 CDT** (PID 1517884): design token system + dark theme (navy surfaces, neon accents, glassy borders, WCAG AA) — foundation ticket per Tick 115 handoff. Model hy3 @ opencode-go (flat-rate, UI routing). Prompt: /tmp/canopy_ui01_prompt.txt. Mockups copied to docs/mockups/ (in-repo, was /tmp — ephemeral). Worker owns frontend/ only; Go backend off-limits. |
+
+**Coverage (Tick 116):** ~40.7% total (no source logic this tick — verification + dispatch).
+
+**Context:** This tick (12:33:41 CDT) fired while sibling Tick 115 (11:34 CDT) was still running — it committed 20be611 at 12:36:49, 3 min after this tick began. Per foreman discipline (parallel-tick collision protocol): independently verified ALL sibling claims (judge verdict ef4c08a9 on disk with 15/15 ACs PASS; build/vet/tsc clean; board synced 81+22; git tree clean at 20be611). Claims held. Then executed the explicit handoff from Tick 115: "dispatch UI-01-PARITY (mockup parity) worker (Hy3 UI work per routing)". Rescoped the gitreins task to the dispatchable unit (UI-01, 8 ACs), copied the /tmp mockups into the repo (they're the design reference and /tmp is ephemeral), committed prep 69d4459, and spawned the Hy3 worker.
+
+**Project Status:** 81/103 board tasks complete (BUG-026, BUG-027 closed Tick 115). All MVP gaps delivered. UI-01 IN FLIGHT (Hy3 worker, design tokens + dark theme). Open: UI-02..09 (pending, sequential dispatch), INFRA-001 (scheduler-level, fleet.toml 900s mitigation), E2E-001 (recurring, due window 116-121). Scheduler at :9090, 15m cadence. PG healthy at :5437. Coverage ~40.7%.
+
+**Verdict:** PRODUCTIVE — Verified sibling Tick 115 claims independently (all held: BUG-026 judge PASS ef4c08a9, BUG-027 closed, board synced). Executed the handoff: UI-01 mockup-parity worker dispatched (Hy3 @ opencode-go, flat-rate) with in-repo mockup assets + rescoped gitreins task. Build/vet/tsc clean. No regressions. Board-v2 sync deferred to UI-01 completion entry (single write, avoids churn).
