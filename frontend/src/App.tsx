@@ -1,4 +1,13 @@
 import { NavLink, Outlet, Routes, Route } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Trees,
+  Network,
+  Hash,
+  LayoutGrid,
+  ShieldCheck,
+  GitBranch,
+} from 'lucide-react'
 import TreeView from './components/TreeView'
 import ApprovalPanel from './components/ApprovalPanel'
 import TreesPage from './pages/TreesPage'
@@ -7,11 +16,41 @@ import TopicsPage from './pages/TopicsPage'
 import CardsPage from './pages/CardsPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 
+// ─── Navigation model ──────────────────────────────────────────────────
+
+interface NavItem {
+  to: string
+  label: string
+  ariaLabel: string
+  icon: typeof LayoutDashboard
+  end?: boolean
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Dashboard', ariaLabel: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/trees', label: 'Trees', ariaLabel: 'Trees', icon: Trees },
+  { to: '/tree/demo', label: 'Tree View', ariaLabel: 'Tree View — demo tree', icon: GitBranch },
+  { to: '/nodes', label: 'Nodes', ariaLabel: 'Nodes', icon: Network },
+  { to: '/topics', label: 'Topics', ariaLabel: 'Topics', icon: Hash },
+  { to: '/cards', label: 'Cards', ariaLabel: 'Cards', icon: LayoutGrid },
+  { to: '/approvals', label: 'Approvals', ariaLabel: 'Approvals', icon: ShieldCheck },
+]
+
+const navLinkClass = (isActive: boolean) =>
+  [
+    'group flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+    isActive
+      ? 'bg-accent-2/12 text-accent-2-300 ring-1 ring-inset ring-accent-2/30'
+      : 'text-content-muted hover:bg-surface-hover/60 hover:text-content-primary',
+  ].join(' ')
+
 function Dashboard() {
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">
+      <h1 className="text-3xl font-bold tracking-tight text-content-primary">
+        Dashboard
+      </h1>
+      <p className="mt-2 text-content-muted">
         Welcome to Hermes Canopy — your knowledge canopy.
       </p>
     </div>
@@ -20,7 +59,7 @@ function Dashboard() {
 
 function Layout() {
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-screen bg-surface-base text-content-secondary">
       {/* Offline indicator bar */}
       <OfflineIndicator />
 
@@ -31,113 +70,37 @@ function Layout() {
 
       {/* Sidebar */}
       <aside
-        className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col"
+        className="w-64 shrink-0 bg-surface-panel border-r border-line-subtle flex flex-col"
         role="navigation"
         aria-label="Main navigation"
       >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <span className="text-lg font-semibold text-gray-900 dark:text-white">
-            🌳 Canopy
+        <div className="p-4 border-b border-line-subtle">
+          <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-content-primary">
+            <span
+              aria-hidden="true"
+              className="grid h-7 w-7 place-items-center rounded-md bg-accent/15 text-accent ring-1 ring-inset ring-accent/30"
+            >
+              <Trees className="h-4 w-4" />
+            </span>
+            Canopy
           </span>
         </div>
         <nav className="flex-1 p-4 space-y-1" aria-label="Primary navigation">
-          <NavLink
-            to="/"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            end
-            aria-label="Dashboard"
-          >
-            Dashboard
-          </NavLink>
-          <NavLink
-            to="/trees"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Trees"
-          >
-            Trees
-          </NavLink>
-          <NavLink
-            to="/tree/demo"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Tree View — demo tree"
-          >
-            🌳 Tree View
-          </NavLink>
-          <NavLink
-            to="/nodes"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Nodes"
-          >
-            Nodes
-          </NavLink>
-          <NavLink
-            to="/topics"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Topics"
-          >
-            Topics
-          </NavLink>
-          <NavLink
-            to="/cards"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Cards"
-          >
-            Cards
-          </NavLink>
-          <NavLink
-            to="/approvals"
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-              }`
-            }
-            aria-label="Approvals"
-          >
-            Approvals
-          </NavLink>
+          {NAV_ITEMS.map(({ to, label, ariaLabel, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => navLinkClass(isActive)}
+              aria-label={ariaLabel}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {label}
+            </NavLink>
+          ))}
         </nav>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Hermes Canopy v0.1.0
-          </p>
+        <div className="p-4 border-t border-line-subtle">
+          <p className="text-xs text-content-faint">Hermes Canopy v0.1.0</p>
         </div>
       </aside>
 
@@ -145,14 +108,18 @@ function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header
-          className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-6"
+          className="h-14 shrink-0 bg-surface-panel/80 backdrop-blur-md border-b border-line-subtle flex items-center px-6"
           role="banner"
         >
-          <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          <h2 className="text-sm font-medium text-content-tertiary">
             Knowledge Canopy
           </h2>
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="inline-flex items-center gap-1.5 rounded-sm bg-surface-input px-2 py-1 text-xs text-content-muted ring-1 ring-inset ring-line-subtle">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-status-success"
+              />
               Backend: localhost:8080
             </span>
           </div>

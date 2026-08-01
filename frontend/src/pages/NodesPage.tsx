@@ -87,7 +87,7 @@ function nodeTypeIcon(t: string) {
     case 'topic':
       return <Hash className="w-3.5 h-3.5 text-purple-400" />;
     default:
-      return <MessageSquare className="w-3.5 h-3.5 text-gray-400" />;
+      return <MessageSquare className="w-3.5 h-3.5 text-content-muted" />;
   }
 }
 
@@ -141,24 +141,24 @@ function EditNodeDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh]">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg mx-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <h2 className="text-sm font-medium text-gray-200">Edit Node</h2>
+      <div className="relative glass-raised rounded-xl w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle">
+          <h2 className="text-sm font-medium text-content-primary">Edit Node</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+            className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-hover"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
-            <div className="flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+            <div className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               {error}
             </div>
           )}
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-content-muted">
             {nodeTypeIcon(node.nodeType)}
             <span>{nodeTypeLabel(node.nodeType)}</span>
             <span>·</span>
@@ -170,21 +170,21 @@ function EditNodeDialog({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={8}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+            className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
             placeholder="Node content..."
           />
         </div>
-        <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="px-4 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 rounded-lg transition-colors disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Save'}
           </button>
@@ -206,26 +206,26 @@ function NodeRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-colors group">
+    <div className="flex items-start gap-3 px-4 py-3 border-b border-line-subtle/50 last:border-b-0 hover:bg-surface-hover/30 transition-colors group">
       <div className="flex-shrink-0 mt-0.5">
         {nodeTypeIcon(node.nodeType)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs font-medium text-gray-400 uppercase">
+          <span className="text-xs font-medium text-content-tertiary uppercase">
             {nodeTypeLabel(node.nodeType)}
           </span>
-          <span className="text-[10px] text-gray-600 font-mono">
+          <span className="text-[10px] text-content-faint font-mono">
             {node.id.slice(0, 8)}
           </span>
-          <span className="text-[10px] text-gray-600">
+          <span className="text-[10px] text-content-faint">
             depth {node.depth} · {node.childCount} children
           </span>
         </div>
-        <p className="text-sm text-gray-300 line-clamp-2">
+        <p className="text-sm text-content-secondary line-clamp-2">
           {node.content}
         </p>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-600">
+        <div className="flex items-center gap-3 mt-1 text-[11px] text-content-faint">
           <span className="flex items-center gap-1">
             <User className="w-3 h-3" />
             {node.authorDisplayName || node.authorId.slice(0, 8)}
@@ -242,7 +242,7 @@ function NodeRow({
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={onEdit}
-          className="p-1.5 rounded-md text-gray-600 hover:text-purple-400 hover:bg-purple-500/10"
+          className="p-1.5 rounded-md text-content-faint hover:text-accent-2 hover:bg-accent-2/10"
           title="Edit content"
           aria-label={`Edit node ${node.id.slice(0, 8)}`}
         >
@@ -250,7 +250,7 @@ function NodeRow({
         </button>
         <button
           onClick={onDelete}
-          className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10"
+          className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10"
           title="Delete node"
           aria-label={`Delete node ${node.id.slice(0, 8)}`}
         >
@@ -346,15 +346,15 @@ export default function NodesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nodes</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-content-primary">Nodes</h1>
+          <p className="text-sm text-content-muted mt-1">
             Browse and manage nodes across conversation trees
           </p>
         </div>
         <button
           onClick={fetchTrees}
           disabled={treesLoading}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-surface-input hover:bg-surface-hover text-content-secondary ring-1 ring-inset ring-line-subtle transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${treesLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -364,7 +364,7 @@ export default function NodesPage() {
       {/* Error banner */}
       {error && (
         <div
-          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-status-danger text-sm"
           role="alert"
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
@@ -377,13 +377,13 @@ export default function NodesPage() {
 
       {/* Tree Selector */}
       <div className="mb-6">
-        <label htmlFor="nodes-tree-select" className="block text-xs text-gray-500 mb-2">Select Tree</label>
+        <label htmlFor="nodes-tree-select" className="block text-xs text-content-muted mb-2">Select Tree</label>
         <div className="relative">
           <select
             id="nodes-tree-select"
             value={selectedTreeId ?? ''}
             onChange={(e) => handleTreeSelect(e.target.value)}
-            className="w-full max-w-md appearance-none bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 cursor-pointer"
+            className="w-full max-w-md appearance-none bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent cursor-pointer"
           >
             <option value="">Choose a tree...</option>
             {trees.map((t) => (
@@ -392,10 +392,10 @@ export default function NodesPage() {
               </option>
             ))}
           </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted pointer-events-none" />
         </div>
         {!treesLoading && trees.length === 0 && (
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-content-muted mt-1">
             No trees available. Create one first on the Trees page.
           </p>
         )}
@@ -405,23 +405,23 @@ export default function NodesPage() {
       {selectedTree && (
         <div className="flex items-center gap-3 mb-4">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-muted" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+              className="w-full bg-surface-input border border-line-subtle rounded-lg pl-9 pr-3 py-2 text-sm text-content-primary placeholder-content-faint focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
               placeholder="Search nodes..."
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-content-muted">
             {filteredNodes.length} of {nodes.length} nodes
           </span>
         </div>
@@ -429,10 +429,10 @@ export default function NodesPage() {
 
       {/* No tree selected */}
       {!selectedTreeId && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
-          <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h2 className="text-sm font-medium text-gray-400 mb-1">No tree selected</h2>
-          <p className="text-xs text-gray-600">
+        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
+          <Inbox className="w-10 h-10 text-content-faint/50 mx-auto mb-3" />
+          <h2 className="text-sm font-medium text-content-secondary mb-1">No tree selected</h2>
+          <p className="text-xs text-content-muted">
             Select a conversation tree above to browse its nodes.
           </p>
         </div>
@@ -443,9 +443,9 @@ export default function NodesPage() {
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="rounded-lg p-4 animate-pulse">
-              <div className="h-3 bg-gray-800 rounded w-20 mb-2" />
-              <div className="h-4 bg-gray-800 rounded w-96 mb-1" />
-              <div className="h-3 bg-gray-800 rounded w-32" />
+              <div className="h-3 bg-surface-input rounded w-20 mb-2" />
+              <div className="h-4 bg-surface-input rounded w-96 mb-1" />
+              <div className="h-3 bg-surface-input rounded w-32" />
             </div>
           ))}
         </div>
@@ -453,10 +453,10 @@ export default function NodesPage() {
 
       {/* Empty nodes */}
       {selectedTree && !nodesLoading && nodes.length === 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
-          <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h2 className="text-sm font-medium text-gray-400 mb-1">No nodes found</h2>
-          <p className="text-xs text-gray-600">
+        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
+          <Inbox className="w-10 h-10 text-content-faint/50 mx-auto mb-3" />
+          <h2 className="text-sm font-medium text-content-secondary mb-1">No nodes found</h2>
+          <p className="text-xs text-content-muted">
             This tree has no nodes yet. Use the Tree View to add messages.
           </p>
         </div>
@@ -464,9 +464,9 @@ export default function NodesPage() {
 
       {/* Node list */}
       {selectedTree && !nodesLoading && filteredNodes.length > 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900/50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-            <h3 className="text-xs font-medium text-gray-400">
+        <div className="rounded-xl border border-line-subtle bg-surface-panel overflow-hidden">
+          <div className="px-4 py-3 border-b border-line-subtle flex items-center justify-between">
+            <h3 className="text-xs font-medium text-content-tertiary">
               {selectedTree.title} — {nodes.length} nodes
             </h3>
           </div>
@@ -494,25 +494,25 @@ export default function NodesPage() {
       {deleteNodeId && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
           <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteNodeId(null)} />
-          <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm mx-4">
-            <div className="px-5 py-4 border-b border-gray-800">
-              <h2 className="text-sm font-medium text-gray-200">Delete Node</h2>
+          <div className="relative glass-raised rounded-xl w-full max-w-sm mx-4">
+            <div className="px-5 py-4 border-b border-line-subtle">
+              <h2 className="text-sm font-medium text-content-primary">Delete Node</h2>
             </div>
             <div className="px-5 py-4">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-content-secondary">
                 Are you sure you want to delete this node? This will soft-delete it.
               </p>
             </div>
-            <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-end gap-2">
+            <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
               <button
                 onClick={() => setDeleteNodeId(null)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteNode}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors"
               >
                 Delete
               </button>
@@ -524,7 +524,7 @@ export default function NodesPage() {
       {/* Delete loading state */}
       {deleteNodeId && (
         <div className="fixed inset-0 z-[51] flex items-center justify-center bg-black/60">
-          <p className="text-sm text-gray-400">Deleting...</p>
+          <p className="text-sm text-content-secondary">Deleting...</p>
         </div>
       )}
     </div>

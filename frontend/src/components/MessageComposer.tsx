@@ -21,6 +21,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { Send, Paperclip, Pin, X } from 'lucide-react';
+import { token, palette, alpha, nodeTypeColor } from '../theme.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -44,20 +45,7 @@ export interface MessageComposerProps {
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 function getNodeColor(nodeType: string): string {
-  switch (nodeType) {
-    case 'synthesis':
-      return '#f59e0b';
-    case 'card':
-      return '#3b82f6';
-    case 'topic':
-      return '#f43f5e';
-    case 'system':
-      return '#3b82f6';
-    case 'message':
-      return '#22c55e';
-    default:
-      return '#6b7280';
-  }
+  return nodeTypeColor(nodeType);
 }
 
 function getNodeTypeLabel(nodeType: string): string {
@@ -103,25 +91,20 @@ function FilePreview({ file, onRemove }: FilePreviewProps) {
 
   return (
     <div
-      className="relative group flex items-center gap-2 px-2 py-1 rounded-md border text-xs"
-      style={{
-        backgroundColor: '#1a1a2e',
-        borderColor: '#2d2d4a',
-        color: '#e2e8f0',
-      }}
+      className="relative group flex items-center gap-2 px-2 py-1 rounded-md border border-line-subtle bg-surface-input text-content-primary text-xs"
       title={file.name}
     >
       {previewUrl ? (
         <img
           src={previewUrl}
           alt={file.name}
-          className="w-8 h-8 object-cover rounded"
+          className="w-8 h-8 object-cover rounded-xs"
         />
       ) : (
         <span className="text-base flex-shrink-0">{icon}</span>
       )}
       <span className="max-w-[100px] truncate">{name}</span>
-      <span className="flex-shrink-0" style={{ color: '#94a3b8' }}>
+      <span className="flex-shrink-0 text-content-muted">
         {formatFileSize(file.size)}
       </span>
       <button
@@ -258,16 +241,12 @@ export default function MessageComposer({
 
   return (
     <div
-      className="border-t shrink-0"
-      style={{ borderColor: '#2d2d4a', backgroundColor: '#0f0f1a' }}
+      className="border-t border-line-subtle bg-surface-panel shrink-0"
     >
       {/* ── Pinned context nodes ───────────────────────────────────── */}
       {pinnedNodes.length > 0 && (
         <div className="flex items-center gap-1.5 px-4 pt-2.5 pb-1 flex-wrap">
-          <Pin
-            className="w-3.5 h-3.5 flex-shrink-0"
-            style={{ color: '#7c3aed' }}
-          />
+          <Pin className="w-3.5 h-3.5 flex-shrink-0 text-accent-2" />
           {pinnedNodes.map((node) => {
             const color = getNodeColor(node.nodeType);
             return (
@@ -275,8 +254,8 @@ export default function MessageComposer({
                 key={node.id}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors"
                 style={{
-                  backgroundColor: `${color}18`,
-                  borderColor: `${color}44`,
+                  backgroundColor: alpha(color, 0.1),
+                  borderColor: alpha(color, 0.27),
                   color,
                 }}
                 title={`${getNodeTypeLabel(node.nodeType)}: ${node.label}`}
@@ -318,16 +297,12 @@ export default function MessageComposer({
         {/* Drop zone overlay */}
         {isDragOver && (
           <div
-            className="absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed rounded-lg mx-4 my-2"
+            className="absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-accent-2 rounded-lg mx-4 my-2"
             style={{
-              borderColor: '#7c3aed',
-              backgroundColor: 'rgba(124, 58, 237, 0.12)',
+              backgroundColor: alpha(palette.accent2Strong, 0.14),
             }}
           >
-            <span
-              className="text-sm font-medium flex items-center gap-2"
-              style={{ color: '#a78bfa' }}
-            >
+            <span className="text-sm font-medium flex items-center gap-2 text-accent-2">
               <Paperclip className="w-4 h-4" />
               Drop files to attach
             </span>
@@ -344,9 +319,8 @@ export default function MessageComposer({
             placeholder={placeholder}
             disabled={isInputDisabled}
             rows={1}
-            className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:select-none"
+            className="flex-1 resize-none bg-transparent text-sm text-content-primary placeholder:text-content-faint outline-none placeholder:select-none"
             style={{
-              color: '#e2e8f0',
               maxHeight: '300px',
               lineHeight: '1.5',
               opacity: isInputDisabled ? 0.5 : 1,
@@ -365,14 +339,14 @@ export default function MessageComposer({
                 // Placeholder: pin the "current context" (could be selected node).
               }}
               className="p-1.5 rounded-md transition-colors"
-              style={{ color: '#94a3b8' }}
+              style={{ color: token.contentMuted }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#1a1a2e';
-                e.currentTarget.style.color = '#a78bfa';
+                e.currentTarget.style.backgroundColor = token.surfaceInput;
+                e.currentTarget.style.color = token.accent2;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#94a3b8';
+                e.currentTarget.style.color = token.contentMuted;
               }}
               title="Pin context node"
               aria-label="Pin context node"
@@ -384,14 +358,14 @@ export default function MessageComposer({
             <button
               onClick={() => fileInputRef.current?.click()}
               className="p-1.5 rounded-md transition-colors"
-              style={{ color: '#94a3b8' }}
+              style={{ color: token.contentMuted }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#1a1a2e';
-                e.currentTarget.style.color = '#e2e8f0';
+                e.currentTarget.style.backgroundColor = token.surfaceInput;
+                e.currentTarget.style.color = token.contentPrimary;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#94a3b8';
+                e.currentTarget.style.color = token.contentMuted;
               }}
               title="Attach files"
               aria-label="Attach files"
@@ -412,19 +386,24 @@ export default function MessageComposer({
               disabled={!canSend}
               className="p-1.5 rounded-md transition-all"
               style={{
-                color: canSend ? '#7c3aed' : '#4a4a6a',
+                color: canSend ? token.accent2 : token.contentFaint,
                 cursor: canSend ? 'pointer' : 'not-allowed',
                 opacity: canSend ? 1 : 0.5,
               }}
               onMouseEnter={(e) => {
                 if (canSend) {
-                  e.currentTarget.style.backgroundColor = '#7c3aed22';
-                  e.currentTarget.style.color = '#a78bfa';
+                  e.currentTarget.style.backgroundColor = alpha(
+                    palette.accent2,
+                    0.14,
+                  );
+                  e.currentTarget.style.color = token.accent2;
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = canSend ? '#7c3aed' : '#4a4a6a';
+                e.currentTarget.style.color = canSend
+                  ? token.accent2
+                  : token.contentFaint;
               }}
               title={canSend ? 'Send message (⌘↵)' : 'Type a message to send'}
               aria-label="Send message"
@@ -436,10 +415,7 @@ export default function MessageComposer({
       </div>
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between px-4 pb-2.5 text-xs select-none"
-        style={{ color: '#4a4a6a' }}
-      >
+      <div className="flex items-center justify-between px-4 pb-2.5 text-xs select-none text-content-faint">
         {/* Character + token count */}
         <span>
           {readOnly
@@ -451,13 +427,7 @@ export default function MessageComposer({
 
         {/* Keyboard shortcut hint */}
         <span className="flex items-center gap-1">
-          <kbd
-            className="px-1 py-0.5 rounded text-[10px] font-mono"
-            style={{
-              backgroundColor: '#1a1a2e',
-              border: '1px solid #2d2d4a',
-            }}
-          >
+          <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
             ⌘↵
           </kbd>
           <span>to send</span>

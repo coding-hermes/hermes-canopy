@@ -139,14 +139,14 @@ function ConfirmDialog({
         className="absolute inset-0 bg-black/60"
         onClick={onCancel}
       />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-200">
+      <div className="relative glass-raised rounded-xl w-full max-w-md mx-4">
+        <div className="px-5 py-4 border-b border-line-subtle">
+          <h3 className="text-sm font-medium text-content-primary">
             {isApprove ? 'Approve' : 'Deny'} Change
           </h3>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <label htmlFor="confirm-comment" className="block text-xs text-gray-400">
+          <label htmlFor="confirm-comment" className="block text-xs text-content-muted">
             Comment (optional)
           </label>
           <textarea
@@ -154,14 +154,14 @@ function ConfirmDialog({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+            className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
             placeholder={isApprove ? 'Looks good to me!' : 'Reason for denial...'}
           />
         </div>
-        <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
@@ -196,23 +196,23 @@ function ApprovalCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 transition-colors hover:border-gray-600 cursor-pointer group ${style.bg}`}
+      className={`rounded-lg border p-4 transition-colors hover:border-accent-2/40 cursor-pointer group ${style.bg}`}
       onClick={onSelect}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-            <h3 className="text-sm font-medium text-gray-200 truncate">
+            <h3 className="text-sm font-medium text-content-primary truncate">
               {item.title}
             </h3>
           </div>
           {item.description && (
-            <p className="text-xs text-gray-500 line-clamp-2 mb-2">
+            <p className="text-xs text-content-muted line-clamp-2 mb-2">
               {item.description}
             </p>
           )}
-          <div className="flex items-center gap-3 text-[11px] text-gray-600">
+          <div className="flex items-center gap-3 text-[11px] text-content-faint">
             <span className="font-mono">{item.nodeId.slice(0, 8)}</span>
             <span>by {item.authorId}</span>
             <span className="flex items-center gap-1">
@@ -251,12 +251,12 @@ function ApprovalCard({
               </button>
             </>
           )}
-          <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+          <ChevronRight className="w-4 h-4 text-content-faint group-hover:text-content-secondary transition-colors" />
         </div>
       </div>
 
       {item.reviewedBy && (
-        <div className={`mt-2 pt-2 border-t border-gray-700/50`}>
+        <div className={`mt-2 pt-2 border-t border-line-subtle`}>
           <span className={`text-[11px] ${style.text}`}>
             {item.status === 'approved'
               ? `Approved by ${item.reviewedBy}`
@@ -426,15 +426,15 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Approvals</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-content-primary">Approvals</h1>
+          <p className="text-sm text-content-muted mt-1">
             Review and manage pending change requests
           </p>
         </div>
         <button
           onClick={fetchApprovals}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-surface-input hover:bg-surface-hover text-content-secondary ring-1 ring-inset ring-line-subtle transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -442,7 +442,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       </div>
 
       {/* ── Filter tabs ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 mb-4 p-1 rounded-lg bg-gray-800/50 w-fit">
+      <div className="flex items-center gap-1 mb-4 p-1 rounded-lg bg-surface-input/70 ring-1 ring-inset ring-line-subtle w-fit">
         {(['all', 'pending', 'approved', 'denied'] as const).map((f) => (
           <button
             key={f}
@@ -450,7 +450,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
             className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
               statusFilter === f
                 ? 'bg-purple-600 text-white'
-                : 'text-gray-300 hover:text-gray-100'
+                : 'text-content-secondary hover:text-content-primary'
             }`}
           >
             {f}
@@ -460,7 +460,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
 
       {/* ── Error banner ───────────────────────────────────────────── */}
       {error && (
-        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-status-danger text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
           <button
@@ -478,14 +478,14 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="rounded-lg border border-gray-800 p-4 animate-pulse"
+              className="rounded-lg border border-line-subtle p-4 animate-pulse"
             >
               <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-gray-700 mt-1.5" />
+                <div className="w-2 h-2 rounded-full bg-content-faint/50 mt-1.5" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-800 rounded w-48" />
-                  <div className="h-3 bg-gray-800 rounded w-72" />
-                  <div className="h-3 bg-gray-800 rounded w-32" />
+                  <div className="h-4 bg-surface-input rounded w-48" />
+                  <div className="h-3 bg-surface-input rounded w-72" />
+                  <div className="h-3 bg-surface-input rounded w-32" />
                 </div>
               </div>
             </div>
@@ -495,12 +495,12 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
 
       {/* ── Empty state ────────────────────────────────────────────── */}
       {!loading && !error && filteredItems.length === 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
-          <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-gray-400 mb-1">
+        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
+          <Inbox className="w-10 h-10 text-content-faint/50 mx-auto mb-3" />
+          <h3 className="text-sm font-medium text-content-secondary mb-1">
             No {statusFilter !== 'all' ? statusFilter : ''} approvals
           </h3>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-content-muted">
             {statusFilter === 'pending'
               ? 'All change requests have been reviewed.'
               : 'No approval items match this filter.'}
@@ -535,18 +535,18 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
             className="absolute inset-0 bg-black/60"
             onClick={() => setSelectedId(null)}
           />
-          <div className="relative bg-gray-950 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+          <div className="relative glass-raised rounded-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle flex-shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <Eye className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                <h2 className="text-sm font-medium text-gray-200 truncate">
+                <h2 className="text-sm font-medium text-content-primary truncate">
                   {selectedItem?.title ?? 'Loading…'}
                 </h2>
               </div>
               <button
                 onClick={() => setSelectedId(null)}
-                className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-hover transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -557,8 +557,8 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
               {/* Detail loading/error */}
               {detailLoading && (
                 <div className="space-y-2 animate-pulse">
-                  <div className="h-4 bg-gray-800 rounded w-32" />
-                  <div className="h-3 bg-gray-800 rounded w-48" />
+                  <div className="h-4 bg-surface-input rounded w-32" />
+                  <div className="h-3 bg-surface-input rounded w-48" />
                 </div>
               )}
               {detailError && (

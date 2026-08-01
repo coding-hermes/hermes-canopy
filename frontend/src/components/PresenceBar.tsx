@@ -11,6 +11,7 @@
 
 import { useMemo } from 'react';
 import type { UserPresence } from '../types/multiUser.ts';
+import { palette } from '../theme.ts';
 import {
   getUserInitials,
   getPermissionLabel,
@@ -66,7 +67,7 @@ export default function PresenceBar({
   if (users.length === 0) {
     return (
       <div className="flex items-center gap-2 px-4 py-1.5">
-        <span className="text-xs" style={{ color: '#4a4a6a' }}>
+        <span className="text-xs text-content-muted">
           {totalOnline > 0
             ? `${totalOnline} online`
             : 'No other users online'}
@@ -78,7 +79,7 @@ export default function PresenceBar({
   return (
     <div className="flex items-center gap-2 px-4 py-1.5">
       {/* Online count */}
-      <span className="text-xs flex-shrink-0" style={{ color: '#4a4a6a' }}>
+      <span className="text-xs flex-shrink-0 text-content-muted">
         {totalOnline} online
       </span>
 
@@ -105,7 +106,7 @@ export default function PresenceBar({
                   width: AVATAR_SIZE,
                   height: AVATAR_SIZE,
                   backgroundColor: user.avatarColor,
-                  borderColor: '#0f0f1a',
+                  borderColor: palette.surfacePanel,
                   color: '#ffffff',
                   opacity: isIdle ? 0.4 : 1,
                 }}
@@ -120,8 +121,8 @@ export default function PresenceBar({
                   style={{
                     width: 10,
                     height: 10,
-                    backgroundColor: '#22c55e',
-                    borderColor: '#0f0f1a',
+                    backgroundColor: palette.success,
+                    borderColor: palette.surfacePanel,
                   }}
                 />
               )}
@@ -130,9 +131,9 @@ export default function PresenceBar({
               <div
                 className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded-md text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg"
                 style={{
-                  backgroundColor: '#1a1a2e',
-                  border: '1px solid #2d2d4a',
-                  color: '#e2e8f0',
+                  backgroundColor: palette.surfaceRaised,
+                  border: `1px solid ${palette.surfaceHover}`,
+                  color: palette.contentPrimary,
                 }}
               >
                 <div className="font-medium">{user.userName}</div>
@@ -147,7 +148,7 @@ export default function PresenceBar({
                   {getPermissionLabel(user.permission)}
                 </span>
                 {isIdle && (
-                  <span className="ml-1 text-[10px]" style={{ color: '#94a3b8' }}>
+                  <span className="ml-1 text-[10px] text-content-muted">
                     Idle
                   </span>
                 )}

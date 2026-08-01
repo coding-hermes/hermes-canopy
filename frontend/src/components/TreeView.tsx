@@ -36,6 +36,7 @@ import type {
   ShareInvitePayload,
 } from '../types/multiUser.ts';
 import { getColorForUser } from '../types/multiUser.ts';
+import { token, palette, alpha } from '../theme.ts';
 // ─── Mock membership ───────────────────────────────────────────────────
 
 interface Member {
@@ -209,37 +210,31 @@ export default function TreeView() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center p-8">
-          <p className="text-red-500 dark:text-red-400 text-lg mb-2">
+          <p className="text-status-danger text-lg mb-2">
             Error loading tree
           </p>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">{error}</p>
+          <p className="text-content-muted text-sm">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div className="h-full w-full flex flex-col bg-surface-base">
       {/* TreeView page heading for screen readers */}
       <h1 className="sr-only">
         Tree View: {tree.treeTitle || 'Untitled Tree'}
       </h1>
       {/* Tree header bar */}
-      <div
-        className="h-10 flex items-center px-4 gap-3 border-b shrink-0"
-        style={{
-          backgroundColor: '#0f0f1a',
-          borderColor: '#2d2d4a',
-        }}
-      >
-        <span className="text-sm font-medium" style={{ color: '#e2e8f0' }}>
+      <div className="h-10 flex items-center px-4 gap-3 border-b border-line-subtle bg-surface-panel shrink-0">
+        <span className="text-sm font-medium text-content-primary">
           🌳 {tree.treeTitle || 'Tree View'}
         </span>
-        <span className="text-xs" style={{ color: '#94a3b8' }}>
+        <span className="text-xs text-content-muted">
           {tree.nodes.length} nodes · {tree.edges.length} edges
         </span>
         {!tree.isReady && (
-          <span className="text-xs text-amber-500 animate-pulse ml-auto">
+          <span className="text-xs text-status-warning animate-pulse ml-auto">
             Connecting...
           </span>
         )}
@@ -250,15 +245,15 @@ export default function TreeView() {
             onClick={() => setShowShareDialog(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ml-auto"
             style={{
-              backgroundColor: '#7c3aed18',
-              color: '#a78bfa',
-              border: '1px solid #7c3aed33',
+              backgroundColor: alpha(palette.accent2, 0.1),
+              color: token.accent2,
+              border: `1px solid ${alpha(palette.accent2, 0.24)}`,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#7c3aed28';
+              e.currentTarget.style.backgroundColor = alpha(palette.accent2, 0.18);
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#7c3aed18';
+              e.currentTarget.style.backgroundColor = alpha(palette.accent2, 0.1);
             }}
             aria-label="Share tree"
           >

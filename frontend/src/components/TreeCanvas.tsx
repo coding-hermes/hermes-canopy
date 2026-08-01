@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
 import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
+import { palette, nodeTypeColor } from '../theme.ts';
 
 // ─── Custom nodes ─────────────────────────────────────────────────────
 
@@ -330,8 +331,8 @@ function TreeCanvasInner({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400 text-sm">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent mx-auto mb-3" />
+          <p className="text-content-muted text-sm">
             Loading tree...
           </p>
         </div>
@@ -345,10 +346,10 @@ function TreeCanvasInner({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-gray-500 dark:text-gray-400 text-lg mb-2">
+          <p className="text-content-secondary text-lg mb-2">
             🌳 Empty Tree
           </p>
-          <p className="text-gray-400 dark:text-gray-500 text-sm">
+          <p className="text-content-muted text-sm">
             {treeTitle
               ? `"${treeTitle}" has no nodes yet.`
               : 'Create a tree to get started.'}
@@ -362,7 +363,7 @@ function TreeCanvasInner({
 
   return (
     <div
-      className="h-full w-full relative"
+      className="h-full w-full relative bg-surface-base"
       onMouseMove={handleMouseMove}
       role="application"
       aria-label={`Tree canvas: ${treeTitle || 'Untitled'} — ${totalCount} nodes`}
@@ -370,14 +371,14 @@ function TreeCanvasInner({
     >
       {/* Large tree warning banner */}
       {isLargeTree && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-1.5 text-sm text-amber-800 dark:text-amber-200 shadow-md">
+        <div className="glass absolute top-2 left-1/2 -translate-x-1/2 z-10 rounded-lg px-4 py-1.5 text-sm text-status-warning ring-1 ring-inset ring-amber-400/30">
           ⚠️ Large tree ({totalCount} nodes) — simplified rendering active
         </div>
       )}
 
       {/* Collapse info */}
       {collapsedNodes.size > 0 && (
-        <div className="absolute top-2 right-4 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 shadow-sm">
+        <div className="glass absolute top-2 right-4 z-10 rounded-lg px-3 py-1.5 text-xs text-content-secondary">
           {collapsedNodes.size} branch{collapsedNodes.size !== 1 ? 'es' : ''}{' '}
           collapsed · {hiddenNodes.size} node{hiddenNodes.size !== 1 ? 's' : ''}{' '}
           hidden
@@ -402,7 +403,7 @@ function TreeCanvasInner({
             type: MarkerType.ArrowClosed,
             width: 16,
             height: 16,
-            color: '#9ca3af',
+            color: palette.contentFaint,
           },
         }}
         // Large tree optimizations
@@ -416,7 +417,7 @@ function TreeCanvasInner({
         onPaneClick={onPaneClick}
       >
         <Background
-          color="#e5e7eb"
+          color={palette.surfaceHover}
           gap={isLargeTree ? 40 : 20}
           size={1}
         />
@@ -426,32 +427,22 @@ function TreeCanvasInner({
           showFitView
           showInteractive={false}
           onFitView={zoomToFit}
-          className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_button]:!bg-[#1a1a2e] [&_button]:!border-[#2d2d4a] [&_button]:!text-[#e2e8f0] [&_button:hover]:!bg-[#7c3aed] [&_button:hover]:!text-white [&_button_svg]:!fill-[#e2e8f0] [&_button:hover_svg]:!fill-white"
+          className="!bg-surface-panel !border-line-subtle !shadow-lg !rounded-lg !overflow-hidden [&_button]:!bg-surface-panel [&_button]:!border-line-subtle [&_button]:!text-content-primary [&_button:hover]:!bg-accent-2-600 [&_button:hover]:!text-white [&_button_svg]:!fill-content-primary [&_button:hover_svg]:!fill-white"
           aria-label="Canvas controls: zoom in, zoom out, fit view"
         />
         <MiniMap
           position="bottom-right"
           nodeColor={(n) => {
             const d = n.data as TreeNodeCardData | undefined;
-            if (!d) return '#6b7280';
-            switch (d.nodeType) {
-              case 'synthesis':
-                return '#f59e0b';
-              case 'card':
-                // Agent cards get a purple tint, regular cards get blue
-                return d.isAgentCard ? '#7c3aed' : '#3b82f6';
-              case 'topic':
-                return '#f43f5e';
-              case 'system':
-                return '#3b82f6';
-              case 'message':
-                return d.isAgent ? '#7c3aed' : '#22c55e';
-              default:
-                return '#6b7280';
-            }
+            if (!d) return palette.neutral;
+            // Agent cards/messages take the violet accent; everything else
+            // follows the shared node-type identity palette.
+            return nodeTypeColor(d.nodeType, {
+              isAgent: d.isAgent || d.isAgentCard,
+            });
           }}
-          maskColor="rgba(15,15,26,0.7)"
-          className="!bg-[#1a1a2e] !border-[#2d2d4a] !shadow-lg [&_svg]:!rounded-md"
+          maskColor="rgba(11,13,23,0.72)"
+          className="!bg-surface-panel !border-line-subtle !shadow-lg !rounded-lg [&_svg]:!rounded-md"
           style={{ width: 180, height: 120 }}
           aria-label="Tree minimap: overview of all nodes"
         />

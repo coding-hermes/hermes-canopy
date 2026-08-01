@@ -115,15 +115,15 @@ function CreateTreeDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <h2 className="text-sm font-medium text-gray-200">Create Tree</h2>
+      <div className="relative glass-raised rounded-xl w-full max-w-md mx-4">
+        <div className="px-5 py-4 border-b border-line-subtle">
+          <h2 className="text-sm font-medium text-content-primary">Create Tree</h2>
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
             <div
               id="create-tree-error"
-              className="flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs"
+              className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs"
               role="alert"
             >
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
@@ -131,12 +131,12 @@ function CreateTreeDialog({
             </div>
           )}
           <div>
-            <label htmlFor="create-tree-title" className="block text-xs text-gray-400 mb-1">Title *</label>
+            <label htmlFor="create-tree-title" className="block text-xs text-content-muted mb-1">Title *</label>
             <input
               id="create-tree-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
               placeholder="My Conversation Tree"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
@@ -146,39 +146,39 @@ function CreateTreeDialog({
             />
           </div>
           <div>
-            <label htmlFor="create-tree-desc" className="block text-xs text-gray-400 mb-1">Description</label>
+            <label htmlFor="create-tree-desc" className="block text-xs text-content-muted mb-1">Description</label>
             <textarea
               id="create-tree-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
               placeholder="Optional description..."
             />
           </div>
           <div>
-            <label htmlFor="create-tree-root-msg" className="block text-xs text-gray-400 mb-1">Root Message</label>
+            <label htmlFor="create-tree-root-msg" className="block text-xs text-content-muted mb-1">Root Message</label>
             <textarea
               id="create-tree-root-msg"
               value={rootContent}
               onChange={(e) => setRootContent(e.target.value)}
               rows={3}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
               placeholder="Initial message content (optional)..."
             />
           </div>
         </div>
-        <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={loading || !title.trim()}
-            className="px-4 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating...' : 'Create'}
           </button>
@@ -204,20 +204,20 @@ function DeleteConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm mx-4">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <h2 className="text-sm font-medium text-gray-200">Delete Tree</h2>
+      <div className="relative glass-raised rounded-xl w-full max-w-sm mx-4">
+        <div className="px-5 py-4 border-b border-line-subtle">
+          <h2 className="text-sm font-medium text-content-primary">Delete Tree</h2>
         </div>
         <div className="px-5 py-4">
-          <p className="text-sm text-gray-400">
-            Are you sure you want to delete <span className="text-gray-200 font-medium">"{treeTitle}"</span>?
+          <p className="text-sm text-content-secondary">
+            Are you sure you want to delete <span className="text-content-primary font-medium">"{treeTitle}"</span>?
             This action cannot be undone.
           </p>
         </div>
-        <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
@@ -227,7 +227,7 @@ function DeleteConfirmDialog({
               onConfirm();
             }}
             disabled={loading}
-            className="px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors disabled:opacity-50"
           >
             {loading ? 'Deleting...' : 'Delete'}
           </button>
@@ -250,20 +250,20 @@ function TreeCard({
 }) {
   return (
     <div
-      className="rounded-lg border border-gray-800 bg-gray-900/50 p-4 hover:border-gray-600 cursor-pointer group transition-colors"
+      className="rounded-lg border border-line-subtle bg-surface-panel p-4 hover:border-accent-2/40 cursor-pointer group transition-colors"
       onClick={onSelect}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-gray-200 truncate">
+          <h3 className="text-sm font-medium text-content-primary truncate">
             {tree.title}
           </h3>
           {tree.description && (
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+            <p className="text-xs text-content-muted mt-1 line-clamp-2">
               {tree.description}
             </p>
           )}
-          <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-600">
+          <div className="flex items-center gap-3 mt-2 text-[11px] text-content-faint">
             <span className="flex items-center gap-1">
               <Hash className="w-3 h-3" />
               {tree.node_count} nodes
@@ -284,7 +284,7 @@ function TreeCard({
               e.stopPropagation();
               onSelect();
             }}
-            className="p-1.5 rounded-md text-gray-600 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
+            className="p-1.5 rounded-md text-content-faint hover:text-accent-2 hover:bg-accent-2/10 transition-colors"
             title="Open tree"
             aria-label={`Open tree: ${tree.title}`}
           >
@@ -295,7 +295,7 @@ function TreeCard({
               e.stopPropagation();
               onDelete();
             }}
-            className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10 transition-colors"
             title="Delete tree"
             aria-label={`Delete tree: ${tree.title}`}
           >
@@ -358,8 +358,8 @@ export default function TreesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trees</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-content-primary">Trees</h1>
+          <p className="text-sm text-content-muted mt-1">
             {pagination ? `${pagination.total} conversation trees` : 'Manage conversation trees'}
           </p>
         </div>
@@ -367,14 +367,14 @@ export default function TreesPage() {
           <button
             onClick={fetchTrees}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-surface-input hover:bg-surface-hover text-content-secondary ring-1 ring-inset ring-line-subtle transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             New Tree
@@ -385,7 +385,7 @@ export default function TreesPage() {
       {/* Error banner */}
       {error && (
         <div
-          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-status-danger text-sm"
           role="alert"
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
@@ -400,10 +400,10 @@ export default function TreesPage() {
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-lg border border-gray-800 p-4 animate-pulse">
-              <div className="h-4 bg-gray-800 rounded w-48 mb-2" />
-              <div className="h-3 bg-gray-800 rounded w-72 mb-2" />
-              <div className="h-3 bg-gray-800 rounded w-32" />
+            <div key={i} className="rounded-lg border border-line-subtle p-4 animate-pulse">
+              <div className="h-4 bg-surface-input rounded w-48 mb-2" />
+              <div className="h-3 bg-surface-input rounded w-72 mb-2" />
+              <div className="h-3 bg-surface-input rounded w-32" />
             </div>
           ))}
         </div>
@@ -411,15 +411,15 @@ export default function TreesPage() {
 
       {/* Empty state */}
       {!loading && !error && trees.length === 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
-          <Inbox className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <h2 className="text-sm font-medium text-gray-400 mb-1">No trees yet</h2>
-          <p className="text-xs text-gray-600 mb-4">
+        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
+          <Inbox className="w-10 h-10 text-content-faint/50 mx-auto mb-3" />
+          <h2 className="text-sm font-medium text-content-secondary mb-1">No trees yet</h2>
+          <p className="text-xs text-content-muted mb-4">
             Create your first conversation tree to get started.
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Create Tree
