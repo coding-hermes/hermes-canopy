@@ -158,3 +158,23 @@ tasks:
   status: complete
   created_at: '2026-08-01T02:33:31.548749+00:00'
   completed_at: '2026-08-01T04:35:09.039775+00:00'
+- id: BUG-025
+  title: "Flat /nodes mount allows any authenticated user to read/mutate any node\
+    \ by UUID \u2014 enforce tree membership (NodeAccessMiddleware)"
+  criteria:
+  - NodeAccessMiddleware exists in internal/handler/middleware.go and is wired on
+    the flat /nodes mount in internal/server/server.go (commit 9fe210b)
+  - Flat /nodes routes (create/update/delete/reply/fork) resolve the node's tree and
+    return 403 NOT_TREE_MEMBER for non-members; bare-form path /api/v1/nodes/nodes/{node_id}
+    parses node_id at parts[4] correctly
+  - Tree-scoped mount /trees/{tree_id}/nodes still uses TreeMembershipMiddleware (unchanged)
+  - "Export routes registered directly (r.Get /trees/{tree_id}/export, r.Post /trees/import)\
+    \ \u2014 no chi mount conflict with TreeHandler"
+  - TestAPI_NodeReply and TestAPI_NodeFork PASS with PG (regression for bare-form
+    path parsing)
+  - Handler integration suite PASS (TestAPI|TestAuth|TestApproval|TestTree|TestMLS|TestMulti|TestSecurity|TestContext|TestPlugin|TestGraph|TestTopic|TestCard|TestExport|TestSSE|TestInteg)
+  - go build + go vet + gofmt clean on changed files
+  - gitreins guard Tier 1 PASS (secrets, build, lint, tests)
+  status: complete
+  created_at: '2026-08-01T06:51:09.508993+00:00'
+  completed_at: '2026-08-01T07:15:18.814713+00:00'

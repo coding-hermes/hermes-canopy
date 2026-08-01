@@ -1220,3 +1220,5 @@
 {"from":"internal/testutil/integration_test.go","to":"pkg:github.com/jackc/pgx/v5","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/testutil/integration.go","to":"std:strings","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/testutil/integration.go","to":"std:sync","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/middleware.go","to":"std:errors","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/middleware.go","to":"pkg:github.com/totalwindupflightsystems/hermes-canopy/internal/service","rel":"imports","provenance":"ast_exact","confidence":1.0}
