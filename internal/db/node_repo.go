@@ -138,17 +138,18 @@ func (r *PGNodeRepo) GetAncestors(ctx context.Context, nodeID uuid.UUID) ([]Node
 	rows, err := r.pool.Query(ctx, `
         WITH RECURSIVE chain(id, tree_id, parent_id, author_id, content,
                 content_format, node_type, sequence_num, metadata, created_at,
-                edited_at, deleted_at) AS (
-            SELECT `+nodeColumns+`
+                edited_at, deleted_at, depth) AS (
+            SELECT `+nodeColumns+`, 0
             FROM nodes
             WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
             SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
                    n.content_format, n.node_type, n.sequence_num, n.metadata,
-                   n.created_at, n.edited_at, n.deleted_at
+                   n.created_at, n.edited_at, n.deleted_at, chain.depth + 1
             FROM nodes n
             JOIN chain c ON n.id = c.parent_id
             WHERE n.deleted_at IS NULL
+              AND chain.depth < 10000
         )
         SELECT `+nodeColumns+`
         FROM chain
@@ -182,6 +183,7 @@ func (r *PGNodeRepo) GetSubtree(ctx context.Context, rootID uuid.UUID, maxDepth 
             WHERE e.deleted_at IS NULL
               AND n.deleted_at IS NULL
               AND ($2::int = 0 OR sub.depth + 1 <= $2)
+              AND sub.depth < 10000
         )
         SELECT `+nodeColumns+`
         FROM sub
@@ -201,16 +203,16 @@ func (r *PGNodeRepo) GetPath(ctx context.Context, fromID, toID uuid.UUID) ([]Nod
 	var lca uuid.UUID
 	err := r.pool.QueryRow(ctx, `
         WITH RECURSIVE up_from AS (
-            SELECT id, parent_id FROM nodes WHERE id = $1 AND deleted_at IS NULL
+            SELECT id, parent_id, 0 AS depth FROM nodes WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.id, n.parent_id FROM nodes n JOIN up_from u ON n.id = u.parent_id
-            WHERE n.deleted_at IS NULL
+            SELECT n.id, n.parent_id, u.depth + 1 FROM nodes n JOIN up_from u ON n.id = u.parent_id
+            WHERE n.deleted_at IS NULL AND u.depth < 10000
         ),
         up_to AS (
-            SELECT id, parent_id FROM nodes WHERE id = $2 AND deleted_at IS NULL
+            SELECT id, parent_id, 0 AS depth FROM nodes WHERE id = $2 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.id, n.parent_id FROM nodes n JOIN up_to t ON n.id = t.parent_id
-            WHERE n.deleted_at IS NULL
+            SELECT n.id, n.parent_id, t.depth + 1 FROM nodes n JOIN up_to t ON n.id = t.parent_id
+            WHERE n.deleted_at IS NULL AND t.depth < 10000
         )
         SELECT up_from.id
         FROM up_from
@@ -330,6 +332,7 @@ func (r *PGNodeRepo) GetCounts(ctx context.Context, treeID uuid.UUID) (*NodeCoun
             SELECT n.id, d.depth + 1
             FROM tree_nodes n
             JOIN depths d ON n.parent_id = d.id
+            WHERE d.depth < 10000
         ),
         node_tot AS (SELECT COUNT(*)::bigint AS total, COUNT(*) FILTER (WHERE deleted_at IS NULL)::bigint AS active FROM tree_nodes),
         edge_tot AS (

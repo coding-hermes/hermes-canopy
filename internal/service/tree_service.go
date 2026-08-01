@@ -785,7 +785,7 @@ func (s *TreeServiceImpl) computeStats(ctx context.Context, treeID uuid.UUID, tr
                 SELECT n.id, chain.depth + 1
                 FROM chain
                 JOIN nodes n ON n.parent_id = chain.id AND n.deleted_at IS NULL
-                WHERE chain.depth < 1000000
+                WHERE chain.depth < 10000
             )
             SELECT COALESCE(MAX(depth), 0) FROM chain`, *rootID,
 		).Scan(&depth)

@@ -339,17 +339,16 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		// fetching the whole chain; the CTE keeps us to a single
 		// round trip).
 		if err := tx.QueryRow(ctx, `
-            WITH RECURSIVE chain AS (
-                SELECT 0 AS depth
-                WHERE EXISTS (SELECT 1 FROM nodes WHERE id = $1 AND deleted_at IS NULL)
+            WITH RECURSIVE chain(id, parent_id, depth) AS (
+                SELECT id, parent_id, 0
+                FROM nodes
+                WHERE id = $1 AND deleted_at IS NULL
                 UNION ALL
-                SELECT chain.depth + 1
-                FROM chain
-                JOIN nodes parent ON parent.id = (
-                    SELECT parent_id FROM nodes WHERE id = $1
-                )
-                JOIN nodes child ON child.parent_id = parent.id
-                WHERE chain.depth < 1000000
+                SELECT n.id, n.parent_id, c.depth + 1
+                FROM nodes n
+                JOIN chain c ON n.id = c.parent_id
+                WHERE n.deleted_at IS NULL
+                  AND c.depth < 10000  -- cycle guard: cap depth
             )
             SELECT COALESCE(MAX(depth), 0) FROM chain`,
 			input.ParentID,
@@ -821,7 +820,7 @@ func (s *NodeServiceImpl) computeDepth(ctx context.Context, nodeID uuid.UUID, pa
             FROM chain
             JOIN nodes n ON n.id = chain.parent_id
             WHERE chain.parent_id IS NOT NULL
-              AND chain.depth < 1000000
+              AND chain.depth < 10000
         )
         SELECT COALESCE(MAX(depth), 0) FROM chain`,
 		nodeID,

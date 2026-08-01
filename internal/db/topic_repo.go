@@ -291,12 +291,13 @@ func (r *PGTopicRepo) HardDelete(ctx context.Context, id uuid.UUID) error {
 // GetParentTopics returns all ancestor topics for a given topic.
 func (r *PGTopicRepo) GetParentTopics(ctx context.Context, topicID uuid.UUID) ([]Topic, error) {
 	rows, err := r.pool.Query(ctx, `
-        WITH RECURSIVE ancestors AS (
-            SELECT t.* FROM topics t WHERE t.id = $1
+        WITH RECURSIVE ancestors(id, parent_topic_id, depth) AS (
+            SELECT t.id, t.parent_topic_id, 0 FROM topics t WHERE t.id = $1
             UNION ALL
-            SELECT t.* FROM topics t
+            SELECT t.id, t.parent_topic_id, a.depth + 1 FROM topics t
             JOIN ancestors a ON t.id = a.parent_topic_id
             WHERE a.parent_topic_id IS NOT NULL
+              AND a.depth < 10000
         )
         SELECT `+topicColumns+` FROM ancestors
         WHERE id != $1  -- exclude the topic itself
