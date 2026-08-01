@@ -15,6 +15,7 @@ import NodesPage from './pages/NodesPage'
 import TopicsPage from './pages/TopicsPage'
 import CardsPage from './pages/CardsPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
+import TopicsRail from './components/TopicsRail'
 
 // ─── Navigation model ──────────────────────────────────────────────────
 
@@ -103,6 +104,9 @@ function Layout() {
           <p className="text-xs text-content-faint">Hermes Canopy v0.1.0</p>
         </div>
       </aside>
+
+      {/* Topics rail — persistent across routes (UI-02, mockup-1.png) */}
+      <TopicsRail />
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">

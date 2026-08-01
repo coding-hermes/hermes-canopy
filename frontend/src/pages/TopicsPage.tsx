@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -19,28 +20,13 @@ import {
   X,
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import type { TopicSummary, TreeSummary } from '../types/topic';
+import { readStoredTreeId, storeTreeId, notifyTopicsChanged } from '../lib/activeTree';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
-interface TopicSummary {
-  id: string;
-  tree_id: string;
-  root_node_id: string;
-  title: string;
-  description: string;
-  slug: string;
-  status: string;
-  node_count: number;
-  created_at: string;
-}
-
 interface ListTopicsResponse {
   topics: TopicSummary[];
-}
-
-interface TreeSummary {
-  id: string;
-  title: string;
 }
 
 interface ListTreesResponse {
@@ -199,15 +185,25 @@ function CreateTopicDialog({
 
 function TopicCard({
   topic,
+  highlighted,
   onDelete,
 }: {
   topic: TopicSummary;
+  highlighted?: boolean;
   onDelete: () => void;
 }) {
   const dotColor = STATUS_STYLES[topic.status] ?? 'bg-content-muted';
 
   return (
-    <div className="rounded-lg border border-line-subtle bg-surface-panel p-4 hover:border-accent-2/40 group transition-colors">
+    <div
+      id={`topic-${topic.id}`}
+      aria-current={highlighted ? 'true' : undefined}
+      className={`rounded-lg border bg-surface-panel p-4 group transition-colors ${
+        highlighted
+          ? 'border-accent-2/60 ring-1 ring-inset ring-accent-2/30'
+          : 'border-line-subtle hover:border-accent-2/40'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -259,13 +255,24 @@ function TopicCard({
 // ─── Main Component ────────────────────────────────────────────────────
 
 export default function TopicsPage() {
+  // Deep links from the persistent topics rail (UI-02):
+  //   /topics?tree=<treeId>          — preselect a tree
+  //   /topics?tree=…&topic=<topicId> — preselect + highlight a topic
+  //   /topics?new=1                  — open the create dialog
+  const [searchParams, setSearchParams] = useSearchParams();
+  const treeParam = searchParams.get('tree') ?? '';
+  const topicParam = searchParams.get('topic') ?? '';
+  const wantsCreate = searchParams.get('new') === '1';
+
   const [trees, setTrees] = useState<TreeSummary[]>([]);
-  const [selectedTreeId, setSelectedTreeId] = useState<string>('');
+  const [selectedTreeId, setSelectedTreeId] = useState<string>(
+    () => treeParam || readStoredTreeId(),
+  );
   const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(wantsCreate);
   const [deleteTarget, setDeleteTarget] = useState<TopicSummary | null>(null);
 
   const fetchTrees = useCallback(async () => {
@@ -298,9 +305,57 @@ export default function TopicsPage() {
     }
   }, []);
 
+  // Load topics whenever the scoped tree changes (initial mount included —
+  // the tree may arrive from the ?tree= deep link or localStorage).
+  useEffect(() => {
+    if (selectedTreeId) void fetchTopics(selectedTreeId);
+    else setTopics([]);
+  }, [selectedTreeId, fetchTopics]);
+
+  // Follow the rail: a ?tree= change navigates without remounting the page.
+  useEffect(() => {
+    if (treeParam && treeParam !== selectedTreeId) setSelectedTreeId(treeParam);
+  }, [treeParam, selectedTreeId]);
+
+  // Reopen the dialog when the rail deep-links with ?new=1.
+  useEffect(() => {
+    if (wantsCreate) setShowCreate(true);
+  }, [wantsCreate]);
+
+  // Bring a rail-deep-linked topic into view. Highlighting alone is not
+  // enough — with a long list the target card is usually below the fold,
+  // so the click appears to do nothing in the content area.
+  useEffect(() => {
+    if (!topicParam || topicsLoading) return;
+    const card = document.getElementById(`topic-${topicParam}`);
+    if (!card) return;
+    const reduceMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    card.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
+  }, [topicParam, topicsLoading, topics]);
+
   const handleTreeSelect = (treeId: string) => {
     setSelectedTreeId(treeId);
-    if (treeId) void fetchTopics(treeId);
+    storeTreeId(treeId); // keep the rail in sync
+    const next = new URLSearchParams(searchParams);
+    if (treeId) next.set('tree', treeId);
+    else next.delete('tree');
+    next.delete('topic');
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
   };
 
   const handleDelete = async () => {
@@ -308,6 +363,7 @@ export default function TopicsPage() {
     try {
       await apiDelete(`/topics/${deleteTarget.id}`);
       setTopics((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      notifyTopicsChanged(); // refresh the rail
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to archive topic');
     } finally {
@@ -317,7 +373,8 @@ export default function TopicsPage() {
 
   const handleCreated = (topic: TopicSummary) => {
     setTopics((prev) => [topic, ...prev]);
-    setShowCreate(false);
+    closeCreate();
+    notifyTopicsChanged(); // refresh the rail
   };
 
   const filteredTopics = searchQuery
@@ -468,6 +525,7 @@ export default function TopicsPage() {
             <TopicCard
               key={topic.id}
               topic={topic}
+              highlighted={topic.id === topicParam}
               onDelete={() => setDeleteTarget(topic)}
             />
           ))}
@@ -479,7 +537,7 @@ export default function TopicsPage() {
         <CreateTopicDialog
           trees={trees}
           treeId={selectedTreeId}
-          onClose={() => setShowCreate(false)}
+          onClose={closeCreate}
           onCreated={handleCreated}
         />
       )}
