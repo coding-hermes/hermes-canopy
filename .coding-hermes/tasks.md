@@ -1206,3 +1206,33 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 84/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅, UI-02 ✅, UI-03 ✅, UI-04 IN FLIGHT, UI-05..09 pending. Scheduler daemon reachable at :9090 (restarted 20:28, catch-up firing), fleet.toml pins 900s active cadence. PG healthy at :5437. E2E 42/42 green (T119). Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — Sibling T119's claims verified independently (all held: UI-03 commit 1272d4f + judge PASS e7ce1d40, board-v2 synced, E2E 42/42). Executed the handoff: UI-04 branching canvas dispatched to Hy3 with full context + pre-created gitreins task. No duplicate dispatch, no code commits (sibling owned UI-03; worker owns frontend/ now). Next tick: steward UI-04 worker to completion (verify + judge + board).
+
+### Tick 120 — 2026-08-01 21:38 CDT spawn (DeepSeek V4 Flash) — COORDINATION (UI-04 worker in flight)
+
+> **Context:** This tick fired 46 min after T119-CONCURRENT (20:52 commit b39e059). UI-04 branching canvas worker (Hy3 @ opencode-go, PID 2377531, spawned 20:46) is ALIVE and mid-flight — verified via /proc/2377531/cwd → /home/kara/hermes-canopy, 52m32s elapsed at gate time, actively editing test files (canvasGeometry.test.ts +isFrontierSlot at ~21:38). Working tree shows worker's uncommitted progress: 12 modified + 11 untracked files, all frontend/ (TreeCanvas, TreeView, 8 node/edge components, useYjsTree, d3Layout, types + new GlowConnector/GhostNode/NodeChrome + 5 lib helpers + 5 test files). Per foreman discipline (T116/T117-CONCURRENT precedent): did NOT touch frontend/, did NOT run parallel test suites, did NOT re-dispatch.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ WORKER MID-FLIGHT (expected) | 12 M + 11 ?? frontend/ files, all UI-04 worker's uncommitted work. No drift in .coding-hermes/ or .gitreins/. HEAD still b39e059. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0 (independent re-run over b39e059 tree — Go side untouched by worker). |
+| 3 | Frontend | ⏸️ WORKER OWNS | tsc/build/lint/vitest/Playwright runs belong to UI-04 worker (mid-verification). No parallel runs (PG + vitest contention avoidance). |
+| 4 | Tests | ⏸️ WORKER OWNS | Worker editing canvasGeometry.test.ts at gate time (verification phase). Prior state: 49/49 vitest + 42/42 Playwright green (T119). |
+| 5 | UI-04 ACs | ⏳ IN PROGRESS | gitreins task pending (created T119-CONCURRENT, 10 ACs). Worker will `task complete` after commit — judge next tick. |
+| 6 | Hilo graph | ✅ USEFUL | 1263 edges, 192 files (fresh stats — matches T119-CONCURRENT; worker's frontend edits uncommitted, no graph delta yet). Top dep: google/uuid. Hilo=useful |
+| 7 | TODO/FIXME | ⚠️ 9 pre-existing | 5 stub_adapters.go post-MVP + 1 cursor TODO (tree_service.go:442) + 3 auth test skips (TODO(BE-12c), pre-existing). No new TODOs. |
+| 8 | Deps | — | Stable (164 Go outdated, unchanged since Tick 113). |
+| 9 | GitReins | ✅ UI-01/02/03 COMPLETE | tasks.yaml: UI-01/02/03 complete (verdicts d0bcbd3f/97ff5733/e7ce1d40 on disk), UI-04 pending (in flight, worker-owned). |
+| 10 | Secrets | ✅ CLEAN | No new code committed since T119 gitleaks scan (449 commits, 0 leaks). |
+| 11 | Board consistency | ✅ CONSISTENT | Board at Tick 119-CONCURRENT (84/112 complete). UI-04 row 🔄 in-flight (dispatch info from T119-CONCURRENT). No parquet churn this tick (no status change — single-write discipline, T116 precedent). |
+| 12 | Scheduler | ✅ REACHABLE | Daemon at :9090. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml admin intent), Priority=10, Weight=10. This tick ID hermes-canopy-2026-08-01-21-38-04 running; no concurrent canopy session. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 14 | DuckBrain | ✅ WRITTEN | Namespace: hermes-canopy. Tick 120 entry saved. |
+| 15 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 119 (42/42 PASS, 51.2s). Due window 116-121 closed. Next window 122-127 — likely satisfied by UI-04 verification run. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (HEAD == origin/master; 44 local ahead unpushed — consistent with fleet, push deferred). gh run list: no public runs (consistent). |
+| 17 | Dispatch | ⛔ NONE — WORKER ALREADY ACTIVE | UI-04 (Hy3 @ opencode-go, PID 2377531) verified alive at gate (52m32s). No duplicate dispatch. Siblings ring-runner kimi (2887093) + helios glm (2920658) are different projects — verified via /proc cwd. |
+
+**Coverage (Tick 120):** ~40.7% total (no source logic this tick — coordination).
+
+**Project Status:** 84/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅, UI-02 ✅, UI-03 ✅, UI-04 IN FLIGHT (Hy3, ~53 min, verification phase), UI-05..09 pending sequential. Open: INFRA-001 (scheduler-level, fleet.toml 900s), E2E-001 (window closed, next 122-127), 21 post-MVP backlog. Scheduler at :9090, 900s cadence. PG healthy at :5437. Coverage ~40.7%.
+
+**Verdict:** COORDINATION — UI-04 worker alive and productive (12 modified + 11 new frontend files, mid-test-verification). All read-only gates green: go build/vet clean, Hilo 1263/192 stable, TODO/FIXME unchanged (9 total incl. 3 pre-existing test skips), PG healthy, scheduler reachable, 0 new remote commits. No dispatch, no code commits, no parallel test suites. Board consistent. Next tick: steward UI-04 to completion (verify commit → guard → judge → board-v2 sync).
