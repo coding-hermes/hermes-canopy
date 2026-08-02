@@ -134,13 +134,13 @@
 ||| ✅ UI-05 | Node card redesign — avatar circle (initials, per-author color), timestamp top-right, body content, #topic hashtag pill, ··· overflow menu, hover states. Replace the checkbox + raw-ID row format. ✅ Tick 122 (970202d, Hy3 @ opencode-go): NodeCard.tsx 374L + lib/nodeMeta.ts 378L + nodeMeta.test.ts 379L + NodesPage.tsx rework (1214+/114−). Guard PASS, judge PASS 4fcfcb43 (10/10 ACs), vitest 240/240, Playwright 42/42 (judge-verified), tsc/build/lint clean, a11y menu semantics (aria-haspopup/expanded, role=menu, Escape/arrows, focus restore). | High | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++components | Hy3 | Medium | DeepSeek V4 Flash |
 ||| 🔄 UI-06 | Composer bar — floating bottom input: paperclip attach, "Message... use @mention or #topic" placeholder, @ / # / emoji buttons, Send button with ⌘↵ badge. Wire to existing node-create API (POST /trees/{tree_id}/nodes). DISPATCHED Tick 122 (Hy3 @ opencode-go, PID 224524, prompt /tmp/canopy_ui06_prompt.txt) — gitreins task created (11 ACs) + in_progress pre-dispatch. KEY: handleSendMessage in TreeView is a console.log stub; wire real POST /api/v1/trees/{tree_id}/nodes (snake_case body) via lib/api.ts apiPost. | High | 4 | UI-01, BUG-026 | ++frontend, ++ui, ++api-use | Hy3 | Medium | DeepSeek V4 Pro |
 || UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. Wire to existing FE-04 shortcut infra. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
-|| UI-08 | Node list hierarchy — indentation/branch lines for parent-child, clickable node IDs linking to detail, bulk-action bar appearing when checkboxes are selected (delete/merge/tag). Fix screenshot findings: "(1 nodes)" grammar → "(1 node)", dedupe demo tree node IDs (019fb0c2 repeated ×4 in seed data), placeholder author 00000000. | Medium | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++data | Hy3 | Medium | DeepSeek V4 Pro |
+||| 🔄 UI-08 | Node list hierarchy — indentation/branch lines for parent-child, clickable node IDs linking to detail, bulk-action bar appearing when checkboxes are selected (delete/merge/tag). Fix screenshot findings: "(1 nodes)" grammar → "(1 node)", dedupe demo tree node IDs (019fb0c2 repeated ×4 in seed data), placeholder author 00000000. DISPATCHED Tick 126 (Hy3 @ custom:opencode-go, PID 2004677, prompt /tmp/canopy_ui08_prompt.txt) — gitreins task created (8 ACs) + in_progress pre-dispatch. | Medium | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++data | Hy3 | Medium | DeepSeek V4 Pro |
 || UI-09 | Visual regression baseline — capture mockup-vs-app screenshots for all 4 vision-brief mockups (graph nav, cards, collaboration, topics), store as golden images, wire pixel-diff into E2E-001 loop so parity regressions fail CI. | Medium | 4 | UI-01→UI-08, E2E-001 | ++testing, ++visual-regression, ++screenshots | GPT-5.6 Luna | Medium | Step 3.7 Flash |
 ||| BUG-027 | Guard-blocking test suite issues (2): (1) SSE subscribe/flush race — sse_handler.go flushed the 200 header BEFORE subscribing, so a broadcast landing in that window is missed and block-reading clients hang forever (internal/sse package 600s timeout under `go test ./...` parallel load). FIXED 2026-08-01 — handler subscribes BEFORE writing headers (client outbox buffers bytes so nothing hits the wire early); subscribe-failure now returns real HTTP 500 since headers aren't committed. (2) TestINT05_2000NodeTree — 2000 sequential HTTP node creates took 2.5-3+ min (75ms+/node on busy DB from leaked test DBs), blowing guard package timeouts in parallel runs. FIXED — honors `-short` (guard mode) with 300 nodes (187s→25s); full 2000-node run preserved for non-short CI/benchmark ticks. | High | 3 | sse, handler | ++bug, ++sse, ++concurrency, ++testing, ++benchmark | DeepSeek V4 Pro | High | GLM-5.2 |
 ||| ✅ BUG-028 | BUG-025 regression: NodeAccessMiddleware tree-scoped branch (/api/v1/nodes/{tree_id}/nodes/{node_id}) never validated node_id at parts[5] — malformed UUID → 403 NOT_TREE_MEMBER instead of 400 INVALID_NODE_ID. FIXED Tick 116-CONCURRENT (10c1370, +9 lines): validate parts[5] before membership check. TestBE12_ValidationErrors PASSES now. Judge PASS 54a07a2d (5/5 ACs). Found via FULL suite run (siblings' filtered 38-test runs missed it). | High | 2 | BUG-025 | ++bug, ++middleware, ++api-contract, ++security | DeepSeek V4 Flash | Low | — |
 |||| ✅ BUG-029 | Root node creation 503: internal/service/node_service.go:411 unconditionally inserts an edge with source_id = input.ParentID (uuid.Nil when unset) — violates edges_source_id_fkey. FIXED Tick 125 (3c49734) — edge insert wrapped in `if input.ParentID != uuid.Nil`, root nodes return Edge: nil (edge: null). 2 new handler tests (TestAPI_NodeCreate_RootNode_NoEdge_BUG029 + ReplyNode_HasEdge_BUG029) PASS live with PG. Judge PASS 626656ae (7/7 ACs). Worker glm-5.2 @ zai-glm. | High | 3 | UI-06 | ++backend, ++bug, ++db, ++api-contract | DeepSeek V4 Pro | High | GLM-5.2 |
 |||| ✅ BUG-030 | Composer renders read-only for everyone: frontend/src/hooks/usePresence.ts:135 hardcodes permission: 'viewer' in initial local presence → TreeView readOnly={isViewer} is true in live app. FIXED Tick 125 (cdd7c97) — buildInitialPresence defaults to 'editor'; remote peer permission preserved (payload.permission). 6 new usePresence tests. Vitest 299/299. Judge PASS ec8c3ebc (7/7 ACs). Worker hy3 @ custom:opencode-go. | High | 2 | UI-06 | ++frontend, ++bug, ++presence, ++permissions | DeepSeek V4 Flash | Medium | Hy3 |
-|||| 🔄 UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. Wire to existing FE-04 shortcut infra. DISPATCHED Tick 125 (Hy3 @ custom:opencode-go, PID 1575885, prompt /tmp/canopy_ui07_prompt.txt) — gitreins task created (8 ACs) + in_progress pre-dispatch. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
+||||| ✅ UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. ✅ Tick 126 (b94adf2, worker Hy3 @ opencode-go): shortcuts.ts 307L registry + typing guard, useShortcuts.ts single-listener hook, ShortcutHelp.tsx accessible overlay (role=dialog/aria-modal), TreeCanvas tree scope + App global scope, NavigationBar kbd strip. 11 files +1374/−3, frontend-only. Foreman verified: go build/vet, tsc, oxlint 0 err, vitest 368/368 (69 new). Judge PASS ed31176f (8/8 ACs). Screenshots docs/screenshots/ui-07/. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
 
@@ -1457,3 +1457,49 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 89/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-06 ✅, BUG-029 ✅ + BUG-030 ✅ (composer blockers closed), UI-07 IN FLIGHT, UI-08/09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1339/208. Vitest 299/299. E2E 42/42 (Tick 124).
 
 **Next tick:** steward UI-07 to completion (verify commit → guard → judge → board sync) → dispatch UI-08 (node list hierarchy, Hy3).
+
+---
+
+## Tick 126 — 2026-08-02 03:15 UTC (scheduler tick hermes-canopy-2026-08-02-03-15-04, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — UI-07 stewarded to completion (verify → judge PASS → board sync) + UI-08 dispatched (node list hierarchy).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN at tick start (edges.jsonl delta only) | UI-07 worker (PID 1575885, dispatched Tick 125) EXITED after committing b94adf2 (02:58 CDT). Dirty: `.vfs/graph/edges.jsonl` (+18 legit UI-07 edges — committed with board), untracked `frontend/playwright-report/` (build artifact, left). No canopy siblings (hivemind + dexdat workers verified as different projects via argv/cwd). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0 (independent re-run over b94adf2 tree). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0; oxlint 0 errors / 8 warnings (project baseline); npm build green (worker-verified, judge tier1 re-checked). |
+| 4 | Vitest | ✅ 368/368 (14 files) | Fresh run: 368 PASS (1.72s) — matches worker claim exactly (299 baseline + 69 new: shortcuts.test.ts 53, useShortcuts.test.ts 15, +1). |
+| 5 | GitReins judge UI-07 | ✅ **PASS ed31176f** | `timeout 900 gitreins task complete UI-07` (~2 min this run): tier1 PASS + tier2 PASS, all 8 ACs with per-AC evidence (registry + typing guard matrix, single-listener hook, composer guard proven by test, footer kbd strip, dialog semantics, infra intact, 368 tests, frontend-only commit + trailer). tasks.yaml UI-07 → complete (08:16:40Z). CLI printed c77492c2; on-disk dir ed31176f — known hash-mismatch pitfall, trusted newest dir. |
+| 6 | Hilo | ✅ USEFUL | edges.jsonl +18 ast_exact edges, all referencing HEAD files (shortcuts.ts, useShortcuts.ts, ShortcutHelp.tsx, TreeCanvas, App, NavigationBar + tests) — committed with board per sibling-code-committed rule. |
+| 7 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 8 | Deps | ⚠️ 164 Go outdated | Stable (unchanged since Tick 113). |
+| 9 | Secrets | ✅ CLEAN | Judge tier1 secrets check PASS (full mode). |
+| 10 | Board-v2 | ✅ SYNCED | UI-07 → complete (b94adf2, +1374/−3, 11 files, guard PASS, verdict ed31176f), UI-08 → in_progress + dispatched_at (PID 2004677). Events 21 (task_completed UI-07) + 22 (task_dispatched UI-08) @ tick 126. Board metadata: ticks_total=126, last_commit=b94adf2. Parquet re-exported (absolute paths), read-back verified. |
+| 11 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin), Priority=10, Weight=10. No concurrent canopy session. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections; stack up (vite :5173 + canopyd :8091) for Playwright/judge. |
+| 13 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 126 entry saved. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 124 (judge re-run, 42/42). Next window 128-133. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync with origin/master after push). gh run list: no CI signal (Actions not enabled — fleet-wide). |
+| 16 | Dispatch | ✅ 1 WORKER — UI-08 (Hy3) | **UI-08 dispatched** (PID 2004677, hy3 @ custom:opencode-go): node list hierarchy — indentation/branch lines (depth + parentId already on NodeDetail), clickable node IDs → detail, bulk-action bar (delete/merge/tag; no invented endpoints), grammar fixes at NodesPage.tsx:346/380/458, seed-data investigation (019fb0c2 not found in repo — worker to locate runtime seed or fix display uniqueness; placeholder author fallback). GitReins task created pre-dispatch (8 ACs). Prompt /tmp/canopy_ui08_prompt.txt with code-verified facts. |
+
+### Actions this tick
+
+- **UI-07: CLOSED ✅** — keyboard shortcuts landed (worker Hy3): shortcuts.ts 307L (SHORTCUTS registry + shouldIgnoreShortcut typing/modifier guard), useShortcuts.ts 115L (single window listener, ref-held handlers), ShortcutHelp.tsx 158L (role=dialog + aria-modal, Escape/backdrop dismiss), TreeCanvas tree scope (j/k/h/l), App global scope (m → /approvals, ? → overlay), NavigationBar kbd hint strip (j/k · h/l · m · ?). Foreman verified independently: go build/vet, tsc, oxlint, vitest 368/368 — all match worker claims. Judge PASS ed31176f (8/8 ACs, tier1+tier2).
+- **UI-08 dispatched** per Tick 125 handoff with pre-created gitreins task (8 ACs) + verified-facts prompt: flat-list structure of NodesPage (no hierarchy/checkboxes today), NodeDetail already carries depth/parentId/childCount, exact pluralization bug lines (346/380/458), seed-data finding (019fb0c2 absent from repo — likely runtime demo seed; worker investigates root cause, fixes at source or via display uniqueness), no-endpoint-invention rule for merge/tag actions.
+- **Board-v2 sync**: UI-07 complete row (commit/verdict/lines), UI-08 in_progress + dispatched_at row, 2 events @ tick 126, ticks_total=126, last_commit=b94adf2, parquet re-export + read-back verified (single write).
+- **Committed legit edges.jsonl delta** (+18 UI-07 edges) alongside the board commit.
+- **Pushed**: board commit + worker commit b94adf2 → origin/master (cleared the 1-commit local backlog).
+
+### Remaining open
+
+- UI-08: IN FLIGHT (Hy3 worker, node list hierarchy — PID 2004677).
+- UI-09: pending sequential after UI-08.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 90/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-07 ✅ (judge PASS ed31176f), UI-08 IN FLIGHT, UI-09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1331+/206+ (edges.jsonl +18 pending graph index). Vitest 368/368. E2E 42/42 (Tick 124).
+
+**Next tick:** steward UI-08 to completion (verify commit → guard → judge → board sync) → dispatch UI-09 (visual regression baseline, GPT-5.6 Luna) once the worker has exited.
