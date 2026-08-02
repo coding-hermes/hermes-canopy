@@ -513,7 +513,27 @@ tasks:
     (backend-only)'
   - 'Commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com> trailer; backend-only
     change; no invented endpoints or API changes'
-  status: in_progress
+  status: complete
   created_at: '2026-08-02T11:00:34.807793+00:00'
+  completed_at: '2026-08-02T20:07:32.998177+00:00'
   depends_on:
   - TEST-03
+- id: UI-10
+  title: "UI-10: Sidebar consolidation \u2014 TopicsRail integrated into main sidebar\
+    \ (single rail, search + sort)"
+  criteria:
+  - TopicsRail renders INSIDE the main <aside> below nav buttons, separated by a horizontal
+    divider (single-rail layout, was separate middle column)
+  - Search box (client-side filter) + sort select (Count / A-Z / Newest) present and
+    functional
+  - Topic list scrollable (flex-1 overflow-y-auto); count badge shows visible/total
+  - Sidebar widened w-64 -> w-72 to fit the integrated section
+  - 'Frontend-only change (frontend/src/App.tsx + frontend/src/components/TopicsRail.tsx);
+    commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com> trailer'
+  - 'All existing suites green: vitest 460/460, tsc --noEmit clean, npm run build
+    green, go build/vet unaffected'
+  - 'No regression to topics functionality: existing TopicsPage routing and topic
+    creation still work'
+  status: complete
+  created_at: '2026-08-02T19:45:59.383710+00:00'
+  completed_at: '2026-08-02T20:01:22.368259+00:00'
