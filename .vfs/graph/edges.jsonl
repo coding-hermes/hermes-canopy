@@ -1380,3 +1380,10 @@
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../lib/nodeShortId","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../lib/nodeSelection","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../lib/pluralize","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:buffer","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:fs/promises","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:path","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:url","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:zlib","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/tests/visual-regression.test.ts","to":"local:./setup","rel":"imports","provenance":"ast_exact","confidence":1.0}

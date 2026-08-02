@@ -490,5 +490,30 @@ tasks:
     clean, oxlint 0 errors, npm run build green; frontend/docs-only changes'
   - 'Commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com> trailer; screenshots
     and harness committed; no Go backend changes unless required by the capture harness'
-  status: in_progress
+  status: complete
   created_at: '2026-08-02T09:37:35.866413+00:00'
+  completed_at: '2026-08-02T10:48:11.274993+00:00'
+- id: BUG-031
+  title: Fix SSE goroutine leak causing TestTEST03_DBOutage timeout (handler suite
+    600s hang, tracked since Tick 74)
+  criteria:
+  - Root-cause the goroutine leak making db_unavailable_returns_proper_error_code
+    subtest (internal/handler/chaos_test.go:384-424) hang to 600s package timeout
+    when the DB pool is closed mid-test; verify with go test -run TestTEST03_DBOutage
+    -v plus goroutine dump BEFORE writing the fix
+  - 'Fix must be minimal and surgical (10-50 lines): SSE handler/client goroutines
+    must exit on server or pool shutdown (context cancellation, hub.Shutdown drain,
+    or unsubscribe on connection close) without breaking the TEST-004 shared integration
+    pool design (chaos DBOutage keeps its own isolated pool)'
+  - 'All SSE package tests still pass: go test ./internal/sse/... (TestSSEHub_Shutdown_Drain,
+    slow-client tests) plus full handler chaos suite TestTEST03_* completes without
+    timeout'
+  - 'Existing suites green: go build ./..., go vet ./..., go test ./internal/handler/...
+    with PG on :5437 (generous timeout 1800s), gitleaks clean; vitest 460/460 unaffected
+    (backend-only)'
+  - 'Commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com> trailer; backend-only
+    change; no invented endpoints or API changes'
+  status: in_progress
+  created_at: '2026-08-02T11:00:34.807793+00:00'
+  depends_on:
+  - TEST-03
