@@ -6,24 +6,28 @@
  * Uses the graph subtree endpoint to list nodes for a given tree.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   RefreshCw,
   AlertCircle,
   Inbox,
   Hash,
-  Clock,
-  User,
   MessageSquare,
   GitMerge,
   FileText,
-  Trash2,
-  Edit3,
   ChevronDown,
   Search,
   X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPatch, apiDelete } from '../lib/api';
+import { NodeCard } from '../components/NodeCard';
+import {
+  indexTopicTitles,
+  nodeAuthorNames,
+  nodeTypeLabel,
+} from '../lib/nodeMeta';
+import type { TopicSummary } from '../types/topic';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -63,18 +67,11 @@ interface ListTreesResponse {
   pagination: { total: number };
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────
-
-function nodeTypeLabel(t: string): string {
-  switch (t) {
-    case 'message': return 'Message';
-    case 'synthesis': return 'Synthesis';
-    case 'system': return 'System';
-    case 'card': return 'Card';
-    case 'topic': return 'Topic';
-    default: return t;
-  }
+interface ListTopicsResponse {
+  topics: TopicSummary[];
 }
+
+// ─── Helpers ───────────────────────────────────────────────────────────
 
 function nodeTypeIcon(t: string) {
   switch (t) {
@@ -89,19 +86,6 @@ function nodeTypeIcon(t: string) {
     default:
       return <MessageSquare className="w-3.5 h-3.5 text-content-muted" />;
   }
-}
-
-function formatTimeAgo(iso: string): string {
-  try {
-    const ms = Date.now() - new Date(iso).getTime();
-    const sec = Math.floor(ms / 1000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
-    return `${Math.floor(hr / 24)}d ago`;
-  } catch { return iso; }
 }
 
 // ─── Edit Node Dialog ──────────────────────────────────────────────────
@@ -194,79 +178,14 @@ function EditNodeDialog({
   );
 }
 
-// ─── Node Row ──────────────────────────────────────────────────────────
-
-function NodeRow({
-  node,
-  onEdit,
-  onDelete,
-}: {
-  node: NodeDetail;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-line-subtle/50 last:border-b-0 hover:bg-surface-hover/30 transition-colors group">
-      <div className="flex-shrink-0 mt-0.5">
-        {nodeTypeIcon(node.nodeType)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs font-medium text-content-tertiary uppercase">
-            {nodeTypeLabel(node.nodeType)}
-          </span>
-          <span className="text-[10px] text-content-faint font-mono">
-            {node.id.slice(0, 8)}
-          </span>
-          <span className="text-[10px] text-content-faint">
-            depth {node.depth} · {node.childCount} children
-          </span>
-        </div>
-        <p className="text-sm text-content-secondary line-clamp-2">
-          {node.content}
-        </p>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-content-faint">
-          <span className="flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {node.authorDisplayName || node.authorId.slice(0, 8)}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {formatTimeAgo(node.createdAt)}
-          </span>
-          {node.editedAt && (
-            <span className="text-amber-500/70">(edited)</span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-md text-content-faint hover:text-accent-2 hover:bg-accent-2/10"
-          title="Edit content"
-          aria-label={`Edit node ${node.id.slice(0, 8)}`}
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10"
-          title="Delete node"
-          aria-label={`Delete node ${node.id.slice(0, 8)}`}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Component ────────────────────────────────────────────────────
 
 export default function NodesPage() {
+  const navigate = useNavigate();
   const [trees, setTrees] = useState<TreeSummary[]>([]);
   const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeDetail[]>([]);
+  const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [nodesLoading, setNodesLoading] = useState(false);
   const [treesLoading, setTreesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -307,9 +226,30 @@ export default function NodesPage() {
     }
   }, []);
 
+  /**
+   * Topic titles for the cards' `#topic` pills.
+   *
+   * A node's metadata may reference a topic by id or slug; this resolves
+   * that to the real title. Best-effort — a failure here must not surface
+   * an error banner or block the node list, the pills simply fall back to
+   * the slug the metadata carried.
+   */
+  const fetchTopics = useCallback(async (treeId: string) => {
+    try {
+      const data = await apiGet<ListTopicsResponse>(
+        `/topics?tree_id=${encodeURIComponent(treeId)}&limit=100`,
+      );
+      setTopics(Array.isArray(data.topics) ? data.topics : []);
+    } catch {
+      setTopics([]);
+    }
+  }, []);
+
   const handleTreeSelect = (treeId: string) => {
     setSelectedTreeId(treeId);
     void fetchNodes(treeId);
+    if (treeId) void fetchTopics(treeId);
+    else setTopics([]);
   };
 
   const handleDeleteNode = async () => {
@@ -338,6 +278,21 @@ export default function NodesPage() {
           n.id.includes(searchQuery),
       )
     : nodes;
+
+  // Author identities and topic titles are derived once per fetch, not
+  // per card — every card would otherwise rebuild the same two maps.
+  const authorNames = useMemo(() => nodeAuthorNames(nodes), [nodes]);
+  const topicTitles = useMemo(() => indexTopicTitles(topics), [topics]);
+
+  const openTopic = useCallback(
+    (topicId: string | null) => {
+      const params = new URLSearchParams();
+      if (selectedTreeId) params.set('tree', selectedTreeId);
+      if (topicId) params.set('topic', topicId);
+      navigate(`/topics?${params.toString()}`);
+    },
+    [navigate, selectedTreeId],
+  );
 
   const selectedTree = trees.find((t) => t.id === selectedTreeId);
 
@@ -440,12 +395,20 @@ export default function NodesPage() {
 
       {/* Loading nodes */}
       {nodesLoading && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-lg p-4 animate-pulse">
-              <div className="h-3 bg-surface-input rounded w-20 mb-2" />
-              <div className="h-4 bg-surface-input rounded w-96 mb-1" />
-              <div className="h-3 bg-surface-input rounded w-32" />
+            <div
+              key={i}
+              className="animate-pulse rounded-xl border border-line-subtle bg-surface-panel p-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-7 w-7 shrink-0 rounded-full bg-surface-input" />
+                <div className="flex-1">
+                  <div className="mb-2 h-3.5 w-32 rounded bg-surface-input" />
+                  <div className="h-3 w-48 rounded bg-surface-input" />
+                </div>
+              </div>
+              <div className="mt-3 h-4 w-full max-w-lg rounded bg-surface-input" />
             </div>
           ))}
         </div>
@@ -464,21 +427,27 @@ export default function NodesPage() {
 
       {/* Node list */}
       {selectedTree && !nodesLoading && filteredNodes.length > 0 && (
-        <div className="rounded-xl border border-line-subtle bg-surface-panel overflow-hidden">
-          <div className="px-4 py-3 border-b border-line-subtle flex items-center justify-between">
-            <h3 className="text-xs font-medium text-content-tertiary">
+        <section aria-label={`Nodes in ${selectedTree.title}`}>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-xs font-medium text-content-tertiary">
+              {nodeTypeIcon('message')}
               {selectedTree.title} — {nodes.length} nodes
-            </h3>
+            </h2>
           </div>
-          {filteredNodes.map((node) => (
-            <NodeRow
-              key={node.id}
-              node={node}
-              onEdit={() => setEditNode(node)}
-              onDelete={() => setDeleteNodeId(node.id)}
-            />
-          ))}
-        </div>
+          <div className="space-y-3">
+            {filteredNodes.map((node) => (
+              <NodeCard
+                key={node.id}
+                node={node}
+                authorNames={authorNames}
+                topicTitles={topicTitles}
+                onEdit={() => setEditNode(node)}
+                onDelete={() => setDeleteNodeId(node.id)}
+                onOpenTopic={openTopic}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Edit dialog */}
