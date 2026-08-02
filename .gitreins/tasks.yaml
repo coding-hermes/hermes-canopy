@@ -309,5 +309,30 @@ tasks:
   - npm run build + tsc --noEmit + lint all pass; existing 49/49 vitest + 42/42 Playwright
     suites stay green
   - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by trailer"
-  status: pending
+  status: complete
   created_at: '2026-08-02T01:45:27.292425+00:00'
+  completed_at: '2026-08-02T04:19:47.993307+00:00'
+- id: UI-05
+  title: 'Mockup parity UI-05: Node card redesign (vision-brief v2.0)'
+  criteria:
+  - "Nodes page rows replaced with card format: circular avatar (initials, per-author\
+    \ deterministic color) top-left, timestamp top-right, body content, #topic hashtag\
+    \ pill, '\xB7\xB7\xB7' overflow menu (Edit/Delete)"
+  - "Reuses UI-04 primitives (NodeAvatar/describeNodeAvatar from src/lib/nodeAvatar.ts\
+    \ + src/components/nodes/NodeChrome.tsx) \u2014 no parallel avatar system"
+  - Raw-ID row format replaced; short id retained only as aria-label/title for a11y;
+    depth/child-count info preserved subtly
+  - "Hashtag pill derives from node metadata (topic reference) when present, hidden\
+    \ gracefully otherwise \u2014 no invented topic API"
+  - Overflow menu has accessible semantics (aria-expanded, aria-haspopup, Escape closes);
+    keyboard navigation + focus-visible preserved
+  - Edit, delete, search filtering, and tree selector keep working unchanged
+  - Design tokens used exclusively (no hardcoded hex); WCAG AA contrast for pill/avatar
+    text/timestamps
+  - Unit tests for new pure helpers (topic-pill derivation, card meta formatting)
+    pass (vitest 193 + new)
+  - npm run build + tsc --noEmit + lint all pass; 42/42 Playwright integration suite
+    stays green
+  - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by trailer"
+  status: pending
+  created_at: '2026-08-02T04:22:00.701495+00:00'
