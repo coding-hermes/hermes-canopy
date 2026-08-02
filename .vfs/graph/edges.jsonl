@@ -1334,3 +1334,7 @@
 {"from":"frontend/src/components/MessageComposer.tsx","to":"local:../lib/composer.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/lib/__tests__/composer.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/lib/__tests__/composer.test.ts","to":"local:../composer","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/hooks/__tests__/usePresence.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/hooks/__tests__/usePresence.test.ts","to":"local:../usePresence.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/hooks/__tests__/usePresence.test.ts","to":"local:../../types/multiUser.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/handler/api_integration_extended_test.go","to":"std:context","rel":"imports","provenance":"ast_exact","confidence":1.0}

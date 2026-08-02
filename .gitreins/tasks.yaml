@@ -388,8 +388,9 @@ tasks:
     tests with PG) pass
   - 'No frontend changes; commit includes Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
     trailer'
-  status: pending
+  status: complete
   created_at: '2026-08-02T06:32:12.657379+00:00'
+  completed_at: '2026-08-02T07:33:36.614567+00:00'
 - id: BUG-030
   title: 'Fix composer read-only: usePresence.ts initial local permission ''viewer''
     -> ''editor'' (single-user default)'
@@ -409,5 +410,32 @@ tasks:
     green
   - "Frontend/ only \u2014 no Go changes; commit includes Co-authored-by: Alexis Okuwa\
     \ <wojonstech@gmail.com> trailer"
-  status: pending
+  status: complete
   created_at: '2026-08-02T06:32:13.694419+00:00'
+  completed_at: '2026-08-02T07:35:27.776953+00:00'
+- id: UI-07
+  title: "UI-07: Keyboard shortcuts \u2014 j/k navigate, h/l drill, m merge, ? help\
+    \ + footer strip"
+  criteria:
+  - "frontend/src/lib/shortcuts.ts exposes SHORTCUTS metadata (key/label/description,\
+    \ single source) + shouldIgnoreShortcut guard returning true for input/textarea/contentEditable\
+    \ targets and when ctrl/meta/alt is held \u2014 with unit tests covering the matrix"
+  - "j/k move tree selection down/up in TreeView, h/l collapse/expand the focused\
+    \ branch (reusing treeCollapse helpers), m navigates to /approvals, ? toggles\
+    \ the shortcut help overlay \u2014 all wired via one window keydown hook (useShortcuts.ts)\
+    \ with proper cleanup"
+  - "Typing in MessageComposer is unaffected \u2014 no single-key shortcut fires while\
+    \ composing (guard proven by test)"
+  - "NavigationBar footer strip shows the new keys (j/k \xB7 h/l \xB7 m \xB7 ?) using\
+    \ the existing <kbd> chip pattern, subtle text-[11px] text-content-faint, hidden\
+    \ on small screens"
+  - Help overlay lists all shortcuts from the SHORTCUTS source, closes on Escape/outside
+    click, role=dialog + aria-modal + accessible name
+  - 'Existing keyboard infra intact: TreeCanvas Ctrl+0/=/-/Tab/Enter/Escape/Home still
+    work; NavigationBar search Arrows/Enter/Escape still work'
+  - npm run test green (299 baseline + new shortcuts tests), tsc --noEmit clean, oxlint
+    0 errors, npm run build green
+  - 'Frontend-only commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
+    trailer'
+  status: in_progress
+  created_at: '2026-08-02T07:33:45.906160+00:00'

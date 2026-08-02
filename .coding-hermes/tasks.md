@@ -138,8 +138,9 @@
 || UI-09 | Visual regression baseline — capture mockup-vs-app screenshots for all 4 vision-brief mockups (graph nav, cards, collaboration, topics), store as golden images, wire pixel-diff into E2E-001 loop so parity regressions fail CI. | Medium | 4 | UI-01→UI-08, E2E-001 | ++testing, ++visual-regression, ++screenshots | GPT-5.6 Luna | Medium | Step 3.7 Flash |
 ||| BUG-027 | Guard-blocking test suite issues (2): (1) SSE subscribe/flush race — sse_handler.go flushed the 200 header BEFORE subscribing, so a broadcast landing in that window is missed and block-reading clients hang forever (internal/sse package 600s timeout under `go test ./...` parallel load). FIXED 2026-08-01 — handler subscribes BEFORE writing headers (client outbox buffers bytes so nothing hits the wire early); subscribe-failure now returns real HTTP 500 since headers aren't committed. (2) TestINT05_2000NodeTree — 2000 sequential HTTP node creates took 2.5-3+ min (75ms+/node on busy DB from leaked test DBs), blowing guard package timeouts in parallel runs. FIXED — honors `-short` (guard mode) with 300 nodes (187s→25s); full 2000-node run preserved for non-short CI/benchmark ticks. | High | 3 | sse, handler | ++bug, ++sse, ++concurrency, ++testing, ++benchmark | DeepSeek V4 Pro | High | GLM-5.2 |
 ||| ✅ BUG-028 | BUG-025 regression: NodeAccessMiddleware tree-scoped branch (/api/v1/nodes/{tree_id}/nodes/{node_id}) never validated node_id at parts[5] — malformed UUID → 403 NOT_TREE_MEMBER instead of 400 INVALID_NODE_ID. FIXED Tick 116-CONCURRENT (10c1370, +9 lines): validate parts[5] before membership check. TestBE12_ValidationErrors PASSES now. Judge PASS 54a07a2d (5/5 ACs). Found via FULL suite run (siblings' filtered 38-test runs missed it). | High | 2 | BUG-025 | ++bug, ++middleware, ++api-contract, ++security | DeepSeek V4 Flash | Low | — |
-||| 🔄 BUG-029 | Root node creation 503: internal/service/node_service.go:411 unconditionally inserts an edge with source_id = input.ParentID (uuid.Nil when unset) — violates edges_source_id_fkey. Live-verified by UI-06 worker (root create 503s; replies with parent_id return 201). Fix: skip edge insert for root nodes (no parent edge) or use NULL source with schema allowance. FOUND Tick 123 (worker report, code-verified foreman-side). | High | 3 | UI-06 | ++backend, ++bug, ++db, ++api-contract | DeepSeek V4 Pro | High | GLM-5.2 |
-||| 🔄 BUG-030 | Composer renders read-only for everyone: frontend/src/hooks/usePresence.ts:135 hardcodes permission: 'viewer' in initial local presence → TreeView readOnly={isViewer} is true in live app (no way to send messages). Worker flipped locally to test, restored (no diff). Fix: derive permission from real membership/role (or default 'editor' for the local single-user case) with tests. FOUND Tick 123 (worker report, code-verified foreman-side). | High | 2 | UI-06 | ++frontend, ++bug, ++presence, ++permissions | DeepSeek V4 Flash | Medium | Hy3 |
+|||| ✅ BUG-029 | Root node creation 503: internal/service/node_service.go:411 unconditionally inserts an edge with source_id = input.ParentID (uuid.Nil when unset) — violates edges_source_id_fkey. FIXED Tick 125 (3c49734) — edge insert wrapped in `if input.ParentID != uuid.Nil`, root nodes return Edge: nil (edge: null). 2 new handler tests (TestAPI_NodeCreate_RootNode_NoEdge_BUG029 + ReplyNode_HasEdge_BUG029) PASS live with PG. Judge PASS 626656ae (7/7 ACs). Worker glm-5.2 @ zai-glm. | High | 3 | UI-06 | ++backend, ++bug, ++db, ++api-contract | DeepSeek V4 Pro | High | GLM-5.2 |
+|||| ✅ BUG-030 | Composer renders read-only for everyone: frontend/src/hooks/usePresence.ts:135 hardcodes permission: 'viewer' in initial local presence → TreeView readOnly={isViewer} is true in live app. FIXED Tick 125 (cdd7c97) — buildInitialPresence defaults to 'editor'; remote peer permission preserved (payload.permission). 6 new usePresence tests. Vitest 299/299. Judge PASS ec8c3ebc (7/7 ACs). Worker hy3 @ custom:opencode-go. | High | 2 | UI-06 | ++frontend, ++bug, ++presence, ++permissions | DeepSeek V4 Flash | Medium | Hy3 |
+|||| 🔄 UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. Wire to existing FE-04 shortcut infra. DISPATCHED Tick 125 (Hy3 @ custom:opencode-go, PID 1575885, prompt /tmp/canopy_ui07_prompt.txt) — gitreins task created (8 ACs) + in_progress pre-dispatch. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
 
@@ -1409,3 +1410,50 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 87/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-06 ✅ (judge PASS 32c9da94), BUG-029/030 IN FLIGHT (composer blockers), UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1336/207. Vitest 293/293. E2E 42/42 (judge-verified this tick).
 
 **Next tick:** steward BUG-029 + BUG-030 to completion (verify commits → guard → judge each → board sync) → dispatch UI-07 (keyboard shortcuts, Hy3) once both workers have exited.
+
+---
+
+## Tick 125 — 2026-08-02 02:00 UTC (scheduler tick hermes-canopy-2026-08-02-02-00-28)
+
+**Verdict: PRODUCTIVE** — Both composer blockers stewarded to completion (BUG-029 judge PASS 626656ae, BUG-030 judge PASS ec8c3ebc), UI-07 dispatched (keyboard shortcuts), board-v2 synced, 4 commits pushed (2 worker + 2 board).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN → 2 WORKER COMMITS → BOARD DELTAS | Tick start: BUG-030 committed (cdd7c97), BUG-029 worker in flight (staged, not committed). BUG-029 landed mid-tick (3c49734, 02:30 CDT). Final deltas: board parquet (sync), .gitreins/tasks.yaml (+30 — judge completion records), edges.jsonl (+4 legit edges), untracked frontend/playwright-report/ (left). |
+| 2 | Worker health | ✅ BOTH EXITED | BUG-029 (glm-5.2 @ zai-glm, PID 896076): exited after commit, 47 min runtime (2 full-suite verification runs — service + handler integration tests live with PG). BUG-030 (hy3 @ custom:opencode-go, PID 896946): exited Tick 124-125 window after commit cdd7c97. |
+| 3 | BUG-029 verify | ✅ BUILD/VET/GOFMT/TESTS | go build + go vet exit 0; gofmt -l empty on all 3 changed files; commit 3c49734 (node_service.go edge-insert wrapped in `if input.ParentID != uuid.Nil`, root → Edge: nil; node_service_test.go +149; api_integration_extended_test.go +113). Targeted tests live with PG: TestAPI_NodeCreate_RootNode_NoEdge_BUG029 PASS (2.54s), TestAPI_NodeCreate_ReplyNode_HasEdge_BUG029 PASS (3.25s), TestAPI_NodeReply PASS (11.34s). |
+| 4 | BUG-030 verify | ✅ TSC/VITEST/BUILD | tsc --noEmit exit 0; vitest 299/299 (293 baseline + 6 new usePresence tests); build green. Commit cdd7c97 (frontend-only: usePresence.ts + test, +123/−9). |
+| 5 | GitReins judge BUG-029 | ✅ **PASS 626656ae** | `timeout 900 gitreins task complete BUG-029`: tier1 PASS (full guard — secrets/go_build/go_lint/go_tests) + tier2 PASS, all 7 ACs with file:line + live PG evidence (root create 201 + edge_count=0; reply edge non-nil; all callers handle nil Edge — node_handler only derefs out.Node). Task complete (completed_at 07:33:36Z). |
+| 6 | GitReins judge BUG-030 | ✅ **PASS ec8c3ebc** | `timeout 900 gitreins task complete BUG-030`: tier1 PASS + tier2 PASS, all ACs verified (usePresence.ts:57-75 buildInitialPresence → 'editor'; TreeView:265/363 isViewer/readOnly chain; remote payload.permission preserved; 299 vitest; tsc/build/oxlint clean). Task complete (completed_at 07:35:27Z). |
+| 7 | Hilo | ✅ USEFUL | Fresh stats: 1339 edges / 208 files (up from 1336/207 — BUG-029/030 edges indexed). edges.jsonl +4 ast_exact edges all reference HEAD files — committed with board. |
+| 8 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 9 | Deps | ⚠️ 164 Go outdated | Stable (unchanged since Tick 113). |
+| 10 | Secrets | ✅ CLEAN | Judge tier1 secrets checks PASS both runs (full mode). |
+| 11 | Board-v2 | ✅ SYNCED | BUG-029 → complete (3c49734, guard PASS, verdict 626656ae), BUG-030 → complete (cdd7c97, verdict ec8c3ebc), UI-07 → in_progress + dispatched_at. Events 18/19/20 (task_completed ×2 + task_dispatched) @ tick 125. Board metadata: ticks_total=125, last_commit=3c49734. Parquet re-exported (absolute paths). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin), Priority=10, Weight=10. No concurrent canopy session. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 healthy (up 10 min at tick start — container restarted ~01:50). 26 test DBs during worker verification; sweep self-heals on pool creation. |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 124 (judge re-run, 42/42). Next window 128-133. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. Deps stable. gh run list: no CI signal (Actions not enabled — fleet-wide). |
+| 16 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 125 entry saved. |
+| 17 | Dispatch | ✅ 1 WORKER — UI-07 (Hy3) | **UI-07 dispatched** (PID 1575885, hy3 @ custom:opencode-go): keyboard shortcuts — j/k navigate, h/l drill, m merge, ? help overlay + footer strip. GitReins task created pre-dispatch (8 ACs). Prompt /tmp/canopy_ui07_prompt.txt with verified facts (existing TreeCanvas/NavigationBar keydown infra, routes for view selector, composer typing guard pitfall, 299 vitest baseline). |
+
+### Actions this tick
+
+- **BUG-029: CLOSED ✅** — root node create 503 root-fixed (edge FK violation). Worker (glm-5.2) committed 3c49734 after two full verification runs; foreman verified independently (build/vet/gofmt + targeted live-PG tests) and judged PASS 626656ae (7/7 ACs). This unblocks the composer's root-message flow (UI-06 follow-up).
+- **BUG-030: CLOSED ✅** — composer read-only root-fixed (local presence default 'viewer' → 'editor'). Worker (hy3) committed cdd7c97; foreman verified (tsc, vitest 299/299) and judged PASS ec8c3ebc (7/7 ACs). Composer now editable for the local single-user case with remote peer permission preserved.
+- **UI-07 dispatched** per Tick 124 handoff ("dispatch UI-07 once both workers have exited") — both exited, so dispatched immediately with pre-created gitreins task.
+- **Board-v2 sync**: both completions + dispatch event + metadata advanced to tick 125 (single write, parquet re-exported, verified read-back).
+- **Pushed**: 2 worker commits + board deltas → origin/master (cleared the 2-commit local backlog).
+
+### Remaining open
+
+- UI-07: IN FLIGHT (Hy3 worker, keyboard shortcuts — PID 1575885).
+- UI-08, UI-09: pending sequential after UI-07.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 89/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-06 ✅, BUG-029 ✅ + BUG-030 ✅ (composer blockers closed), UI-07 IN FLIGHT, UI-08/09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1339/208. Vitest 299/299. E2E 42/42 (Tick 124).
+
+**Next tick:** steward UI-07 to completion (verify commit → guard → judge → board sync) → dispatch UI-08 (node list hierarchy, Hy3).
