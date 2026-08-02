@@ -1,21 +1,18 @@
 /**
- * Hermes Canopy — Topics Rail (UI-02, Phase 11 Mockup Parity)
+ * Hermes Canopy — Topics sidebar section (UI-02 + sidebar consolidation)
  *
- * A persistent left rail listing the topics of the active tree, mounted
- * in `App.tsx` `Layout()` so it survives route changes (mockup-1.png).
+ * Lives INSIDE the main sidebar (`App.tsx` `Layout()`), below the primary
+ * navigation buttons, separated by a horizontal rule — ChatGPT-style
+ * single-rail layout. Survives route changes (mockup-1.png).
  *
- * Column order matches the mockup:
- *
- *     [ main nav sidebar ] [ TOPICS RAIL ] [ header + <Outlet/> ]
- *
- * Contents, top to bottom:
- *   • header       — "Topics" + inline `+` create button
- *   • scroll list  — topic pills: semantic icon, title, node-count badge
- *   • ghost button — dashed "New topic"
- *   • footer       — pinned settings + refresh controls
+ * Layout, top to bottom:
+ *   • header    — "Topics" + count + sort select + `+` create button
+ *   • search    — filter box over the topic list (client-side)
+ *   • list      — scrollable topic pills: semantic icon, title, count badge
+ *   • footer    — pinned settings + refresh controls
  *
  * The backend list endpoint is tree-scoped (`GET /topics?tree_id=…` returns
- * 400 MISSING_TREE_ID otherwise), so the rail resolves a tree first via
+ * 400 MISSING_TREE_ID otherwise), so the section resolves a tree first via
  * `GET /trees` and remembers the choice in `localStorage` — the same tree
  * the user picked on the Topics page.
  *
@@ -32,8 +29,8 @@ import {
   Settings,
   Inbox,
   AlertCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Search,
+  ArrowDownWideNarrow,
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import type { TopicSummary, TreeSummary } from '../types/topic';
@@ -54,17 +51,17 @@ interface ListTreesResponse {
   trees: TreeSummary[];
 }
 
+type SortMode = 'count' | 'name' | 'newest';
+
 // ─── Topic pill ────────────────────────────────────────────────────────
 
 function TopicPill({
   topic,
   active,
-  collapsed,
   onSelect,
 }: {
   topic: TopicSummary;
   active: boolean;
-  collapsed: boolean;
   onSelect: () => void;
 }) {
   const Icon = topicIcon(topic.title);
@@ -75,10 +72,9 @@ function TopicPill({
       type="button"
       onClick={onSelect}
       aria-current={active ? 'true' : undefined}
-      title={collapsed ? `${topic.title} — ${count} nodes` : undefined}
+      title={`${topic.title} — ${count} nodes`}
       className={[
-        'group w-full flex items-center rounded-lg transition-colors text-left',
-        collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-2.5 py-2',
+        'group w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors text-left',
         active
           ? 'bg-accent-2/12 ring-1 ring-inset ring-accent-2/35'
           : 'ring-1 ring-inset ring-transparent hover:bg-surface-hover/50',
@@ -96,36 +92,32 @@ function TopicPill({
         <Icon className="h-3.5 w-3.5" />
       </span>
 
-      {!collapsed && (
-        <>
-          <span
-            className={[
-              'flex-1 min-w-0 truncate text-sm',
-              active
-                ? 'font-medium text-content-primary'
-                : 'text-content-tertiary group-hover:text-content-primary',
-            ].join(' ')}
-          >
-            {topic.title}
-          </span>
-          <span
-            aria-label={`${count} nodes`}
-            className={[
-              'shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-inset',
-              active
-                ? 'bg-accent-2/15 text-accent-2-300 ring-accent-2/30'
-                : 'bg-surface-input text-content-muted ring-line-subtle',
-            ].join(' ')}
-          >
-            {count}
-          </span>
-        </>
-      )}
+      <span
+        className={[
+          'flex-1 min-w-0 truncate text-sm',
+          active
+            ? 'font-medium text-content-primary'
+            : 'text-content-tertiary group-hover:text-content-primary',
+        ].join(' ')}
+      >
+        {topic.title}
+      </span>
+      <span
+        aria-label={`${count} nodes`}
+        className={[
+          'shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-inset',
+          active
+            ? 'bg-accent-2/15 text-accent-2-300 ring-accent-2/30'
+            : 'bg-surface-input text-content-muted ring-line-subtle',
+        ].join(' ')}
+      >
+        {count}
+      </span>
     </button>
   );
 }
 
-// ─── Rail ──────────────────────────────────────────────────────────────
+// ─── Sidebar section ───────────────────────────────────────────────────
 
 export default function TopicsRail() {
   const navigate = useNavigate();
@@ -142,7 +134,8 @@ export default function TopicsRail() {
   const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('count');
 
   // Latest requested tree, so an out-of-order response can't overwrite a
   // newer one (StrictMode double-invokes effects in dev).
@@ -225,76 +218,121 @@ export default function TopicsRail() {
     navigate(`/topics?${params.toString()}`);
   };
 
-  const railWidth = collapsed ? 'w-16' : 'w-60';
+  // Client-side filter + sort (search + sort controls, ChatGPT-style rail)
+  const q = query.trim().toLowerCase();
+  const visible = topics
+    .filter((t) => !q || t.title.toLowerCase().includes(q))
+    .sort((a, b) => {
+      switch (sortMode) {
+        case 'name':
+          return a.title.localeCompare(b.title);
+        case 'newest':
+          return b.created_at.localeCompare(a.created_at);
+        case 'count':
+        default:
+          return (
+            (b.node_count ?? 0) - (a.node_count ?? 0) ||
+            a.title.localeCompare(b.title)
+          );
+      }
+    });
 
   return (
-    <nav
+    <section
       aria-label="Topics"
       data-testid="topics-rail"
-      className={`${railWidth} hidden md:flex shrink-0 flex-col border-r border-line-subtle bg-surface-panel/60 transition-[width] duration-200`}
+      className="flex min-h-0 flex-1 flex-col border-t border-line-subtle"
     >
-      {/* Header */}
-      <div
-        className={`flex h-14 shrink-0 items-center border-b border-line-subtle ${
-          collapsed ? 'justify-center px-2' : 'gap-2 px-4'
-        }`}
-      >
-        {!collapsed && (
-          <h2 className="flex-1 text-sm font-semibold tracking-tight text-content-primary">
-            Topics
-          </h2>
-        )}
+      {/* Header — title + count, sort, new */}
+      <div className="flex shrink-0 items-center gap-1.5 px-4 pt-3 pb-2">
+        <h2 className="flex-1 min-w-0 text-sm font-semibold tracking-tight text-content-primary">
+          Topics
+        </h2>
+        <span
+          aria-hidden="true"
+          className="shrink-0 rounded-sm bg-surface-input px-1.5 py-0.5 text-[11px] tabular-nums text-content-muted ring-1 ring-inset ring-line-subtle"
+        >
+          {topics.length}
+        </span>
+        <label className="sr-only" htmlFor="topics-sort">
+          Sort topics
+        </label>
+        <div className="relative shrink-0">
+          <ArrowDownWideNarrow
+            className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-content-muted"
+            aria-hidden="true"
+          />
+          <select
+            id="topics-sort"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            aria-label="Sort topics"
+            className="h-7 appearance-none rounded-md bg-surface-input pl-6 pr-5 text-[11px] font-medium text-content-secondary ring-1 ring-inset ring-line-subtle transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <option value="count">Count</option>
+            <option value="name">A–Z</option>
+            <option value="newest">Newest</option>
+          </select>
+        </div>
         <button
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? 'Expand topics rail' : 'Collapse topics rail'}
-          aria-expanded={!collapsed}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-content-muted ring-1 ring-inset ring-line-subtle transition-colors hover:bg-surface-hover hover:text-content-primary"
+          onClick={openCreate}
+          aria-label="New topic"
+          title="New topic"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-2/15 text-accent-2-300 ring-1 ring-inset ring-accent-2/30 transition-colors hover:bg-accent-2/25"
         >
-          {collapsed ? (
-            <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={openCreate}
-            aria-label="New topic"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-2/15 text-accent-2-300 ring-1 ring-inset ring-accent-2/30 transition-colors hover:bg-accent-2/25"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        )}
       </div>
 
-      {/* Topic list */}
-      <div className={`flex-1 overflow-y-auto ${collapsed ? 'p-2' : 'p-3'} space-y-1`}>
+      {/* Search */}
+      <div className="shrink-0 px-3 pb-2">
+        <label className="sr-only" htmlFor="topics-search">
+          Search topics
+        </label>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-muted"
+            aria-hidden="true"
+          />
+          <input
+            id="topics-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search topics…"
+            className="w-full rounded-md bg-surface-input py-1.5 pl-8 pr-3 text-[13px] text-content-primary placeholder:text-content-faint ring-1 ring-inset ring-line-subtle transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+        </div>
+      </div>
+
+      {/* Topic list — scrollable */}
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-1">
         {loading && (
           <div className="space-y-1" aria-hidden="true">
             {[0, 1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className={`animate-pulse rounded-lg bg-surface-input/70 ${
-                  collapsed ? 'h-11' : 'h-11'
-                }`}
+                className="h-11 animate-pulse rounded-lg bg-surface-input/70"
               />
             ))}
           </div>
         )}
 
-        {!loading && error && !collapsed && (
+        {!loading && error && (
           <div
             role="alert"
             className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[11px] text-status-danger"
           >
-            <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <AlertCircle
+              className="mt-px h-3.5 w-3.5 shrink-0"
+              aria-hidden="true"
+            />
             <span className="min-w-0 break-words">{error}</span>
           </div>
         )}
 
-        {!loading && !error && topics.length === 0 && !collapsed && (
+        {!loading && !error && topics.length === 0 && (
           <div className="rounded-lg border border-line-subtle bg-surface-panel px-3 py-6 text-center">
             <Inbox
               className="mx-auto mb-2 h-6 w-6 text-content-faint"
@@ -310,18 +348,32 @@ export default function TopicsRail() {
         )}
 
         {!loading &&
-          topics.map((topic) => (
+          !error &&
+          topics.length > 0 &&
+          visible.length === 0 && (
+            <div className="rounded-lg border border-line-subtle bg-surface-panel px-3 py-6 text-center">
+              <Search
+                className="mx-auto mb-2 h-6 w-6 text-content-faint"
+                aria-hidden="true"
+              />
+              <p className="text-xs font-medium text-content-secondary">
+                No topics match “{query}”
+              </p>
+            </div>
+          )}
+
+        {!loading &&
+          visible.map((topic) => (
             <TopicPill
               key={topic.id}
               topic={topic}
               active={topic.id === activeTopicId}
-              collapsed={collapsed}
               onSelect={() => openTopic(topic)}
             />
           ))}
 
         {/* Ghost "New topic" button — mockup places it below the list */}
-        {!collapsed && !loading && (
+        {!loading && (
           <button
             type="button"
             onClick={openCreate}
@@ -339,15 +391,15 @@ export default function TopicsRail() {
       </div>
 
       {/* Pinned footer — settings + refresh */}
-      <div
-        className={`flex shrink-0 items-center border-t border-line-subtle ${
-          collapsed ? 'flex-col gap-1 p-2' : 'gap-1 px-3 py-2.5'
-        }`}
-      >
+      <div className="flex shrink-0 items-center gap-1 border-t border-line-subtle px-3 py-2">
         <button
           type="button"
           onClick={() =>
-            navigate(treeId ? `/topics?tree=${encodeURIComponent(treeId)}` : '/topics')
+            navigate(
+              treeId
+                ? `/topics?tree=${encodeURIComponent(treeId)}`
+                : '/topics',
+            )
           }
           aria-label="Manage topics"
           title="Manage topics"
@@ -368,12 +420,10 @@ export default function TopicsRail() {
             aria-hidden="true"
           />
         </button>
-        {!collapsed && (
-          <span className="ml-auto text-[11px] tabular-nums text-content-muted">
-            {topics.length} {topics.length === 1 ? 'topic' : 'topics'}
-          </span>
-        )}
+        <span className="ml-auto text-[11px] tabular-nums text-content-muted">
+          {visible.length}/{topics.length} topics
+        </span>
       </div>
-    </nav>
+    </section>
   );
 }

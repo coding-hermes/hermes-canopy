@@ -85,9 +85,9 @@ function Layout() {
         Skip to main content
       </a>
 
-      {/* Sidebar */}
+      {/* Sidebar — single rail: nav buttons, divider, topics section (ChatGPT-style) */}
       <aside
-        className="w-64 shrink-0 bg-surface-panel border-r border-line-subtle flex flex-col"
+        className="w-72 shrink-0 bg-surface-panel border-r border-line-subtle flex flex-col"
         role="navigation"
         aria-label="Main navigation"
       >
@@ -102,7 +102,7 @@ function Layout() {
             Canopy
           </span>
         </div>
-        <nav className="flex-1 p-4 space-y-1" aria-label="Primary navigation">
+        <nav className="p-3 space-y-1" aria-label="Primary navigation">
           {NAV_ITEMS.map(({ to, label, ariaLabel, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -116,13 +116,14 @@ function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* Horizontal rule then topics section — single sidebar, no second column */}
+        <TopicsRail />
+
         <div className="p-4 border-t border-line-subtle">
           <p className="text-xs text-content-faint">Hermes Canopy v0.1.0</p>
         </div>
       </aside>
-
-      {/* Topics rail — persistent across routes (UI-02, mockup-1.png) */}
-      <TopicsRail />
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
