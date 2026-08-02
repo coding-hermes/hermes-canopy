@@ -334,5 +334,38 @@ tasks:
   - npm run build + tsc --noEmit + lint all pass; 42/42 Playwright integration suite
     stays green
   - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by trailer"
-  status: in_progress
+  status: complete
   created_at: '2026-08-02T04:22:00.701495+00:00'
+  completed_at: '2026-08-02T05:17:04.730883+00:00'
+- id: UI-06
+  title: 'Mockup parity UI-06: Composer bar (vision-brief v2.0)'
+  criteria:
+  - "Floating bottom composer bar in TreeView matching mockup-1: paperclip button\
+    \ leftmost, input with placeholder \"Message... use @mention or #topic\", @ /\
+    \ # / emoji icon button cluster, prominent Send button with \u2318\u21B5 keyboard\
+    \ badge"
+  - "Design tokens used exclusively (UI-01 @theme tokens in index.css + theme.ts)\
+    \ \u2014 no hardcoded hex colors"
+  - "Send is wired to the REAL node-create API: POST /api/v1/trees/{tree_id}/nodes\
+    \ with snake_case JSON body {parent_id, content, content_format, node_type} via\
+    \ lib/api.ts apiPost \u2014 no console.log stub, no invented endpoints"
+  - 'Reply flow preserved: replying to a node (replyToNodeId in TreeView) sends parent_id=that
+    node; root messages send parent_id=null; ghost-slot reply target cleared on send'
+  - "Attachment paperclip opens a file picker (existing MessageComposer attachment\
+    \ behavior preserved or reimplemented); no file upload API exists \u2014 do not\
+    \ invent one, files stay client-side"
+  - "@ / # buttons insert the trigger character at cursor (or open a lightweight mention/topic\
+    \ picker); emoji button opens a small picker or inserts emoji \u2014 controls\
+    \ are functional with aria-labels"
+  - "\u2318\u21B5 (Cmd/Ctrl+Enter) sends; textarea auto-grows (existing behavior preserved);\
+    \ disabled/readOnly/viewer states preserved from current MessageComposer props"
+  - All icon buttons have aria-labels + title; keyboard navigation and focus-visible
+    preserved; contrast WCAG AA
+  - "Unit tests for new pure helpers (snake_case node-payload builder, placeholder\
+    \ derivation) in frontend/src/lib/__tests__/ \u2014 vitest suite passes"
+  - npm run build + tsc --noEmit + lint all pass; vitest all green; Playwright 42/42
+    suite stays green
+  - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by:\
+    \ Alexis Okuwa <wojonstech@gmail.com> trailer"
+  status: in_progress
+  created_at: '2026-08-02T05:07:59.109869+00:00'

@@ -131,8 +131,8 @@
 | ✅ UI-02 | Topics sidebar rail — left navigation with topic pills (semantic icon + name + count badge), "New topic" button, settings + refresh at bottom. Currently Topics is a separate page with no persistent rail. DONE Tick 118 (db2b1ce): TopicsRail.tsx (379 lines) + activeTree.ts/topicIcons.ts libs + 3 test files (20 tests), Layout-level integration, real API counts, responsive collapse. Judge PASS 97ff5733 (8/8 ACs). | High | 4 | UI-01, FE-14 | ++frontend, ++ui, ++navigation | Hy3 | Medium | DeepSeek V4 Pro |
 ||| UI-03 | Header upgrade — context title (active topic → active tree → "Knowledge Canopy" fallback) + real-data count badge, "Macro tree view" subtitle, segmented Tree/Detail/Merge selector with icons (accent-highlighted active state, wired to real routes), backend status pill preserved. ✅ Tick 119 (1272d4f, heal of orphaned Hy3 worker): AppHeader.tsx 254L + headerContext.ts 178L (pure resolution logic) + 29 unit tests. tsc/build/lint clean, 49/49 vitest, 42/42 Playwright, a11y single-h1 preserved (h2 in header), WCAG AA. | Medium | 2 | UI-01 | ++frontend, ++ui | Hy3 | Low | DeepSeek V4 Flash |
 ||| ✅ UI-04 | Branching tree canvas — horizontal tree with glowing bezier connector lines, joint dots, expand/collapse chevrons on connectors, ghost placeholder nodes, color-coded circular avatars (initials), reply-count badges, active-node neon glow. Builds on FE-03 React Flow work. ✅ Tick 121 (610a094, Hy3 @ opencode-go): TreeCanvas/TreeView + GlowConnector + NodeChrome (NodeAvatar/ReplyBadge/CollapseChevron/NodeShell) + GhostNode + horizontal d3Layout + 5 pure libs (canvasGeometry/nodeAvatar/replyCounts/treeCollapse/nodeCard) + 5 test files. 193/193 vitest (49 baseline + 144 new), 42/42 Playwright, tsc/build/lint clean, go build/vet clean. Judge PASS b7d69a2f (10/10 ACs). Worker fixed 2 real defects via measurement (active-glow never rendered; ghost-slot label 3.40:1 → 5.51:1 AA). Screenshots /tmp/ui04-shots/. | High | 5 | FE-03, UI-01 | ++frontend, ++visualization, ++graph, ++react | DeepSeek V4 Pro | High | GPT-5.6 Sol |
-||| 🔄 UI-05 | Node card redesign — avatar circle (initials, per-author color), timestamp top-right, body content, #topic hashtag pill, ··· overflow menu, hover states. Replace the checkbox + raw-ID row format. DISPATCHED Tick 121 (Hy3 @ opencode-go, prompt /tmp/canopy_ui05_prompt.txt) — gitreins task created (10 ACs) + in_progress pre-dispatch. | High | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++components | Hy3 | Medium | DeepSeek V4 Flash |
-|| UI-06 | Composer bar — floating bottom input: paperclip attach, "Message... use @mention or #topic" placeholder, @ / # / emoji buttons, Send button with ⌘↵ badge. Wire to existing node-create API (POST /trees/{tree_id}/nodes). | High | 4 | UI-01, BUG-026 | ++frontend, ++ui, ++api-use | Hy3 | Medium | DeepSeek V4 Pro |
+||| ✅ UI-05 | Node card redesign — avatar circle (initials, per-author color), timestamp top-right, body content, #topic hashtag pill, ··· overflow menu, hover states. Replace the checkbox + raw-ID row format. ✅ Tick 122 (970202d, Hy3 @ opencode-go): NodeCard.tsx 374L + lib/nodeMeta.ts 378L + nodeMeta.test.ts 379L + NodesPage.tsx rework (1214+/114−). Guard PASS, judge PASS 4fcfcb43 (10/10 ACs), vitest 240/240, Playwright 42/42 (judge-verified), tsc/build/lint clean, a11y menu semantics (aria-haspopup/expanded, role=menu, Escape/arrows, focus restore). | High | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++components | Hy3 | Medium | DeepSeek V4 Flash |
+||| 🔄 UI-06 | Composer bar — floating bottom input: paperclip attach, "Message... use @mention or #topic" placeholder, @ / # / emoji buttons, Send button with ⌘↵ badge. Wire to existing node-create API (POST /trees/{tree_id}/nodes). DISPATCHED Tick 122 (Hy3 @ opencode-go, PID 224524, prompt /tmp/canopy_ui06_prompt.txt) — gitreins task created (11 ACs) + in_progress pre-dispatch. KEY: handleSendMessage in TreeView is a console.log stub; wire real POST /api/v1/trees/{tree_id}/nodes (snake_case body) via lib/api.ts apiPost. | High | 4 | UI-01, BUG-026 | ++frontend, ++ui, ++api-use | Hy3 | Medium | DeepSeek V4 Pro |
 || UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. Wire to existing FE-04 shortcut infra. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
 || UI-08 | Node list hierarchy — indentation/branch lines for parent-child, clickable node IDs linking to detail, bulk-action bar appearing when checkboxes are selected (delete/merge/tag). Fix screenshot findings: "(1 nodes)" grammar → "(1 node)", dedupe demo tree node IDs (019fb0c2 repeated ×4 in seed data), placeholder author 00000000. | Medium | 3 | UI-01, BUG-026 | ++frontend, ++ui, ++data | Hy3 | Medium | DeepSeek V4 Pro |
 || UI-09 | Visual regression baseline — capture mockup-vs-app screenshots for all 4 vision-brief mockups (graph nav, cards, collaboration, topics), store as golden images, wire pixel-diff into E2E-001 loop so parity regressions fail CI. | Medium | 4 | UI-01→UI-08, E2E-001 | ++testing, ++visual-regression, ++screenshots | GPT-5.6 Luna | Medium | Step 3.7 Flash |
@@ -1278,3 +1278,45 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 85/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅, UI-02 ✅, UI-03 ✅, UI-04 ✅, UI-05 IN FLIGHT, UI-06..09 pending. Scheduler daemon reachable at :9090, fleet.toml pins 900s active cadence. PG healthy at :5437. E2E 42/42 green (this tick). Coverage ~40.7%.
 
 **Verdict:** PRODUCTIVE — UI-04 stewarded to completion: worker's claims verified independently (all gates re-run: 193/193 vitest, 42/42 Playwright, tsc/build/lint, go build/vet), judge PASS b7d69a2f (10/10 ACs), board-v2 synced (ticks_total=121), tracked test-results restored. Next mockup-parity task UI-05 (node card redesign) dispatched to Hy3 with pre-created gitreins task. No regressions. Next tick: steward UI-05 to completion (verify → judge → board).
+
+---
+
+## Tick 122 — 2026-08-02 00:04 CDT (scheduler tick hermes-canopy-2026-08-02-00-04-15)
+
+**Verdict: PRODUCTIVE** — UI-05 stewarded to completion (verify → guard → judge → board sync) + UI-06 dispatched.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN at 970202d + board deltas | Worker's UI-05 commit landed (970202d, 4 files frontend-only, +1214/−114, co-author trailer present). Dirty: edges.jsonl (+12 legit UI-05 edges — committed with board), untracked frontend/playwright-report/ (build artifact, ignored). |
+| 2 | Guard (Tier 1) | ✅ PASS | `timeout 1500 gitreins guard` (test mode full): secrets clean, go_build ok, go_lint ok, go_tests ok, exit 0. Re-ran once to confirm full output. |
+| 3 | Vitest | ✅ 240/240 (10 files) | Fresh run: includes new nodeCard.test.ts (13) + nodeMeta.test.ts — all PASS (1.16s). |
+| 4 | tsc + build + lint | ✅ CLEAN | tsc --noEmit exit 0; npm run build green; oxlint 0 errors / 8 warnings (project baseline). |
+| 5 | GitReins judge UI-05 | ✅ **PASS 4fcfcb43** | `timeout 900 gitreins judge UI-05` background (~9 min). tier1 PASS + tier2 PASS, all 10 ACs with per-AC evidence. Judge independently re-verified: 240 unit tests, 42/42 Playwright, build/tsc/lint, frontend-only commit + trailer. (CLI printed b99e76b0; on-disk dir 4fcfcb43 — known hash-mismatch pitfall, trust newest dir.) |
+| 6 | Hilo | ✅ USEFUL | edges.jsonl +12 legit ast_exact edges from committed UI-05 files (NodeCard.tsx, nodeMeta.ts, NodesPage.tsx) — committed with board per "sibling code already committed" rule. |
+| 7 | Board-v2 | ✅ SYNCED | DuckDB: UI-05 → complete (970202d, guard PASS, verdict 4fcfcb43), UI-06 → in_progress + dispatched_at, events 12 (task_completed UI-05) + 13 (task_dispatched UI-06) @ tick 122, ticks_total=122, last_commit=970202d. Cooldown row corrected 43200 → 900 (fleet.toml pin, no PUT). Parquet re-exported (absolute paths). |
+| 8 | Scheduler | ✅ REACHABLE | :9090, hermes-canopy CooldownS=900 (fleet.toml line 310 pin), no concurrent canopy session. |
+| 9 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (50 local ahead — pushed this tick). gh run list: 0 workflow runs ever (Actions not enabled/billing — consistent with fleet, no CI signal). gh issue list: 0 open. Deps stable. |
+| 10 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 122 entry + status update. |
+| 11 | Off-by-One | ✅ SUBMITTED | Problem submitted for this tick's pattern (see submission id in actions). |
+
+### Actions this tick
+
+- **Verified UI-05 worker claims independently**: guard PASS (twice), vitest 240/240, tsc/build/lint clean, worker commit inspected (NodeCard.tsx 374L with real disclosure menu a11y — aria-haspopup/expanded, role=menu, Escape + focus restore; reuses UI-04 NodeAvatar/nodeAvatar.ts primitives; design tokens only).
+- **Ran the judge** (`timeout 900 gitreins judge UI-05`, background, ~9 min): PASS 4fcfcb43, 10/10 ACs. Worker had committed but not completed the gitreins task — completion record written foreman-side (tasks.yaml UI-05 → complete + completed_at).
+- **Board-v2 sync**: UI-05 complete row, UI-06 in_progress row (pre-dispatch), 2 events @ tick 122, ticks_total=122, last_commit=970202d, cooldown 43200→900 corrected to fleet.toml.
+- **UI-06 dispatched** (PID 224524, Hy3 @ opencode-go): composer bar — mockup-1 reference (vision-verified: paperclip / "Message... use @mention or #topic" placeholder / @ # emoji cluster / Send + ⌘↵ badge), verified facts (handleSendMessage is a console.log stub; real API POST /api/v1/trees/{tree_id}/nodes with snake_case body; apiPost in lib/api.ts; replyToNodeId → parent_id; no upload endpoint — files stay client-side). GitReins task UI-06 created pre-dispatch (11 ACs).
+- **Pushed**: 50 commits (ticks 119-122 backlog) → origin/master. Long-overdue push cleared.
+- **Left**: frontend/playwright-report/ untracked (build artifact — worker's own test output, not committed).
+
+### Remaining open
+
+- UI-06: IN FLIGHT (Hy3 worker, composer bar).
+- UI-07..09: pending sequential after UI-06.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 86/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-05 ✅, UI-06 IN FLIGHT, UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. E2E 42/42 (judge-verified this tick). Coverage ~40.7%.
+
+**Next tick:** steward UI-06 to completion (verify commit → guard → judge → board sync) → dispatch UI-07.

@@ -1317,3 +1317,15 @@
 {"from":"frontend/src/lib/__tests__/replyCounts.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/lib/__tests__/replyCounts.test.ts","to":"local:../treeCollapse","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/lib/__tests__/replyCounts.test.ts","to":"local:../replyCounts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"pkg:react","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"pkg:lucide-react","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"local:./nodes/NodeChrome.tsx","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"local:../lib/nodeAvatar.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"local:../lib/nodeMeta.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/NodeCard.tsx","to":"local:../theme.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/nodeMeta.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/nodeMeta.test.ts","to":"local:../nodeMeta","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/pages/NodesPage.tsx","to":"pkg:react-router-dom","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/pages/NodesPage.tsx","to":"local:../components/NodeCard","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/pages/NodesPage.tsx","to":"local:../lib/nodeMeta","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/pages/NodesPage.tsx","to":"local:../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
