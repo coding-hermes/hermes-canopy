@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -822,4 +823,116 @@ func TestAPI_HealthNoAuth(t *testing.T) {
 		}
 		t.Logf("GET %s no auth: OK", path)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// BUG-029: Root node create 503 — edge FK violation
+// ---------------------------------------------------------------------------
+//
+// Create() unconditionally inserted an edge with source_id = input.ParentID.
+// For root nodes ParentID is uuid.Nil, but edges.source_id is NOT NULL with an
+// FK to nodes(id), so the INSERT violated edges_source_id_fkey and the handler
+// surfaced it as a 503. The fix skips the edge insert for root nodes and
+// returns Edge: nil in CreateNodeResult.
+//
+// These tests prove: (a) root node create returns 201 with no edge, (b) no
+// edge row exists for the root node, and (c) reply create (parent_id set)
+// still returns an edge — the regression guard for the non-root path.
+
+func TestAPI_NodeCreate_RootNode_NoEdge_BUG029(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	defer testutil.TruncateAll(t, pool)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+	tree := createTreeViaHTTP(t, srv, ownerID, "BUG-029 Root Node Test")
+
+	// POST a ROOT node — NO parent_id.
+	rootBody := map[string]any{
+		"content":   "BUG-029 standalone root node",
+		"node_type": "message",
+	}
+	req := apiRequest(t, srv.Server.URL, http.MethodPost,
+		fmt.Sprintf("/api/v1/trees/%s/nodes", tree.ID), ownerID, rootBody)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST root node: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// AC: root create returns 201 (was 503 before the fix).
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST root node: status=%d, want %d; body=%s",
+			resp.StatusCode, http.StatusCreated, string(bodyBytes))
+	}
+
+	var result service.CreateNodeResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode root node result: %v", err)
+	}
+	if result.Node == nil {
+		t.Fatal("root node result has nil Node")
+	}
+	if result.Node.ID == uuid.Nil {
+		t.Fatal("root node has nil ID")
+	}
+	// AC: root nodes have NO edge.
+	if result.Edge != nil {
+		t.Fatalf("root node Edge = %v, want nil (root nodes have no parent edge)", result.Edge)
+	}
+
+	// AC: no edge row exists for the new root node.
+	var edgeCount int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM edges WHERE target_id = $1`, result.Node.ID,
+	).Scan(&edgeCount); err != nil {
+		t.Fatalf("count edges for root node: %v", err)
+	}
+	if edgeCount != 0 {
+		t.Fatalf("edges targeting root node = %d, want 0", edgeCount)
+	}
+	t.Logf("BUG-029 ✓ root node %s created (201), edge=nil, edge_count=0", result.Node.ID)
+}
+
+func TestAPI_NodeCreate_ReplyNode_HasEdge_BUG029(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	defer testutil.TruncateAll(t, pool)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+	tree := createTreeViaHTTP(t, srv, ownerID, "BUG-029 Reply Regression")
+
+	// Create a reply to the tree's root node — parent_id set.
+	reply := createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "BUG-029 reply child")
+
+	// AC: reply nodes MUST have an edge (regression guard).
+	if reply.Edge == nil {
+		t.Fatal("reply node Edge = nil, want non-nil (replies must create a parent edge)")
+	}
+	if reply.Edge.SourceNodeID != tree.RootNodeID {
+		t.Fatalf("reply edge source = %s, want root %s", reply.Edge.SourceNodeID, tree.RootNodeID)
+	}
+	if reply.Edge.TargetNodeID != reply.Node.ID {
+		t.Fatalf("reply edge target = %s, want reply %s", reply.Edge.TargetNodeID, reply.Node.ID)
+	}
+
+	// Verify exactly one edge row in the DB targeting the reply.
+	var edgeCount int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM edges WHERE target_id = $1`, reply.Node.ID,
+	).Scan(&edgeCount); err != nil {
+		t.Fatalf("count edges for reply: %v", err)
+	}
+	if edgeCount != 1 {
+		t.Fatalf("edges targeting reply = %d, want 1", edgeCount)
+	}
+	t.Logf("BUG-029 ✓ reply node %s has edge %s (source=%s)",
+		reply.Node.ID, reply.Edge.ID, reply.Edge.SourceNodeID)
 }

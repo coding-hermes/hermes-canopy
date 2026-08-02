@@ -397,31 +397,37 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		return nil, fmt.Errorf("%w: insert node: %v", ErrDatabaseUnavailable, err)
 	}
 
-	// Insert edge from parent → new node. EdgeRepo.Create handles the
-	// single-parent rule for non-synthesis targets.
-	var createdEdge db.Edge
-	var edgeSeqNum int64
-	if err := tx.QueryRow(ctx, `
-        SELECT COALESCE(MAX(sequence_num), 0) + 1
-        FROM edges
-        WHERE tree_id = $1`, treeID,
-	).Scan(&edgeSeqNum); err != nil {
-		return nil, fmt.Errorf("%w: edge sequence_num: %v", ErrDatabaseUnavailable, err)
-	}
-	err = tx.QueryRow(ctx, `
-        INSERT INTO edges
-            (tree_id, source_id, target_id, edge_type, sequence_num, metadata)
-        VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)
-        RETURNING `+edgeColumns,
-		treeID, input.ParentID, created.ID, edgeType, edgeSeqNum,
-	).Scan(
-		&createdEdge.ID, &createdEdge.TreeID, &createdEdge.SourceID,
-		&createdEdge.TargetID, &createdEdge.EdgeType,
-		&createdEdge.SequenceNum, &createdEdge.Metadata,
-		&createdEdge.CreatedAt, &createdEdge.DeletedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("%w: insert edge: %v", ErrDatabaseUnavailable, err)
+	// Insert edge from parent → new node. Root nodes (no parent) have
+	// NO parent edge — the edges table requires source_id NOT NULL with
+	// an FK to nodes(id), so inserting an edge with source_id = uuid.Nil
+	// violates edges_source_id_fkey and surfaces as a 503 (BUG-029).
+	var edgeDetail *EdgeDetail
+	if input.ParentID != uuid.Nil {
+		var createdEdge db.Edge
+		var edgeSeqNum int64
+		if err := tx.QueryRow(ctx, `
+            SELECT COALESCE(MAX(sequence_num), 0) + 1
+            FROM edges
+            WHERE tree_id = $1`, treeID,
+		).Scan(&edgeSeqNum); err != nil {
+			return nil, fmt.Errorf("%w: edge sequence_num: %v", ErrDatabaseUnavailable, err)
+		}
+		err = tx.QueryRow(ctx, `
+            INSERT INTO edges
+                (tree_id, source_id, target_id, edge_type, sequence_num, metadata)
+            VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)
+            RETURNING `+edgeColumns,
+			treeID, input.ParentID, created.ID, edgeType, edgeSeqNum,
+		).Scan(
+			&createdEdge.ID, &createdEdge.TreeID, &createdEdge.SourceID,
+			&createdEdge.TargetID, &createdEdge.EdgeType,
+			&createdEdge.SequenceNum, &createdEdge.Metadata,
+			&createdEdge.CreatedAt, &createdEdge.DeletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%w: insert edge: %v", ErrDatabaseUnavailable, err)
+		}
+		edgeDetail = edgeToDetail(createdEdge)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -438,7 +444,7 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 
 	return &CreateNodeResult{
 		Node: detail,
-		Edge: edgeToDetail(createdEdge),
+		Edge: edgeDetail, // nil for root nodes (no parent edge)
 	}, nil
 }
 

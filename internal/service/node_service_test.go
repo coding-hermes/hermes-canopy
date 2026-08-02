@@ -183,7 +183,9 @@ func TestSoftDelete_WithNilPool(t *testing.T) {
 // the service maps every field through nodeToDetail.
 type listByTreeRepoStub struct{}
 
-func (n *listByTreeRepoStub) Create(_ context.Context, node *db.Node) (*db.Node, error) { return node, nil }
+func (n *listByTreeRepoStub) Create(_ context.Context, node *db.Node) (*db.Node, error) {
+	return node, nil
+}
 func (n *listByTreeRepoStub) GetByID(_ context.Context, _ uuid.UUID) (*db.Node, error) {
 	return nil, db.ErrNotFound
 }
@@ -225,7 +227,9 @@ func (n *listByTreeRepoStub) GetAncestors(_ context.Context, _ uuid.UUID) ([]db.
 func (n *listByTreeRepoStub) GetSubtree(_ context.Context, _ uuid.UUID, _ int) ([]db.Node, error) {
 	return nil, nil
 }
-func (n *listByTreeRepoStub) GetPath(_ context.Context, _, _ uuid.UUID) ([]db.Node, error) { return nil, nil }
+func (n *listByTreeRepoStub) GetPath(_ context.Context, _, _ uuid.UUID) ([]db.Node, error) {
+	return nil, nil
+}
 func (n *listByTreeRepoStub) Update(_ context.Context, _ uuid.UUID, _ string, _ []byte) (*db.Node, error) {
 	return nil, nil
 }
@@ -317,6 +321,20 @@ func TestListByTree_EmptyTree_ReturnsEmptyNonNil(t *testing.T) {
 		t.Fatalf("ListByTree() = %v, want empty non-nil slice ({\"nodes\": []} contract)", nodes)
 	}
 }
+
+// --- BUG-029 regression tests live in the handler package ---
+//
+// Create() unconditionally inserted an edge with source_id = input.ParentID.
+// For root nodes ParentID is uuid.Nil, but edges.source_id is NOT NULL with
+// an FK to nodes(id) — so the INSERT violated edges_source_id_fkey and the
+// handler surfaced it as a 503. The fix skips the edge insert for root nodes.
+//
+// The regression tests are in internal/handler/api_integration_extended_test.go
+// because that package already has PG integration infrastructure
+// (NewSharedIntegrationPool) — adding PG tests here would add a new
+// concurrent database to the full-suite parallel run and tip the already-
+// borderline handler/plugin suites over their timeouts (the known PG test
+// storm pattern, TEST-004).
 
 // --- helpers (shared) ---
 
