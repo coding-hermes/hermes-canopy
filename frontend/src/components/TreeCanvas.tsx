@@ -1,15 +1,24 @@
 /**
  * Hermes Canopy — Tree Canvas (React Flow)
  *
- * Renders a conversation DAG as a navigable tree view with:
- *   - Custom node types (MessageNode, SynthesisNode, CardNode, TopicNode)
- *   - Custom edge types (ReplyEdge, ForkEdge, SynthesisEdge)
- *   - Expand/collapse for branches
- *   - Zoom-to-fit and focus-on-node animations
+ * Renders a conversation DAG as the branching tree view from the vision
+ * brief (docs/mockups/mockup-1.png):
+ *
+ *   - Horizontal left→right layout (d3-hierarchy, transposed in d3Layout)
+ *   - Glowing bezier connectors with joint dots (edges/GlowConnector)
+ *   - Colour-coded author avatars + reply badges on every card
+ *   - Expand/collapse chevrons on the connector, state persisted per node
+ *   - Dashed ghost slots at the frontier for "add a reply here"
+ *   - Neon glow on the selected node
  *   - Large tree fallback (>500 nodes) with simplified rendering
- *   - Keyboard shortcuts (Ctrl+0 fit, Ctrl+= zoom in, Ctrl+- zoom out)
+ *   - Keyboard shortcuts (Ctrl+0 fit, Ctrl+= zoom in, Ctrl+- zoom out,
+ *     Tab/Shift-Tab cycle, Enter collapse, Home root, Escape deselect)
  *   - MiniMap with dark theme styling
  *   - Collaborative cursors overlay (multi-user)
+ *
+ * Derivation (collapse algebra, reply counts, avatars, connector geometry)
+ * lives in `src/lib/` as pure functions — this component wires them to
+ * React Flow and paints.
  *
  * Built on @xyflow/react v12.
  */
@@ -19,7 +28,6 @@ import {
   Background,
   Controls,
   MiniMap,
-  MarkerType,
   ReactFlowProvider,
   useReactFlow,
   type Node,
@@ -29,10 +37,20 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { TreeNodeCardData } from '../types/tree.ts';
+import type { GhostNodeData, TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
 import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
 import { palette, nodeTypeColor } from '../theme.ts';
+import {
+  buildChildMap,
+  hiddenCountFor,
+  hiddenNodeIds,
+  isCollapsible,
+  pruneCollapsed,
+  toggleCollapsed,
+} from '../lib/treeCollapse.ts';
+import { deriveReplyCounts, replyCountFor } from '../lib/replyCounts.ts';
+import { ghostSlotPosition, isFrontierSlot } from '../lib/canvasGeometry.ts';
 
 // ─── Custom nodes ─────────────────────────────────────────────────────
 
@@ -40,6 +58,7 @@ import { MessageNode } from './nodes/MessageNode.tsx';
 import { SynthesisNode } from './nodes/SynthesisNode.tsx';
 import { CardNode } from './nodes/CardNode.tsx';
 import { TopicNode } from './nodes/TopicNode.tsx';
+import { GhostNode } from './nodes/GhostNode.tsx';
 import { AgentCardNode } from './agent/AgentCardNode.tsx';
 
 // ─── Custom edges ─────────────────────────────────────────────────────
@@ -56,6 +75,7 @@ const nodeTypes: NodeTypes = {
   cardNode: CardNode,
   topicNode: TopicNode,
   agentCardNode: AgentCardNode,
+  ghostNode: GhostNode,
 };
 
 const edgeTypes = {
@@ -63,6 +83,12 @@ const edgeTypes = {
   forkEdge: ForkEdge,
   synthesisEdge: SynthesisEdge,
 };
+
+/** Prefix marking a synthetic ghost slot node — never a real graph id. */
+const GHOST_PREFIX = 'ghost:';
+
+/** Where a ghost slot sits relative to its parent (left→right canvas). */
+const GHOST_OFFSET = { dx: 260, dy: 0 };
 
 // ─── Tree Canvas Props ────────────────────────────────────────────────
 
@@ -79,43 +105,16 @@ export interface TreeCanvasProps {
   collaborativeCursors?: ReactNode;
   /** Called when the user's mouse moves on the canvas (screen coords) */
   onCanvasMouseMove?: (x: number, y: number) => void;
-}
-
-// ─── Collapse helpers ─────────────────────────────────────────────────
-
-/**
- * Compute which nodes should be hidden because an ancestor is collapsed.
- */
-function computeHiddenNodes(
-  _nodes: Node<TreeNodeCardData>[],
-  collapsedNodeIds: Set<string>,
-  edges: Edge[],
-): Set<string> {
-  const hidden = new Set<string>();
-
-  // Build child map
-  const childrenMap = new Map<string, string[]>();
-  for (const edge of edges) {
-    const list = childrenMap.get(edge.source) ?? [];
-    list.push(edge.target);
-    childrenMap.set(edge.source, list);
-  }
-
-  function markDescendants(nodeId: string): void {
-    const children = childrenMap.get(nodeId) ?? [];
-    for (const childId of children) {
-      if (!hidden.has(childId)) {
-        hidden.add(childId);
-        markDescendants(childId);
-      }
-    }
-  }
-
-  for (const nodeId of collapsedNodeIds) {
-    markDescendants(nodeId);
-  }
-
-  return hidden;
+  /**
+   * Invoked when the user activates a ghost "add reply" slot. The parent
+   * node id is passed through; the page decides how to create the reply
+   * (focus the composer, POST /trees/{id}/nodes, …). When omitted, no
+   * ghost slots are rendered — an affordance that does nothing is worse
+   * than none at all.
+   */
+  onCreateReply?: (parentId: string) => void;
+  /** Real author display names, when the page can resolve them. */
+  authorNames?: ReadonlyMap<string, string>;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────
@@ -127,37 +126,185 @@ function TreeCanvasInner({
   nodesDraggable: nodesDraggableOverride,
   collaborativeCursors,
   onCanvasMouseMove,
+  onCreateReply,
+  authorNames,
 }: TreeCanvasProps) {
   const { nodes: allNodes, edges: allEdges, treeTitle, isReady } = tree;
   const reactFlowInstance = useReactFlow();
 
-  // Collapse state
+  // Collapse state — a set of node ids whose subtree is hidden.
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
-  // Compute hidden nodes from collapse state
-  const hiddenNodes = useMemo(
-    () => computeHiddenNodes(allNodes, collapsedNodes, allEdges),
-    [allNodes, collapsedNodes, allEdges],
+  /**
+   * The node wearing the neon active glow.
+   *
+   * This is tracked here rather than read off React Flow's own `selected`
+   * flag: the canvas re-derives its `nodes` array on every render (Yjs
+   * snapshot → layout → enrichment), which replaces the objects React
+   * Flow mutates, so its internal selection never survives a frame. Owning
+   * the id explicitly is what makes the glow actually follow the user.
+   */
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+
+  // Parent→children adjacency, the basis of every derivation below.
+  const childMap = useMemo(() => buildChildMap(allEdges), [allEdges]);
+
+  // Reply counts straight from the graph — never hardcoded.
+  const replyCounts = useMemo(
+    () => deriveReplyCounts(allEdges, allNodes.map((n) => n.id)),
+    [allEdges, allNodes],
   );
 
-  // Filter visible nodes and edges
-  const visibleNodes = useMemo(
-    () => allNodes.filter((n) => !hiddenNodes.has(n.id)),
-    [allNodes, hiddenNodes],
+  /*
+   * Drop collapse entries for nodes that have disappeared.
+   *
+   * The Yjs snapshot is rebuilt on every change, so this runs constantly;
+   * bailing out when nothing was pruned keeps the state identity stable
+   * and avoids an update loop.
+   */
+  useEffect(() => {
+    setCollapsedNodes((prev) => {
+      if (prev.size === 0) return prev;
+      const pruned = pruneCollapsed(prev, allNodes.map((n) => n.id));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [allNodes]);
+
+  // Nodes hidden because an ancestor is collapsed
+  const hiddenNodes = useMemo(
+    () => hiddenNodeIds(childMap, collapsedNodes),
+    [childMap, collapsedNodes],
   );
+
+  // ─── Handlers ────────────────────────────────────────────────────
+
+  /** Toggle collapse/expand for a node's subtree */
+  const toggleCollapse = useCallback((nodeId: string) => {
+    setCollapsedNodes((prev) => toggleCollapsed(prev, nodeId));
+  }, []);
+
+  // ─── Visible graph ───────────────────────────────────────────────
+
+  /**
+   * Visible cards, enriched with the chrome each one needs: reply count,
+   * collapse state, hidden-subtree size and a bound toggle. The toggle is
+   * only attached to nodes that actually have children, so a leaf renders
+   * no chevron.
+   */
+  const visibleNodes = useMemo(() => {
+    const enriched: Node<TreeNodeCardData>[] = [];
+
+    for (const node of allNodes) {
+      if (hiddenNodes.has(node.id)) continue;
+
+      const collapsible = isCollapsible(childMap, node.id);
+      const collapsed = collapsedNodes.has(node.id);
+
+      enriched.push({
+        ...node,
+        selected: node.id === activeNodeId,
+        data: {
+          ...node.data,
+          replyCount: replyCountFor(replyCounts, node.id),
+          collapsed,
+          hiddenCount: collapsed ? hiddenCountFor(childMap, node.id) : 0,
+          ...(collapsible
+            ? { onToggleCollapse: () => toggleCollapse(node.id) }
+            : {}),
+          ...(authorNames ? { authorNames } : {}),
+        },
+      });
+    }
+
+    return enriched;
+  }, [
+    allNodes,
+    hiddenNodes,
+    childMap,
+    collapsedNodes,
+    replyCounts,
+    toggleCollapse,
+    authorNames,
+    activeNodeId,
+  ]);
 
   const visibleNodeIds = useMemo(
     () => new Set(visibleNodes.map((n) => n.id)),
     [visibleNodes],
   );
 
-  const visibleEdges = useMemo(
+  /**
+   * Ghost "add a reply here" slots at the frontier of the tree.
+   *
+   * The dashed marker is part of the graph's visual language (it shows
+   * where the tree can still grow), so it renders for everyone — but it
+   * only becomes clickable when the page supplied a handler, i.e. when
+   * the current user may actually write. Suppressed on large trees, where
+   * the simplified renderer is already fighting for pixels.
+   */
+  const ghostNodes = useMemo(() => {
+    if (shouldUseSimplifiedMode(allNodes.length)) return [];
+
+    const ghosts: Node<GhostNodeData>[] = [];
+    for (const node of visibleNodes) {
+      const eligible = isFrontierSlot({
+        childCount: replyCountFor(replyCounts, node.id),
+        collapsed: collapsedNodes.has(node.id),
+      });
+      if (!eligible) continue;
+
+      ghosts.push({
+        id: `${GHOST_PREFIX}${node.id}`,
+        type: 'ghostNode',
+        position: ghostSlotPosition(node.position, GHOST_OFFSET),
+        draggable: false,
+        selectable: false,
+        data: {
+          parentId: node.id,
+          ...(onCreateReply ? { onCreate: onCreateReply } : {}),
+        },
+      });
+    }
+    return ghosts;
+  }, [onCreateReply, allNodes.length, visibleNodes, replyCounts, collapsedNodes]);
+
+  /** Ghost slots are linked to their parent by a faint reply connector. */
+  const ghostEdges = useMemo(
     () =>
-      allEdges.filter(
-        (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target),
-      ),
-    [allEdges, visibleNodeIds],
+      ghostNodes.map<Edge>((ghost) => ({
+        id: `${ghost.id}:edge`,
+        source: (ghost.data as GhostNodeData).parentId,
+        target: ghost.id,
+        type: 'replyEdge',
+        selectable: false,
+        focusable: false,
+        data: { dimmed: true, hideJoint: true },
+      })),
+    [ghostNodes],
   );
+
+  const canvasNodes = useMemo(
+    () => [...visibleNodes, ...ghostNodes] as Node<TreeNodeCardData>[],
+    [visibleNodes, ghostNodes],
+  );
+
+  /**
+   * Visible connectors. An edge whose source is collapsed is kept only
+   * when its target is still on screen; the `dimmed` flag lets the
+   * connector fade for a branch that leads into hidden content.
+   */
+  const visibleEdges = useMemo(() => {
+    const real = allEdges
+      .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
+      .map((edge) => ({
+        ...edge,
+        data: {
+          ...(edge.data ?? {}),
+          dimmed: collapsedNodes.has(edge.target),
+        },
+      }));
+    return [...real, ...ghostEdges];
+  }, [allEdges, visibleNodeIds, collapsedNodes, ghostEdges]);
 
   // Large tree detection
   const totalCount = allNodes.length;
@@ -166,28 +313,14 @@ function TreeCanvasInner({
   // Determine draggable state
   const isDraggable = nodesDraggableOverride ?? !isLargeTree;
 
-  // ─── Handlers ────────────────────────────────────────────────────
-
-  /** Toggle collapse/expand for a node's subtree */
-  const toggleCollapse = useCallback(
-    (nodeId: string) => {
-      setCollapsedNodes((prev) => {
-        const next = new Set(prev);
-        if (next.has(nodeId)) {
-          next.delete(nodeId);
-        } else {
-          next.add(nodeId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-
   /** Handle node click: select node, toggle collapse on double-click */
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Single click selects
+      // Ghost slots are pure affordances — they never become the selection
+      if (node.id.startsWith(GHOST_PREFIX)) return;
+
+      // Single click selects — drive the glow and notify the page
+      setActiveNodeId(node.id);
       onSelectionChange?.(node.id);
 
       // Double-click toggles collapse
@@ -212,6 +345,7 @@ function TreeCanvasInner({
 
   /** Deselect when clicking the canvas background */
   const onPaneClick = useCallback(() => {
+    setActiveNodeId(null);
     onSelectionChange?.(null);
   }, [onSelectionChange]);
 
@@ -276,6 +410,7 @@ function TreeCanvasInner({
           : (currentIdx >= visibleIds.length - 1 ? 0 : currentIdx + 1);
         const nextId = visibleIds[nextIdx];
         setFocusedNodeId(nextId);
+        setActiveNodeId(nextId ?? null);
         onSelectionChange?.(nextId);
         focusRef.current(nextId);
       } else if (e.key === 'Enter' && focusedNodeId) {
@@ -285,6 +420,7 @@ function TreeCanvasInner({
       } else if (e.key === 'Escape') {
         // Escape deselects
         setFocusedNodeId(null);
+        setActiveNodeId(null);
         onSelectionChange?.(null);
       } else if (e.key === 'Home' && visibleNodes.length > 0) {
         // Home jumps to root node
@@ -292,6 +428,7 @@ function TreeCanvasInner({
         const rootId = visibleNodes[0]?.id;
         if (rootId) {
           setFocusedNodeId(rootId);
+          setActiveNodeId(rootId);
           onSelectionChange?.(rootId);
           focusRef.current(rootId);
         }
@@ -314,6 +451,9 @@ function TreeCanvasInner({
   useEffect(() => {
     if (focusNodeId && focusNodeId !== prevFocusRef.current) {
       prevFocusRef.current = focusNodeId;
+      // Selection driven from outside (search, breadcrumbs, ghost slot)
+      // must light the same glow as an in-canvas click.
+      setActiveNodeId(focusNodeId);
       // Small delay to ensure layout is stable
       const timer = setTimeout(() => {
         focusFnRef.current(focusNodeId);
@@ -389,7 +529,7 @@ function TreeCanvasInner({
       {collaborativeCursors}
 
       <ReactFlow
-        nodes={visibleNodes}
+        nodes={canvasNodes}
         edges={visibleEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -397,15 +537,7 @@ function TreeCanvasInner({
         fitViewOptions={{ padding: 0.3, duration: 300 }}
         minZoom={isLargeTree ? 0.05 : 0.1}
         maxZoom={2}
-        defaultEdgeOptions={{
-          type: 'replyEdge',
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 16,
-            height: 16,
-            color: palette.contentFaint,
-          },
-        }}
+        defaultEdgeOptions={{ type: 'replyEdge' }}
         // Large tree optimizations
         onlyRenderVisibleElements={isLargeTree}
         nodesDraggable={isDraggable}

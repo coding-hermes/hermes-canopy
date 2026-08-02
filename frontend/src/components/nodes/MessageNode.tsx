@@ -1,86 +1,104 @@
 /**
- * Hermes Canopy — MessageNode
+ * Hermes Canopy — MessageNode (UI-04, Phase 11 Mockup Parity)
  *
- * Renders a standard conversation message node.
- * Supports human (green) and agent (purple) variants.
- * Shows content preview, timestamp, and author badge.
+ * The primary card on the branching canvas (docs/mockups/mockup-1.png):
+ *
+ *   ┌──────────────────────────────┐
+ *   │ (SC) Sarah Chen        09:48 │  avatar + author + time
+ *   │ Improve core product…        │  body preview
+ *   │ 💬 3                         │  reply badge (hidden on a leaf)
+ *   └──────────────────────────────┘─◗ collapse chevron on the connector
+ *
+ * Human and agent messages share the layout and differ only in accent:
+ * cyan for people, violet for agents. Selection lights the card with the
+ * neon glow. All chrome comes from NodeChrome; all colour from tokens.
  */
 
 import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { type NodeProps, type Node } from '@xyflow/react';
 import type { TreeNodeCardData } from '../../types/tree.ts';
+import { palette, alpha } from '../../theme.ts';
+import { formatNodeTime, nodeAuthorName, previewText } from '../../lib/nodeCard.ts';
+import {
+  CollapseChevron,
+  NodeAvatar,
+  NodeShell,
+  ReplyBadge,
+} from './NodeChrome.tsx';
 
 type MessageNodeType = Node<TreeNodeCardData, 'messageNode'>;
 
 function MessageNodeComponent({ data, selected }: NodeProps<MessageNodeType>) {
-  const typedData = data as unknown as TreeNodeCardData;
+  const d = data as unknown as TreeNodeCardData;
 
-  const isAgent = typedData.isAgent;
-  const badgeLabel = isAgent ? '🤖 Agent' : '👤 Human';
-  const badgeClass = isAgent
-    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
-    : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-  const borderClass = isAgent
-    ? 'border-l-purple-400 dark:border-l-purple-500'
-    : 'border-l-green-400 dark:border-l-green-500';
+  const isAgent = d.isAgent === true;
+  const accent = isAgent ? palette.accent2 : palette.accent;
+  const authorName = nodeAuthorName(d.authorId, {
+    names: d.authorNames,
+    isAgent,
+  });
+
+  // Real data only: the canvas supplies a derived reply count; childCount
+  // from the Yjs snapshot is the fallback. Never a literal.
+  const replyCount = d.replyCount ?? d.childCount ?? 0;
+  const canCollapse = typeof d.onToggleCollapse === 'function';
 
   return (
-    <div
-      className={`rounded-lg border bg-white dark:bg-gray-800 shadow-sm transition-all duration-150 min-w-[180px] max-w-[260px] border-l-4 ${borderClass} ${
-        selected
-          ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md'
-          : 'border-gray-200 dark:border-gray-700'
+    <NodeShell
+      accent={accent}
+      selected={selected}
+      ariaLabel={`${isAgent ? 'Agent' : 'Message'} from ${authorName}: ${
+        previewText(d.content, 60) || 'untitled'
       }`}
-      role="article"
-      aria-label={`${isAgent ? 'Agent' : 'Human'} message: ${typedData.content?.slice(0, 60) || 'untitled'}`}
-      tabIndex={0}
+      adornment={
+        canCollapse ? (
+          <CollapseChevron
+            collapsed={d.collapsed === true}
+            hiddenCount={d.hiddenCount ?? 0}
+            onToggle={() => d.onToggleCollapse?.()}
+            accent={accent}
+          />
+        ) : undefined
+      }
     >
-      {/* Target handle (incoming edges from parent) */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-gray-400 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label={`Connect input to ${typedData.label || 'message node'}`}
-        role="button"
-        tabIndex={0}
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass}`}>
-          {badgeLabel}
+      {/* Header — avatar, author, timestamp */}
+      <div className="flex items-center gap-2 px-2.5 pt-2.5">
+        <NodeAvatar
+          authorId={d.authorId}
+          isAgent={isAgent}
+          names={d.authorNames}
+        />
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-content-primary">
+          {authorName}
         </span>
-        {typedData.childCount > 0 && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">
-            {typedData.childCount} {typedData.childCount === 1 ? 'reply' : 'replies'}
-          </span>
-        )}
+        <span className="shrink-0 text-[10px] text-content-faint">
+          {formatNodeTime(d.createdAt)}
+        </span>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2">
-        <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-3 whitespace-pre-wrap break-words">
-          {typedData.content.length > 120
-            ? `${typedData.content.slice(0, 120)}…`
-            : typedData.content}
+      {/* Body */}
+      <div className="px-2.5 pt-1.5">
+        <p className="line-clamp-3 text-xs leading-snug break-words whitespace-pre-wrap text-content-secondary">
+          {previewText(d.content)}
         </p>
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-1.5 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-        <span>{new Date(typedData.createdAt).toLocaleDateString()}</span>
+      {/* Footer — reply badge + agent tag */}
+      <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-2.5">
+        <ReplyBadge count={replyCount} accent={accent} />
+        {isAgent && (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[9px] font-medium tracking-wide uppercase"
+            style={{
+              backgroundColor: alpha(palette.accent2, 0.12),
+              color: palette.accent2,
+            }}
+          >
+            Agent
+          </span>
+        )}
       </div>
-
-      {/* Source handle (outgoing edges to children) */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-gray-400 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label={`Connect output from ${typedData.label || 'message node'}`}
-        role="button"
-        tabIndex={0}
-      />
-    </div>
+    </NodeShell>
   );
 }
 

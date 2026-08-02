@@ -11,7 +11,7 @@
  *   - Share dialog with permission management
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Share2 } from 'lucide-react';
 import TreeCanvas from '../components/TreeCanvas.tsx';
@@ -73,6 +73,13 @@ export default function TreeView() {
   // Navigation state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+
+  /**
+   * Node the composer will reply to, set by activating a ghost slot on the
+   * canvas (UI-04). Kept as state rather than written straight to the graph
+   * so the affordance never creates an empty node behind the user's back.
+   */
+  const [replyToNodeId, setReplyToNodeId] = useState<string | null>(null);
 
   // Share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -159,6 +166,35 @@ export default function TreeView() {
     setTimeout(() => setFocusNodeId(nodeId), 0);
   }, []);
 
+  /**
+   * Ghost-slot activation (UI-04): arm the composer against the chosen
+   * parent, select it and pan to it. The reply itself is created when the
+   * user actually sends — clicking a placeholder should never write a node.
+   */
+  const handleCreateReply = useCallback((parentId: string) => {
+    setReplyToNodeId(parentId);
+    setSelectedNodeId(parentId);
+    setFocusNodeId(null);
+    setTimeout(() => setFocusNodeId(parentId), 0);
+  }, []);
+
+  /**
+   * Author display names for canvas avatars.
+   *
+   * Presence is the only live identity source in MVP; membership fills in
+   * the rest. Avatar colours come from `getColorForUser` either way, so a
+   * person looks the same here as in the presence bar.
+   */
+  const authorNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const member of members) names.set(member.userId, member.userName);
+    for (const [id, presence] of remotePresence) {
+      if (presence.userName) names.set(id, presence.userName);
+    }
+    if (localUserId) names.set(localUserId, 'You');
+    return names;
+  }, [members, remotePresence, localUserId]);
+
   // Handle message send from MessageComposer
   const handleSendMessage = useCallback(
     (_message: string, _files: File[], _pinnedNodes: PinnedNode[]) => {
@@ -166,9 +202,12 @@ export default function TreeView() {
         text: _message.slice(0, 100),
         fileCount: _files.length,
         pinnedCount: _pinnedNodes.length,
+        replyTo: replyToNodeId,
       });
+      // Sending clears the armed reply target (UI-04 ghost slot).
+      setReplyToNodeId(null);
     },
-    [],
+    [replyToNodeId],
   );
 
   // ── Share dialog handlers ─────────────────────────────────────────
@@ -287,6 +326,8 @@ export default function TreeView() {
           onSelectionChange={handleSelectionChange}
           focusNodeId={focusNodeId}
           nodesDraggable={!isViewer}
+          authorNames={authorNames}
+          {...(isViewer ? {} : { onCreateReply: handleCreateReply })}
           collaborativeCursors={
             <CollaborativeCursors
               remotePresence={remotePresence}
@@ -304,7 +345,9 @@ export default function TreeView() {
         placeholder={
           isViewer
             ? 'View-only mode — request edit access to contribute'
-            : 'Type a message...'
+            : replyToNodeId
+              ? 'Reply to the selected node...'
+              : 'Type a message...'
         }
       />
 

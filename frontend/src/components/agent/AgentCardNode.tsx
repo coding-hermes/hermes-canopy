@@ -7,6 +7,10 @@
  *
  * Child nodes of agent messages — represents the agent's visible
  * work activity (search, code exec, file read, thinking, tool calls).
+ *
+ * Handles are Left (target) / Right (source) to match the left→right
+ * branching canvas introduced in UI-04 — with Top/Bottom handles the
+ * glowing connectors would leave the wrong faces and cross their cards.
  */
 
 import { memo } from 'react';
@@ -54,7 +58,7 @@ function AgentCardNodeComponent({
       >
         <Handle
           type="target"
-          position={Position.Top}
+          position={Position.Left}
           className="!bg-purple-500 !w-3 !h-3 !border-2 !border-gray-900"
         />
         <div className="px-3 py-2 text-sm text-gray-400">
@@ -62,7 +66,7 @@ function AgentCardNodeComponent({
         </div>
         <Handle
           type="source"
-          position={Position.Bottom}
+          position={Position.Right}
           className="!bg-purple-500 !w-3 !h-3 !border-2 !border-gray-900"
         />
       </div>
@@ -77,7 +81,7 @@ function AgentCardNodeComponent({
       {/* Target handle — agent cards receive edges from parent messages */}
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className="!bg-purple-500 !w-3 !h-3 !border-2 !border-gray-900"
       />
 
@@ -90,7 +94,7 @@ function AgentCardNodeComponent({
       {/* Source handle — agent cards can have child nodes */}
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className="!bg-purple-500 !w-3 !h-3 !border-2 !border-gray-900"
       />
     </div>

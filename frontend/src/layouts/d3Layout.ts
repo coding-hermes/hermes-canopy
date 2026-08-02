@@ -7,9 +7,18 @@
  * Handles multi-parent synthesis nodes by attaching them to their first
  * discovered parent during tree construction. Synthesis edges are rendered
  * as additional connections on top of the primary tree layout.
+ *
+ * Orientation (UI-04): the canvas runs LEFT→RIGHT — depth advances along
+ * x, siblings stack along y (docs/mockups/mockup-1.png). d3-hierarchy
+ * always lays a tree out top-down (`x` = breadth, `y` = depth), so the two
+ * axes are transposed on the way out via `place()`. The extents handed to
+ * `nodeSize` are transposed for the same reason: d3 wants
+ * `[breadthExtent, depthExtent]`, which for a horizontal tree is driven by
+ * node HEIGHT then node WIDTH.
  */
 
 import { tree as d3Tree, hierarchy, type HierarchyNode } from 'd3-hierarchy';
+import { palette } from '../theme.ts';
 
 // ─── Layout types ─────────────────────────────────────────────────────
 
@@ -41,9 +50,28 @@ const NODE_SIZES: Record<string, { width: number; height: number }> = {
 
 const DEFAULT_NODE_SIZE = { width: 220, height: 100 };
 
-const H_SPACING = 40; // horizontal gap between siblings
-const V_SPACING = 60; // vertical gap between levels
+const H_SPACING = 40; // gap between siblings (along the breadth axis)
+const V_SPACING = 60; // gap between levels (along the depth axis)
 const MAX_LEVELS_WARN = 200; // warn if tree is deeper than this
+
+/**
+ * Breadth/depth extents handed to `d3.tree().nodeSize()`.
+ *
+ * Breadth (d3 `x`) becomes screen y, so it is driven by node HEIGHT plus
+ * the sibling gap. Depth (d3 `y`) becomes screen x, driven by node WIDTH
+ * plus the level gap. Swapping these is what makes a horizontal tree
+ * overlap vertically while leaving cavernous gaps between columns.
+ */
+const BREADTH_EXTENT = DEFAULT_NODE_SIZE.height + H_SPACING;
+const DEPTH_EXTENT = DEFAULT_NODE_SIZE.width + V_SPACING;
+
+/**
+ * Transpose a d3 (breadth, depth) pair into canvas (x, y).
+ * Depth runs rightwards; breadth runs downwards.
+ */
+function place(breadth: number, depth: number): { x: number; y: number } {
+  return { x: depth, y: breadth };
+}
 
 // ─── D3 hierarchy node shape ──────────────────────────────────────────
 
@@ -151,7 +179,7 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
   if (roots.length === 1) {
     const root = hierarchy<HierarchyDatum>(rootData, buildHierarchyChildren);
     const layout = d3Tree<HierarchyDatum>()
-      .nodeSize([DEFAULT_NODE_SIZE.width + H_SPACING, DEFAULT_NODE_SIZE.height + V_SPACING])
+      .nodeSize([BREADTH_EXTENT, DEPTH_EXTENT])
       .separation((a, b) => {
         // Extra separation between unrelated branches
         return a.parent === b.parent ? 1 : 1.3;
@@ -159,13 +187,10 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
 
     const laidOut = layout(root);
 
-    // Extract positions
+    // Extract positions (transposed — d3 x = breadth, y = depth)
     laidOut.each((node: HierarchyNode<HierarchyDatum>) => {
       if (node.data.id !== '__virtual_root__') {
-        positions.set(node.data.id, {
-          x: node.x ?? 0,
-          y: node.y ?? 0,
-        });
+        positions.set(node.data.id, place(node.x ?? 0, node.y ?? 0));
       }
     });
 
@@ -177,15 +202,19 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
       );
     }
   } else {
-    // Multiple roots: lay out each root as a separate tree, offsetting x
-    let xOffset = 0;
+    // Multiple roots: lay out each root as a separate tree, stacking them
+    // down the breadth axis (screen y) so every root starts at x = 0 and
+    // the forest reads as parallel horizontal trees.
+    let breadthOffset = 0;
     const ROOT_GAP = 100;
 
     for (const rootId of roots) {
       const data = buildHierarchyData(rootId);
       const root = hierarchy<HierarchyDatum>(data, buildHierarchyChildren);
-      const layout = d3Tree<HierarchyDatum>()
-        .nodeSize([DEFAULT_NODE_SIZE.width + H_SPACING, DEFAULT_NODE_SIZE.height + V_SPACING]);
+      const layout = d3Tree<HierarchyDatum>().nodeSize([
+        BREADTH_EXTENT,
+        DEPTH_EXTENT,
+      ]);
 
       const laidOut = layout(root);
 
@@ -195,20 +224,21 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
           // Already positioned via another root — skip
           return;
         }
-        positions.set(node.data.id, {
-          x: (node.x ?? 0) + xOffset,
-          y: node.y ?? 0,
-        });
+        positions.set(
+          node.data.id,
+          place((node.x ?? 0) + breadthOffset, node.y ?? 0),
+        );
       });
 
-      // Calculate width of this tree to offset next root
-      let minX = Infinity;
-      let maxX = -Infinity;
+      // Measure this tree's breadth so the next root clears it
+      let minBreadth = Infinity;
+      let maxBreadth = -Infinity;
       laidOut.each((node: HierarchyNode<HierarchyDatum>) => {
-        minX = Math.min(minX, node.x ?? 0);
-        maxX = Math.max(maxX, node.x ?? 0);
+        minBreadth = Math.min(minBreadth, node.x ?? 0);
+        maxBreadth = Math.max(maxBreadth, node.x ?? 0);
       });
-      xOffset += (maxX - minX) + NODE_SIZES.message.width + ROOT_GAP;
+      breadthOffset +=
+        maxBreadth - minBreadth + DEFAULT_NODE_SIZE.height + ROOT_GAP;
     }
   }
 
@@ -225,16 +255,16 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
       }
     }
 
-    // Position below the average of parents
+    // Position to the RIGHT of the deepest parent, centred on their breadth
     if (parents.length > 0) {
-      let avgX = 0;
-      let maxY = 0;
+      let avgY = 0;
+      let maxX = 0;
       let positioned = 0;
       for (const parentId of parents) {
         const parentPos = positions.get(parentId);
         if (parentPos) {
-          avgX += parentPos.x;
-          maxY = Math.max(maxY, parentPos.y);
+          avgY += parentPos.y;
+          maxX = Math.max(maxX, parentPos.x);
           positioned++;
         }
       }
@@ -242,8 +272,8 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
         const nodeType = getNodeType(nodeId) ?? 'message';
         const size = NODE_SIZES[nodeType] ?? DEFAULT_NODE_SIZE;
         positions.set(nodeId, {
-          x: avgX / positioned,
-          y: maxY + size.height + V_SPACING,
+          x: maxX + size.width + V_SPACING,
+          y: avgY / positioned,
         });
       }
     }
@@ -282,38 +312,45 @@ export interface EdgeStyle {
   markerColor: string;
 }
 
+/**
+ * Get edge style based on edge type.
+ *
+ * Colours come from the token palette (theme.ts) — the canvas is the one
+ * place that needs raw hex (SVG stroke attributes sit outside the CSS
+ * cascade), so it reads the mirror rather than inventing values.
+ */
 export function getEdgeStyle(edgeType: string): EdgeStyle {
   switch (edgeType) {
     case 'synthesis':
       return {
-        stroke: '#f59e0b',
+        stroke: palette.warning,
         strokeWidth: 2.5,
-        strokeDasharray: '8,4',
+        strokeDasharray: '7,5',
         animated: true,
-        markerColor: '#f59e0b',
+        markerColor: palette.warning,
       };
     case 'fork':
       return {
-        stroke: '#8b5cf6',
+        stroke: palette.accent3,
         strokeWidth: 2,
         animated: false,
-        markerColor: '#8b5cf6',
+        markerColor: palette.accent3,
       };
     case 'reference':
       return {
-        stroke: '#6b7280',
+        stroke: palette.contentFaint,
         strokeWidth: 1.5,
         strokeDasharray: '4,4',
         animated: false,
-        markerColor: '#6b7280',
+        markerColor: palette.contentFaint,
       };
     case 'reply':
     default:
       return {
-        stroke: '#6b7280',
-        strokeWidth: 1.5,
+        stroke: palette.accent,
+        strokeWidth: 1.6,
         animated: false,
-        markerColor: '#6b7280',
+        markerColor: palette.accent,
       };
   }
 }

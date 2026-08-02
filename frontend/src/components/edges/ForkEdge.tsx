@@ -1,52 +1,13 @@
 /**
  * Hermes Canopy — ForkEdge
  *
- * Branch/fork edge: purple, slightly thicker.
- * Indicates a new branch created from a conversation node.
+ * Branch/fork link: glowing magenta bezier (UI-04). Indicates a new branch
+ * created from a conversation node.
  */
 
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import type { EdgeProps } from '@xyflow/react';
+import { GlowConnector } from './GlowConnector.tsx';
 
-export function ForkEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  markerEnd,
-}: EdgeProps) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 10,
-  });
-
-  return (
-    <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        style={{
-          stroke: '#8b5cf6',
-          strokeWidth: 2,
-        }}
-        markerEnd={markerEnd}
-      />
-      {/* Invisible wider path for keyboard/screen reader access */}
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={20}
-        role="presentation"
-        aria-hidden="true"
-      />
-    </>
-  );
+export function ForkEdge(props: EdgeProps) {
+  return <GlowConnector {...props} kind="fork" />;
 }

@@ -1,72 +1,101 @@
 /**
- * Hermes Canopy — SynthesisNode
+ * Hermes Canopy — SynthesisNode (UI-04, Phase 11 Mockup Parity)
  *
- * Renders a synthesis/merge node that combines multiple parent branches.
- * Visual: amber/gold accent, merge icon, multi-handle for incoming edges.
+ * A synthesis node combines multiple parent branches. It wears the same
+ * card chrome as every other node on the branching canvas (avatar, reply
+ * badge, collapse chevron) with an amber identity accent and a ⊕ marker
+ * so a merge stays legible at a glance.
  */
 
 import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { GitMerge } from 'lucide-react';
 import type { TreeNodeCardData } from '../../types/tree.ts';
+import { palette, alpha } from '../../theme.ts';
+import { formatNodeTime, nodeAuthorName, previewText } from '../../lib/nodeCard.ts';
+import {
+  CollapseChevron,
+  NodeAvatar,
+  NodeShell,
+  ReplyBadge,
+} from './NodeChrome.tsx';
 
 type SynthesisNodeType = Node<TreeNodeCardData, 'synthesisNode'>;
 
-function SynthesisNodeComponent({ data, selected }: NodeProps<SynthesisNodeType>) {
-  const typedData = data as unknown as TreeNodeCardData;
+const ACCENT = palette.warning;
+
+function SynthesisNodeComponent({
+  data,
+  selected,
+}: NodeProps<SynthesisNodeType>) {
+  const d = data as unknown as TreeNodeCardData;
+  const authorName = nodeAuthorName(d.authorId, { names: d.authorNames });
+  const replyCount = d.replyCount ?? d.childCount ?? 0;
+  const canCollapse = typeof d.onToggleCollapse === 'function';
 
   return (
-    <div
-      className={`rounded-lg border bg-amber-50 dark:bg-amber-950/40 shadow-sm transition-all duration-150 min-w-[200px] max-w-[280px] ${
-        selected
-          ? 'border-amber-500 ring-2 ring-amber-500/30 shadow-md'
-          : 'border-amber-200 dark:border-amber-800'
-      }`}
-      role="article"
-      aria-label={`Synthesis node: ${typedData.content?.slice(0, 60) || 'untitled'}`}
-      tabIndex={0}
+    <NodeShell
+      accent={ACCENT}
+      selected={selected}
+      ariaLabel={`Synthesis node: ${previewText(d.content, 60) || 'untitled'}`}
+      minWidth={210}
+      maxWidth={280}
+      adornment={
+        canCollapse ? (
+          <CollapseChevron
+            collapsed={d.collapsed === true}
+            hiddenCount={d.hiddenCount ?? 0}
+            onToggle={() => d.onToggleCollapse?.()}
+            accent={ACCENT}
+          />
+        ) : undefined
+      }
     >
-      {/* Target handle — multi-parent synthesis nodes accept from multiple sources */}
+      {/*
+        Synthesis nodes accept several inbound edges. React Flow needs one
+        handle per side; the extra top handle gives multi-parent links a
+        second face to land on so they don't stack on the left edge.
+      */}
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label="Connect input from parent nodes to synthesis"
-        role="button"
-        tabIndex={0}
+        id="merge"
+        className="!h-2 !w-2 !border-0"
+        style={{ backgroundColor: alpha(ACCENT, 0.8) }}
+        isConnectable={false}
+        aria-hidden="true"
       />
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-200 dark:border-amber-800" role="heading" aria-level={3}>
-        <span className="text-amber-600 dark:text-amber-300 text-base" aria-hidden="true">⊕</span>
-        <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+      <div className="flex items-center gap-2 px-2.5 pt-2.5">
+        <NodeAvatar authorId={d.authorId} names={d.authorNames} />
+        <span
+          className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs font-semibold"
+          style={{ color: ACCENT }}
+        >
+          <GitMerge className="h-3 w-3 shrink-0" aria-hidden="true" />
           Synthesis
+        </span>
+        <span className="shrink-0 text-[10px] text-content-faint">
+          {formatNodeTime(d.createdAt)}
         </span>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2">
-        <p className="text-sm text-amber-900 dark:text-amber-100 line-clamp-3 whitespace-pre-wrap break-words">
-          {typedData.content.length > 150
-            ? `${typedData.content.slice(0, 150)}…`
-            : typedData.content || 'Synthesized from multiple branches'}
+      {/* Body */}
+      <div className="px-2.5 pt-1.5">
+        <p className="line-clamp-3 text-xs leading-snug break-words whitespace-pre-wrap text-content-secondary">
+          {previewText(d.content, 150) || 'Synthesized from multiple branches'}
         </p>
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-1.5 border-t border-amber-200 dark:border-amber-800 flex items-center gap-2 text-xs text-amber-500 dark:text-amber-400">
-        <span>{new Date(typedData.createdAt).toLocaleDateString()}</span>
+      <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-2.5">
+        <ReplyBadge count={replyCount} accent={ACCENT} />
+        <span className="truncate text-[10px] text-content-faint">
+          {authorName}
+        </span>
       </div>
-
-      {/* Source handle */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label="Connect output from synthesis node"
-        role="button"
-        tabIndex={0}
-      />
-    </div>
+    </NodeShell>
   );
 }
 

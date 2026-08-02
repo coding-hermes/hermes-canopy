@@ -1,52 +1,13 @@
 /**
  * Hermes Canopy — ReplyEdge
  *
- * Standard reply edge: solid gray line with arrow.
- * Subtle and unobtrusive — the default edge for conversation threads.
+ * The default conversation link: a glowing cyan bezier (UI-04). Geometry
+ * and colour come from GlowConnector / lib/canvasGeometry.
  */
 
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import type { EdgeProps } from '@xyflow/react';
+import { GlowConnector } from './GlowConnector.tsx';
 
-export function ReplyEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  markerEnd,
-}: EdgeProps) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8,
-  });
-
-  return (
-    <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        style={{
-          stroke: '#9ca3af',
-          strokeWidth: 1.5,
-        }}
-        markerEnd={markerEnd}
-      />
-      {/* Invisible wider path for keyboard/screen reader access */}
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={20}
-        role="presentation"
-        aria-hidden="true"
-      />
-    </>
-  );
+export function ReplyEdge(props: EdgeProps) {
+  return <GlowConnector {...props} kind="reply" />;
 }

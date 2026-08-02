@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MarkerType, type Node, type Edge } from '@xyflow/react';
+import { type Node, type Edge } from '@xyflow/react';
 import type { TreeYDoc } from './treeStore.ts';
 import type { TreeNodeCardData } from '../types/tree.ts';
 import { nodeTypeToFlowType } from '../types/tree.ts';
@@ -136,12 +136,9 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
         strokeWidth: style.strokeWidth,
         ...(style.strokeDasharray ? { strokeDasharray: style.strokeDasharray } : {}),
       },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 16,
-        height: 16,
-        color: style.markerColor,
-      },
+      // No markerEnd: UI-04 connectors terminate in the target card's
+      // handle dot, so an arrowhead would sit on top of it. Direction is
+      // carried by the left→right layout.
     });
   }
 

@@ -1,71 +1,78 @@
 /**
- * Hermes Canopy — TopicNode
+ * Hermes Canopy — TopicNode (UI-04, Phase 11 Mockup Parity)
  *
- * Renders a Topic node — a named, searchable subgraph with #references.
- * Visual: hashtag badge, collapsible, shows child count.
+ * A Topic node — a named, searchable subgraph with #references. Wears the
+ * shared branching-canvas chrome with the magenta topic accent, matching
+ * the topic pills in the sidebar rail (UI-02).
  */
 
 import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { type NodeProps, type Node } from '@xyflow/react';
+import { Hash } from 'lucide-react';
 import type { TreeNodeCardData } from '../../types/tree.ts';
+import { palette } from '../../theme.ts';
+import { previewText } from '../../lib/nodeCard.ts';
+import {
+  CollapseChevron,
+  NodeAvatar,
+  NodeShell,
+  ReplyBadge,
+} from './NodeChrome.tsx';
 
 type TopicNodeType = Node<TreeNodeCardData, 'topicNode'>;
 
+const ACCENT = palette.accent3;
+
 function TopicNodeComponent({ data, selected }: NodeProps<TopicNodeType>) {
-  const typedData = data as unknown as TreeNodeCardData;
-  const topicName = typedData.label.replace(/^#/, '');
+  const d = data as unknown as TreeNodeCardData;
+  const topicName = (d.label ?? '').replace(/^#/, '') || 'topic';
+
+  const replyCount = d.replyCount ?? d.childCount ?? 0;
+  const canCollapse = typeof d.onToggleCollapse === 'function';
 
   return (
-    <div
-      className={`rounded-lg border bg-rose-50 dark:bg-rose-950/40 shadow-sm transition-all duration-150 min-w-[180px] max-w-[240px] ${
-        selected
-          ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md'
-          : 'border-rose-200 dark:border-rose-800'
-      }`}
-      role="article"
-      aria-label={`Topic: ${topicName}`}
-      tabIndex={0}
+    <NodeShell
+      accent={ACCENT}
+      selected={selected}
+      ariaLabel={`Topic: ${topicName}`}
+      minWidth={180}
+      maxWidth={240}
+      adornment={
+        canCollapse ? (
+          <CollapseChevron
+            collapsed={d.collapsed === true}
+            hiddenCount={d.hiddenCount ?? 0}
+            onToggle={() => d.onToggleCollapse?.()}
+            accent={ACCENT}
+          />
+        ) : undefined
+      }
     >
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label={`Connect input to topic ${topicName}`}
-        role="button"
-        tabIndex={0}
-      />
-
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-rose-200 dark:border-rose-800" role="heading" aria-level={3}>
-        <span className="text-rose-500 dark:text-rose-400 text-lg font-bold" aria-hidden="true">#</span>
-        <span className="text-sm font-semibold text-rose-800 dark:text-rose-200 truncate">
+      <div className="flex items-center gap-2 px-2.5 pt-2.5">
+        <NodeAvatar authorId={d.authorId} names={d.authorNames} size="sm" />
+        <span
+          className="inline-flex min-w-0 flex-1 items-center gap-0.5 truncate text-xs font-semibold"
+          style={{ color: ACCENT }}
+        >
+          <Hash className="h-3 w-3 shrink-0" aria-hidden="true" />
           {topicName}
         </span>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2">
-        <p className="text-sm text-rose-900 dark:text-rose-100 line-clamp-2 whitespace-pre-wrap break-words">
-          {typedData.content.length > 100
-            ? `${typedData.content.slice(0, 100)}…`
-            : typedData.content || `Topic with ${typedData.childCount} nodes`}
+      {/* Body */}
+      <div className="px-2.5 pt-1.5">
+        <p className="line-clamp-2 text-xs leading-snug break-words whitespace-pre-wrap text-content-secondary">
+          {previewText(d.content, 100) ||
+            (replyCount > 0 ? `Topic with ${replyCount} nodes` : 'Empty topic')}
         </p>
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-1.5 border-t border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs text-rose-500 dark:text-rose-400">
-        <span>{typedData.childCount > 0 ? `${typedData.childCount} nodes` : 'Empty topic'}</span>
+      <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-2.5">
+        <ReplyBadge count={replyCount} accent={ACCENT} />
       </div>
-
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800"
-        aria-label={`Connect output from topic ${topicName}`}
-        role="button"
-        tabIndex={0}
-      />
-    </div>
+    </NodeShell>
   );
 }
 

@@ -126,7 +126,8 @@ export type FlowNodeType =
   | 'synthesisNode'
   | 'cardNode'
   | 'topicNode'
-  | 'agentCardNode';
+  | 'agentCardNode'
+  | 'ghostNode';
 
 /** Extended React Flow node data carried on each flow node. */
 export interface TreeNodeCardData extends Record<string, unknown> {
@@ -147,6 +148,30 @@ export interface TreeNodeCardData extends Record<string, unknown> {
   cardType?: 'file' | 'task' | 'code';
   /** When true, this card node is an agent iteration card */
   isAgentCard?: boolean;
+
+  // ─── UI-04: branching canvas chrome ─────────────────────────────────
+  /**
+   * Direct reply count for the badge. Derived from the graph (or the
+   * authoritative `GET /trees/{id}/nodes` payload) by the canvas — never
+   * hardcoded. Falls back to `childCount` when absent.
+   */
+  replyCount?: number;
+  /** How many nodes this node is hiding while collapsed. */
+  hiddenCount?: number;
+  /** Toggle this node's subtree. Absent on leaves — no chevron rendered. */
+  onToggleCollapse?: () => void;
+  /** Real author display names, when the caller can resolve them. */
+  authorNames?: ReadonlyMap<string, string>;
+}
+
+/** Data carried on a ghost placeholder node (UI-04 add-reply affordance). */
+export interface GhostNodeData extends Record<string, unknown> {
+  /** Node this ghost would become a child of. */
+  parentId: string;
+  /** Invoked when the user activates the slot. */
+  onCreate?: (parentId: string) => void;
+  /** Label shown inside the dashed outline. */
+  label?: string;
 }
 
 /** Map NodeType to the React Flow custom node type string. */
