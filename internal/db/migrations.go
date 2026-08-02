@@ -14,13 +14,13 @@ func MigrateUp(dbURL string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	m, err := migrate.NewWithSourceInstance("iofs", src, dbURL)
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return err

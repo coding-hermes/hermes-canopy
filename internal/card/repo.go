@@ -149,7 +149,7 @@ func (r *SQLiteCardRepo) List(ctx context.Context, options ListCardsOptions) ([]
 	if err != nil {
 		return nil, fmt.Errorf("card: list: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var cards []Card
 	for rows.Next() {
@@ -272,7 +272,7 @@ func (r *SQLiteCardRepo) ListEvents(ctx context.Context, cardID uuid.UUID, after
 	if err != nil {
 		return nil, fmt.Errorf("card: list events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []CardEvent
 	for rows.Next() {
@@ -313,7 +313,7 @@ func (r *SQLiteCardRepo) GetByContextHash(ctx context.Context, contextHash strin
 	if err != nil {
 		return nil, fmt.Errorf("card: get by context hash: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var cards []Card
 	for rows.Next() {

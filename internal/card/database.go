@@ -87,13 +87,13 @@ func (m *CardDBManager) openDB(ctype CardType) (*sql.DB, error) {
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("card: pragma %q: %w", p, err)
 		}
 	}
 
 	if err := migrate(db, ctype); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("card: migrate %s: %w", ctype, err)
 	}
 

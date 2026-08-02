@@ -153,13 +153,13 @@ func (db *DB) MigrateWith(ctx context.Context, src fs.FS, dir string) error {
 	if err != nil {
 		return fmt.Errorf("db: iofs source: %w", err)
 	}
-	defer iofsSrc.Close()
+	defer func() { _ = iofsSrc.Close() }()
 
 	drv, err := postgres.WithInstance(sqlDB, &postgres.Config{})
 	if err != nil {
 		return fmt.Errorf("db: postgres driver: %w", err)
 	}
-	defer drv.Close()
+	defer func() { _ = drv.Close() }()
 
 	m, err := migrate.NewWithInstance("iofs", iofsSrc, "postgres", drv)
 	if err != nil {

@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"sort"
 	"sync"
 )
 
@@ -164,30 +163,4 @@ func (ts *TransportSelector) SetTopology(topology NetworkTopology) {
 	ts.mu.Lock()
 	ts.topology = topology
 	ts.mu.Unlock()
-}
-
-// negotiateCapabilities computes the intersection of local and remote
-// capabilities. The order is deterministic and sorted lexicographically.
-func negotiateCapabilities(local, remote []string) []string {
-	if len(local) == 0 || len(remote) == 0 {
-		return nil
-	}
-	remoteSet := make(map[string]struct{}, len(remote))
-	for _, capability := range remote {
-		remoteSet[capability] = struct{}{}
-	}
-
-	seen := make(map[string]struct{}, len(local))
-	result := make([]string, 0, len(local))
-	for _, capability := range local {
-		if _, ok := seen[capability]; ok {
-			continue
-		}
-		if _, ok := remoteSet[capability]; ok {
-			seen[capability] = struct{}{}
-			result = append(result, capability)
-		}
-	}
-	sort.Strings(result)
-	return result
 }

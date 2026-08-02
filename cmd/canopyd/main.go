@@ -311,9 +311,3 @@ func (m *pgMLSKeyPackageManager) GetKeyPackage(ctx context.Context, profileID uu
 func (m *pgMLSKeyPackageManager) ExpireKeyPackage(ctx context.Context, keyPackageID uuid.UUID) error {
 	return m.Expire(ctx, keyPackageID)
 }
-
-func versionHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf(`{"version":"%s"}`, version)))
-}

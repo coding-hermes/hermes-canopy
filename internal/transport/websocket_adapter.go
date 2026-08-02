@@ -26,10 +26,9 @@ type WebSocketAdapter struct {
 	// upgrader configures WebSocket upgrade parameters.
 	upgrader websocket.Upgrader
 
-	mu     sync.RWMutex
-	conns  map[string]*wsConn            // conn ID → connection state
-	rooms  map[string]map[string]*wsConn // tenantChannel → {connID → wsConn}
-	server *http.Server                  // optional HTTP server for upgrade endpoint
+	mu    sync.RWMutex
+	conns map[string]*wsConn            // conn ID → connection state
+	rooms map[string]map[string]*wsConn // tenantChannel → {connID → wsConn}
 
 	// addr is the listen address when running in server mode.
 	addr string
@@ -440,14 +439,14 @@ func (a *WebSocketAdapter) writePump(wc *wsConn) {
 			if err != nil {
 				continue
 			}
-			wc.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = wc.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := wc.ws.WriteMessage(websocket.TextMessage, data); err != nil {
 				return
 			}
 			wc.conn.SequenceWatermark = msg.Sequence
 
 		case <-ticker.C:
-			wc.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = wc.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := wc.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

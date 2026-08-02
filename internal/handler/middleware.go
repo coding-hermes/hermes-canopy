@@ -128,9 +128,6 @@ type TreeMemberChecker interface {
 	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
 }
 
-// treeMembershipKey holds the role in context for handlers that need it.
-type treeMembershipKey struct{}
-
 // treeIDFromPath extracts the tree ID from the URL path. In chi, middleware
 // runs before route matching, so chi.URLParam is not available for params
 // defined on mounted subrouters. Instead, we parse the path directly.
@@ -283,6 +280,8 @@ func NodeAccessMiddleware(svc service.NodeService, checker TreeMemberChecker) fu
 
 // chiURLParam is a test-safe wrapper around chi.URLParam that avoids
 // importing chi in middleware tests.
+//
+//nolint:unused // replaced in middleware_test.go; test-only override target
 var chiURLParam = func(r *http.Request, key string) string {
 	// Default implementation — replaced in tests.
 	return ""

@@ -374,14 +374,3 @@ func collectNodes(rows pgx.Rows) ([]Node, error) {
 	}
 	return out, rows.Err()
 }
-
-// splitCols returns the column list with the prefix-removed aliases for
-// use in recursive CTE inner selects. Centralised to keep CTE SELECTs
-// in lockstep with nodeColumns.
-func splitCols() string {
-	// Returns "id AS id, tree_id AS tree_id, ..." — ugly but unambiguous.
-	// pgx accepts bare column references in recursive CTE selections.
-	const c = `id, tree_id, parent_id, author_id, content, content_format,
-        node_type, sequence_num, metadata, created_at, edited_at, deleted_at`
-	return c
-}

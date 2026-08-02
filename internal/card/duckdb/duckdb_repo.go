@@ -120,7 +120,7 @@ func (r *CardRepo) List(ctx context.Context, options card.ListCardsOptions) ([]c
 	if err != nil {
 		return nil, fmt.Errorf("duckdb: list: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var cards []card.Card
 	for rows.Next() {
@@ -279,7 +279,7 @@ func (r *CardRepo) ListEvents(ctx context.Context, cardID uuid.UUID, afterSequen
 	if err != nil {
 		return nil, fmt.Errorf("duckdb: list events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []card.CardEvent
 	for rows.Next() {
@@ -320,7 +320,7 @@ func (r *CardRepo) GetByContextHash(ctx context.Context, contextHash string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("duckdb: get by context hash: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var cards []card.Card
 	for rows.Next() {

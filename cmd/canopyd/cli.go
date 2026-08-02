@@ -178,7 +178,7 @@ func apiRequest(method, path string, body io.Reader) ([]byte, int) {
 		fmt.Fprintf(os.Stderr, "Error: failed to reach server at %s: %v\n", serverURL(), err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

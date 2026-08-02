@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -258,9 +257,7 @@ func formatEvent(ev SSEEvent) []byte {
 	b.Write(out)
 	b.WriteByte('\n')
 
-	b.WriteString("retry: ")
-	b.WriteString(fmt.Sprintf("%d", DefaultRetryMS))
-	b.WriteByte('\n')
+	fmt.Fprintf(&b, "retry: %d\n", DefaultRetryMS)
 
 	// Blank line terminator required by the spec for dispatch.
 	b.WriteByte('\n')
@@ -292,17 +289,4 @@ func ComposeEvent(treeID, actorID uuid.UUID, eventType string, data any) SSEEven
 		TreeID:    treeID,
 		ActorID:   actorID,
 	}
-}
-
-// connFromWriter extracts a net.Conn from a ResponseWriter if possible
-// (after Hijack). Returns nil otherwise. Mostly here for completeness;
-// not exercised in MVP.
-func connFromWriter(w http.ResponseWriter) net.Conn {
-	if hj, ok := w.(http.Hijacker); ok {
-		conn, _, err := hj.Hijack()
-		if err == nil {
-			return conn
-		}
-	}
-	return nil
 }

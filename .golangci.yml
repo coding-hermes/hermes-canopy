@@ -1,30 +1,28 @@
+version: "2"
+
 run:
   timeout: 60s
   tests: false
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  gosimple:
-    checks: ["all"]
-  staticcheck:
-    checks: ["all"]
+errcheck:
+  check-type-assertions: true
+
+staticcheck:
+  checks: ["all"]
 
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  use-default-exclusions: false
 
 output:
   formats:
-    - format: colored-line-number
+    colored-line-number: {}

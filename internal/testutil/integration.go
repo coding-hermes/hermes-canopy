@@ -48,7 +48,7 @@ func dropTestDBByName(ctx context.Context, adminURL, dbName string) error {
 	if err != nil {
 		return fmt.Errorf("connect for drop: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	_, _ = conn.Exec(ctx, fmt.Sprintf(
 		"DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName))
@@ -147,7 +147,7 @@ func sweepStaleTestDBs(ctx context.Context, adminURL string) {
 		log.Printf("testutil: sweepStaleTestDBs: connect: %v", err)
 		return
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	// Candidate leaked test databases. The escaped LIKE prefix plus the
 	// hex-pattern regex confines the sweep to uniqueDBName() output only.
@@ -263,7 +263,7 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	dbName := uniqueDBName()
 
 	// Drop (if re-running) and recreate the unique test database.
-	dropTestDBByName(ctx, adminURL, dbName)
+	_ = dropTestDBByName(ctx, adminURL, dbName)
 
 	// Connect to the newly-created database.
 	targetURL := fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", dbName)
@@ -291,7 +291,7 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 		if dropErr != nil {
 			return
 		}
-		defer dropConn.Close(dropCtx)
+		defer func() { _ = dropConn.Close(dropCtx) }()
 		_, _ = dropConn.Exec(dropCtx,
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName))
 	})
@@ -454,7 +454,7 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 	if err != nil {
 		t.Fatalf("TruncateAll: begin tx: %v", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Single TRUNCATE statement listing ALL tables: PostgreSQL resolves
 	// the FK dependency graph ONCE instead of per-statement. Per-table

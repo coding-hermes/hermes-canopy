@@ -471,7 +471,7 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 	case status == TreeStatusDeleted:
 		rows, err = s.listDeletedOnly(ctx, limit+1, 0)
 	}
-	if err != nil && !(errors.Is(err, db.ErrNotFound) && strings.TrimSpace(p.Search) != "") {
+	if err != nil && (!errors.Is(err, db.ErrNotFound) || strings.TrimSpace(p.Search) == "") {
 		return nil, fmt.Errorf("%w: list trees: %v", ErrDatabaseUnavailable, err)
 	}
 	if rows == nil {

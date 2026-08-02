@@ -134,8 +134,9 @@ func ExtractTenantIDFromToken(token string) (string, error) {
 	}
 	// Sanitise: tenant IDs must be alphanumeric with hyphens/underscores.
 	for _, r := range tenantID {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+		valid := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_'
+		if !valid {
 			return "", fmt.Errorf("%w: invalid character in tenant ID", ErrTenantTokenInvalid)
 		}
 	}

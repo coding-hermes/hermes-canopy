@@ -52,9 +52,6 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	if maxAncestors <= 0 {
 		maxAncestors = 50
 	}
-	if !req.ResolveRefs && req.ResolveRefs == false {
-		// resolveRefs defaults to true per spec
-	}
 	// Note: resolveRefs defaults to true — the zero-value for bool is false,
 	// but the spec says "default true". The HTTP handler will set ResolveRefs=true
 	// when the query param is absent (or "true"). The struct default is false

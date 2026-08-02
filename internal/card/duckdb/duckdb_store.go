@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	_ "github.com/marcboeker/go-duckdb" // register duckdb database/sql driver
 )
@@ -17,7 +16,6 @@ import (
 // It handles connection lifecycle, schema migration, and provides
 // a *sql.DB for repository operations.
 type Store struct {
-	mu sync.Mutex
 	db *sql.DB
 }
 
@@ -41,7 +39,7 @@ func NewStore(dbPath string) (*Store, error) {
 	store := &Store{db: db}
 
 	if err := store.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("duckdb: migrate: %w", err)
 	}
 

@@ -28,10 +28,6 @@ const (
 // MAJOR.MINOR.PATCH with an optional -prerelease suffix.
 var semverPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$`)
 
-// slugStripPattern matches characters removed during slug derivation
-// (anything that is not [a-z0-9-] after lowercasing).
-var slugStripPattern = regexp.MustCompile(`[^a-z0-9-]`)
-
 // ParseManifest extracts and validates the @canopy-manifest comment block
 // from the top of a plugin source file. It returns ErrInvalidManifest when
 // the block is missing or its JSON is malformed, and
