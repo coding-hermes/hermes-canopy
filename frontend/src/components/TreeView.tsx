@@ -37,6 +37,12 @@ import type {
 } from '../types/multiUser.ts';
 import { getColorForUser } from '../types/multiUser.ts';
 import { token, palette, alpha } from '../theme.ts';
+import { apiPost } from '../lib/api.ts';
+import {
+  buildCreateNodeBody,
+  buildSendMetadata,
+  composerPlaceholder,
+} from '../lib/composer.ts';
 // ─── Mock membership ───────────────────────────────────────────────────
 
 interface Member {
@@ -195,19 +201,32 @@ export default function TreeView() {
     return names;
   }, [members, remotePresence, localUserId]);
 
-  // Handle message send from MessageComposer
+  // Handle message send from MessageComposer — creates a real node.
+  //
+  // Snake_case body per internal/handler/node_handler.go; an armed ghost
+  // slot (UI-04) becomes `parent_id`, otherwise the message is a root.
+  // Errors are re-thrown so the composer keeps the user's text and shows
+  // the server's own message inline.
   const handleSendMessage = useCallback(
-    (_message: string, _files: File[], _pinnedNodes: PinnedNode[]) => {
-      console.log('[TreeView] Message sent:', {
-        text: _message.slice(0, 100),
-        fileCount: _files.length,
-        pinnedCount: _pinnedNodes.length,
-        replyTo: replyToNodeId,
+    async (message: string, files: File[], pinned: PinnedNode[]) => {
+      if (!treeId) throw new Error('No tree selected.');
+
+      const body = buildCreateNodeBody({
+        content: message,
+        parentId: replyToNodeId,
+        metadata:
+          buildSendMetadata({
+            files,
+            pinnedNodeIds: pinned.map((n) => n.id),
+          }) ?? undefined,
       });
+
+      await apiPost<{ node: unknown }>(`/trees/${treeId}/nodes`, body);
+
       // Sending clears the armed reply target (UI-04 ghost slot).
       setReplyToNodeId(null);
     },
-    [replyToNodeId],
+    [treeId, replyToNodeId],
   );
 
   // ── Share dialog handlers ─────────────────────────────────────────
@@ -342,13 +361,10 @@ export default function TreeView() {
         onSend={handleSendMessage}
         disabled={!tree.isReady}
         readOnly={isViewer}
-        placeholder={
-          isViewer
-            ? 'View-only mode — request edit access to contribute'
-            : replyToNodeId
-              ? 'Reply to the selected node...'
-              : 'Type a message...'
-        }
+        placeholder={composerPlaceholder({
+          readOnly: isViewer,
+          isReply: replyToNodeId !== null,
+        })}
       />
 
       {/* Share dialog */}

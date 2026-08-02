@@ -248,3 +248,40 @@ export function ghostSlotPosition(
     y: parent.y + (offset.dy ?? 150),
   };
 }
+
+// ─── Canvas keyboard scope ─────────────────────────────────────────────
+
+/**
+ * The subset of an element the Tab-scope check reads. Structural on purpose,
+ * so the rule is testable without a DOM.
+ */
+export interface FocusTargetLike {
+  tagName?: string;
+  isContentEditable?: boolean;
+  /** Result of `getAttribute('tabindex')` — null when the attribute is absent. */
+  tabIndexAttr?: string | null;
+}
+
+/** Elements whose own Tab behaviour must never be hijacked by the canvas. */
+const NATIVE_TAB_STOPS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A']);
+
+/**
+ * Whether the canvas may take Tab over to cycle graph nodes.
+ *
+ * TreeCanvas binds its shortcut handler to `window`, so an unguarded
+ * `preventDefault()` on Tab swallows the key for the entire page — the
+ * composer's @ / # / emoji / Send buttons then become unreachable by
+ * keyboard, which fails WCAG 2.1.1. Tab belongs to the browser whenever a
+ * natively focusable control or an explicit tab stop holds focus; the canvas
+ * only claims it from a non-interactive resting place such as `body`.
+ */
+export function canvasOwnsTab(active: FocusTargetLike | null): boolean {
+  if (!active) return true;
+  const tag = active.tagName?.toUpperCase();
+  if (tag && NATIVE_TAB_STOPS.has(tag)) return false;
+  if (active.isContentEditable) return false;
+  if (active.tabIndexAttr !== null && active.tabIndexAttr !== undefined) {
+    return false;
+  }
+  return true;
+}

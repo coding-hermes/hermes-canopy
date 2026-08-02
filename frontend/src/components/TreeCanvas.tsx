@@ -50,7 +50,11 @@ import {
   toggleCollapsed,
 } from '../lib/treeCollapse.ts';
 import { deriveReplyCounts, replyCountFor } from '../lib/replyCounts.ts';
-import { ghostSlotPosition, isFrontierSlot } from '../lib/canvasGeometry.ts';
+import {
+  canvasOwnsTab,
+  ghostSlotPosition,
+  isFrontierSlot,
+} from '../lib/canvasGeometry.ts';
 
 // ─── Custom nodes ─────────────────────────────────────────────────────
 
@@ -398,7 +402,26 @@ function TreeCanvasInner({
         e.preventDefault();
         reactFlowInstance.zoomOut({ duration: 200 });
       } else if (e.key === 'Tab' && !mod) {
-        // Tab cycles through visible nodes
+        // Tab cycles through visible nodes — but only when the canvas
+        // itself holds the keyboard. This handler is bound to `window`,
+        // so without the guard it swallows Tab for every control on the
+        // page (the composer's @ / # / emoji / Send buttons become
+        // unreachable by keyboard, failing WCAG 2.1.1).
+        const active = document.activeElement;
+        if (
+          !canvasOwnsTab(
+            active
+              ? {
+                  tagName: active.tagName,
+                  isContentEditable:
+                    active instanceof HTMLElement && active.isContentEditable,
+                  tabIndexAttr: active.getAttribute('tabindex'),
+                }
+              : null,
+          )
+        ) {
+          return;
+        }
         e.preventDefault();
         const visibleIds = visibleNodes.map((n) => n.id);
         if (visibleIds.length === 0) return;

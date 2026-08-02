@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { palette } from '../../theme';
 import {
   bezierCurvature,
+  canvasOwnsTab,
   connectorAccent,
   connectorPath,
   connectorStyle,
@@ -318,5 +319,63 @@ describe('ghostSlotPosition', () => {
       x: 15,
       y: 60,
     });
+  });
+});
+
+describe('canvasOwnsTab', () => {
+  // Regression: TreeCanvas binds its shortcuts to `window`, so an
+  // unconditional preventDefault() on Tab trapped focus in the composer's
+  // textarea — @ / # / emoji / Send were unreachable by keyboard (WCAG
+  // 2.1.1). The canvas may only claim Tab from a non-interactive element.
+
+  it('claims Tab when focus rests on the body', () => {
+    expect(canvasOwnsTab({ tagName: 'BODY', tabIndexAttr: null })).toBe(true);
+  });
+
+  it('claims Tab when there is no active element at all', () => {
+    expect(canvasOwnsTab(null)).toBe(true);
+  });
+
+  it('yields Tab to a textarea — the composer input', () => {
+    expect(canvasOwnsTab({ tagName: 'TEXTAREA', tabIndexAttr: null })).toBe(
+      false,
+    );
+  });
+
+  it('yields Tab to the composer icon buttons', () => {
+    expect(canvasOwnsTab({ tagName: 'BUTTON', tabIndexAttr: null })).toBe(
+      false,
+    );
+  });
+
+  it('yields Tab to every native tab stop', () => {
+    for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A']) {
+      expect(canvasOwnsTab({ tagName, tabIndexAttr: null })).toBe(false);
+    }
+  });
+
+  it('is case-insensitive about the tag name', () => {
+    expect(canvasOwnsTab({ tagName: 'textarea', tabIndexAttr: null })).toBe(
+      false,
+    );
+  });
+
+  it('yields Tab to contenteditable regions', () => {
+    expect(
+      canvasOwnsTab({
+        tagName: 'DIV',
+        isContentEditable: true,
+        tabIndexAttr: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('yields Tab to an explicit tab stop, including tabindex="-1"', () => {
+    expect(canvasOwnsTab({ tagName: 'DIV', tabIndexAttr: '0' })).toBe(false);
+    expect(canvasOwnsTab({ tagName: 'DIV', tabIndexAttr: '-1' })).toBe(false);
+  });
+
+  it('still claims Tab from a plain non-interactive div', () => {
+    expect(canvasOwnsTab({ tagName: 'DIV', tabIndexAttr: null })).toBe(true);
   });
 });
