@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Routes, Route } from 'react-router-dom'
+import { NavLink, Outlet, Routes, Route, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Trees,
@@ -17,6 +17,9 @@ import CardsPage from './pages/CardsPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
 import AppHeader from './components/AppHeader'
+import ShortcutHelp from './components/ShortcutHelp'
+import { useShortcuts } from './hooks/useShortcuts'
+import { MERGE_ROUTE } from './lib/shortcuts'
 
 // ─── Navigation model ──────────────────────────────────────────────────
 
@@ -60,6 +63,18 @@ function Dashboard() {
 }
 
 function Layout() {
+  const navigate = useNavigate()
+
+  /*
+   * App-shell shortcut scope (UI-07): `m` jumps to the merge view and `?`
+   * owns the help overlay. Tree-scoped keys (j/k/h/l) are registered by
+   * TreeCanvas instead, so they are inert on pages without a graph.
+   */
+  const { helpOpen, setHelpOpen } = useShortcuts(
+    { openMerge: () => navigate(MERGE_ROUTE) },
+    { handleHelpToggle: true },
+  )
+
   return (
     <div className="flex h-screen bg-surface-base text-content-secondary">
       {/* Offline indicator bar */}
@@ -126,6 +141,9 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Shortcut help overlay — toggled by `?` (UI-07) */}
+      <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

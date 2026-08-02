@@ -43,6 +43,7 @@ import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
 import { palette, nodeTypeColor } from '../theme.ts';
 import {
   buildChildMap,
+  childrenOf,
   hiddenCountFor,
   hiddenNodeIds,
   isCollapsible,
@@ -55,6 +56,13 @@ import {
   ghostSlotPosition,
   isFrontierSlot,
 } from '../lib/canvasGeometry.ts';
+import {
+  buildParentMap,
+  drillInTarget,
+  drillOutTarget,
+  nextFocusIndex,
+} from '../lib/shortcuts.ts';
+import { useShortcuts } from '../hooks/useShortcuts.ts';
 
 // ─── Custom nodes ─────────────────────────────────────────────────────
 
@@ -461,6 +469,97 @@ function TreeCanvasInner({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [reactFlowInstance, visibleNodes, focusedNodeId, toggleCollapse, onSelectionChange]);
+
+  // ─── Vim-style navigation (UI-07: j/k walk, h/l drill) ───────────
+
+  /** child → first parent, for `h`'s step-up out of a branch. */
+  const parentMap = useMemo(() => buildParentMap(allEdges), [allEdges]);
+
+  /**
+   * Move the keyboard cursor to a node: focus ring, selection glow, page
+   * notification and a camera pan — the same four effects Tab produces,
+   * so j/k/h/l feel identical to the existing cycling.
+   */
+  const moveFocusTo = useCallback(
+    (nodeId: string) => {
+      setFocusedNodeId(nodeId);
+      setActiveNodeId(nodeId);
+      onSelectionChange?.(nodeId);
+      focusRef.current(nodeId);
+    },
+    [onSelectionChange],
+  );
+
+  /** j / k — step through the visible nodes in layout order, wrapping. */
+  const stepFocus = useCallback(
+    (direction: 1 | -1) => {
+      const ids = visibleNodes.map((n) => n.id);
+      const current = focusedNodeId ? ids.indexOf(focusedNodeId) : -1;
+      const next = nextFocusIndex(current, ids.length, direction);
+      const nextId = next >= 0 ? ids[next] : undefined;
+      if (nextId) moveFocusTo(nextId);
+    },
+    [visibleNodes, focusedNodeId, moveFocusTo],
+  );
+
+  /**
+   * h / l — drill out / in.
+   *
+   * The decision (collapse vs step to parent, expand vs step to child) is
+   * `drillOutTarget` / `drillInTarget` in lib/shortcuts.ts; this only
+   * applies the outcome. Hidden nodes are never a focus target, so the
+   * step-up is checked against the visible set.
+   */
+  const drill = useCallback(
+    (direction: 'in' | 'out') => {
+      if (!focusedNodeId) return;
+
+      const outcome =
+        direction === 'out'
+          ? drillOutTarget({
+              nodeId: focusedNodeId,
+              collapsible: isCollapsible(childMap, focusedNodeId),
+              collapsed: collapsedNodes.has(focusedNodeId),
+              parentId: parentMap.get(focusedNodeId) ?? null,
+            })
+          : drillInTarget({
+              nodeId: focusedNodeId,
+              collapsed: collapsedNodes.has(focusedNodeId),
+              firstChildId: childrenOf(childMap, focusedNodeId)[0] ?? null,
+            });
+
+      switch (outcome.kind) {
+        case 'collapse':
+        case 'expand':
+          if (outcome.nodeId) toggleCollapse(outcome.nodeId);
+          break;
+        case 'focus':
+          if (outcome.nodeId && visibleNodeIds.has(outcome.nodeId)) {
+            moveFocusTo(outcome.nodeId);
+          }
+          break;
+        case 'none':
+          break;
+      }
+    },
+    [
+      focusedNodeId,
+      childMap,
+      collapsedNodes,
+      parentMap,
+      toggleCollapse,
+      moveFocusTo,
+      visibleNodeIds,
+    ],
+  );
+
+  // Tree-scoped bindings only — `?` and `m` are owned by the app shell.
+  useShortcuts({
+    navigateNext: () => stepFocus(1),
+    navigatePrev: () => stepFocus(-1),
+    drillOut: () => drill('out'),
+    drillIn: () => drill('in'),
+  });
 
   // ─── Focus on node when focusNodeId prop changes ─────────────────
 

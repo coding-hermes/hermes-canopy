@@ -384,7 +384,8 @@ export default function NavigationBar({
         )}
       </div>
 
-      {/* Keyboard shortcuts hint */}
+      {/* Keyboard shortcuts hint (UI-07: the visible disclosure for the
+          single-key navigation layer — `?` opens the full list) */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[11px] hidden lg:inline text-content-faint">
           <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
@@ -394,7 +395,23 @@ export default function NavigationBar({
           <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
             ⌘+/−
           </kbd>{' '}
-          zoom
+          zoom ·{' '}
+          <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
+            j/k
+          </kbd>{' '}
+          move ·{' '}
+          <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
+            h/l
+          </kbd>{' '}
+          drill ·{' '}
+          <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
+            m
+          </kbd>{' '}
+          merge ·{' '}
+          <kbd className="px-1 py-0.5 rounded-xs text-[10px] font-mono bg-surface-input border border-line-subtle text-content-secondary">
+            ?
+          </kbd>{' '}
+          help
         </span>
       </div>
     </div>
