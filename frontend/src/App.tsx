@@ -16,6 +16,7 @@ import TopicsPage from './pages/TopicsPage'
 import CardsPage from './pages/CardsPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
+import AppHeader from './components/AppHeader'
 
 // ─── Navigation model ──────────────────────────────────────────────────
 
@@ -110,24 +111,8 @@ function Layout() {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header
-          className="h-14 shrink-0 bg-surface-panel/80 backdrop-blur-md border-b border-line-subtle flex items-center px-6"
-          role="banner"
-        >
-          <h2 className="text-sm font-medium text-content-tertiary">
-            Knowledge Canopy
-          </h2>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-sm bg-surface-input px-2 py-1 text-xs text-content-muted ring-1 ring-inset ring-line-subtle">
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full bg-status-success"
-              />
-              Backend: localhost:8080
-            </span>
-          </div>
-        </header>
+        {/* Header — context title, view selector, status (UI-03) */}
+        <AppHeader />
 
         {/* Content */}
         <main id="main-content" className="flex-1 overflow-auto" role="main">
