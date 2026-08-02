@@ -50,6 +50,32 @@ function generateUserId(): string {
   return `user_${rand}_${ts}`;
 }
 
+// ─── Initial presence builder ────────────────────────────────────────
+
+/**
+ * Build the local user's initial presence on mount.
+ *
+ * The local user owns the tree in the single-user MVP, so we default to
+ * `'editor'` — there is no membership/role endpoint to derive a role from
+ * yet (post-MVP). Remote peers still arrive via presence updates carrying
+ * their own `permission`, which the remote-update path respects downstream.
+ */
+export function buildInitialPresence(identity: {
+  userId: string;
+  userName: string;
+  avatarColor: string;
+}): LocalPresence {
+  return {
+    userId: identity.userId,
+    userName: identity.userName,
+    avatarColor: identity.avatarColor,
+    permission: 'editor',
+    cursor: null,
+    viewport: null,
+    isActive: true,
+  };
+}
+
 // ─── Hook ──────────────────────────────────────────────────────────────
 
 export function usePresence(
@@ -128,15 +154,7 @@ export function usePresence(
     if (!p) return;
 
     const id = identityRef.current;
-    const initial: LocalPresence = {
-      userId: id.userId,
-      userName: id.userName,
-      avatarColor: id.avatarColor,
-      permission: 'viewer',
-      cursor: null,
-      viewport: null,
-      isActive: true,
-    };
+    const initial = buildInitialPresence(id);
 
     p.setLocalPresence(initial);
     setLocalPresenceState(initial);
