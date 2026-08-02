@@ -1541,3 +1541,44 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 90/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-07 ✅, UI-08 IN FLIGHT (worker alive, verification phase), UI-09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1357/212. Vitest 368/368 (Tick 126). E2E 42/42 (Tick 124). Coverage ~40.7%.
 
 **Next tick:** if the UI-08 worker has exited: verify commit → guard → `timeout 900 gitreins task complete UI-08` (task now exists in-repo) → board-v2 sync → dispatch UI-09 (visual regression baseline, GPT-5.6 Luna). Else continue coordination (worker health read-only).
+
+## Tick 128 — 2026-08-02 04:29 UTC (scheduler tick hermes-canopy-2026-08-02-04-29-27)
+
+**Verdict: PRODUCTIVE** — UI-08 stewarded to completion (verify → judge PASS → board sync) + UI-09 dispatched (visual regression baseline, gpt-5.6-luna @ openai-codex).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ WORKER COMMIT LANDED | Tick start: UI-08 worker (PID 2004677, dispatched Tick 126) had EXITED after committing 0f2543a (04:16 CDT, 22 files, +2006/−30, 8 screenshots in docs/screenshots/ui-08/). Dirty: .vfs/graph/edges.jsonl (+24 legit UI-08 edges), .gitreins/tasks.yaml (judge completion record). Untracked frontend/playwright-report/ left. Sibling check: hivemind go test = different project (dexdat/hivemind packages, verified via argv). |
+| 2 | Worker health | ✅ EXITED | PID 2004677 gone (no /proc entry); commit landed before tick start. |
+| 3 | UI-08 verify | ✅ TSC/VITEST/BUILD | tsc --noEmit exit 0; vitest 460/460 (18 files — 368 baseline + 92 new: nodeHierarchy 274L, nodeSelection 201L, nodeShortId 150L, pluralize 83L tests + nodeMeta additions); npm run build green; go build + go vet exit 0 (Go side untouched); gofmt clean. |
+| 4 | GitReins judge UI-08 | ✅ **PASS 6eefe838** | `timeout 900 gitreins task complete UI-08` (~5 min): tier1 PASS (guard full — secrets/go_build/go_lint/go_tests) + tier2 PASS (COMPLETE, all 8 ACs; JSON-parse fallback to keyword parse noted, verdict saved). On-disk dir 6eefe838 vs CLI-printed 6b6a1020 — known hash-mismatch pitfall, trusted newest dir. Completion record written to tasks.yaml (09:31:01Z). ⚠️ Foreman error this tick: `gitreins task start UI-08` (part of the UI-09 create+start compound) DOWNGRADED UI-08 complete → in_progress; caught immediately, restored via canonical-writer edit (status back to complete, completed_at retained, diff +28/−1 total). |
+| 5 | Hilo | ✅ USEFUL | Fresh stats: 1381 edges / 218 files (up from 1357/212 — UI-08 edges indexed). edges.jsonl +24 ast_exact edges all reference HEAD files — committed with board per sibling-code-committed rule. |
+| 6 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 7 | Deps | ⚠️ 164 Go outdated | Stable (unchanged since Tick 113). |
+| 8 | Secrets | ✅ CLEAN | Judge tier1 secrets check PASS (full mode). |
+| 9 | Board-v2 | ✅ SYNCED | UI-08 → complete (0f2543a, guard PASS, verdict 6eefe838, +2006/−30), UI-09 → in_progress + dispatched_at (PID 2831952). Events 23 (task_completed UI-08) + 24 (task_dispatched UI-09) @ tick 128. Metadata: ticks_total=128 (Tick 127 coordination wrote no board event — documented in its entry), last_commit=0f2543a. Parquet re-exported, read-back verified. Also repaired 2 pre-existing NULL-id events (tick 121 artifacts, per duckdb-board-update recipe) → 26 rows, ids 1-26 contiguous, no dupes. |
+| 10 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin), Priority=10, Weight=10. No concurrent canopy session. |
+| 11 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections. Stack up (vite :5173 + canopyd :8091) for worker screenshots. |
+| 12 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 124 (judge re-run, 42/42). Next window 128-133 — UI-09's golden-diff spec joins the integration suite. |
+| 13 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh run list: no CI signal (Actions not enabled — fleet-wide). |
+| 14 | Dispatch | ✅ 1 WORKER — UI-09 (Luna) | **UI-09 dispatched** (PID 2831952, gpt-5.6-luna @ openai-codex): visual regression baseline — 4 mockups (graph nav/cards/collaboration/topics from /tmp/mockups/), golden screenshots in docs/screenshots/visual-regression/, Playwright toHaveScreenshot pixel-diff (zero new deps — @playwright/test 1.62 present), E2E-loop command documented. GitReins task created IN-REPO via CLI (8 ACs, +26 lines, zero churn — Tick 127 wrong-workdir lesson applied; never MCP for task create). Prompt /tmp/canopy_ui09_prompt.txt with verified facts (routes, stack up, mockup paths, vitest 460 baseline). |
+
+### Actions this tick
+
+- **UI-08: CLOSED ✅** — node list hierarchy landed (worker Hy3 @ opencode-go): NodesPage rework (+252), NodeTreeRow.tsx 206L (indent/branch lines, clickable short IDs), BulkActionBar.tsx 120L (count + delete/merge/tag, selection via nodeSelection.ts), pure libs nodeHierarchy.ts 258L + nodeShortId.ts 112L + pluralize.ts 52L, seed fixes (dedupe + author fallback), 8 screenshots committed. Foreman verified independently: tsc, vitest 460/460, build, go build/vet — all match worker claims. Judge PASS 6eefe838 (8/8 ACs).
+- **UI-09 dispatched** per Tick 127 handoff ("dispatch UI-09 once the worker has exited") — worker exited before tick start, so dispatched immediately. GitReins task created in-repo via CLI (correct workdir), status in_progress pre-dispatch, prompt with verified facts including the exact mockup paths and the 42/42 integration-suite baseline.
+- **Board-v2 sync**: UI-08 complete row (commit/verdict/lines), UI-09 in_progress + dispatched_at row, 2 events @ tick 128, ticks_total=128, last_commit=0f2543a, parquet re-export + read-back verified (single write). NULL-id event repair (2 rows from tick 121) folded into the same write.
+- **Committed legit edges.jsonl delta** (+24 UI-08 edges) + tasks.yaml (UI-09 task + UI-08 completion record) alongside the board commit.
+- **Pushed**: worker commit 0f2543a + board commit → origin/master (cleared the 1-commit local backlog).
+
+### Remaining open
+
+- UI-09: IN FLIGHT (Luna worker, visual regression baseline — PID 2831952).
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 91/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-08 ✅ (judge PASS 6eefe838), UI-09 IN FLIGHT (visual regression baseline), remaining: none pending after UI-09. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1381/218. Vitest 460/460. E2E 42/42 (Tick 124; UI-09 adds golden-diff spec).
+
+**Next tick:** steward UI-09 to completion (verify commit → guard → judge → board sync). Phase 11 then complete — next candidate: NEVER-DONE audit sweep or backlog grooming (INFRA-001 root fix remains scheduler-level).

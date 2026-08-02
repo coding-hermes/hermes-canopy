@@ -463,5 +463,32 @@ tasks:
   - 'All existing tests still pass: vitest 368/368 baseline + new tests, Playwright
     42/42, tsc --noEmit clean, oxlint 0 errors, npm run build green; frontend-only
     changes with Co-authored-by trailer'
-  status: in_progress
+  status: complete
   created_at: '2026-08-02T04:05:00+00:00'
+  completed_at: '2026-08-02T09:31:01.973019+00:00'
+- id: UI-09
+  title: "UI-09: Visual regression baseline \u2014 mockup-vs-app screenshots for all\
+    \ 4 vision-brief mockups (graph nav, cards, collaboration, topics), golden images\
+    \ committed, pixel-diff wired into E2E-001 loop"
+  criteria:
+  - 'Screenshots captured for all 4 vision-brief mockups (graph nav, cards, collaboration,
+    topics): each pair = mockup image + matching app screenshot at the same viewport/route,
+    stored in a committed directory (e.g. docs/screenshots/visual-regression/)'
+  - Golden baseline images committed to git (app screenshots become goldens; mockup
+    source referenced from vision-brief.html or /tmp/mockups/)
+  - 'Pixel-diff tooling exists: a script (Node/Playwright or pixelmatch) that captures
+    current app screenshots and diffs against goldens, exiting non-zero on significant
+    drift with a documented threshold'
+  - 'E2E-001 loop integration: the visual-regression diff run is invoked as part of
+    the E2E tick (documented command), so parity regressions are caught on every E2E
+    run; CI wiring documented (Actions not enabled fleet-wide)'
+  - "App-under-test state matches mockup conditions (same route, seeded data, viewport)\
+    \ \u2014 capture procedure documented so re-captures are reproducible"
+  - 'Golden update path documented: how to refresh goldens after intentional UI changes
+    (README or script flag)'
+  - 'All existing tests still pass: vitest 368+ baseline, Playwright 42/42, tsc --noEmit
+    clean, oxlint 0 errors, npm run build green; frontend/docs-only changes'
+  - 'Commit with Co-authored-by: Alexis Okuwa <wojonstech@gmail.com> trailer; screenshots
+    and harness committed; no Go backend changes unless required by the capture harness'
+  status: in_progress
+  created_at: '2026-08-02T09:37:35.866413+00:00'
