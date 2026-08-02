@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   build:
@@ -97,4 +97,4 @@ jobs:
 
       - name: Deploy
         if: always()
-        run: echo "deploy skipped for PR — requires merge to main"
+        run: echo "deploy skipped for PR — requires merge to master"
