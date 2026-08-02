@@ -1,6 +1,6 @@
-// Node service — business logic for node CRUD operations against the
-// conversation DAG. Implements SPEC-API-03 §3-7. The service is
-// transport-agnostic and depends only on the repository interfaces in
+// Package service contains the business logic layer. NodeService handles
+// node CRUD operations against the conversation DAG. Implements SPEC-API-03
+// §3-7. The service is transport-agnostic and depends only on the repository interfaces in
 // internal/db plus a pgxpool for transactional CreateNode and direct
 // depth/child-count queries.
 package service

@@ -4,12 +4,6 @@ run:
   timeout: 60s
   tests: false
 
-errcheck:
-  check-type-assertions: true
-
-staticcheck:
-  checks: ["all"]
-
 linters:
   enable:
     - errcheck
@@ -17,12 +11,16 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+  settings:
+    errcheck:
+      check-type-assertions: true
+    staticcheck:
+      checks: ["all"]
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  use-default-exclusions: false
 
 output:
   formats:
-    colored-line-number: {}
+    text: {}

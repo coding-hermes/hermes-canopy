@@ -251,12 +251,13 @@ func (m *pgMLSKeyPackageManager) GenerateKeyPackage(
 	if credential.ProfileID == uuid.Nil || credential.ProfileID != profileID {
 		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
 	}
+	derivedPub, ok := keyPair.PrivateKey.Public().(ed25519.PublicKey)
 	if len(credential.Identity) == 0 || credential.CredentialType == "" ||
 		len(credential.SignaturePublicKey) != ed25519.PublicKeySize ||
 		len(keyPair.PublicKey) != ed25519.PublicKeySize ||
 		len(keyPair.PrivateKey) != ed25519.PrivateKeySize ||
 		!bytes.Equal(credential.SignaturePublicKey, keyPair.PublicKey) ||
-		!bytes.Equal(keyPair.PrivateKey.Public().(ed25519.PublicKey), keyPair.PublicKey) {
+		!ok || !bytes.Equal(derivedPub, keyPair.PublicKey) {
 		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
 	}
 

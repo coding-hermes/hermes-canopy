@@ -1,3 +1,5 @@
+// Package hermes provides Hermes agent session/profile routing and
+// token cryptography for the Canopy–Hermes integration layer.
 package hermes
 
 import (
