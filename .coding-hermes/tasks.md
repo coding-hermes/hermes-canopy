@@ -1320,3 +1320,42 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 86/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-05 ✅, UI-06 IN FLIGHT, UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. E2E 42/42 (judge-verified this tick). Coverage ~40.7%.
 
 **Next tick:** steward UI-06 to completion (verify commit → guard → judge → board sync) → dispatch UI-07.
+
+---
+
+## Tick 123 — 2026-08-02 00:39 CDT (scheduler tick hermes-canopy-2026-08-02-00-39-57)
+
+**Verdict: COORDINATION** — UI-06 worker (Hy3, PID 224524) in flight at tick start; its commit a1e793b landed mid-tick (00:57). Worker still alive running post-commit verification → judge deferred to next tick per sequential-only rule (no guard/judge while worker's suite runs). No duplicate spawn, no file touches on worker-owned paths.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Worker in flight | ✅ HEALTHY | PID 224524/224632 (hy3 @ custom:opencode-go, prompt /tmp/canopy_ui06_prompt.txt), 40+ min elapsed, low CPU, cwd=/home/kara/hermes-canopy. Files actively edited at 00:37 (MessageComposer, TreeView, TreeCanvas, canvasGeometry, composer lib + tests). |
+| 2 | Worker commit | ✅ a1e793b (landed mid-tick) | `feat(ui): UI-06 composer bar — floating bottom input with paperclip/@/#/emoji controls, Send wired to node-create API. Addresses UI-06.` 13 files: frontend-only (MessageComposer.tsx, TreeView.tsx, TreeCanvas.tsx, composer.ts, canvasGeometry.ts + 2 test files) + docs/screenshots/ui-06/ (6 PNGs). Co-authored-by trailer present. |
+| 3 | Git status | ⚠️ board deltas only | Worker's WIP files all committed (clean). Dirty: events.parquet (this tick's sync), edges.jsonl (+5 legit UI-06 edges — committed with board per sibling-code-committed rule), untracked frontend/playwright-report/ (build artifact, left). |
+| 4 | Hilo | ✅ USEFUL | Fresh `hilo graph stats` (no warm needed): 1331 edges / 206 files. edges.jsonl +5 ast_exact edges all reference HEAD files (TreeView→api.ts/composer.ts, MessageComposer→composer.ts, composer.test.ts→vitest/composer). |
+| 5 | GitReins UI-06 | ⏸️ in_progress (deferred) | Task in_progress since Tick 122 (11 ACs). Worker committed but has not completed the task; judge NOT run this tick — worker still alive running its verification (sequential-only rule, ref tick-coordination-inflight-worker). Next tick: verify claims → guard → judge → complete → board sync. |
+| 6 | Board-v2 | ✅ SYNCED | ticks_total 122→123, last_tick 05:56 UTC, last_commit 970202d→a1e793b, event 14 (audit, UI-06, tick 123, worker-verified detail). Parquet re-exported (tasks 112, events 16). Cooldown row 900 (fleet.toml pin — untouched). |
+| 7 | Scheduler | ✅ REACHABLE | GET /api/v1/projects: hermes-canopy enabled=true, CooldownS=900 (matches fleet.toml). |
+| 8 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync with origin/master). No CI signal (Actions not enabled — fleet-wide). No new issues. |
+| 9 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 123 entry. |
+
+### Actions this tick
+
+- **Confirmed worker health read-only** (no interference): process tree = MCP watchdogs + LSP server only (mid-LLM-turn, healthy); worker prompt re-read from /tmp/canopy_ui06_prompt.txt to confirm task/ACs.
+- **Read-only review of worker WIP → commit**: verified a1e793b is frontend-only with co-author trailer; screenshot artifacts committed under docs/screenshots/ui-06/ (6 PNGs: treeview full, composer detail, typed state, emoji picker, after-success, error-inline — matching ACs 1/3/6/8 evidence).
+- **Board-v2 sync** (event 14 audit + ticks_total=123 + last_commit=a1e793b + parquet re-export). Note: events.id must be set explicitly via nextval — a bare INSERT leaves id NULL (same class as Tick 121's NULL-id rows); fixed with UPDATE + sequence advance.
+- **edges.jsonl +5 legit edges committed** with the board update (all reference files in HEAD).
+- **Deferred to next tick**: judge UI-06 (worker still alive), UI-07 dispatch (sequential — same frontend files as in-flight work).
+
+### Remaining open
+
+- UI-06: committed a1e793b, awaiting foreman judge + task completion (worker alive as of tick end).
+- UI-07..09: pending sequential after UI-06 completes.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 86/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-05 ✅, UI-06 COMMITTED (judge pending), UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1331/206.
+
+**Next tick:** verify UI-06 claims (vitest/tsc/build/lint) → `timeout 900 gitreins judge UI-06` → task complete + board-v2 sync → dispatch UI-07 (keyboard shortcuts, Hy3) — only after confirming the UI-06 worker process has exited.

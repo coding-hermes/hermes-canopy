@@ -1329,3 +1329,8 @@
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../components/NodeCard","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../lib/nodeMeta","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/NodesPage.tsx","to":"local:../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/TreeView.tsx","to":"local:../lib/api.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/TreeView.tsx","to":"local:../lib/composer.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/MessageComposer.tsx","to":"local:../lib/composer.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/composer.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/composer.test.ts","to":"local:../composer","rel":"imports","provenance":"ast_exact","confidence":1.0}
