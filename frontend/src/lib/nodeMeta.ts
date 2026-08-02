@@ -72,6 +72,42 @@ export function isUuidLike(value: string): boolean {
 }
 
 /**
+ * `uuid.Nil` — Go's zero UUID. Reaches the UI on records written before
+ * auth existed and on any row whose author could not be resolved. It is
+ * NOT a user, so labelling it "User 0000" invents a person who does not
+ * exist; it gets its own label.
+ */
+export const NIL_AUTHOR_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * The local development user.
+ *
+ * `vite.config.ts` signs its dev JWT with `sub` set to this id, so every
+ * node created through `vite dev` is authored by it — which is why a
+ * seeded tree shows one identical author on every row. It is the person
+ * reading the screen, so it resolves to "You" exactly like the Yjs
+ * replica's `local` author does.
+ */
+export const DEV_AUTHOR_ID = '00000000-0000-0000-0000-000000000001';
+
+/** Labels for author ids that carry a known meaning rather than an identity. */
+const WELL_KNOWN_AUTHORS: Readonly<Record<string, string>> = {
+  [NIL_AUTHOR_ID]: 'Unattributed',
+  [DEV_AUTHOR_ID]: 'You',
+};
+
+/**
+ * Label for an author id whose meaning is known a priori, else null.
+ *
+ * Checked before the generic UUID shortener so `…0001` reads "You"
+ * instead of "User 0001", and `…0000` reads "Unattributed" instead of
+ * naming a user that was never there.
+ */
+export function wellKnownAuthorName(authorId: string): string | null {
+  return WELL_KNOWN_AUTHORS[(authorId ?? '').trim().toLowerCase()] ?? null;
+}
+
+/**
  * Stable short label for a UUID author: `User 0001`.
  *
  * Mirrors the `User dead` convention the UI-04 humaniser already uses for
@@ -87,8 +123,9 @@ export function shortAuthorLabel(authorId: string): string {
 /**
  * Build the `names` map handed to `describeNodeAvatar`.
  *
- * Precedence: the API's display name → a short label for a UUID → nothing
- * (let the UI-04 humaniser handle a readable id like `demo_user_1`).
+ * Precedence: the API's display name → a well-known id's label ("You",
+ * "Unattributed") → a short label for any other UUID → nothing (let the
+ * UI-04 humaniser handle a readable id like `demo_user_1`).
  */
 export function nodeAuthorNames(
   nodes: readonly NodeMetaSource[],
@@ -103,6 +140,13 @@ export function nodeAuthorNames(
       names.set(id, given);
       continue;
     }
+
+    const wellKnown = wellKnownAuthorName(id);
+    if (wellKnown) {
+      names.set(id, wellKnown);
+      continue;
+    }
+
     if (isUuidLike(id)) names.set(id, shortAuthorLabel(id));
   }
   return names;

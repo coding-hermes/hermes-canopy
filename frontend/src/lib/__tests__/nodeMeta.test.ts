@@ -14,6 +14,8 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  DEV_AUTHOR_ID,
+  NIL_AUTHOR_ID,
   formatNodeMeta,
   formatTimeAgo,
   indexTopicTitles,
@@ -26,6 +28,7 @@ import {
   shortAuthorLabel,
   slugifyTopic,
   topicPillLabel,
+  wellKnownAuthorName,
   type NodeMetaSource,
 } from '../nodeMeta';
 
@@ -91,7 +94,17 @@ describe('nodeAuthorNames', () => {
 
   it('labels a bare uuid author rather than leaving it to be humanised', () => {
     // Without this the UI-04 humaniser renders "00000000 0000 0000".
-    expect(nodeAuthorNames([node()]).get(DEV_USER)).toBe('User 0001');
+    expect(
+      nodeAuthorNames([node({ authorId: '019fbf2d-13d9-714b-9077-735abfc6dc00' })])
+        .get('019fbf2d-13d9-714b-9077-735abfc6dc00'),
+    ).toBe('User DC00');
+  });
+
+  it('names the dev user "You" instead of "User 0001" (UI-08)', () => {
+    // vite.config.ts signs its dev JWT with sub = …0001, so every node
+    // created through `vite dev` is authored by the person reading the
+    // screen. The seeded demo tree is entirely this author.
+    expect(nodeAuthorNames([node()]).get(DEV_USER)).toBe('You');
   });
 
   it('leaves readable ids alone so the humaniser can name them', () => {
@@ -110,6 +123,56 @@ describe('nodeAuthorNames', () => {
   it('ignores empty author ids without throwing', () => {
     expect(nodeAuthorNames([node({ authorId: '' })]).size).toBe(0);
     expect(nodeAuthorNames([]).size).toBe(0);
+  });
+});
+
+// ─── Placeholder author fallback (UI-08) ───────────────────────────────
+
+describe('wellKnownAuthorName', () => {
+  it('names the zero UUID "Unattributed" rather than inventing a user', () => {
+    // uuid.Nil reaches the UI on rows written before auth existed. The
+    // screenshot showed a bare "00000000" — labelling it "User 0000"
+    // would name a person who was never there.
+    expect(wellKnownAuthorName(NIL_AUTHOR_ID)).toBe('Unattributed');
+  });
+
+  it('names the dev user "You"', () => {
+    expect(wellKnownAuthorName(DEV_AUTHOR_ID)).toBe('You');
+  });
+
+  it('returns null for any other id so the generic path still runs', () => {
+    expect(wellKnownAuthorName('019fbf2d-13d9-714b-9077-735abfc6dc00')).toBeNull();
+    expect(wellKnownAuthorName('demo_user_1')).toBeNull();
+    expect(wellKnownAuthorName('')).toBeNull();
+  });
+
+  it('is case- and whitespace-insensitive', () => {
+    expect(wellKnownAuthorName(`  ${NIL_AUTHOR_ID.toUpperCase()}  `)).toBe(
+      'Unattributed',
+    );
+  });
+});
+
+describe('nodeAuthorNames — placeholder authors', () => {
+  it('gives the nil author a real label instead of a bare uuid', () => {
+    const names = nodeAuthorNames([node({ authorId: NIL_AUTHOR_ID })]);
+    expect(names.get(NIL_AUTHOR_ID)).toBe('Unattributed');
+  });
+
+  it('lets a real display name from the API beat the placeholder label', () => {
+    // Once the backend populates authorDisplayName, that wins.
+    const names = nodeAuthorNames([
+      node({ authorId: DEV_AUTHOR_ID, authorDisplayName: 'Sarah Chen' }),
+    ]);
+    expect(names.get(DEV_AUTHOR_ID)).toBe('Sarah Chen');
+  });
+
+  it('produces initials, not "00", for the placeholder author', () => {
+    // The avatar renders initials of whatever name we resolve; "00000000"
+    // would render as "00". "Unattributed" renders as "UN".
+    const names = nodeAuthorNames([node({ authorId: NIL_AUTHOR_ID })]);
+    const resolved = names.get(NIL_AUTHOR_ID)!;
+    expect(resolved.slice(0, 2).toUpperCase()).toBe('UN');
   });
 });
 

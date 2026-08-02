@@ -2,8 +2,9 @@
  * Hermes Canopy — Nodes Page
  *
  * Browse and manage nodes across conversation trees. Select a tree
- * to view its nodes, edit content, and delete nodes.
- * Uses the graph subtree endpoint to list nodes for a given tree.
+ * to view its nodes as an indented hierarchy, edit content, follow a
+ * node into its tree, and act on a selection in bulk.
+ * Uses the tree-scoped node list endpoint (BUG-026).
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -21,12 +22,25 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPatch, apiDelete } from '../lib/api';
-import { NodeCard } from '../components/NodeCard';
+import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
+import { BulkActionBar } from '../components/BulkActionBar';
 import {
   indexTopicTitles,
   nodeAuthorNames,
   nodeTypeLabel,
 } from '../lib/nodeMeta';
+import { buildHierarchy, filterHierarchy } from '../lib/nodeHierarchy';
+import { disambiguateNodeIds } from '../lib/nodeShortId';
+import {
+  clearSelection,
+  isBulkBarVisible,
+  pruneSelection,
+  selectAllState,
+  toggleAllVisible,
+  toggleSelection,
+  type BulkActionId,
+} from '../lib/nodeSelection';
+import { countLabel, filteredCountLabel } from '../lib/pluralize';
 import type { TopicSummary } from '../types/topic';
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -195,6 +209,14 @@ export default function NodesPage() {
   const [editNode, setEditNode] = useState<NodeDetail | null>(null);
   const [deleteNodeId, setDeleteNodeId] = useState<string | null>(null);
 
+  // Bulk selection (UI-08) — ids, so a re-render or refetch cannot strand
+  // a stale node object in the selection. Pruned whenever the list moves.
+  const [selection, setSelection] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
   // Fetch trees for dropdown
   const fetchTrees = useCallback(async () => {
     setTreesLoading(true);
@@ -269,15 +291,104 @@ export default function NodesPage() {
     setEditNode(null);
   };
 
-  // Filter nodes by search
-  const filteredNodes = searchQuery
-    ? nodes.filter(
-        (n) =>
-          n.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          n.nodeType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          n.id.includes(searchQuery),
-      )
-    : nodes;
+  /*
+   * Hierarchy (UI-08). `parentId` is on every row of the list payload, so
+   * the tree structure is derived here rather than fetched — no extra
+   * request, and it stays correct while a search narrows the list.
+   *
+   * Searching keeps a hit's ANCESTORS visible (dimmed) so a match is
+   * shown in the branch it belongs to instead of as a context-free row;
+   * `matched` distinguishes real hits from that context.
+   */
+  const query = searchQuery.trim().toLowerCase();
+
+  const { rows, matched } = useMemo(() => {
+    const source = nodes as TreeRowNode[];
+    if (!query) {
+      return { rows: buildHierarchy(source), matched: null as Set<string> | null };
+    }
+    const result = filterHierarchy(
+      source,
+      (n) =>
+        n.content.toLowerCase().includes(query) ||
+        n.nodeType.toLowerCase().includes(query) ||
+        n.id.toLowerCase().includes(query),
+    );
+    return { rows: result.rows, matched: result.matched };
+  }, [nodes, query]);
+
+  const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
+
+  /*
+   * Short ids that are actually distinguishing. A UUIDv7's first group is
+   * the top 32 bits of a millisecond timestamp, so nodes seeded within
+   * ~65s of each other share it — `019fb0c2` appeared on four rows of the
+   * demo tree for exactly that reason. See lib/nodeShortId.
+   */
+  const shortIds = useMemo(
+    () => disambiguateNodeIds(nodes.map((n) => n.id)),
+    [nodes],
+  );
+
+  // Selection must survive re-renders but never outlive its rows.
+  useEffect(() => {
+    setSelection((prev) => {
+      const next = pruneSelection(prev, nodes.map((n) => n.id));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [nodes]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelection((prev) => toggleSelection(prev, id));
+  }, []);
+
+  const handleToggleAll = useCallback(() => {
+    setSelection((prev) => toggleAllVisible(prev, visibleIds));
+  }, [visibleIds]);
+
+  const headerSelectState = selectAllState(selection, visibleIds);
+
+  /**
+   * Bulk delete. Deletes are issued per node against the one endpoint
+   * that exists (`DELETE /nodes/{id}`, soft delete) — there is no bulk
+   * route. Failures are collected rather than aborting the run, so a
+   * single 404 does not strand the rest of the selection; whatever did
+   * succeed is removed from the list.
+   */
+  const handleBulkDelete = useCallback(async () => {
+    const ids = [...selection];
+    if (ids.length === 0) return;
+
+    setBulkDeleting(true);
+    const deleted: string[] = [];
+    const failed: string[] = [];
+
+    for (const id of ids) {
+      try {
+        await apiDelete(`/nodes/${id}`);
+        deleted.push(id);
+      } catch {
+        failed.push(id);
+      }
+    }
+
+    if (deleted.length > 0) {
+      const gone = new Set(deleted);
+      setNodes((prev) => prev.filter((n) => !gone.has(n.id)));
+    }
+    setSelection(failed.length > 0 ? new Set(failed) : clearSelection());
+    if (failed.length > 0) {
+      setError(`Failed to delete ${countLabel(failed.length, 'node')}.`);
+    }
+    setBulkDeleting(false);
+    setConfirmBulkDelete(false);
+  }, [selection]);
+
+  const handleBulkAction = useCallback((action: BulkActionId) => {
+    // Merge and tag are rendered disabled (no endpoint) — see
+    // lib/nodeSelection.bulkActions. Only delete can reach here.
+    if (action === 'delete') setConfirmBulkDelete(true);
+  }, []);
 
   // Author identities and topic titles are derived once per fetch, not
   // per card — every card would otherwise rebuild the same two maps.
@@ -343,7 +454,7 @@ export default function NodesPage() {
             <option value="">Choose a tree...</option>
             {trees.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.title} ({t.node_count} nodes)
+                {t.title} ({countLabel(t.node_count, 'node')})
               </option>
             ))}
           </select>
@@ -377,7 +488,7 @@ export default function NodesPage() {
             )}
           </div>
           <span className="text-xs text-content-muted">
-            {filteredNodes.length} of {nodes.length} nodes
+            {filteredCountLabel(rows.length, nodes.length, 'node')}
           </span>
         </div>
       )}
@@ -425,29 +536,72 @@ export default function NodesPage() {
         </div>
       )}
 
-      {/* Node list */}
-      {selectedTree && !nodesLoading && filteredNodes.length > 0 && (
+      {/* Node list — indented hierarchy (UI-08) */}
+      {selectedTree && !nodesLoading && rows.length > 0 && (
         <section aria-label={`Nodes in ${selectedTree.title}`}>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-content-muted">
+              <input
+                type="checkbox"
+                checked={headerSelectState === 'all'}
+                ref={(el) => {
+                  // Indeterminate is a DOM property, not an attribute —
+                  // React cannot set it through JSX.
+                  if (el) el.indeterminate = headerSelectState === 'some';
+                }}
+                onChange={handleToggleAll}
+                data-testid="node-select-all"
+                className="h-3.5 w-3.5 cursor-pointer accent-[var(--color-accent-2)]"
+              />
+              Select all
+            </label>
+
             <h2 className="flex items-center gap-2 text-xs font-medium text-content-tertiary">
               {nodeTypeIcon('message')}
-              {selectedTree.title} — {nodes.length} nodes
+              {selectedTree.title} — {countLabel(nodes.length, 'node')}
             </h2>
           </div>
-          <div className="space-y-3">
-            {filteredNodes.map((node) => (
-              <NodeCard
-                key={node.id}
-                node={node}
+
+          <ul role="tree" aria-label="Node hierarchy" className="space-y-3">
+            {rows.map((row) => (
+              <NodeTreeRow
+                key={row.id}
+                row={row}
+                shortId={shortIds.get(row.id) ?? row.id}
+                selected={selection.has(row.id)}
+                onToggleSelect={handleToggleSelect}
+                isMatch={matched === null || matched.has(row.id)}
+                searching={matched !== null}
                 authorNames={authorNames}
                 topicTitles={topicTitles}
-                onEdit={() => setEditNode(node)}
-                onDelete={() => setDeleteNodeId(node.id)}
+                onEdit={() => setEditNode(row.node as NodeDetail)}
+                onDelete={() => setDeleteNodeId(row.id)}
                 onOpenTopic={openTopic}
               />
             ))}
-          </div>
+          </ul>
+
+          {isBulkBarVisible(selection) && (
+            <BulkActionBar
+              count={selection.size}
+              onClear={() => setSelection(clearSelection())}
+              onAction={handleBulkAction}
+            />
+          )}
         </section>
+      )}
+
+      {/* No search results — distinct from "this tree has no nodes" */}
+      {selectedTree && !nodesLoading && nodes.length > 0 && rows.length === 0 && (
+        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
+          <Search className="mx-auto mb-3 h-10 w-10 text-content-faint/50" />
+          <h2 className="mb-1 text-sm font-medium text-content-secondary">
+            No matching nodes
+          </h2>
+          <p className="text-xs text-content-muted">
+            Nothing in this tree matches “{searchQuery}”.
+          </p>
+        </div>
       )}
 
       {/* Edit dialog */}
@@ -494,6 +648,52 @@ export default function NodesPage() {
       {deleteNodeId && (
         <div className="fixed inset-0 z-[51] flex items-center justify-center bg-black/60">
           <p className="text-sm text-content-secondary">Deleting...</p>
+        </div>
+      )}
+
+      {/* Bulk delete confirmation (UI-08) */}
+      {confirmBulkDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Delete selected nodes"
+        >
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => !bulkDeleting && setConfirmBulkDelete(false)}
+          />
+          <div className="glass-raised relative mx-4 w-full max-w-sm rounded-xl">
+            <div className="border-b border-line-subtle px-5 py-4">
+              <h2 className="text-sm font-medium text-content-primary">
+                Delete {countLabel(selection.size, 'node')}
+              </h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-content-secondary">
+                {bulkDeleting
+                  ? 'Deleting…'
+                  : `This will soft-delete ${countLabel(selection.size, 'node')}. Replies to a deleted node are not removed.`}
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-line-subtle px-5 py-3">
+              <button
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={bulkDeleting}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-content-muted transition-colors hover:bg-surface-hover hover:text-content-primary disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                data-testid="bulk-delete-confirm"
+                className="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

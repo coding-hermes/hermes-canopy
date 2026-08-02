@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Share2 } from 'lucide-react';
 import TreeCanvas from '../components/TreeCanvas.tsx';
 import NavigationBar from '../components/NavigationBar.tsx';
@@ -150,6 +150,34 @@ export default function TreeView() {
   }, [treeId]);
 
   const tree = useYjsTree(doc);
+
+  /*
+   * Deep-link focus (UI-08). The Nodes page links a node's id here —
+   * `/tree/{treeId}?node={nodeId}` — because TreeView IS the node detail
+   * context in this product: it is where a node's parents, replies and
+   * content actually live, so there is no separate `/nodes/:id` route to
+   * invent.
+   *
+   * Read-only on purpose. Writing the param back would feed the router
+   * update into this effect and spin a render loop (BUG hermes-canopy
+   * UI-02). For the same reason the dependency is the param VALUE, not
+   * the `searchParams` object — its identity changes every render.
+   *
+   * `hasNode` gates on the node existing in the replica: Yjs hydrates
+   * asynchronously, so on a cold load the param arrives before the graph
+   * does and an ungated effect would focus nothing and never retry.
+   */
+  const [searchParams] = useSearchParams();
+  const deepLinkNodeId = searchParams.get('node');
+  const hasNode = deepLinkNodeId
+    ? tree.nodes.some((n) => n.id === deepLinkNodeId)
+    : false;
+
+  useEffect(() => {
+    if (!deepLinkNodeId || !hasNode) return;
+    setSelectedNodeId(deepLinkNodeId);
+    setFocusNodeId(deepLinkNodeId);
+  }, [deepLinkNodeId, hasNode]);
 
   // ── Multi-user presence ──────────────────────────────────────────
   const {
