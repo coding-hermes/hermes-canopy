@@ -1361,3 +1361,51 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 86/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-05 ✅, UI-06 COMMITTED (judge pending), UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1331/206.
 
 **Next tick:** verify UI-06 claims (vitest/tsc/build/lint) → `timeout 900 gitreins judge UI-06` → task complete + board-v2 sync → dispatch UI-07 (keyboard shortcuts, Hy3) — only after confirming the UI-06 worker process has exited.
+---
+
+## Tick 124 — 2026-08-02 01:20 UTC (scheduler tick hermes-canopy-2026-08-02-01-20-24)
+
+**Verdict: PRODUCTIVE** — UI-06 stewarded to completion (verify → judge PASS → board sync) + BUG-029 (backend) and BUG-030 (frontend) dispatched in parallel (disjoint paths, both High-priority UI-06 follow-ups).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN at a1e793b (worker commit) | UI-06 worker (PID 224524) confirmed EXITED. Dirty at tick start: only untracked frontend/playwright-report/ (build artifact, left). No sibling canopy sessions (mythos + hivemind workers verified as different projects via /proc cwd). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0 (independent re-run over a1e793b tree). |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0; oxlint 0 errors / 0 warnings; npm run build green (SW bundle included). |
+| 4 | Vitest | ✅ 293/293 (11 files) | Fresh run: 293 PASS (1.22s) — up from 240 at Tick 122: UI-06 added composer.test.ts (44) + canvasGeometry additions (52 total). |
+| 5 | GitReins judge UI-06 | ✅ **PASS 32c9da94** | `timeout 900 gitreins task complete UI-06` (background, ~7 min). tier1 PASS + tier2 PASS, all 11 ACs with per-AC code evidence. Judge independently re-verified: vitest 293/293, Playwright 42/42 (5 files), tsc/build/lint, frontend-only commit a1e793b + Co-authored-by trailer. (CLI printed 000077b9; on-disk dir 32c9da94 — known hash-mismatch pitfall, trust newest dir.) |
+| 6 | Hilo | ✅ USEFUL | Fresh `hilo graph stats`: 1336 edges / 207 files (up from 1331/206 — UI-06 edges indexed). Top dep: google/uuid. Hilo=useful |
+| 7 | TODO/FIXME | ⚠️ 9 pre-existing | 5 stub_adapters.go post-MVP + 1 cursor TODO (tree_service.go:442) + 3 auth test skips. No new TODOs. |
+| 8 | GitReins | ✅ UI-06 COMPLETE + BUG-029/030 CREATED | tasks.yaml: UI-06 status=complete (verdict 32c9da94, completed_at 06:22:52Z written by judge at start; verdict dir landed 01:26 local). BUG-029 (7 ACs) + BUG-030 (7 ACs) tasks created pre-dispatch this tick. |
+| 9 | Secrets | ✅ CLEAN | No new code committed since Tick 119 gitleaks scan (449 commits, 0 leaks); judge tier1 secrets check PASS. |
+| 10 | Board-v2 | ✅ SYNCED | DuckDB board: UI-06 → complete (a1e793b, +1120/−172, guard PASS, verdict 32c9da94), BUG-029 + BUG-030 → in_progress + dispatched_at, events 15 (task_completed UI-06) + 16/17 (task_dispatched BUG-029/030) @ tick 124, ticks_total=124, last_commit=a1e793b. Parquet re-exported (absolute paths). Sequence events_id_seq recreated (DuckDB has no setval). |
+| 11 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT needed), Priority=10, Weight=10. No concurrent canopy session. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg at :5437 accepting connections. |
+| 13 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 124 entry + status update. |
+| 14 | E2E-001 | ✅ WINDOW SATISFIED (judge re-run) | Playwright 42/42 re-run by UI-06 judge as part of AC verification (window 122-127 closed by this tick). Next window 128-133. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync with origin/master). gh run list: 404 (repo is coding-hermes/hermes-canopy, Actions not enabled — consistent). No new issues. Deps stable. |
+| 16 | Dispatch | ✅ **2 WORKERS IN PARALLEL** | BUG-029 (root node 503, Go): glm-5.2 @ zai-glm, PID 896076. BUG-030 (composer read-only, TS): hy3 @ custom:opencode-go, PID 896946. Both verified alive at gate end (cwd=/home/kara/hermes-canopy). Disjoint paths (internal/ vs frontend/) — safe to parallelize. GitReins tasks created pre-dispatch (canopy precedent: UI-04/05/06 survived). |
+
+### Actions this tick
+
+- **Verified UI-06 worker claims independently** (worker exited Tick 123): commit a1e793b inspected (13 files frontend-only: MessageComposer.tsx 553±, TreeView, TreeCanvas, composer.ts 221+, canvasGeometry.ts, 2 test files, 6 PNG screenshots; +1120/−172; Co-authored-by trailer present). vitest 293/293 re-run PASS, tsc/build/lint clean, go build/vet clean.
+- **Ran the judge** (`timeout 900 gitreins task complete UI-06`, background): PASS 32c9da94, 11/11 ACs. Completion record was written by the judge at start (06:22:52Z); verdict dir landed 01:26 local. E2E window 122-127 satisfied by the judge's own Playwright 42/42 re-run.
+- **Board-v2 sync**: UI-06 complete row (commit/verdict/lines), BUG-029/030 in_progress + dispatched_at rows, 3 events @ tick 124, ticks_total=124, parquet re-export. Note: DuckDB has no `setval` — events inserted with explicit id = MAX+1 and `events_id_seq` recreated (DROP + CREATE START WITH next) to keep nextval inserts consistent.
+- **BUG-029 + BUG-030 dispatched in parallel** (both High, both UI-06 follow-ups, disjoint file trees):
+  - BUG-029 → glm-5.2 @ zai-glm (board fallback — surgical ~15-line Go fix, flat-rate bucket; primary V4 Pro is PAYG, not justified for this scope). Prompt /tmp/canopy_bug029_prompt.txt with code-verified facts (edge INSERT at node_service.go:411-422 unconditionally uses input.ParentID as source_id; CreateNodeResult.Edge is a pointer so nil is valid; fix = wrap edge insert in `if input.ParentID != uuid.Nil`).
+  - BUG-030 → hy3 @ custom:opencode-go (board fallback — flat-rate, proven on UI-04/05/06 frontend work). Prompt /tmp/canopy_bug030_prompt.txt with code-verified facts (usePresence.ts:135 hardcodes permission:'viewer'; TreeView:265 isViewer → readOnly; no membership endpoint in MVP → default 'editor'; remote payload.permission path preserved).
+- **UI-07 (keyboard shortcuts, Low) deferred** — BUG-029/030 are High-priority blockers of the just-shipped composer feature; UI-07 next after both land.
+
+### Remaining open
+
+- BUG-029: IN FLIGHT (glm-5.2, PID 896076).
+- BUG-030: IN FLIGHT (hy3, PID 896946).
+- UI-07..09: pending sequential after BUG-029/030.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 87/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-06 ✅ (judge PASS 32c9da94), BUG-029/030 IN FLIGHT (composer blockers), UI-07..09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1336/207. Vitest 293/293. E2E 42/42 (judge-verified this tick).
+
+**Next tick:** steward BUG-029 + BUG-030 to completion (verify commits → guard → judge each → board sync) → dispatch UI-07 (keyboard shortcuts, Hy3) once both workers have exited.

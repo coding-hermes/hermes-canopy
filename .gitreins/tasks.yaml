@@ -367,5 +367,47 @@ tasks:
     suite stays green
   - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by:\
     \ Alexis Okuwa <wojonstech@gmail.com> trailer"
-  status: in_progress
+  status: complete
   created_at: '2026-08-02T05:07:59.109869+00:00'
+  completed_at: '2026-08-02T06:22:52.163028+00:00'
+- id: BUG-029
+  title: 'Fix root node creation 503: skip edge insert when ParentID is nil (edges_source_id_fkey
+    violation)'
+  criteria:
+  - 'Root node creation (parent_id null/unset) succeeds: POST /api/v1/trees/{tree_id}/nodes
+    with no parent_id returns 201 with the created node, NOT 503'
+  - "NodeServiceImpl.Create skips the edge INSERT when input.ParentID == uuid.Nil\
+    \ (root nodes have no parent edge) \u2014 verified in code"
+  - "Reply/fork nodes (parent_id set) still insert their edge and return it: CreateNodeResult.Edge\
+    \ non-nil for replies \u2014 no regression"
+  - CreateNodeResult.Edge is nil for root nodes; all callers of Create/CreateNodeResult
+    handle nil Edge safely (check node_handler.go and any other consumers)
+  - 'Regression test: service or handler test proves root node create returns 201
+    with no edge row inserted (edges count for tree unchanged after root create)'
+  - go build + go vet + gofmt clean; go test ./internal/service/... (and handler node
+    tests with PG) pass
+  - 'No frontend changes; commit includes Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
+    trailer'
+  status: pending
+  created_at: '2026-08-02T06:32:12.657379+00:00'
+- id: BUG-030
+  title: 'Fix composer read-only: usePresence.ts initial local permission ''viewer''
+    -> ''editor'' (single-user default)'
+  criteria:
+  - "usePresence.ts initial local presence no longer hardcodes permission: 'viewer'\
+    \ \u2014 defaults to 'editor' (single-user MVP local user) or derives from real\
+    \ membership when an endpoint exists"
+  - "Live app: TreeView readOnly={isViewer} resolves isViewer=false for the local\
+    \ user \u2014 composer is editable (no way to send messages is fixed)"
+  - "Remote presence updates still respected: permission from remote peers (payload.permission,\
+    \ line ~243) overrides \u2014 viewer/editor/admin preserved"
+  - No other hardcoded 'viewer' defaults introduced; ShareDialog + yjsProvider permission
+    flows unchanged (or updated consistently)
+  - 'Unit tests: default-permission behavior tested (usePresence or component-level);
+    existing vitest suite stays green (293 tests)'
+  - tsc --noEmit + npm run build + oxlint clean; Playwright integration suite stays
+    green
+  - "Frontend/ only \u2014 no Go changes; commit includes Co-authored-by: Alexis Okuwa\
+    \ <wojonstech@gmail.com> trailer"
+  status: pending
+  created_at: '2026-08-02T06:32:13.694419+00:00'
