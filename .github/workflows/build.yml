@@ -25,7 +25,7 @@ jobs:
         ports:
           - 5437:5432
         options: >-
-          --health-cmd pg_isready -U canopy
+          --health-cmd "pg_isready -U canopy"
           --health-interval 3s
           --health-timeout 3s
           --health-retries 10
