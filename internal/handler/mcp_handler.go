@@ -108,16 +108,16 @@ var tools = []toolDef{
 	},
 	{
 		Name:        "create_node",
-        Description: "Create a new node in a tree",
-        InputSchema: inputSchema{
-        	Type: "object",
-        	Properties: map[string]propDef{
-        		"tree_id":   {Type: "string", Description: "UUID of the tree (also set via AuthorID context)"},
-        		"content":   {Type: "string", Description: "Markdown content for the node"},
-        		"parent_id": {Type: "string", Description: "Optional parent node UUID"},
-        	},
-        	Required: []string{"tree_id", "content"},
-        },
+		Description: "Create a new node in a tree",
+		InputSchema: inputSchema{
+			Type: "object",
+			Properties: map[string]propDef{
+				"tree_id":   {Type: "string", Description: "UUID of the tree (also set via AuthorID context)"},
+				"content":   {Type: "string", Description: "Markdown content for the node"},
+				"parent_id": {Type: "string", Description: "Optional parent node UUID"},
+			},
+			Required: []string{"tree_id", "content"},
+		},
 	},
 	{
 		Name:        "list_topics",

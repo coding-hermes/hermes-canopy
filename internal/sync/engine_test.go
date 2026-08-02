@@ -67,8 +67,8 @@ func TestBuildNodeEventPayload_WithAllFields(t *testing.T) {
 
 func TestBuildNodeEventPayload_Minimal(t *testing.T) {
 	m := NodeMutation{
-		Type:   MutNodeRemoved,
-		NodeID: uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		Type:    MutNodeRemoved,
+		NodeID:  uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 		ActorID: uuid.MustParse("00000000-0000-0000-0000-000000000002"),
 	}
 

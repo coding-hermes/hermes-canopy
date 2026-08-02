@@ -379,9 +379,9 @@ func scanCardFromRows(rows *sql.Rows) (*card.Card, error) {
 
 func scanEventFromRows(rows *sql.Rows) (*card.CardEvent, error) {
 	var (
-		seq                                                            int64
-		eventIDStr, cardIDStr, eventType, actorKind, actorID, payload  string
-		createdAt                                                      time.Time
+		seq                                                           int64
+		eventIDStr, cardIDStr, eventType, actorKind, actorID, payload string
+		createdAt                                                     time.Time
 	)
 
 	err := rows.Scan(&seq, &eventIDStr, &cardIDStr, &eventType, &actorKind, &actorID, &payload, &createdAt)

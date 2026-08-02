@@ -27,9 +27,9 @@ type WebSocketAdapter struct {
 	upgrader websocket.Upgrader
 
 	mu     sync.RWMutex
-	conns  map[string]*wsConn // conn ID → connection state
+	conns  map[string]*wsConn            // conn ID → connection state
 	rooms  map[string]map[string]*wsConn // tenantChannel → {connID → wsConn}
-	server *http.Server // optional HTTP server for upgrade endpoint
+	server *http.Server                  // optional HTTP server for upgrade endpoint
 
 	// addr is the listen address when running in server mode.
 	addr string
@@ -40,11 +40,11 @@ type WebSocketAdapter struct {
 
 // wsConn wraps a gorilla WebSocket connection with Canopy metadata.
 type wsConn struct {
-	conn     *Connection
-	ws       *websocket.Conn
-	recvChan chan *Message
-	sendChan chan *Message
-	done     chan struct{}
+	conn      *Connection
+	ws        *websocket.Conn
+	recvChan  chan *Message
+	sendChan  chan *Message
+	done      chan struct{}
 	closeOnce sync.Once
 }
 
@@ -348,7 +348,7 @@ func (a *WebSocketAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Peer:          r.RemoteAddr,
 		TenantID:      tenantID,
 		Metadata: map[string]string{
-			"tenant_id": tenantID,
+			"tenant_id":  tenantID,
 			"user_agent": r.UserAgent(),
 		},
 		State:         StateActive,

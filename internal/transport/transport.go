@@ -41,7 +41,7 @@ type TransportAdapter interface {
 type ConnectOptions struct {
 	Target         string
 	TransportType  TransportType
-	TenantID       string            // multi-tenant scope (empty = public)
+	TenantID       string // multi-tenant scope (empty = public)
 	Auth           AuthMaterial
 	Metadata       map[string]string
 	TLSConfig      *tls.Config

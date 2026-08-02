@@ -57,10 +57,10 @@ func TestPGTopicRepo_Create_WithTags(t *testing.T) {
 
 	tags := []string{"design", "architecture", "v2"}
 	out, err := repo.Create(ctx, db.TopicCreateInput{
-		TreeID:      tree.ID,
-		RootNodeID:  node.ID,
-		Title:       "Tagged Topic",
-		TopicTags:   tags,
+		TreeID:     tree.ID,
+		RootNodeID: node.ID,
+		Title:      "Tagged Topic",
+		TopicTags:  tags,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, out)
@@ -79,7 +79,7 @@ func TestPGTopicRepo_Create_WithParentTopic(t *testing.T) {
 		TreeID:     tree.ID,
 		RootNodeID: node.ID,
 		Title:      "Parent Topic",
-		TopicTags:   []string{},
+		TopicTags:  []string{},
 	})
 	require.NoError(t, err)
 

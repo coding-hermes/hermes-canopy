@@ -37,11 +37,11 @@ var (
 // It holds the tree metadata, all nodes, and all edges so a complete
 // conversation DAG can be reconstructed from a single JSON document.
 type ExportData struct {
-	Tree      ExportTree `json:"tree"`
-	Nodes     []db.Node  `json:"nodes"`
-	Edges     []db.Edge  `json:"edges"`
-	Version   int        `json:"version"`
-	ExportedAt time.Time `json:"exportedAt"`
+	Tree       ExportTree `json:"tree"`
+	Nodes      []db.Node  `json:"nodes"`
+	Edges      []db.Edge  `json:"edges"`
+	Version    int        `json:"version"`
+	ExportedAt time.Time  `json:"exportedAt"`
 }
 
 // ExportTree carries the tree-level metadata that is included in the export.
@@ -126,9 +126,9 @@ func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*
 			CreatedAt:   t.CreatedAt,
 			RootNodeID:  rootNodeID,
 		},
-		Nodes:     nodes,
-		Edges:     edges,
-		Version:   1,
+		Nodes:      nodes,
+		Edges:      edges,
+		Version:    1,
 		ExportedAt: s.now().UTC(),
 	}, nil
 }
