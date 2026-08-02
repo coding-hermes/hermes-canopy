@@ -267,5 +267,25 @@ tasks:
     (UI-01 tokens already AA-verified)'
   - npm run build passes, tsc --noEmit clean, existing Playwright suite tests still
     pass (no regressions)
-  status: pending
+  status: complete
   created_at: '2026-08-01T20:40:56.815266+00:00'
+  completed_at: '2026-08-01T23:57:22.823563+00:00'
+- id: UI-03
+  title: 'Mockup parity UI-03: Header upgrade (vision-brief v2.0)'
+  criteria:
+  - "Header shows context title (active topic \u2192 active tree \u2192 \"Knowledge\
+    \ Canopy\" fallback chain) + count badge reflecting REAL data from API (no hardcoded\
+    \ numbers)"
+  - '"Macro tree view" subtitle present under the title, styled with content-faint/muted
+    design tokens'
+  - Segmented Tree/Detail/Merge selector with icons, accent-highlighted active state,
+    wired to real routes (highlight follows current route)
+  - Backend status pill preserved in the header's right zone
+  - TopicsRail + left nav + all existing routes functionally untouched (build passes,
+    no layout regressions)
+  - 'a11y: exactly one h1 per page preserved, segmented control has accessible semantics
+    + focus states, WCAG AA contrast'
+  - Unit tests for the context-resolution logic pass (npm test green)
+  - npm run build + tsc --noEmit + lint all pass
+  status: pending
+  created_at: '2026-08-01T23:59:26.322361+00:00'
