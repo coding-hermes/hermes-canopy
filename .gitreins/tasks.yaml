@@ -334,5 +334,5 @@ tasks:
   - npm run build + tsc --noEmit + lint all pass; 42/42 Playwright integration suite
     stays green
   - "Frontend/ only \u2014 no Go backend changes; commit includes Co-authored-by trailer"
-  status: pending
+  status: in_progress
   created_at: '2026-08-02T04:22:00.701495+00:00'
