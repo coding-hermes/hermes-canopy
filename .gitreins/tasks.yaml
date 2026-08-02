@@ -287,5 +287,6 @@ tasks:
     + focus states, WCAG AA contrast'
   - Unit tests for the context-resolution logic pass (npm test green)
   - npm run build + tsc --noEmit + lint all pass
-  status: pending
+  status: complete
   created_at: '2026-08-01T23:59:26.322361+00:00'
+  completed_at: '2026-08-02T01:39:49.953931+00:00'

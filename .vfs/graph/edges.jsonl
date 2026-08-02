@@ -1249,3 +1249,15 @@
 {"from":"frontend/src/pages/TopicsPage.tsx","to":"pkg:react-router-dom","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/TopicsPage.tsx","to":"local:../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/pages/TopicsPage.tsx","to":"local:../lib/activeTree","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"pkg:react","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"pkg:react-router-dom","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"pkg:lucide-react","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"local:../lib/api","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"local:../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"local:../lib/activeTree","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/components/AppHeader.tsx","to":"local:../lib/headerContext","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/App.tsx","to":"local:./components/AppHeader","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/headerContext.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/headerContext.test.ts","to":"local:../../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/__tests__/headerContext.test.ts","to":"local:../headerContext","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"frontend/src/lib/headerContext.ts","to":"local:../types/topic","rel":"imports","provenance":"ast_exact","confidence":1.0}
