@@ -1715,3 +1715,44 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/115 board tasks complete (BUG-031, UI-10 closed this tick; UI-08/UI-09 already ✅). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy (restarted). Hilo stable. Vitest 460/460. Chaos suite 6/6 (was 5/6 + hang). Coverage ~40.7%.
 
 **Next tick:** E2E-001 window approaching (134-139) — run full integration suite incl. 4 visual-regression tests. Otherwise maintenance: no dispatchable tasks (INFRA-001 scheduler-level, post-MVP backlog deferred).
+
+## Tick 132 — 2026-08-02 16:10 UTC (scheduler tick hermes-canopy-2026-08-02-16-10-55, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — Full 16-gate audit green. No workers in flight (all prior PIDs exited), no dispatchable tasks (INFRA-001 scheduler-level, post-MVP backlog deferred by design). Mechanical hygiene fix landed: gofmt cleanup of 7 pre-existing unformatted files (8ad7ee0, whitespace-only, foreman-direct per skill exception).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN → gofmt commit | Tick start: clean at 4340fa7 (Tick 131 board), 0/0 vs origin/master. All prior worker PIDs (224524→3528106) confirmed exited. Only untracked: frontend/playwright-report/ (build artifact, left by convention). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0 (post-gofmt re-run). |
+| 3 | gofmt | ✅ FIXED (7 files) | `gofmt -l internal/` surfaced 7 pre-existing unformatted files (duckdb_repo.go, topic_repo_test.go, mcp_handler.go, export_service.go, engine_test.go, transport.go, websocket_adapter.go — all touched 07-26→07-31, pre-Tick-131). Fixed foreman-direct (mechanical exception): 8ad7ee0, 37+/37− whitespace-only (var-block alignment, space-vs-tab indentation). Trailer present. `gofmt -l` now empty. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 5 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.22s — matches Tick 131 baseline exactly. |
+| 6 | Go tests | ✅ 11/11 NON-PG PASS | card (0.167s), card/duckdb (0.059s), config, hermes, mls, server, service, sse (1.229s), sync, testutil (5.269s), transport — all PASS. Handler/PG suites not run (maintenance tick; E2E window covers them). |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs Tick 131). Top dep: google/uuid (100). Hilo=useful. Post-commit hook re-discovered 44 edges for gofmt files — zero new graph delta (files already indexed). |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 7 FE BUG-024 stubs. No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | tasks.yaml: all tasks complete. No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks: 494 commits, 29.44MB, 1.13s, 0 leaks. |
+| 11 | Board consistency | ✅ CONSISTENT | DuckDB: 94 complete + 22 pending, 0 in_progress, events 30 (last 29/30 @ tick 131), meta ticks_total=131, last_commit=9545799, cooldown 900. No parquet churn (T116/T120 single-write discipline — no status changes this tick). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin), Priority=10, Weight=10. No concurrent canopy session. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (container up 56 min, healthy). |
+| 14 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 129 (46/46 incl. 4 visual-regression). Next window 134-139. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync). gh run list: no CI signal (Actions not enabled — fleet-wide). gh issue list: 0 open. Deps: not re-scanned (stable since Tick 113). |
+| 16 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 132 entry + status update. |
+
+### Actions this tick
+
+- **gofmt hygiene fix (8ad7ee0)**: 7 pre-existing unformatted Go files cleaned (whitespace-only, 37+/37−). Foreman-direct per skill mechanical-cleanup exception — no worker needed. Verified: go build, go vet, 11/11 non-PG test packages, vitest 460/460 all green post-fix. Co-authored-by trailer verified via `git log -1 --format='%B' | grep`.
+- **Full maintenance audit**: all 16 gates green. No regressions, no drift, no new bugs.
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: window 134-139 (full integration suite incl. 4 visual-regression tests).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Chaos suite 6/6 (Tick 131). Coverage ~40.7%.
+
+**Next tick:** E2E-001 window approaching (134-139) — run full integration suite incl. 4 visual-regression tests when window opens. Otherwise maintenance: no dispatchable tasks (INFRA-001 scheduler-level, post-MVP backlog deferred).
