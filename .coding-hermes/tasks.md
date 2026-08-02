@@ -1797,4 +1797,46 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 
 **Project Status:** 94/115 board tasks complete. **CI LIVE for the first time** (GitHub Actions green on master). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo ~1450/219. Vitest 460/460. golangci-lint 0 issues (was: broken config). Coverage ~40.7%.
 
-**Next tick:** E2E-001 window approaching (134-139) — run full integration suite incl. 4 visual-regression tests when window opens. Otherwise maintenance: no dispatchable tasks (INFRA-001 scheduler-level, post-MVP backlog deferred). CI now guards every push — watch for first red run.
+## Tick 134 — 2026-08-02 23:40 UTC (scheduler tick hermes-canopy-2026-08-02-18-29-18, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — E2E-001 window 134-139 satisfied: full integration suite 46/46 after fixing a real defect (stale visual-regression goldens). First run 42/46 — all 4 visual-regression tests failed with 20-30% pixel drift; root cause: goldens were captured at Tick 129 BEFORE the UI-10 sidebar consolidation (Tick 131) changed the layout. Refreshed goldens via the documented UI-09 workflow (UPDATE_VISUAL_GOLDENS=1), vision-checked the new golden (intended dark-navy UI intact), clean re-run 46/46. No worker dispatch beyond the E2E subagent; no new tasks (INFRA-001 scheduler-level, post-MVP backlog deferred).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Tick start clean at 4b55b14 (Tick 133 board), in sync with origin/master. Only untracked: frontend/playwright-report/ (build artifact, left by convention). No workers in flight (no opencode/codex/glm/hy3 processes). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0; oxlint 0 errors / 8 warnings (project baseline); npm run build green (dist + sw.js). |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 3.84s — matches Tick 131/132/133 baseline. |
+| 5 | Go tests | ✅ 11/11 NON-PG PASS | card, card/duckdb, config, hermes, mls, server, service, sse (1.343s), sync, testutil (4.051s), transport — all PASS. Handler/PG suites covered by E2E window. |
+| 6 | E2E-001 | ✅ **WINDOW 134-139 SATISFIED — 46/46** | Run 1 (delegate_task worker): 42/46 — visual-regression 4/4 FAILED (drift 20.1-29.5%, max channel delta 230-244). Root cause: goldens stale — captured Tick 129 pre-UI-10; UI-10 sidebar consolidation (judge PASS 7ebe237c) changed layout globally. All 42 functional tests PASS (accessibility 7, approval-panel 5, crud-pages 14, navigation 9, tree-rendering 7) → UI intact, drift = intentional layout change, not a rendering break. Fix: UPDATE_VISUAL_GOLDENS=1 full-suite run (46/46, goldens + mockup pairs regenerated), then clean verification run WITHOUT the env var: **46/46 PASS (44.47s)**. |
+| 7 | Golden vision check | ✅ INTENDED UI | vision_analyze on new mockup-1-graph-nav.png golden: dark navy theme, topics rail INSIDE sidebar (search + sort + 9/9 badge = UI-10), glowing bezier connectors (UI-04), NodeCard avatars (UI-05), composer bar with @/#/emoji + ⌘↵ (UI-06), shortcut kbd strip (UI-07). Not blank/broken. |
+| 8 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs Tick 132). Top dep: google/uuid. Hilo=useful |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | tasks.yaml all complete. No churn. No judge needed (no worker task this tick). |
+| 10 | Secrets | ✅ CLEAN | gitleaks: 494+ commits, 0 leaks (exit 0). |
+| 11 | Board-v2 | ✅ SYNCED | Event 31 (audit E2E-001, tick 134) + meta ticks_total 131→134, last_tick updated, ticks_idle 0. Parquet re-exported + read-back verified. last_commit 9545799 → golden-refresh commit (pass 2). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10. No concurrent canopy session. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (5 trees seeded). Stack (canopyd :8091 + vite :5173) started for E2E, killed after run — ports confirmed closed. |
+| 14 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync). CI: Go-only integration step (no Playwright in build.yml) — stale goldens would NOT have red CI, but would fail every future E2E window. gh issue list: 0 open. Deps stable. |
+| 15 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 134 entry + status update. |
+| 16 | Dispatch | ✅ E2E SUBAGENT ONLY | E2E run via delegate_task (42/46 first pass → golden refresh → 46/46 clean pass). No feature worker — no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog items deferred by design). |
+
+### Actions this tick
+
+- **E2E-001 window 134-139: CLOSED ✅ (46/46)** — first window run since Tick 129. The 4 visual-regression failures were a genuine finding: goldens predated UI-10's sidebar consolidation, so every subsequent E2E window would have failed. Followed UI-09's documented refresh workflow (UPDATE_VISUAL_GOLDENS=1), then proved the new baseline with a clean env-var-free run. Goldens + pairs regenerated (8 PNGs, docs/screenshots/visual-regression/).
+- **Vision verification (Bane standard):** new golden analyzed — confirms the app renders the intended Phase 11 design (all UI-01→UI-10 elements present); refresh enshrines correct state, not a broken render.
+- **Board-v2 sync:** event 31 + ticks_total=134 (pass 1), last_commit updated post-commit (pass 2, per board_sync.py two-pass design). Parquet re-exported, read-back verified.
+- **Servers cleaned:** canopyd (:8091) + vite (:5173) killed after the run; ports confirmed closed (ss check).
+- **No new tasks opened:** backlog unchanged — INFRA-001 (scheduler-level), E2E-001 (next window 140-145), 21 post-MVP items, 164 Go + 12 npm outdated deps (stable).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 140-145 (46/46 baseline now fresh).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/115 board tasks complete. E2E-001 window 134-139 satisfied (46/46, goldens refreshed to current UI). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%.
+
+**Next tick:** maintenance — E2E window 140-145 in the future; no dispatchable tasks. If a future window fails on visual-regression again, check for intentional layout changes landing between goldens and window (refresh is the documented workflow, but goldens should be refreshed AT the landing tick per UI-09 README).
