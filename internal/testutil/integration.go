@@ -93,6 +93,14 @@ type testDBInfo struct {
 // hour with zero connections cannot belong to a running test.
 const staleTestDBAge = time.Hour
 
+// sweepStaleTimeout bounds the best-effort stale-DB sweep. DROP DATABASE
+// WITH (FORCE) can block indefinitely waiting for a stuck backend from a
+// prior timed-out run to terminate; without a deadline the sweep hangs
+// NewIntegrationPool and every test behind it (BUG-031). 5s is generous
+// for the scan + per-DB checks; a hung DROP is abandoned and retried next
+// run (the sweep is idempotent).
+const sweepStaleTimeout = 5 * time.Second
+
 // staleTestDBs returns the subset of candidate databases that are safe to
 // drop: older than staleTestDBAge AND holding zero active connections.
 // Databases whose creation time is unknown are never returned — an
@@ -240,7 +248,17 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	// runs (their t.Cleanup never fired). NON-FATAL: any error is logged and
 	// ignored so a locked database can never block test setup. One sweep per
 	// pool creation is enough — it is idempotent.
-	sweepStaleTestDBs(ctx, adminURL)
+	//
+	// BUG-031: the sweep uses context.Background() internally (its queries
+	// have no deadline). A DROP DATABASE WITH (FORCE) that blocks waiting
+	// for a stuck backend from a previous timed-out run to terminate will
+	// hang the sweep forever — hanging NewIntegrationPool and the whole
+	// subtest. Bound it with a generous deadline: 5s is plenty for the
+	// candidate scan + age/connection checks, and if a DROP does hang we
+	// abandon it and let the next run retry (idempotent).
+	sweepCtx, sweepCancel := context.WithTimeout(ctx, sweepStaleTimeout)
+	defer sweepCancel()
+	sweepStaleTestDBs(sweepCtx, adminURL)
 
 	dbName := uniqueDBName()
 
@@ -342,7 +360,11 @@ func NewSharedIntegrationPool(t *testing.T) *pgxpool.Pool {
 		// leak DBs through this path too (BUG-027: 12 leaked DBs,
 		// ~120MB, slowing every CREATE DATABASE and turning fast tests
 		// into parallel-suite timeouts).
-		sweepStaleTestDBs(ctx, sharedPoolAdmin)
+		//
+		// BUG-031: bounded with sweepStaleTimeout — see NewIntegrationPool.
+		sweepCtx, sweepCancel := context.WithTimeout(ctx, sweepStaleTimeout)
+		defer sweepCancel()
+		sweepStaleTestDBs(sweepCtx, sharedPoolAdmin)
 
 		// Drop any prior run's shared DB for this binary, then recreate.
 		if err := dropTestDBByName(ctx, sharedPoolAdmin, sharedPoolName); err != nil {
