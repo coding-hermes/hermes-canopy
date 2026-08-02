@@ -1503,3 +1503,41 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 90/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-07 ✅ (judge PASS ed31176f), UI-08 IN FLIGHT, UI-09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1331+/206+ (edges.jsonl +18 pending graph index). Vitest 368/368. E2E 42/42 (Tick 124).
 
 **Next tick:** steward UI-08 to completion (verify commit → guard → judge → board sync) → dispatch UI-09 (visual regression baseline, GPT-5.6 Luna) once the worker has exited.
+
+## Tick 127 — 2026-08-02 04:06 UTC (scheduler tick hermes-canopy-2026-08-02-03-58-06)
+
+**Verdict: COORDINATION** — UI-08 worker (Hy3 @ custom:opencode-go, PID 2004677, dispatched Tick 126 03:19) ALIVE and mid-verification at tick start (43 min elapsed; verify script /tmp/ui08_verify.mjs ran 03:58). Work uncommitted (4 M + 10 ?? frontend/ files). No commit landed mid-tick → judge deferred per sequential-only rule. Fixed a real defect this tick: Tick 126's MCP `task_create` wrote the UI-08 gitreins task into the WRONG repo (gitreins-poc — the MCP wrapper's workdir), leaving hermes-canopy's tasks.yaml without a UI-08 task that would have broken `gitreins judge UI-08` at completion time. Task replicated in-repo (8 ACs, status in_progress) with zero formatting churn; stray removed from gitreins-poc.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Worker health | ✅ ALIVE | PID 2004677 (hy3 @ custom:opencode-go), 43m13s elapsed at gate, cwd=/home/kara/hermes-canopy. Verify script /tmp/ui08_verify.mjs ran 03:58 (timeout 90). No interference: read-only gates only, no parallel test suites. |
+| 2 | Git status | ⚠️ WORKER MID-FLIGHT (expected) | 4 M + 10 ?? frontend/ files = worker's UI-08 work (TreeView.tsx, nodeMeta.ts + test, NodesPage.tsx modified; BulkActionBar.tsx, NodeTreeRow.tsx, nodeHierarchy/selection/shortId/pluralize + 4 test files untracked). M .gitreins/tasks.yaml (this tick's task fix). ?? frontend/playwright-report/ (build artifact, left). HEAD still 9c6bea6. |
+| 3 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0 (Go side untouched by worker). |
+| 4 | Hilo graph | ✅ USEFUL | 1357 edges, 212 files (fresh stats; +18 UI-07 edges now indexed vs Tick 125's 1339/208). Top dep: google/uuid. Hilo=useful |
+| 5 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go post-MVP stubs + 1 cursor TODO (tree_service.go:442). No new TODOs. |
+| 6 | GitReins | ✅ TASK-FIX | **Defect:** Tick 126 created UI-08 via MCP → landed in /home/kara/gitreins-poc/.gitreins/tasks.yaml (MCP wrapper workdir = gitreins-poc, not hermes-canopy). hermes-canopy's tasks.yaml had NO UI-08 task → judge would fail at completion. **Fix:** UI-08 replicated in-repo (8 ACs from the stray, status in_progress matching dispatched worker) using gitreins' canonical writer config (engine/task_manager.py:92 — yaml.dump, default_flow_style=False, sort_keys=False) → diff = 25 insertions, 0 deletions, no reserialization churn. Stray removed from gitreins-poc (24→23 tasks, working-tree only — their AGENTS.md forbids committing tasks.yaml; their foreman folds or restores). |
+| 7 | Board consistency | ✅ CONSISTENT | DuckDB board @ tick 126: UI-08 in_progress (dispatched_at 03:19:38), events 21 (task_completed UI-07) + 22 (task_dispatched UI-08), ticks_total=126, last_commit=b94adf2 (project convention: stewarded task commit). No parquet churn this tick (no status change — T116/T120 single-write discipline). |
+| 8 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin), Priority=10, Weight=10. No concurrent canopy session. |
+| 9 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections. |
+| 10 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 124 (judge re-run, 42/42). Next window 128-133 — likely satisfied by UI-08 verification run. |
+| 11 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync with origin/master). gh run list: no CI signal (Actions not enabled — fleet-wide). |
+| 12 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 127 entry saved. |
+
+### Actions this tick
+
+- **Confirmed worker health read-only** (no interference): PID 2004677 alive 43m+, verification script observed running at 03:58, files last touched 03:50-03:55, no commit yet. Per sequential-only rule: no guard/judge/parallel test suites while the worker's suite runs (T116/T120 precedent).
+- **FIXED wrong-workdir gitreins task (real defect):** Tick 126's MCP task_create wrote UI-08 into gitreins-poc's tasks.yaml (MCP server workdir). Replicated the task in hermes-canopy (8 ACs, in_progress) with the canonical gitreins writer → clean 25-line insert diff. Removed the stray from gitreins-poc (uncommitted). Without this fix, the completion-time judge would fail with "task not found" — judge path now sound.
+- **Board/tasks commit:** tasks.md (this entry) + .gitreins/tasks.yaml (UI-08 task) committed; pushed → origin/master.
+
+### Remaining open
+
+- UI-08: IN FLIGHT (Hy3 worker, node list hierarchy — PID 2004677, verification phase, uncommitted work in tree).
+- UI-09: pending sequential after UI-08.
+- INFRA-001: tick storm — fleet.toml 900s pin while Phase 11 open (unchanged).
+- Handler suite SSE goroutine leak (TEST-03 DBOutage timeout) — pre-existing, tracked since Tick 74.
+
+**Project Status:** 90/112 board tasks complete. Phase 11 mockup parity: UI-01 ✅ → UI-07 ✅, UI-08 IN FLIGHT (worker alive, verification phase), UI-09 pending. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1357/212. Vitest 368/368 (Tick 126). E2E 42/42 (Tick 124). Coverage ~40.7%.
+
+**Next tick:** if the UI-08 worker has exited: verify commit → guard → `timeout 900 gitreins task complete UI-08` (task now exists in-repo) → board-v2 sync → dispatch UI-09 (visual regression baseline, GPT-5.6 Luna). Else continue coordination (worker health read-only).

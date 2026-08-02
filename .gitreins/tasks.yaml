@@ -440,3 +440,28 @@ tasks:
   status: complete
   created_at: '2026-08-02T07:33:45.906160+00:00'
   completed_at: '2026-08-02T08:16:40.583705+00:00'
+- id: UI-08
+  title: "UI-08: Node list hierarchy \u2014 indentation/branch lines, clickable node\
+    \ IDs, bulk-action bar, seed-data fixes"
+  criteria:
+  - 'NodesPage renders the node list with parent-child hierarchy: children indented
+    under their parent with branch/guide lines (visual tree structure), matching mockup
+    parity (vision-brief node-list design)'
+  - Node IDs in the list are clickable and link to the node detail view (existing
+    route/detail mechanism), with hover/active states
+  - 'Bulk-action bar appears when checkboxes are selected: shows count + delete/merge/tag
+    actions (disabled state when nothing selected); selection state persists across
+    list re-render'
+  - 'Seed-data fixes: ''(1 nodes)'' grammar corrected to ''(1 node)'' (singular handling
+    everywhere count==1)'
+  - "Seed-data fixes: demo tree duplicate node IDs deduped (019fb0c2 repeated x4 in\
+    \ seed data \u2014 each node gets a unique ID)"
+  - 'Seed-data fixes: placeholder author 00000000-0000-0000-0000-000000000000 replaced
+    with a real display name/avatar fallback'
+  - 'New logic extracted to pure lib module(s) with unit tests (vitest) covering:
+    hierarchy/indentation computation, pluralization, ID dedup, selection state'
+  - 'All existing tests still pass: vitest 368/368 baseline + new tests, Playwright
+    42/42, tsc --noEmit clean, oxlint 0 errors, npm run build green; frontend-only
+    changes with Co-authored-by trailer'
+  status: in_progress
+  created_at: '2026-08-02T04:05:00+00:00'
