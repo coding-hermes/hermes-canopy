@@ -123,7 +123,7 @@
 || TEST-004 | PG test architecture: 224 tests × fresh DB + 21 migrations each (~5-20s setup/test) = db package ~8min, handler ~15min. NOT a hang — cumulative setup cost. Suites PASS with generous timeout (verified 1800s run). FIXED Tick 111 (9fe210b follow-up): shared integration pool (a2a70f3) + single-statement TRUNCATE 28 tables + all suites migrated (chaos DBOutage keeps isolated pool). Judge PASS f0f68b9e. | Medium | 4 | testutil | ++testing, ++db | DeepSeek V4 Flash | Medium | — |
 || TEST-001 | PG test blocker FIXED Tick 107 (3e31dda): migration 000021 FK referenced nodes(id, tree_id) — no UNIQUE constraint on that pair, Postgres rejected MigrateUp on every fresh test DB. Changed to FK(node_id) REFERENCES nodes(id). All PG-dependent suites (db, handler, sse, testutil, integration) unblocked. | Critical | 2 | migrations | ++testing, ++db | DeepSeek V4 Flash | — | — |
 || TEST-002 | Test DB leak backlog: 95 leaked canopy_* test databases (830 MB) from prior runs slow every CREATE DATABASE (template copy + catalog scan) — db/handler suites blow 300s timeout. FIX: 1) DROP DATABASE IF EXISTS canopy_* WITH (FORCE) sweep via admin conn 2) verify count=0 3) re-run go test ./internal/db + ./internal/handler to confirm PASS. Root cause (BUG-012 partial): t.Cleanup drop only runs on clean teardown — timeouts/panics skip it. Long-term: pre-run sweep in NewIntegrationPool (drop stale DBs older than 1h on startup). | Critical | 2 | testutil, db | ++testing, ++db, ++debugging | DeepSeek V4 Flash | High | — |
-|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS. ✅ Tick 76: 41/41 PASS. ✅ Tick 105: 41/41 PASS (100%) — 3 screenshots saved, /trees route coexistence confirmed. ✅ Tick 111: 41/41 PASS (37.32s) — report e2e-output/tick111.md, 3 screenshots. |
+|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS. ✅ Tick 76: 41/41 PASS. ✅ Tick 105: 41/41 PASS (100%) — 3 screenshots saved, /trees route coexistence confirmed. ✅ Tick 111: 41/41 PASS (37.32s) — report e2e-output/tick111.md, 3 screenshots. ✅ Tick 140: 46/46 PASS (44.02s) — window 140-145 satisfied, 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick140.md. |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || ✅ BUG-012 | Test database leak: NewIntegrationPool creates unique DB per test but never drops on teardown. FIXED Tick 73 (871de1f): DROP DATABASE IF EXISTS WITH (FORCE) in t.Cleanup(). Verified: 0 leaked DBs after full 16/16 test run. | Critical | 2 | — | ++testing, ++debugging, ++sql | DeepSeek V4 Pro | Medium | DeepSeek V4 Flash |
 | **Phase 11: Mockup Parity (vision-brief v2.0)** | [NEW — 2026-08-01: Luna/Terra vision review of BUG-026 screenshots vs vision-brief.html mockups. Current Nodes page is a flat utilitarian list; mockup 1 is a graph-native dark UI with topics sidebar, branching canvas, color-coded avatars, composer, view modes. Tickets below close the gap. Reference: /tmp/mockups/mockup-1.png] | | | | | | | |
@@ -2054,3 +2054,47 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI LIVE + green (4 runs, timeout fix confirmed). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%.
 
 **Next tick:** maintenance — E2E window 140-145; E2E-001 becomes DUE at Tick 140 (first tick of window per fixture-due-window rule). Re-check CI status each tick (live signal).
+
+## Tick 140 — 2026-08-02 21:27 UTC (scheduler tick hermes-canopy-2026-08-02-21-27-55, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE + E2E WINDOW SATISFIED** — E2E-001 due (window 140-145 opens this tick): full integration suite run via delegate_task worker, **46/46 PASS (44.02s, 6 files, no retries)** — stack (canopyd :8091 + vite :5173) started/stopped cleanly, canopyd rebuilt first (Tick 112 stale-binary lesson). All 15 static gates green. No dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design). CI green on 5 consecutive workflow runs.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 7479412 (Tick 139 board), in sync with origin/master (fetch verified). Only untracked: frontend/playwright-report/ (build artifact, left by convention). No canopy workers in flight (only UHLP USABILITY-001 worker — different project, verified via argv). Stack down at tick start. |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.01s — matches Tick 131-139 baseline exactly. |
+| 5 | Go tests | ✅ 13/13 NON-PG PASS | card, card/duckdb, config, context, hermes, mls, plugin (9.5s), server, service, sse (1.2s), sync, testutil (5.0s), transport — all PASS. Handler/PG suites covered by E2E windows. |
+| 6 | E2E-001 | ✅ **WINDOW 140-145 SATISFIED — 46/46** | Delegate_task worker (deepseek-v4-pro, 211s): rebuilt canopyd, started stack (health 200 both), ran `npm run test:integration` — 46/46 PASS (44.02s): crud-pages 14, visual-regression 4, navigation 9, approval-panel 5, tree-rendering 7, accessibility 7. No retries needed. Report /tmp/canopy-e2e-tick140.md + raw /tmp/canopy-e2e-results.txt (foreman-verified: per-file counts + duration + Test Files 6 passed). Servers killed, ports 8091/5173 confirmed free (ss check). |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs T132-139). Top dep: google/uuid. Hilo=useful |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 7 FE BUG-024 stubs. No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | tasks.yaml all complete. No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks: 512 commits scanned, 29.48MB, 1.45s, 0 leaks. |
+| 11 | Board-v2 | ✅ SYNCED | Event 32 (audit E2E-001, tick 140) appended, ticks_total 134→140, parquet re-exported. No task status changes (single-write discipline). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10. No concurrent canopy session. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (SELECT 1 ok; container up 4h, healthy). |
+| 14 | CI | ✅ GREEN (live) | gh run list: last 5 runs all success (30778520383 Tick 139 board, 30777337265 Tick 138 board, 30777152298 CI timeout fix, 30775802392 Tick 137 board, 30774563878 Tick 136 board). CI a real signal — monitor per window. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync). gh issue list: 0 open. Deps: not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated). |
+| 16 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 140 entry + status update. |
+| 17 | Off-by-One | ✅ SUBMITTED | sub_1f88e1 (e2e-playwright-vitest-stack-run — the full stack-start + suite-run + cleanup recipe). |
+
+### Actions this tick
+
+- **E2E-001 window 140-145: CLOSED ✅ (46/46)** — dispatched via delegate_task per browser-work-in-workers rule. Worker rebuilt canopyd (migrations embedded — Tick 112 lesson), started stack, ran the full suite: 46/46 PASS on first attempt with zero retries. Visual-regression 4/4 PASS against the fresh T134 goldens (no drift — no layout changes since UI-10). Foreman independently verified: per-file results in report, raw vitest output tail ("Test Files 6 passed (6), Tests 46 passed (46)"), ports free after cleanup.
+- **Full maintenance audit**: all 15 static gates green. No regressions, no drift, no new bugs, no workers in flight (UHLP worker is another project).
+- **Board-v2 sync**: event 32 (audit E2E-001) via append_board_event_parquet.py, ticks_total=140, parquet re-exported.
+- **No worker dispatched for code**: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 146-151 (46/46 baseline fresh — T134 goldens still current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 140-145 satisfied (46/46). CI LIVE + green (5 runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%.
+
+**Next tick:** maintenance — E2E window 146-151 in the future; no dispatchable tasks. Re-check CI status each tick (live signal).
