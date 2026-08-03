@@ -1925,3 +1925,46 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/115 board tasks complete (115 = 94 complete + 21 deferred post-MVP; INFRA-001 scheduler-level). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI LIVE + green (3 consecutive runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%.
 
 **Next tick:** maintenance — E2E window 140-145 in the future; no dispatchable tasks. Re-check CI status each tick (live signal). Board mirror now fully reconciled — verify no further 🔄 remnants (grep audit done this tick).
+
+## Tick 137 — 2026-08-02 19:57 UTC (scheduler tick hermes-canopy-2026-08-02-19-57-38, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — Full 16-gate audit green. No workers in flight, no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design). CI green on last 3 workflow runs (incl. Tick 136 board push 30774563878). No code changes, no parquet churn (no status changes — T132/T135 single-write discipline).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at c9f3c9a (Tick 136 board), in sync with origin/master (fetch verified). Only untracked: frontend/playwright-report/ (build artifact, left by convention). No worker processes (opencode/codex/glm/hy3/luna all absent). Stack down (no :5173/:8091 — killed post-E2E per T134). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.10s — matches Tick 131-136 baseline exactly. |
+| 5 | Go tests | ✅ 13/13 NON-PG PASS | card, card/duckdb, config, hermes, mls, server, service, sse, sync, testutil, transport (cached) + context + plugin — all PASS. Handler/PG suites covered by E2E windows. |
+| 6 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs T132-136). Top dep: google/uuid. Hilo=useful |
+| 7 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 7 FE BUG-024 stubs. No new TODOs. |
+| 8 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | tasks.yaml all complete (UI-08 08-02T09:31Z, BUG-031/UI-10 08-02T19:48/19:57Z). No churn. |
+| 9 | Secrets | ✅ CLEAN | gitleaks: 508 commits, 29.47MB, 1.26s, 0 leaks. |
+| 10 | Board-v2 | ✅ CONSISTENT | DuckDB: 94 complete + 22 pending (21 post-MVP backlog + INFRA-001), 0 in_progress, events 31. Board table: project "Hermes Canopy", ticks_total=134, last_commit=506d02f, cooldown_s=900. No parquet churn (no status changes — T116/T120/T132 discipline). |
+| 11 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, UpdatedAt 18:42:12Z. No concurrent canopy session. |
+| 12 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (SELECT 1 ok; container up 2h, healthy). |
+| 13 | E2E-001 | ⏭️ NOT DUE | Last full run Tick 134 (46/46 incl. 4 visual-regression, goldens refreshed post-UI-10). Next window 140-145. |
+| 14 | CI | ✅ GREEN (live) | gh run list: last 3 runs all success (30774563878 Tick 136 board, 30773578987 Tick 135 board, 30772831957 Tick 134 board). CI a real signal — monitor per window. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync). gh issue list: 0 open. Deps: not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated). |
+| 16 | DuckBrain | ✅ WRITTEN | hermes-canopy namespace: tick 137 entry + status update. |
+
+### Actions this tick
+
+- **Full maintenance audit**: all 16 gates green. No regressions, no drift, no new bugs, no workers in flight.
+- **CI verified as live signal**: 3 consecutive green runs including the Tick 136 board push. No action needed.
+- **No worker dispatched**: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md). Board unchanged since T136 mirror reconciliation — no 🔄 remnants.
+- **Board entry committed + pushed** (tasks.md only; parquet untouched — no status changes).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 140-145 (46/46 baseline fresh from T134 golden refresh).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI LIVE + green (3 runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%.
+
+**Next tick:** maintenance — E2E window 140-145 in the future; no dispatchable tasks. Re-check CI status each tick (live signal). If a future window fails on visual-regression, refresh goldens at the landing tick per UI-09 README.
