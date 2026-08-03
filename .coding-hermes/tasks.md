@@ -2810,3 +2810,47 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 152-157 satisfied (46/46). CI LIVE + green (7 runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. Board event-id chain repaired (migration-era stale sequence).
 
 **Next tick:** maintenance — E2E window 158-163 in the future; no dispatchable tasks. Re-check CI status each tick (live signal).
+## Tick 157 — 2026-08-03 11:24 UTC (scheduler tick hermes-canopy-2026-08-03-06-24-32, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — Full 17-gate audit green. No workers in flight, no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md). E2E-001 not due (window 152-157 satisfied at Tick 152; next window 158-163). CI green on 7+ consecutive workflow runs (5 latest verified live). DuckBrain gap found + backfilled: Tick 156 claimed a namespace write but /ticks/156 was absent (keys ended at /ticks/155) — backfilled 156, wrote 157, updated project status (T149/T150 backfill precedent). No code changes, no task status changes, no board event appended (single-write discipline — pure maintenance, zero board.db writes).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | CLEAN | Clean at 58fb433 (Tick 156 board), 0 commits behind origin/master (fetch verified). Only untracked: frontend/playwright-report/ (build artifact, left by convention). No canopy worker processes. Stack down (no :5173/:8091 — killed post-E2E per T134 convention). |
+| 2 | Build+vet | CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | 460/460 (18 files) | Fresh run 1.97s — matches Tick 131-156 baseline exactly. |
+| 5 | Go tests | 13/13 NON-PG PASS | card (0.215s), card/duckdb, config, context, hermes, mls, plugin (12.3s), server, service, sse (1.3s), sync, testutil (6.7s), transport — all PASS (fresh -count=1). Handler/PG suites covered by E2E windows. |
+| 6 | E2E-001 | NOT DUE | Window 152-157 satisfied at Tick 152 (46/46, 43.97s, T134 goldens current — no drift). Next window 158-163. |
+| 7 | Hilo graph | USEFUL | 1388 edges / 219 files (stable vs T132-156). Top dep: google/uuid. Hilo=useful |
+| 8 | TODO/FIXME | pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). No new TODOs. |
+| 9 | GitReins | 27/27 COMPLETE, 0 ACTIVE | tasks.yaml all complete (27 complete, 0 pending/in_progress). No churn. |
+| 10 | Secrets | CLEAN | gitleaks exit 0, 29.57MB scanned, 0 leaks. |
+| 11 | Board-v2 | SYNCED (read-only) | DuckDB: 94 complete + 22 pending (21 post-MVP backlog + INFRA-001), 0 in_progress. Events: 42 rows, MAX(id)=42 — Tick 156's renumbered 1-42 chain intact (sequence START 43). No event appended, no parquet write (pure maintenance, single-write discipline). |
+| 12 | Scheduler | REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10. No concurrent canopy session. |
+| 13 | PG health | ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 14 | CI | GREEN (live) | gh run list -R coding-hermes/hermes-canopy: last 5 runs all success (30807727641 Tick 156 board, 30805798670 Tick 155, 30804286768 Tick 154, 30800836198 Tick 153, 30798819632 Tick 152 board). 7+ consecutive green total. CI a real signal — monitor per window. |
+| 15 | External signals | CLEAN | git fetch: 0 new remote commits (in sync). gh issue list: 0 open. Deps: not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated). |
+| 16 | DuckBrain | WRITTEN + GAP BACKFILLED | hermes-canopy namespace: /ticks/156 MISSING (Tick 156 claimed write but absent — keys ended at 155). BACKFILLED 156 (id 9bc09c79) + wrote 157 (id 72024dc1) + updated /project/hermes-canopy/status. Finding logged per T149/T150 precedent. |
+| 17 | Off-by-One | HEALTHY | Server up (16h43m, :8766 /health ok). Discover e2e-stack-run: not re-probed (no new problem class — routine). |
+
+### Actions this tick
+
+- **Full maintenance audit**: all 17 gates green. No regressions, no drift, no new bugs, no workers in flight.
+- **CI verified as live signal**: 5 latest runs (T152-T156 boards) all green; 7+ consecutive total.
+- **No worker dispatched**: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md). Board unchanged — no status changes, no event append (single-write discipline).
+- **DuckBrain gap repaired**: direct recall of /ticks/156 returned empty; list_keys showed keys ending at /ticks/155. Backfilled 156 (verdict MAINTENANCE, event-id chain repair summary) and wrote 157 + project status. Contiguity now verified through 157.
+- **Board entry committed + pushed** (tasks.md only; board parquet untouched).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 158-163 (46/46 baseline fresh — T134 goldens still current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/115 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 152-157 satisfied (46/46). CI LIVE + green (7+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 157 (156 backfilled).
+
+**Next tick:** maintenance — E2E window 158-163 in the future; no dispatchable tasks. Re-check CI status each tick (live signal).
