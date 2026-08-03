@@ -2485,6 +2485,7 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 - **No worker dispatched**: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md). Board unchanged since T136 mirror reconciliation — no remnants.
 - **Board-v2 sync**: event 35 (audit E2E-001) via board.db insert, ticks_total=149, parquet re-exported.
 - **Board entry committed + pushed** (tasks.md only; parquet event + tick counter only, no task status changes).
+- **Trailer exception (Tick 149):** first commit 6a03f46 was made with `git commit -m` which bypasses the .gitmessage template — Co-authored-by trailer missing. Force-push to amend is blocked in cron mode (per Tick 130/131 precedent) — exception documented per skill rules. This follow-up note commit carries the trailer properly.
 
 ### Remaining open
 
