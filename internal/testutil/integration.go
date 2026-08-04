@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 )
@@ -28,6 +30,14 @@ import (
 // Migration 000009 revokes privileges from canopy_app, but the role
 // isn't created until migration 000019. We create it upfront to
 // work around this ordering issue.
+//
+// CI runs `go test ./... -short` WITHOUT -p 1, so each package's test
+// binary starts in its own process and calls NewSharedIntegrationPool
+// concurrently. On a fresh Postgres (role not yet created), the DO
+// block's IF NOT EXISTS check races: two transactions can both see no
+// role, both attempt CREATE ROLE, and the loser fails with SQLSTATE
+// 23505 (duplicate key on pg_authid_rolname_index). The role exists
+// by then, so treat that as success.
 func ensureCanopyRole(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `DO $$
 	BEGIN
@@ -36,6 +46,13 @@ func ensureCanopyRole(ctx context.Context, pool *pgxpool.Pool) error {
 		END IF;
 	END
 	$$;`)
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return nil
+	}
 	return err
 }
 
