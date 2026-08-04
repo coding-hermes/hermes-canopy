@@ -1387,3 +1387,5 @@
 {"from":"frontend/tests/visual-regression.test.ts","to":"pkg:node:zlib","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/tests/visual-regression.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/tests/visual-regression.test.ts","to":"local:./setup","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:errors","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"pkg:github.com/jackc/pgx/v5/pgconn","rel":"imports","provenance":"ast_exact","confidence":1.0}

@@ -537,3 +537,17 @@ tasks:
   status: complete
   created_at: '2026-08-02T19:45:59.383710+00:00'
   completed_at: '2026-08-02T20:01:22.368259+00:00'
+- id: ci-001-canopy-role-race
+  title: 'CI-001: ensureCanopyRole CREATE ROLE race fix'
+  criteria:
+  - internal/testutil/integration.go's ensureCanopyRole treats SQLSTATE 23505 (duplicate
+    key pg_authid_rolname_index) as success
+  - 'fix compiles: go build ./... passes'
+  - go vet ./... passes
+  - go test ./... -short (CI-style, parallel packages, no -p 1) passes with canopy_app
+    role dropped
+  - gitreins guard tier 1 passes
+  - comment documents the CI race (parallel packages, fresh Postgres, 23505)
+  status: complete
+  created_at: '2026-08-04T14:38:59.437144+00:00'
+  completed_at: '2026-08-04T14:39:03.626700+00:00'
