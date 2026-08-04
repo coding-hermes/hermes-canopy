@@ -26,7 +26,6 @@ import (
 func TestAPI_NodeReply(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -88,7 +87,6 @@ func TestAPI_NodeReply(t *testing.T) {
 func TestAPI_NodeFork(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -151,7 +149,6 @@ func TestAPI_NodeFork(t *testing.T) {
 func TestAPI_CardListFilters(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -261,7 +258,6 @@ func TestAPI_CardListFilters(t *testing.T) {
 func TestAPI_CardUpdateValidation(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -323,7 +319,6 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 func TestAPI_TopicListPagination(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -429,7 +424,6 @@ func TestAPI_TopicListPagination(t *testing.T) {
 func TestAPI_ApprovalDenyWithoutReason(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -508,7 +502,6 @@ func TestAPI_ApprovalDenyWithoutReason(t *testing.T) {
 func TestAPI_ApprovalErrorCases(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -621,7 +614,6 @@ func TestAPI_ApprovalErrorCases(t *testing.T) {
 func TestAPI_TreeListPagination(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -682,7 +674,6 @@ func TestAPI_TreeListPagination(t *testing.T) {
 func TestAPI_GraphSubtreeNotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -711,7 +702,6 @@ func TestAPI_GraphSubtreeNotFound(t *testing.T) {
 func TestAPI_GraphAncestorsNotFound(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -740,7 +730,6 @@ func TestAPI_GraphAncestorsNotFound(t *testing.T) {
 func TestAPI_ApprovalAlreadyDecided(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -797,7 +786,6 @@ func TestAPI_ApprovalAlreadyDecided(t *testing.T) {
 func TestAPI_HealthNoAuth(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -842,7 +830,6 @@ func TestAPI_HealthNoAuth(t *testing.T) {
 func TestAPI_NodeCreate_RootNode_NoEdge_BUG029(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -901,7 +888,6 @@ func TestAPI_NodeCreate_RootNode_NoEdge_BUG029(t *testing.T) {
 func TestAPI_NodeCreate_ReplyNode_HasEdge_BUG029(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()

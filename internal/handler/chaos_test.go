@@ -538,7 +538,6 @@ func TestTEST03_DBOutage(t *testing.T) {
 	t.Run("db_pool_exhaustion_handled_gracefully", func(t *testing.T) {
 		// Test what happens when the connection pool is exhausted.
 		pool := testutil.NewSharedIntegrationPool(t)
-		defer testutil.TruncateAll(t, pool)
 
 		srv, cleanup := newTestServer(t, pool)
 		defer cleanup()

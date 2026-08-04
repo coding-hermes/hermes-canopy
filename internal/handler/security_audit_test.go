@@ -422,7 +422,6 @@ func TestSEC06b_JWT_UserIdFallback(t *testing.T) {
 func TestSEC07_AuthBypass_NoTokenAccess(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -455,7 +454,6 @@ func TestSEC07_AuthBypass_NoTokenAccess(t *testing.T) {
 func TestSEC08_AuthBypass_CrossUserTreeAccess(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -514,7 +512,6 @@ func TestSEC08_AuthBypass_CrossUserTreeAccess(t *testing.T) {
 func TestSEC09_AuthBypass_AuthorNotFromContext(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -549,7 +546,6 @@ func TestSEC09_AuthBypass_AuthorNotFromContext(t *testing.T) {
 func TestSEC09b_AuthBypass_TreeMembershipNotEnforced(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -601,7 +597,6 @@ func TestSEC09b_AuthBypass_TreeMembershipNotEnforced(t *testing.T) {
 func TestSEC10_SQLInjection_ParameterizedQueries(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -639,7 +634,6 @@ func TestSEC10_SQLInjection_ParameterizedQueries(t *testing.T) {
 func TestSEC11_InputValidation_ExtremeContentLength(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -680,7 +674,6 @@ func TestSEC11_InputValidation_ExtremeContentLength(t *testing.T) {
 func TestSEC11b_InputValidation_EmptyContent(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -717,7 +710,6 @@ func TestSEC11b_InputValidation_EmptyContent(t *testing.T) {
 func TestSEC11c_InputValidation_InvalidUUID(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -745,7 +737,6 @@ func TestSEC11c_InputValidation_InvalidUUID(t *testing.T) {
 func TestSEC12_ErrorLeakage_NoInternalInfo(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()
@@ -806,7 +797,6 @@ func TestSEC12_ErrorLeakage_NoInternalInfo(t *testing.T) {
 func TestSEC12b_ErrorLeakage_ApprovalHandlerEcho(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithFullAPI(t, pool)
 	defer srv.Cleanup()

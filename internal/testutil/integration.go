@@ -457,10 +457,16 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Single TRUNCATE statement listing ALL tables: PostgreSQL resolves
-	// the FK dependency graph ONCE instead of per-statement. Per-table
-	// TRUNCATE ... CASCADE costs ~0.3-0.9s each (each cascade re-scans
-	// pg_constraint/pg_trigger for the full dependency closure), so 20
-	// separate cascades ≈ 7s; one combined statement ≈ 3ms (TEST-004).
+	// the FK dependency graph ONCE instead of per-statement. Measured Tick
+	// 191 (canopy-pg): 28-table TRUNCATE CASCADE ≈ 0.8-1.3s median ~1.0s
+	// regardless of data volume (per-table lock+catalog overhead); the
+	// earlier "≈3ms" comment was wrong. session_replication_role=replica,
+	// no-CASCADE, and EXISTS-gated dynamic truncate do NOT reduce this
+	// (measured 1.08s / 1.18s / 1.24s). DROP SCHEMA is 6x faster but
+	// destroys tables mid-suite (migrations do not re-run per test).
+	// The real -short win (Tick 191) was removing 76 redundant per-test
+	// TruncateAll defers: NewSharedIntegrationPool truncates on EVERY
+	// call, so the defer duplicated the reset (handler 190.6s → 85.8s).
 	quoted := make([]string, len(tables))
 	for i, name := range tables {
 		quoted[i] = fmt.Sprintf("%q", name)

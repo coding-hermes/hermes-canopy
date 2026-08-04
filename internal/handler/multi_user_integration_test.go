@@ -220,7 +220,6 @@ func editNodeForUser(t *testing.T, srv *approvalTestServer, nodeID, userID uuid.
 func TestINT02_ConcurrentEdits(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -319,7 +318,6 @@ func TestINT02_ConcurrentEdits(t *testing.T) {
 func TestINT02_CRDTMerge(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -427,7 +425,6 @@ func TestINT02_CRDTMerge(t *testing.T) {
 func TestINT02_PresenceState(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -569,7 +566,6 @@ func TestINT02_PresenceState(t *testing.T) {
 func TestINT02_PermissionsEnforcement(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()

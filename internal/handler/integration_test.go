@@ -139,7 +139,6 @@ func authenticatedRequest(t *testing.T, srvURL, method, path string, body any) *
 func TestBE12_TreeCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -290,7 +289,6 @@ func TestBE12_TreeCRUD(t *testing.T) {
 func TestBE12_NodeCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -448,7 +446,6 @@ func TestBE12_NodeCRUD(t *testing.T) {
 func TestBE12_EdgeCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -579,7 +576,6 @@ func TestBE12_EdgeCRUD(t *testing.T) {
 func TestBE12_AuthRejection(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -673,7 +669,6 @@ func TestBE12_AuthRejection(t *testing.T) {
 func TestBE12_ValidationErrors(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()

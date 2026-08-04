@@ -35,7 +35,6 @@ import (
 func TestINT01_FullTreeFlow(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -509,7 +508,6 @@ func TestINT01_FullTreeFlow(t *testing.T) {
 func TestINT01_TreeFlowWithBranching(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -697,7 +695,6 @@ func createChildNodeForFlow(t *testing.T, srv *approvalTestServer,
 func TestINT01_SynthesisAndDeny(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()

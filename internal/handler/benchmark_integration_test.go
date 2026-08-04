@@ -29,9 +29,11 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestINT05_2000NodeTree(t *testing.T) {
+	if testing.Short() {
+		t.Skip("perf benchmark — full 2000-node run only in non-short mode (Tick 191: -short target <60s)")
+	}
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()
@@ -109,9 +111,11 @@ func TestINT05_2000NodeTree(t *testing.T) {
 }
 
 func TestINT05_LatencyP99(t *testing.T) {
+	if testing.Short() {
+		t.Skip("perf benchmark — full run only in non-short mode (Tick 191: -short target <60s)")
+	}
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newTestServer(t, pool)
 	defer cleanup()

@@ -35,7 +35,6 @@ import (
 func TestINT04_OfflineSync(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()
@@ -232,7 +231,6 @@ func TestINT04_OfflineSync(t *testing.T) {
 func TestINT04_SyncEngineDirect(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv := newTestServerWithApprovals(t, pool)
 	defer srv.Cleanup()

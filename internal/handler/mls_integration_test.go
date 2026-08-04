@@ -180,7 +180,6 @@ func ensureProfile(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 func TestBE12d_MLSGroupCRUD(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -289,7 +288,6 @@ func TestBE12d_MLSGroupCRUD(t *testing.T) {
 func TestBE12d_MLSMemberManagement(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -455,7 +453,6 @@ func TestBE12d_MLSMemberManagement(t *testing.T) {
 func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -556,7 +553,6 @@ func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 func TestBE12d_MLSErrorCases(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -692,7 +688,6 @@ func TestBE12d_MLSErrorCases(t *testing.T) {
 func TestBE12d_MLSValidationErrors(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -814,7 +809,6 @@ func TestBE12d_MLSValidationErrors(t *testing.T) {
 func TestBE12d_MLSProposals(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -907,7 +901,6 @@ func TestBE12d_MLSProposals(t *testing.T) {
 func TestBE12d_MLSMultipleGroups(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()
@@ -1009,7 +1002,6 @@ func TestBE12d_MLSMultipleGroups(t *testing.T) {
 func TestBE12d_MLSAuthRejection(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 
 	srv, cleanup := newMLSTestServer(t, pool)
 	defer cleanup()

@@ -87,7 +87,6 @@ func (c *transportTestClient) eventCount() int {
 func TestBE12e_SSEHubLifecycle(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 	_ = pool // no DB needed for in-memory SSE hub tests
 
 	t.Run("subscribe_broadcast_receive", func(t *testing.T) {
@@ -234,7 +233,6 @@ func TestBE12e_SSEHubLifecycle(t *testing.T) {
 func TestBE12e_ConnectionLifecycle(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 	_ = pool
 
 	t.Run("connect_creates_active_connection", func(t *testing.T) {
@@ -475,7 +473,6 @@ func TestBE12e_ConnectionLifecycle(t *testing.T) {
 func TestBE12e_RateLimiting(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
-	defer testutil.TruncateAll(t, pool)
 	_ = pool
 
 	t.Run("token_bucket_initial_burst", func(t *testing.T) {
