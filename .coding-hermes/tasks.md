@@ -4471,3 +4471,45 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/116 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 194-199 satisfied (46/46); next 200-205. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 194 (tick + status writes both id-recall verified).
 
 **Next tick:** maintenance — E2E window 200-205 opens at Tick 200 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
+## Tick 195 — 2026-08-04 13:38 UTC (scheduler tick hermes-canopy-2026-08-04-08-32-18, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — pure maintenance tick, all 16 gates green. E2E-001 window 194-199 already SATISFIED at Tick 194; next window 200-205 opens at Tick 200 (not due). Full `go test -short -p 1 -count=1 -timeout 300s ./...` sweep PASS (exit 0) — db 75.5s / handler 85.1s, comfortably within the 300s per-package cap. No code changes, no task status changes, no event append (single-write discipline — no status change), no worker dispatch.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at b6e9c9a (Tick 194 board). 0 unpushed (origin/master..HEAD empty after fetch). Only untracked: frontend/playwright-report/ (known artifact). No canopy worker processes. Stack down post-E2E (ports 8091/5173 verified free via prior-tick convention). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.15s — matches baseline (T131-194). |
+| 5 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0: card 0.17s, card/duckdb 0.08s, config, context, db 75.5s (PG-backed green), handler 85.1s, hermes, mls, plugin 14.5s, server, service, sse 1.2s, sync, testutil 4.4s, transport — all ok. Both PG packages well within the 300s cap. |
+| 6 | E2E-001 | ⏭️ NOT DUE | Window 194-199 SATISFIED at Tick 194 (46/46, 45.95s). Next window 200-205 — first tick of window (Tick 200) runs the suite per fixture-due-window rule. |
+| 7 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes since Tick 194 — stable at 1388 edges / 219 files (T132-194). Hilo=useful. |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers (ShareDialog.tsx 1 + yjsProvider.ts 14). No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | 27 complete, 0 pending, 0 in_progress. No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks exit 0: 572 commits scanned, 29.84MB, 1.85s, no leaks found. |
+| 11 | Board-v2 | ✅ SYNCED (0 writes) | DuckDB parquet: 94 complete + 22 pending (21 post-MVP backlog + INFRA-001), 0 in_progress. Events: MAX(id)=51, MAX(tick_number)=194 — matches Tick 194's audit append. No drift. No event appended this tick (pure maintenance — single-write discipline, T157/T159 precedent). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, DecayRate=1, model deepseek-v4-flash @ deepseek-foreman. My tick hermes-canopy-2026-08-04-08-32-18 confirmed running (SpawnedAt 08:32:18-05:00 matches). 6 active ticks, 0 dups. Daemon uptime 42h51m. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 14 | CI | ✅ GREEN (live) | gh run list -R coding-hermes/hermes-canopy: last 6 runs all success (30909145850 Tick 194 board 2m23s, 30903071779 Tick 193, 30900784684 Tick 192, 30898156067 Tick 191, 30898070916 perf 19e165b, 30891381156 Tick 190). |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated). |
+| 16 | DuckBrain | ✅ WRITTEN + VERIFIED | hermes-canopy namespace: /ticks/194 direct recall pre-write (30b41a55 — contiguous, no backfill needed), /ticks/195 written + exact-ID recall confirmed (f4398ab9), /project/hermes-canopy/status refreshed (pre-write newest was 340bbb81 @164 — expected lag, refreshed unconditionally) + exact-ID recall verified (fb533468, last_tick 195). |
+
+### Actions this tick
+
+- **Full maintenance audit**: all 16 gates green. Full -short sweep PASS — fourth consecutive green sweep since the GAP-003 re-scope close (T192), this time standalone (no concurrent E2E load): db 75.5s / handler 85.1s, both well under the 300s per-package cap.
+- **Board-v2**: read-only verification (94/22, MAX(id)=51). NO event appended — pure maintenance tick with no status change (single-write discipline, T157/T159 precedent).
+- **No worker dispatched for code**: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 200-205 (46/46 baseline fresh — T134 goldens still current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option (dedicated perf tick), no open task row.
+
+**Project Status:** 94/116 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 194-199 satisfied (46/46); next 200-205. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 195 (tick + status writes both id-recall verified).
+
+**Next tick:** maintenance — E2E window 200-205 opens at Tick 200 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
