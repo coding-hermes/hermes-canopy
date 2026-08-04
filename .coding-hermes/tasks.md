@@ -36,7 +36,7 @@
 |----|------|-----|-----|------|------|-------|-----|----------|
 | ✅ GAP-001 | Stand-In finding: NO integration guide exists (docs/ has no *integrat* file). A new user cannot learn how to run + use the canopy backend/frontend from docs. Write docs/INTEGRATION.md covering: prerequisites, docker-compose up, migrations, dev server, API base URL, first tree/node CRUD via curl, frontend dev. | High | 2 | — | ++docs, ++onboarding | DeepSeek V4 Flash | Medium | — |
 | ✅ GAP-002 | Stand-In finding: NO API documentation (docs/ has no *api* file). Backend has 9+ specs in specs/ but no user-facing API reference. Generate docs/API.md from the OpenAPI/spec files or write endpoint reference: auth, tree, node, edge, merge, approval, topics, SSE events. | High | 3 | GAP-001 | ++docs, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| 🔄 GAP-003 | Stand-In finding: `go test -short ./...` exceeds 120s (timed out) — suite is too slow for CI/fast iteration. Investigate: find slowest tests (go test -short -v -json ./... | jq select(Test.Elapsed>10)), fix the recursive CTE test that recurses all children (TEST-003 fix may need verification), add -short skips for heavy integration tests. Target: <60s for -short. | Critical | 3 | TEST-003 | ++testing, ++performance | DeepSeek V4 Flash | High | Step 3.7 Flash |
+| 🔄 GAP-003 | Stand-In finding: `go test -short ./...` exceeds 120s (timed out) — suite is too slow for CI/fast iteration. Investigate: find slowest tests (go test -short -v -json ./... | jq select(Test.Elapsed>10)), fix the recursive CTE test that recurses all children (TEST-003 fix may need verification), add -short skips for heavy integration tests. Target: <60s for -short. ✅ Tick 110: recursive-CTE hang FIXED (17f85ce). ✅ Tick 190: chaos DBOutage -short skip (dd4dead), root cause measured. ✅ Tick 191 (19e165b): 76 redundant per-test table-reset defers removed — handler 190.6s→85.8s, serial -short 305s→271s, CI-parallel ~147s; INT05 skips under -short; fast-reset hypotheses DISPROVEN (replica-role 1.08s, no-CASCADE 1.18s, EXISTS-gated 1.24s — all ≈ baseline; DROP SCHEMA 0.17s but destructive mid-suite). ⚠️ <60s NOT met: ~1s/28-table reset floor is structural (220 PG tests). Remaining: re-scope to <150s CI-parallel (met) or template-DB/TestMain refactor (dedicated perf tick). | Critical | 3 | TEST-003 | ++testing, ++performance | DeepSeek V4 Flash | High | Step 3.7 Flash |
 | **Phase 4: Backend** | | | | | | | | |
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 | ✅ BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB. 5 tests (TreeCRUD, NodeCRUD, EdgeCRUD, AuthRejection, ValidationErrors — all PASS). 758 lines in internal/handler/integration_test.go. Edge sequence_num fix included (MAX+1 per tree). Committed 863ca35. | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
@@ -4296,3 +4296,48 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 96/116 board tasks complete (GAP-001/002 closed). Docs gap closed (INTEGRATION + API reference live). GAP-003 in progress with measured root cause. CI green. PG healthy. Scheduler :9090 healthy (900s cooldown). DuckBrain contiguous through 190.
 
 **Next tick:** GAP-003 fast-reset + -short skip work (data above). E2E window 194-199 opens at 194 — first tick of window runs suite per fixture rule.
+## Tick 191 — 2026-08-04 09:50 UTC (scheduler tick hermes-canopy-2026-08-04-03-48-11, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — GAP-003 progress: 76 redundant per-test table-reset defers removed (handler -short 190.6s → 85.8s isolated, full -short serial 305s → 271s, CI-parallel wall ~150-190s → ~147s). INT05 benchmark now skips under -short. Measured: `session_replication_role=replica` / no-CASCADE / EXISTS-gated dynamic reset are ALL ~1s (no win — T190's fast-reset hypothesis DISPROVEN by direct measurement); DROP SCHEMA is 6x faster (0.17s) but destroys tables mid-suite (migrations don't re-run per test). GAP-003 stays 🔄 — <60s target NOT met; floor is structural (~1s per 28-table reset × ~220 PG tests).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN → 1 commit pushed | Clean at 1ef02c2 (Tick 190 board). Only untracked: frontend/playwright-report/ (known artifact). No canopy worker processes. Stack down (no :5173/:8091 — post-E2E convention). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.89s — matches Tick 131-190 baseline exactly. |
+| 5 | Go tests | ✅ ALL PASS | 14/14 packages green: db 106.7s (PG-backed), plugin 26.1s, handler deferred to full sweeps below. Full `-short -p 1` sweep: 4m31s serial ALL PASS (db 100.5s, handler 140.3s — contention with db suite, isolated handler = 85.8s). CI-parallel shape `go test ./... -short`: 2m27s wall ALL PASS (db 145.8s, handler 143.2s, plugin 56.6s — shared-PG contention). Guard (full mode) PASS after changes. |
+| 6 | E2E-001 | ⏭️ NOT DUE | Window 188-193 satisfied at Tick 188 (46/46). Next window 194-199 (first tick of window runs the suite per fixture rule). |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs T132-190 — test-only changes don't move the graph). Top dep: google/uuid. |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers. No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | 27 complete, 0 pending, 0 in_progress. No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks exit 0: 567 commits, 29.81MB, 2.01s, no leaks. |
+| 11 | Board-v2 | ✅ CONSISTENT (read-only) | Parquet: 94 complete + 22 pending, 0 in_progress. Events: 49 rows, MAX(id)=49 (event 49 = audit GAP-001/002/003 @ tick 190 — canonical marker intact). No event appended (GAP-003 status unchanged this tick — single-write discipline). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, DecayRate=1, model deepseek-v4-flash @ deepseek-foreman. LatestTick null (normal). |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 14 | CI | ✅ GREEN (live) | gh run list -R coding-hermes/hermes-canopy: last 6 runs all success (30891381156 Tick 190 board 2m38s, 30891291966 chaos-skip 2m48s, 30881906625 Tick 189, 30880416179 Tick 188, 30878530079 Tick 187, 30876947255 Tick 186). CI a real signal. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed (verified before push). gh issue list: 0 open. Deps stable (164 Go + 12 npm outdated — non-blocking). |
+| 16 | DuckBrain | ✅ WRITTEN + VERIFIED | hermes-canopy namespace: /ticks/190 pre-write recall confirmed (5af2acc4 — contiguous, no backfill), /ticks/191 written + id-recall verified (0273cd74), /project/hermes-canopy/status refreshed (write confirmed 0bbdfcd2; recall list relevance-ranked — known pattern, newest write present). |
+| 17 | Off-by-One | ✅ HEALTHY + SUBMITTED | Server up (38h22m, :8766 /health ok). Submitted problem class go-test-suite-reset-overhead (sub_d78005, queued). Discover: not_found (new class — normal). |
+
+### Actions this tick
+
+- **GAP-003 (🔄 → progress, commit 19e165b, foreman-direct + script-verified):** Removed 76 redundant `defer testutil.TruncateAll(t, pool)` lines across 13 handler test files. Root cause: NewSharedIntegrationPool truncates on EVERY call (integration.go — TruncateAll outside the sync.Once), so each test paid TWO resets (~1s each): one at pool init, one via the defer. The db package (92 tests, ZERO defers, all green) proved the single-reset pattern safe. Script verified every defer site's enclosing func calls NewShared (KEEP list: chaos_test.go:511 — isolated NewIntegrationPool, genuinely needed). Result: handler 190.6s → 85.8s isolated (-55%); full serial -short 305s → 271s; CI-parallel ~147s wall.
+- **Measured (GAP-003 fast-reset hypotheses — all DISPROVEN except the dedup):** `SET session_replication_role=replica` TRUNCATE: 1.076s median vs 1.008s baseline (NO win — T190's top hypothesis dead). no-CASCADE explicit list: 1.178s (no win). EXISTS-gated dynamic DO-block (only non-empty tables): 1.242s (the 28 catalog checks cost as much as truncating). DROP SCHEMA public CASCADE + recreate + pgcrypto: 0.173s median (6x faster) BUT destroys all tables mid-suite — migrations do not re-run per test, so not viable as a per-test reset. **Conclusion: ~1s/28-table reset floor is structural** (per-table lock+catalog overhead), ~220 PG tests × ~1s = the floor. <60s serial unreachable without gutting PG coverage or a template-DB/TestMain architecture (future work, out of scope for a maintenance tick).
+- **INT05 benchmark:** now skips under `-short` (2 tests, testing.Short() guard) — perf-only, full 2000-node coverage preserved for non-short runs (CI/guard run full mode: config test_mode: full, 900s timeout — no coverage loss).
+- **Comment fix:** integration.go TruncateAll "≈3ms" comment corrected with the measured data (was factually wrong — TEST-004's estimate never held in practice).
+- **Guard:** PASS (full mode) post-change. Board-v2: zero writes (no status change — GAP-003 remains 🔄). E2E not due. No code worker dispatched (mechanical test-infra change, script-verified — foreman-direct exception; T190 precedent with the step-3.7-flash verification-loop failure on this exact task).
+
+### Remaining open
+
+- **GAP-003 🔄 (Critical):** <60s -short target NOT met — measured floor is structural (~1s × ~220 PG tests). Achieved: 305s → 271s serial / ~147s CI-parallel (was 150-190s). Remaining levers for a future tick: (a) template-DB per package (CREATE DATABASE ... TEMPLATE, ~0.2s/reset — big refactor), (b) TestMain-level single truncate per package + rollback-tx isolation (risky), (c) re-scope target to <150s CI-parallel (already met) and close. Recommend (c) or a dedicated perf tick for (a).
+- INFRA-001: tick storm — fleet.toml 900s pin (scheduler-level, unchanged).
+- E2E-001: next window 194-199 (46/46 baseline fresh — T134 goldens current).
+- 21 post-MVP backlog items — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking backlog.
+
+**Project Status:** 96/116 board tasks complete (GAP-001/002 closed T190; GAP-003 in progress with measured progress). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 188-193 satisfied (46/46); next 194-199. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 191 (tick + status writes confirmed).
+
+**Next tick:** GAP-003 — recommend re-scope to <150s CI-parallel (met) or template-DB perf tick. E2E window 194-199 opens at Tick 194 (first tick of window runs the suite per fixture rule). Re-check CI status each tick (live signal).
