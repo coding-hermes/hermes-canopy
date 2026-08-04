@@ -382,6 +382,10 @@ func TestTEST03_NetworkPartition(t *testing.T) {
 // returns proper error codes (not crashes) and recovers when PG comes back.
 // Requires docker compose for PG lifecycle management.
 func TestTEST03_DBOutage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow docker-compose PG outage simulation — full runs only")
+	}
+
 	testutil.SkipIfNoDB(t)
 
 	t.Run("db_unavailable_returns_proper_error_code", func(t *testing.T) {
