@@ -4031,3 +4031,47 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/116 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 182-187 satisfied (46/46); next 188-193. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 184 (tick + status writes both id-recall verified).
 
 **Next tick:** maintenance — E2E window 188-193 opens at Tick 188 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
+## Tick 185 — 2026-08-04 03:14 UTC (scheduler tick hermes-canopy-2026-08-03-22-09-41, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — Full 17-gate audit green. E2E-001 NOT due (window 182-187 satisfied at Tick 182; next window 188-193). No code changes, no task status changes. Board-v2: zero writes (pure maintenance per single-write discipline — no event append). No workers in flight, no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred per AGENTS.md). CI green on 6+ consecutive runs (latest = Tick 184 board push 30869688403).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 7c9aeee (Tick 184 board). 0 commits behind origin/master, 0 unpushed (fetch verified). Only untracked: frontend/playwright-report/ (known build artifact). No canopy worker processes (pgrep zero matches after self-match filter). Stack down (no :5173/:8091 — post-E2E convention). |
+| 2 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.22s — matches Tick 131-184 baseline exactly. |
+| 5 | Go tests | ✅ 14/14 PASS | card (0.128s), card/duckdb (0.053s), config, context, db (64.4s — PG-backed green), hermes, mls, plugin (25.2s), server, service, sse (1.33s), sync, testutil (4.7s), transport — all PASS (fresh -count=1, -p 1). Handler suite deferred to E2E windows per convention. |
+| 6 | E2E-001 | ⏭️ NOT DUE | Window 182-187 satisfied at Tick 182 (46/46 PASS). Next window 188-193 (first tick of window runs the suite per fixture rule). |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs T132-184 — no Go changes). Top dep: google/uuid. Hilo=useful. |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers (components/ShareDialog.tsx 1 + stores/yjsProvider.ts 14). No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | 27 complete (grep -c '●'), 0 pending, 0 in_progress ("No tasks found"). No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks exit 0: 558 commits scanned, 29.74MB, 1.41s, no leaks found. |
+| 11 | Board-v2 | ✅ CONSISTENT (read-only) | DuckDB parquet: 94 complete + 22 pending (21 post-MVP backlog + INFRA-001), 0 in_progress. Events: MAX(id)=47, 47 rows (event 47 = audit E2E-001 @ tick 182 — canonical marker intact). No event appended, no parquet write (pure maintenance, single-write discipline). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, DecayRate=1, model deepseek-v4-flash @ deepseek-foreman. LatestTick null (normal). |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 14 | CI | ✅ GREEN (live) | gh run list -R coding-hermes/hermes-canopy: last 6 runs all success (30869688403 Tick 184 board, 30867792441 Tick 183 board, 30866438327 Tick 182 board, 30864885851 Tick 181 board, 30863147335 Tick 180 board, 30862070643 Tick 179 board). CI a real signal — monitor per window. |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (in sync), 0 unpushed. gh issue list: 0 open. Deps re-verified: 164 Go + 12 npm outdated (stable since Tick 113 — non-blocking backlog). |
+| 16 | DuckBrain | ✅ WRITTEN + VERIFIED | hermes-canopy namespace: /ticks/184 direct recall pre-write (82b4d400 — contiguous, no backfill needed), /ticks/185 written + id-recall verified (cec34328), /project/hermes-canopy/status refreshed (pre-write newest was 164 — known silent-drop pattern per T172-T175 lesson; refresh landed + id-recall verified f2541e45). |
+| 17 | Off-by-One | ✅ HEALTHY | Server up (32h32m, :8766 /health ok). Discover for e2e-stack-run → not_found (normal — routine maintenance, no new problem class). |
+
+### Actions this tick
+
+- Full 17-gate maintenance audit: all green. No regressions, no drift, no new bugs, no workers in flight.
+- E2E-001 not due (window 182-187 satisfied at 182; next 188-193) — no worker dispatch.
+- Board-v2: zero writes (pure maintenance tick — no event append per single-write discipline).
+- No worker dispatched for code: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+- DuckBrain: /ticks/185 written + id-recall verified; status key refreshed to 185 + id-recall verified (pre-write lag at 164 — recurring silent-drop pattern, documented; tick keys remain the authoritative contiguity record).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 188-193 (46/46 baseline fresh — T134 goldens still current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 94/116 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 182-187 satisfied (46/46); next 188-193. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 185 (tick + status writes both id-recall verified).
+
+**Next tick:** maintenance — E2E window 188-193 opens at Tick 188 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
