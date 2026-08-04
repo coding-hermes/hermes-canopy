@@ -4384,3 +4384,46 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 97/116 board tasks complete (GAP-001/002/003 all closed — GAP-003 re-scoped + closed T192). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 188-193 satisfied (46/46); next 194-199. CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 192 (tick + status both id-recall verified).
 
 **Next tick:** maintenance — E2E window 194-199 opens at Tick 194 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
+## Tick 193 — 2026-08-04 11:00 UTC (scheduler tick hermes-canopy-2026-08-04-05-48-00, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — all 17 gates green, zero status changes, no worker dispatch. Full `go test -short` sweep PASS (exit 0) — the first full-sweep gate since Tick 192's re-scope close; all packages within the 300s per-package CI timeout (db 289s / handler 228s under host contention, plugin 64s). E2E-001 not due: window 194-199 opens at Tick 194 (first tick of window runs the suite per fixture-due-window rule).
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at f51b157 (Tick 192 board). 0 unpushed (origin/master..HEAD empty). Only untracked: frontend/playwright-report/ (known artifact). pgrep: NO canopy workers, no foreign matches. |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0. gofmt -l internal/ cmd/ empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.19s — matches baseline. |
+| 5 | Go tests | ✅ ALL PASS | `go test -short -count=1 -timeout 300s ./...` exit 0 (~5 min wall; db 289.1s, handler 227.9s, plugin 64.0s — all within per-package 300s). Post-GAP-003-close confirmation: suite fits its real constraints. |
+| 6 | E2E-001 | ⏭️ NOT DUE | Window 188-193 satisfied at Tick 188 (46/46). Next window 194-199 — first tick of window (Tick 194) runs the suite per fixture-due-window rule. |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable vs T132-192 — no Go changes). Orphans pre-existing (ForkEdge.tsx, GlowConnector.tsx). |
+| 8 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers (ShareDialog 1 + yjsProvider 14, 2 files). No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | 27 complete, 0 pending, 0 in_progress. No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks exit 0: 570 commits, 29.83MB, 1.4s, no leaks. |
+| 11 | Board-v2 | ✅ CONSISTENT | Parquet: 94 complete + 22 pending (21 post-MVP + INFRA-001), 0 in_progress. Events MAX(id)=50 (event 50 = audit GAP-003 close @ tick 192). No event appended this tick (no status change — single-write discipline). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, DecayRate=1, model deepseek-v4-flash @ deepseek-foreman. LastTickStarted null (normal). |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 14 | CI | ✅ GREEN (live) | gh run list -R coding-hermes/hermes-canopy: last 6 runs all success (30900784684 Tick 192 board 2m29s, 30898156067 Tick 191 board 2m17s, 30898070916 perf 19e165b 2m28s, 30891381156 Tick 190, 30891291966 chaos-skip, 30881906625 Tick 189). |
+| 15 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps stable (164 Go + 12 npm outdated — non-blocking). |
+| 16 | DuckBrain | ✅ WRITTEN + VERIFIED | hermes-canopy namespace: /ticks/192 pre-write recall (1638345f — contiguous, no backfill), /ticks/193 (505fe9d9) + /project/hermes-canopy/status (8d911b7e) written + exact-ID recall confirmed (T178/T183 pattern). Status key was lagging at 164 pre-write (documented lag pattern — refreshed unconditionally). |
+| 17 | Off-by-One | ✅ HEALTHY | :8766 up (40h18m). No submit (nothing solved on a maintenance tick). |
+
+### Actions this tick
+
+- **Maintenance only:** all 17 gates verified fresh. Full -short sweep run (first since the GAP-003 close at Tick 192) — confirms the re-scoped constraints hold: every package < 300s per-package CI timeout, suite exit 0.
+- **No event appended** — no status change (single-write discipline, T116/T120/T157 precedent).
+- **No worker dispatched:** 22 parquet pending = 21 post-MVP (deferred by design per AGENTS.md) + INFRA-001 (scheduler-level, fleet.toml 900s pin — no PUT).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin (scheduler-level, unchanged).
+- E2E-001: next window 194-199 — runs at Tick 194 (first tick of window; 46/46 baseline fresh — T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog.
+- Template-DB/TestMain test-reset architecture — documented future perf option (dedicated perf tick), no open task row.
+
+**Project Status:** 97/116 board tasks complete (GAP-001/002/003 all closed). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 188-193 satisfied (46/46); next 194-199 (due at Tick 194). CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 193 (tick + status both id-recall verified).
+
+**Next tick:** E2E window 194-199 OPENS — Tick 194 is the first tick of the window and runs the full Playwright suite (46/46 baseline, T134 goldens current) per the fixture-due-window rule; dispatch via delegate_task worker per the ops-ref dispatch pattern. Otherwise maintenance — no dispatchable tasks. Re-check CI status each tick (live signal).
