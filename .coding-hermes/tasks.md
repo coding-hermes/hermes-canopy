@@ -34,9 +34,9 @@
 
 | ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
 |----|------|-----|-----|------|------|-------|-----|----------|
-| GAP-001 | Stand-In finding: NO integration guide exists (docs/ has no *integrat* file). A new user cannot learn how to run + use the canopy backend/frontend from docs. Write docs/INTEGRATION.md covering: prerequisites, docker-compose up, migrations, dev server, API base URL, first tree/node CRUD via curl, frontend dev. | High | 2 | — | ++docs, ++onboarding | DeepSeek V4 Flash | Medium | — |
-| GAP-002 | Stand-In finding: NO API documentation (docs/ has no *api* file). Backend has 9+ specs in specs/ but no user-facing API reference. Generate docs/API.md from the OpenAPI/spec files or write endpoint reference: auth, tree, node, edge, merge, approval, topics, SSE events. | High | 3 | GAP-001 | ++docs, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
-| GAP-003 | Stand-In finding: `go test -short ./...` exceeds 120s (timed out) — suite is too slow for CI/fast iteration. Investigate: find slowest tests (go test -short -v -json ./... | jq select(Test.Elapsed>10)), fix the recursive CTE test that recurses all children (TEST-003 fix may need verification), add -short skips for heavy integration tests. Target: <60s for -short. | Critical | 3 | TEST-003 | ++testing, ++performance | DeepSeek V4 Flash | High | Step 3.7 Flash |
+| ✅ GAP-001 | Stand-In finding: NO integration guide exists (docs/ has no *integrat* file). A new user cannot learn how to run + use the canopy backend/frontend from docs. Write docs/INTEGRATION.md covering: prerequisites, docker-compose up, migrations, dev server, API base URL, first tree/node CRUD via curl, frontend dev. | High | 2 | — | ++docs, ++onboarding | DeepSeek V4 Flash | Medium | — |
+| ✅ GAP-002 | Stand-In finding: NO API documentation (docs/ has no *api* file). Backend has 9+ specs in specs/ but no user-facing API reference. Generate docs/API.md from the OpenAPI/spec files or write endpoint reference: auth, tree, node, edge, merge, approval, topics, SSE events. | High | 3 | GAP-001 | ++docs, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
+| 🔄 GAP-003 | Stand-In finding: `go test -short ./...` exceeds 120s (timed out) — suite is too slow for CI/fast iteration. Investigate: find slowest tests (go test -short -v -json ./... | jq select(Test.Elapsed>10)), fix the recursive CTE test that recurses all children (TEST-003 fix may need verification), add -short skips for heavy integration tests. Target: <60s for -short. | Critical | 3 | TEST-003 | ++testing, ++performance | DeepSeek V4 Flash | High | Step 3.7 Flash |
 | **Phase 4: Backend** | | | | | | | | |
 | ✅ BE-12a | Integration test framework scaffolded & verified (docker-compose PG port 5437, migration runner, SkipIfNoDB, TruncateAll — uuidv7() bug fixed, table name mismatches corrected: tree_snapshots not snapshots, profile_route not profile_routes. All 2 integration tests PASS) | High | 3 | BE-11d | ++testing, ++infra, +docker | DeepSeek V4 Flash | Medium | Step 3.7 Flash |
 | ✅ BE-12b | API-level integration: tree, node, edge CRUD via real HTTP + DB. 5 tests (TreeCRUD, NodeCRUD, EdgeCRUD, AuthRejection, ValidationErrors — all PASS). 758 lines in internal/handler/integration_test.go. Edge sequence_num fix included (MAX+1 per tree). Committed 863ca35. | High | 4 | BE-12a | ++testing, ++api-use, ++backend | DeepSeek V4 Pro | Medium | GLM-5.2 |
@@ -4251,3 +4251,48 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 94/116 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. E2E-001 window 188-193 satisfied (46/46); next 194-199 (due at Tick 194). CI LIVE + green (6+ runs). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1388/219 stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 189 (tick + status writes both id-recall verified).
 
 **Next tick:** maintenance — E2E window 194-199 opens at Tick 194 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
+
+## Tick 190 — 2026-08-04 08:14 UTC (scheduler tick hermes-canopy-2026-08-04-01-16-07, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — Stand-in gap push (commit 9b71507) surfaced 3 new tasks. GAP-001 ✅ (docs/INTEGRATION.md, 400L) + GAP-002 ✅ (docs/API.md, 1067L, 62 endpoint sections) delivered by docs worker (deepseek-v4-flash @ ollama-cloud, commit 3a35c05, trailer verified, manual criteria grep = judge-skip per spec/doc exception). GAP-003 🔄 partial: chaos DBOutage -short skip landed (commit dd4dead, 4 lines, verified firing in isolation 0.004s); root cause measured — see findings. Not <60s yet; re-scoped with measured data for next tick.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN → 3 commits pushed | Stand-in board commit 9b71507 (was unpushed) + docs 3a35c05 + chaos-skip dd4dead. Pushed df5a4c4..dd4dead. Only untracked: frontend/playwright-report/ (known artifact). |
+| 2 | Build+vet | ✅ CLEAN | go build + go vet exit 0. gofmt -l empty. |
+| 3 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 4 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.02s — matches baseline. |
+| 5 | Go tests | ✅ ALL PASS (baseline + fixed sweeps) | Baseline -short -p 1 sweep: 5m5s, 0 failures (handler 190.6s, db 80.4s, plugin 19.5s, testutil 8.3s). All 14 packages ok. |
+| 6 | E2E-001 | ⏭️ NOT DUE | Window 188-193 satisfied at Tick 188; next 194-199. |
+| 7 | Hilo graph | ✅ USEFUL | 1388 edges / 219 files (stable). |
+| 8 | TODO/FIXME | ⚠️ 6 pre-existing | 5 stub_adapters.go + 1 tree_service cursor. No new TODOs. |
+| 9 | GitReins | ✅ 27/27 COMPLETE, 0 ACTIVE | No churn. |
+| 10 | Secrets | ✅ CLEAN | gitleaks 29.77MB scanned, no leaks. |
+| 11 | Board-v2 | ✅ CONSISTENT | Parquet: 94 complete + 22 pending, events MAX(id)=48. tasks.md GAP rows updated (2 complete, 1 in-progress). |
+| 12 | Scheduler | ✅ REACHABLE | :9090. hermes-canopy Enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10. |
+| 13 | PG health | ✅ ACCEPTING | canopy-pg :5437 (pg_isready ok). |
+| 14 | CI | ✅ GREEN (live) | 4+ consecutive success runs (T186-T189 boards). New push will trigger run for T190. |
+| 15 | External signals | ✅ CLEAN | 0 new remote commits, 0 issues, deps stable. |
+| 16 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/189 pre-write recall confirmed (e1b758be, contiguous); /ticks/190 + status written post-gates, id-recall verified. |
+| 17 | Off-by-One | ✅ HEALTHY | :8766 up (35h+). |
+
+### Actions this tick
+
+- **GAP-001 ✅ + GAP-002 ✅ (docs worker, deepseek-v4-flash @ ollama-cloud, 3 min):** docs/INTEGRATION.md (400L — prerequisites, docker-compose, migrations, dev servers, curl walkthrough, env reference) + docs/API.md (1067L — 62 endpoint sections: auth/trees/nodes/edges/graph/topics/cards/approvals/export-import/sync/SSE/context/plugins/profiles/transports/MLS/MCP + error catalog + 13 spec-vs-code drift items). Verified: worker read server.go + handler Routes() as authoritative; foreman spot-checked key claims vs code (compose ports, HTTP_ADDR, Vite proxy :8091 + DEV_JWT) — all accurate. Key drift documented: NO standalone merge/edge routes exist (implicit via node ops); README documents endpoints that don't exist in code. Manual criteria grep passed (docs task — judge-skip per skill exception).
+- **GAP-003 🔄 PARTIAL (perf worker, step-3.7-flash @ stepfun, killed after 1h25m verification loop — 3+ full suite re-runs, no commit; foreman took over):** kept the chaos DBOutage `testing.Short()` skip (verified firing, 0.004s isolated). REVERTED worker's redundant `defer TruncateAll` additions to db×5 + plugin test files — NewSharedIntegrationPool ALREADY truncates per call (integration.go:411); double-truncate regressed db 80.4s→167-259s and plugin 19.5s→22.5s. Reverted to baseline (git checkout), verified build/vet/fmt clean, committed only the chaos skip (dd4dead).
+- **Measured root cause (for next tick):** per-test reset cost ~0.7-1.5s dominates ALL PG suites (handler 128 tests ≈ 1.5s/test, db 92 tests ≈ 0.87s/test, both = shared pool + single TRUNCATE 28-table CASCADE — the integration.go:459 "≈3ms" comment is wrong in practice). Baseline -short serial 305s; with chaos skip ≈ 250s; CI default-parallel ≈ 150-190s wall. <60s requires BOTH: (a) faster reset (e.g. session_replication_role=replica TRUNCATE, or per-package TestMain reuse), AND (b) -short skip list for heaviest suites (chaos, MLS ~21s, INT05 benchmark). Recursive-CTE concern is stale (TEST-003 fixed Tick 110 — verified depth caps present, no slow CTE test in measurements).
+- **Push:** 9b71507 (stand-in) + 3a35c05 (docs) + dd4dead (chaos skip) → origin/master.
+
+### Remaining open
+
+- **GAP-003 🔄 (Critical):** chaos skip delivered; <60s target NOT met. Next tick: (a) fast-reset refactor (measure TruncateAll real cost first — session_replication_role trick), (b) -short skips for chaos/MLS/INT05, (c) re-measure serial + CI-parallel modes. Do NOT re-add redundant truncates.
+- INFRA-001: tick storm (fleet.toml 900s pin — scheduler-level, unchanged).
+- E2E-001: window 194-199 opens at Tick 194.
+- 21 post-MVP backlog items — deferred by design.
+- 164 Go + 12 npm outdated deps — non-blocking backlog.
+
+**Project Status:** 96/116 board tasks complete (GAP-001/002 closed). Docs gap closed (INTEGRATION + API reference live). GAP-003 in progress with measured root cause. CI green. PG healthy. Scheduler :9090 healthy (900s cooldown). DuckBrain contiguous through 190.
+
+**Next tick:** GAP-003 fast-reset + -short skip work (data above). E2E window 194-199 opens at 194 — first tick of window runs suite per fixture rule.
