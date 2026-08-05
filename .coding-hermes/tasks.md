@@ -127,7 +127,7 @@
 || TEST-004 | PG test architecture: 224 tests × fresh DB + 21 migrations each (~5-20s setup/test) = db package ~8min, handler ~15min. NOT a hang — cumulative setup cost. Suites PASS with generous timeout (verified 1800s run). FIXED Tick 111 (9fe210b follow-up): shared integration pool (a2a70f3) + single-statement TRUNCATE 28 tables + all suites migrated (chaos DBOutage keeps isolated pool). Judge PASS f0f68b9e. | Medium | 4 | testutil | ++testing, ++db | DeepSeek V4 Flash | Medium | — |
 || TEST-001 | PG test blocker FIXED Tick 107 (3e31dda): migration 000021 FK referenced nodes(id, tree_id) — no UNIQUE constraint on that pair, Postgres rejected MigrateUp on every fresh test DB. Changed to FK(node_id) REFERENCES nodes(id). All PG-dependent suites (db, handler, sse, testutil, integration) unblocked. | Critical | 2 | migrations | ++testing, ++db | DeepSeek V4 Flash | — | — |
 || TEST-002 | Test DB leak backlog: 95 leaked canopy_* test databases (830 MB) from prior runs slow every CREATE DATABASE (template copy + catalog scan) — db/handler suites blow 300s timeout. FIX: 1) DROP DATABASE IF EXISTS canopy_* WITH (FORCE) sweep via admin conn 2) verify count=0 3) re-run go test ./internal/db + ./internal/handler to confirm PASS. Root cause (BUG-012 partial): t.Cleanup drop only runs on clean teardown — timeouts/panics skip it. Long-term: pre-run sweep in NewIntegrationPool (drop stale DBs older than 1h on startup). | Critical | 2 | testutil, db | ++testing, ++db, ++debugging | DeepSeek V4 Flash | High | — |
-|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS. ✅ Tick 76: 41/41 PASS. ✅ Tick 105: 41/41 PASS (100%) — 3 screenshots saved, /trees route coexistence confirmed. ✅ Tick 111: 41/41 PASS (37.32s) — report e2e-output/tick111.md, 3 screenshots. ✅ Tick 140: 46/46 PASS (44.02s) — window 140-145 satisfied, 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick140.md. ✅ Tick 146: 46/46 PASS (45.19s) — window 146-151 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick146.md. ✅ Tick 152: 46/46 PASS (43.97s) — window 152-157 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick152.md. ✅ Tick 158: 46/46 PASS (44.52s) — window 158-163 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick158.md. ✅ Tick 164: 46/46 PASS (50.47s) — window 164-169 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick164.md. ✅ Tick 170: 46/46 PASS (44.07s, no retries) — window 170-175 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick170.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 176: 46/46 PASS (44.56s, no retries) — window 176-181 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick176.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 182: 46/46 PASS (44.07s, no retries) — window 182-187 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick182.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 188: 46/46 PASS (44.39s, no retries) — window 188-193 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick188.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 194: 46/46 PASS (45.95s, no retries) — window 194-199 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick194.md, raw /tmp/canopy-e2e-results.txt. |
+|| E2E-001 | E2E Testing Tick (self-improving loop) 🔁 Recurring every 5-10 ticks | High | 4 | server running | ++browser, ++screenshots, ++verification | GPT-5.6 Luna | High | Step 3.7 Flash | ✅ Tick 28: 41/41 PASS (100%). ✅ Tick 73: 41/41 PASS. ✅ Tick 76: 41/41 PASS. ✅ Tick 105: 41/41 PASS (100%) — 3 screenshots saved, /trees route coexistence confirmed. ✅ Tick 111: 41/41 PASS (37.32s) — report e2e-output/tick111.md, 3 screenshots. ✅ Tick 140: 46/46 PASS (44.02s) — window 140-145 satisfied, 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick140.md. ✅ Tick 146: 46/46 PASS (45.19s) — window 146-151 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick146.md. ✅ Tick 152: 46/46 PASS (43.97s) — window 152-157 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick152.md. ✅ Tick 158: 46/46 PASS (44.52s) — window 158-163 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick158.md. ✅ Tick 164: 46/46 PASS (50.47s) — window 164-169 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick164.md. ✅ Tick 170: 46/46 PASS (44.07s, no retries) — window 170-175 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick170.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 176: 46/46 PASS (44.56s, no retries) — window 176-181 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick176.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 182: 46/46 PASS (44.07s, no retries) — window 182-187 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick182.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 188: 46/46 PASS (44.39s, no retries) — window 188-193 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick188.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 194: 46/46 PASS (45.95s, no retries) — window 194-199 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick194.md, raw /tmp/canopy-e2e-results.txt. ✅ Tick 200: 46/46 PASS (47.96s) — window 200-205 satisfied (first tick of window per fixture rule), 6 files incl. 4 visual-regression (T134 goldens current, no drift), report /tmp/canopy-e2e-tick200.md, raw /tmp/canopy-e2e-results.txt. First worker timed out at 600s mid-setup; continuation worker completed 219.9s. |
 | NEVER-DONE | 11-point audit sweep | High | 2 | — | ++code-review, +testing | DeepSeek V4 Pro | Medium | GLM-5.2 |
 || ✅ BUG-012 | Test database leak: NewIntegrationPool creates unique DB per test but never drops on teardown. FIXED Tick 73 (871de1f): DROP DATABASE IF EXISTS WITH (FORCE) in t.Cleanup(). Verified: 0 leaked DBs after full 16/16 test run. | Critical | 2 | — | ++testing, ++debugging, ++sql | DeepSeek V4 Pro | Medium | DeepSeek V4 Flash |
 | **Phase 11: Mockup Parity (vision-brief v2.0)** | [NEW — 2026-08-01: Luna/Terra vision review of BUG-026 screenshots vs vision-brief.html mockups. Current Nodes page is a flat utilitarian list; mockup 1 is a graph-native dark UI with topics sidebar, branching canvas, color-coded avatars, composer, view modes. Tickets below close the gap. Reference: /tmp/mockups/mockup-1.png] | | | | | | | |
@@ -4666,3 +4666,89 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 6 consecutive green (CI-001 closed). E2E-001 next window 200-205 (opens Tick 200). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 199 (tick + status writes both exact-key verified).
 
 **Next tick (200):** E2E window 200-205 OPENS — Tick 200 is the first tick of the window and runs the full Playwright suite (46/46 baseline, T134 goldens current) per the fixture-due-window rule; dispatch via delegate_task worker per the ops-ref dispatch pattern. Otherwise maintenance — no dispatchable tasks. Re-check CI status each tick (live signal).
+
+## Tick 200 — 2026-08-04 23:25 UTC (scheduler tick hermes-canopy-2026-08-04-18-25-26, DeepSeek V4 Flash) — E2E Window Tick
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 3757e12 (T199 board). 0 unpushed. Only untracked artifact: frontend/playwright-report/ (known). |
+| 2 | Duplicate fire | ✅ SINGLE | No `## Tick 200` entry at start (grep exit 1). Single fire. |
+| 3 | Worker procs | ✅ NONE | No canopy worker processes at tick start (pgrep clean; foreign dagger worker noted — verified non-canopy, no action). |
+| 4 | Build+vet+gofmt | ✅ CLEAN | go build + go vet clean, gofmt 0 files. |
+| 5 | Frontend | ✅ CLEAN | tsc --noEmit clean. |
+| 6 | Vitest | ✅ 460/460 | 18 files, 2.14s. |
+| 7 | Full -short sweep | ✅ 14/14 PASS | Concurrent-with-E2E variant (T194 pattern): db 46.2s / handler 60.3s / plugin 11.4s / testutil 2.9s — new fastest envelope, exit 0. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes since T194. edges.jsonl 1391 lines stable. Hilo=useful. |
+| 9 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | 28 complete, 0 in_progress. No churn. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 579 commits scanned, 29.88MB, 1.48s, no leaks. |
+| 12 | Board-v2 | ✅ STABLE + AUDIT EVENT | DuckDB parquet: 94 complete + 22 pending, 0 in_progress. Pre-append MAX(id)=51, MAX(tick)=194 (no drift). Audit event appended post-E2E (window RUN) — event id=52, tick=200, verified read-back (detail JSON intact). |
+| 13 | Scheduler | ✅ REACHABLE | :9090 up. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, model deepseek-v4-flash @ deepseek-foreman. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 15 | CI (live) | ✅ GREEN — 7 CONSECUTIVE | 30960937532 (T199 push) success 2m21s; 30952578648, 30943143624, 30942814190, 30909145850 all success. Only failure in window: 30914799140 (T195) — documented 23505 race, fixed by 381144c, closed. gh issue list: 0 open. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. Deps stable (164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/199 contiguous pre-write (37ea8408). /ticks/200 → 32b36d88 exact-key recall verified. /project/hermes-canopy/status refreshed → c1f66dc3 (last_tick 200, semantic recall verified). |
+| 18 | E2E-001 | ✅ WINDOW 200-205 SATISFIED | 46/46 PASS (47.96s) — 6 files: accessibility 7, approval-panel 5, crud-pages 14, navigation 9, tree-rendering 7, visual-regression 4 (T134 goldens current, no drift). Report /tmp/canopy-e2e-tick200.md, raw /tmp/canopy-e2e-results.txt. First worker timed out at 600s mid-setup (canopyd rebuilt+started, Vite+run not reached); continuation worker completed 219.9s reusing the rebuilt stack. Servers killed, ports 8091/5173 verified free. |
+
+### Actions this tick
+
+- E2E window 200-205 RUN at first tick of window per fixture-due-window rule: full Playwright/vitest integration suite via delegate_task worker (browser-work-in-workers), concurrent full -short sweep behind it.
+- Full 18-gate audit; seventh consecutive green CI run; full sweep at new fastest envelope (db 46.2s / handler 60.3s).
+- Board-v2: audit event appended (id=52, event_type=audit, task E2E-001) — window was RUN, per event-append discipline.
+- DuckBrain: /ticks/200 + /project/hermes-canopy/status (last_tick 200) written and exact-key verified.
+- No worker dispatch beyond E2E: no dispatchable code tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 206-211 — opens at Tick 206 (first tick of window).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option, no open task row.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 7 consecutive green (CI-001 closed). E2E-001 window 200-205 SATISFIED (46/46, goldens current). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 200 (tick + status writes both exact-key verified).
+
+**Next tick (201):** maintenance — no dispatchable tasks, no fixture window open (next E2E window 206-211). Re-check CI status each tick (live signal).
+
+## Tick 200 — 2026-08-04 23:25 UTC (scheduler tick hermes-canopy-2026-08-04-18-25-26, DeepSeek V4 Flash) — E2E Window Tick
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 3757e12 (T199 board). 0 unpushed. Only untracked artifact: frontend/playwright-report/ (known). |
+| 2 | Duplicate fire | ✅ SINGLE | No `## Tick 200` entry at start (grep exit 1). Single fire. |
+| 3 | Worker procs | ✅ NONE | No canopy worker processes at tick start (pgrep clean; foreign dagger worker noted — verified non-canopy, no action). |
+| 4 | Build+vet+gofmt | ✅ CLEAN | go build + go vet clean, gofmt 0 files. |
+| 5 | Frontend | ✅ CLEAN | tsc --noEmit clean. |
+| 6 | Vitest | ✅ 460/460 | 18 files, 2.14s. |
+| 7 | Full -short sweep | ✅ 14/14 PASS | Concurrent-with-E2E variant (T194 pattern): db 46.2s / handler 60.3s / plugin 11.4s / testutil 2.9s — new fastest envelope, exit 0. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes since T194. edges.jsonl 1391 lines stable. Hilo=useful. |
+| 9 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | 28 complete, 0 in_progress. No churn. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 579 commits scanned, 29.88MB, 1.48s, no leaks. |
+| 12 | Board-v2 | ✅ STABLE + AUDIT EVENT | DuckDB parquet: 94 complete + 22 pending, 0 in_progress. Pre-append MAX(id)=51, MAX(tick)=194 (no drift). Audit event appended post-E2E (window RUN) — event id=52, tick=200, verified read-back (detail JSON intact). |
+| 13 | Scheduler | ✅ REACHABLE | :9090 up. hermes-canopy: Enabled=true, CooldownS=900 (fleet.toml pin — no PUT), Priority=10, Weight=10, model deepseek-v4-flash @ deepseek-foreman. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 15 | CI (live) | ✅ GREEN — 7 CONSECUTIVE | 30960937532 (T199 push) success 2m21s; 30952578648, 30943143624, 30942814190, 30909145850 all success. Only failure in window: 30914799140 (T195) — documented 23505 race, fixed by 381144c, closed. gh issue list: 0 open. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. Deps stable (164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/199 contiguous pre-write (37ea8408). /ticks/200 → 32b36d88 exact-key recall verified. /project/hermes-canopy/status refreshed → c1f66dc3 (last_tick 200, semantic recall verified). |
+| 18 | E2E-001 | ✅ WINDOW 200-205 SATISFIED | 46/46 PASS (47.96s) — 6 files: accessibility 7, approval-panel 5, crud-pages 14, navigation 9, tree-rendering 7, visual-regression 4 (T134 goldens current, no drift). Report /tmp/canopy-e2e-tick200.md, raw /tmp/canopy-e2e-results.txt. First worker timed out at 600s mid-setup (canopyd rebuilt+started, Vite+run not reached); continuation worker completed 219.9s reusing the rebuilt stack. Servers killed, ports 8091/5173 verified free. |
+
+### Actions this tick
+
+- E2E window 200-205 RUN at first tick of window per fixture-due-window rule: full Playwright/vitest integration suite via delegate_task worker (browser-work-in-workers), concurrent full -short sweep behind it.
+- Full 18-gate audit; seventh consecutive green CI run; full sweep at new fastest envelope (db 46.2s / handler 60.3s).
+- Board-v2: audit event appended (id=52, event_type=audit, task E2E-001) — window was RUN, per event-append discipline.
+- DuckBrain: /ticks/200 + /project/hermes-canopy/status (last_tick 200) written and exact-key verified.
+- No worker dispatch beyond E2E: no dispatchable code tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 206-211 — opens at Tick 206 (first tick of window).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option, no open task row.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 7 consecutive green (CI-001 closed). E2E-001 window 200-205 SATISFIED (46/46, goldens current). Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 200 (tick + status writes both exact-key verified).
+
+**Next tick (201):** maintenance — no dispatchable tasks, no fixture window open (next E2E window 206-211). Re-check CI status each tick (live signal).
