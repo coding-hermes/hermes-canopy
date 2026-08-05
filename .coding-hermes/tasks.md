@@ -4755,3 +4755,48 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 9 consecutive green (CI-001 closed). E2E-001 next window 206-211 (opens Tick 206). Scheduler :9090 healthy (900s cooldown; snake_case API shape absorbed + probe script fixed). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 201 (tick + status writes both exact-ID verified).
 
 **Next tick (202):** maintenance — E2E window 206-211 opens at Tick 206 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
+## Tick 202 — 2026-08-05 03:19 UTC (scheduler tick hermes-canopy-2026-08-04-22-11-44, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — full 16-gate audit all green. Single fire (grep '^## Tick 202' = 0 at start; HEAD 2efbd7a = Tick 201 board). Clean, 0 unpushed. Build/vet/gofmt clean, tsc clean, vitest 460/460 (6.11s), full -short sweep exit 0 — 15/15 packages (db 84.7s / handler 104.5s / plugin 19.0s — within T195-T201 envelope). GitReins 28/28, 0 active. gitleaks clean (582 commits, no leaks). Board-v2 94/22, events COUNT=52 MAX(id)=52 MAX(tick)=200 — no drift, no event appended (single-write discipline). CI 10 consecutive green (latest 30968485353 Tick 201 push). E2E-001 NOT due (window 206-211 opens at Tick 206). Scheduler :9090 healthy — snake_case API shape absorbed last tick, check_scheduler_project.py dual-shape working (CooldownS=900 pin intact). No code changes, no task status changes, no worker dispatch.
+
+### Gate results
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 2efbd7a (Tick 201 board). 0 unpushed (fetch verified). Only untracked: frontend/playwright-report/ (known artifact). No canopy worker processes (pgrep matched 3 procs — ring-runner `vite-node scripts/validate-configs.mjs` + esbuild service, all foreign via cmdline path /home/kara/ring-runner; no action per ops-ref). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 202'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l (git ls-files '*.go') empty. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 5 | Vitest | ✅ 460/460 (18 files) | Fresh run 6.11s (env 45.92s) — matches baseline (T131-201). |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0, 15/15 ok: db 84.7s, handler 104.5s, plugin 19.0s, testutil 5.6s, sse 1.3s, card 0.2s, duckdb 0.2s, config/context/hermes/mls/server/service/sync/transport all ok — standalone envelope consistent (T195 75.5/85.1, T201 78.4/75.2). |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 200-205 SATISFIED at Tick 200 (46/46, 47.96s). Next window 206-211 — first tick of window (Tick 206) runs the suite per fixture-due-window rule. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes since T194. edges.jsonl 1391 lines stable. Hilo=useful. |
+| 9 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers (ShareDialog.tsx 1 + yjsProvider.ts 14). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | 28 complete (●), 0 pending, 0 in_progress. No churn. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 582 commits scanned, 29.90MB, 6.06s, no leaks found. |
+| 12 | Board-v2 | ✅ STABLE (0 writes) | DuckDB parquet: 94 complete + 22 pending, 0 in_progress. Events: COUNT=52, MAX(id)=52, MAX(tick_number)=200 — matches Tick 200's audit append (id=52). No drift. No event appended (pure maintenance — single-write discipline, T157/T159 precedent). |
+| 13 | Scheduler | ✅ REACHABLE | check_scheduler_project.py (dual-shape) :9090: hermes-canopy enabled=true, CooldownS=900 (fleet.toml pin — no PUT), DecayRate=1, Priority=10, Weight=10, UpdatedAt 2026-08-05T00:33:51Z, LastTickStarted null. snake_case API shape stable since T201 patch. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections. |
+| 15 | CI (live) | ✅ GREEN — 10 CONSECUTIVE | 30968485353 (T201) 2m25s, 30963285172 (T200 dedupe), 30963157175 (T200), 30960937532 (T199), 30952578648 (T198), 30943143624 (T197) all success — streak 30900784684→30968485353 = 10 green. Only failure in window: 30914799140 (T195) — documented 23505 race, fixed by 381144c, closed. gh issue list: 0 open. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/201 contiguous pre-write (337ec79a). /ticks/202 → 0bdc102e + /project/hermes-canopy/status → 9c9492cb — both exact-ID recall verified. Status refreshed unconditionally (newest pre-write was tick 199 — expected-lag pattern, refreshed). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 up (56h32m). No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full 18-gate maintenance audit; full -short sweep PASS — ninth consecutive green sweep since the GAP-003 re-scope close (T192).
+- Board-v2 read-only verification (94/22, COUNT=52 MAX(id)=52 MAX(tick)=200). NO event appended — pure maintenance with no status change (single-write discipline).
+- DuckBrain: /ticks/202 + /project/hermes-canopy/status written pre-commit and exact-ID verified (0bdc102e / 9c9492cb).
+- No worker dispatched: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 206-211 — RUNS AT TICK 206 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option, no open task row.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 10 consecutive green (CI-001 closed). E2E-001 next window 206-211 (opens Tick 206). Scheduler :9090 healthy (900s cooldown; snake_case API shape stable + probe script dual-shape). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 202 (tick + status writes both exact-ID verified).
+
+**Next tick (203):** maintenance — E2E window 206-211 opens at Tick 206 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
