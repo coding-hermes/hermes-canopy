@@ -4887,3 +4887,46 @@ The 3 MVP gaps (GAP-001, GAP-002, GAP-004) + topic system gaps (TM-02, TM-03, TM
 
 **Next tick (205):** maintenance — E2E window 206-211 opens at Tick 206 (first tick of window runs the suite per fixture rule). No dispatchable tasks. Re-check CI status each tick (live signal).
 Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
+## Tick 205 — 2026-08-05 11:39 UTC (scheduler tick hermes-canopy-2026-08-05-06-20-18, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — full 18-gate audit all green. Single fire (grep '^## Tick 205' = 0 at start; HEAD 9879b96 = Tick 204 board). Clean, 0 unpushed. Build/vet/gofmt clean, tsc clean, vitest 460/460 (2.46s), full -short sweep exit 0 — 15/15 packages (db 74.6s / handler 99.8s / plugin 15.0s — within T195-T204 envelope). GitReins 28/28, 0 active. gitleaks clean (585 commits, no leaks). Board-v2 94/22, events COUNT=52 MAX(id)=52 MAX(tick)=200 — no drift, no event appended (single-write discipline). CI 13 consecutive green (latest 30991439955 Tick 204 push). E2E-001 NOT due (window 206-211 opens at Tick 206). Scheduler :9090 healthy — dual-shape probe working (cooldown 900s pin intact). No code changes, no task status changes, no worker dispatch.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 9879b96 (Tick 204 board). 0 unpushed (fetch verified). Only untracked: frontend/playwright-report/ (known artifact). No canopy worker processes (pgrep clean). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 205'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ CLEAN | go build ./... + go vet ./... exit 0. gofmt -l internal/ cmd/ empty. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit exit 0. |
+| 5 | Vitest | ✅ 460/460 (18 files) | Fresh run 2.46s — matches baseline (T131-204). |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0, 15/15 ok: db 74.6s, handler 99.8s, plugin 15.0s, testutil 5.0s, sse 1.2s, card/duckdb/config/context/hermes/mls/server/service/sync/transport all ok — standalone envelope consistent (T195 75.5/85.1, T204 52.5/60.7). Twelfth consecutive green sweep since GAP-003 re-scope close (T192). |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 200-205 SATISFIED at Tick 200 (46/46, 47.96s). Next window 206-211 — first tick of window (Tick 206) runs the suite per fixture-due-window rule. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes since T194. edges.jsonl 1391 lines stable. Hilo=useful. |
+| 9 | TODO/FIXME | ⚠️ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + 15 FE BUG-024 markers (ShareDialog.tsx 1 + yjsProvider.ts 14). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | 28 complete (●), 0 pending/in_progress (○). No churn. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 585 commits scanned, 29.92MB, 2.54s, no leaks found. |
+| 12 | Board-v2 | ✅ STABLE (0 writes) | DuckDB parquet: 94 complete + 22 pending, 0 in_progress. Events: COUNT=52, MAX(id)=52, MAX(tick_number)=200 — matches Tick 200's audit append (id=52). No drift. No event appended (pure maintenance — single-write discipline, T157/T159 precedent). |
+| 13 | Scheduler | ✅ REACHABLE | :9090 API: hermes-canopy enabled=true, cooldown_s=900 (fleet.toml pin — no PUT), priority=10, weight=10, decay_rate=1, UpdatedAt 2026-08-05T05:05:31Z, LastTickStarted null. Dual-shape probe clean first try. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
+| 15 | CI (live) | ✅ GREEN — 13 CONSECUTIVE | 30991439955 (T204 push) 2m24s, 30982637210 (T203), 30971987232 (T202), 30968485353 (T201), 30963285172 (T200 dedupe), 30963157175 (T200) all success — streak 30900784684→30991439955 = 13 green. Only failure in window: 30914799140 (T195) — documented 23505 race, fixed by 381144c, closed. gh issue list: 0 open. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/204 contiguous pre-write (7c4d3c89). /ticks/205 → 512618f4 + /project/hermes-canopy/status → 58060b94 — both id-recall verified (exact-match). Status refresh landed same-write. |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 up (64h55m). No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full 18-gate maintenance audit; full -short sweep PASS — twelfth consecutive green sweep since the GAP-003 re-scope close (T192).
+- Board-v2 read-only verification (94/22, COUNT=52 MAX(id)=52 MAX(tick)=200). NO event appended — pure maintenance with no status change (single-write discipline).
+- DuckBrain: /ticks/205 + /project/hermes-canopy/status written pre-commit and id-verified (512618f4 / 58060b94).
+- No worker dispatched: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml 900s pin while backlog open (unchanged, scheduler-level).
+- E2E-001: next window 206-211 — RUNS AT TICK 206 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option, no open task row.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 13 consecutive green (CI-001 closed). E2E-001 next window 206-211 (opens Tick 206). Scheduler :9090 healthy (900s cooldown; dual-shape probe stable). PG :5437 healthy. Hilo 1391 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 205 (tick + status writes both id-verified).
+
+**Next tick (206):** E2E window 206-211 OPENS — Tick 206 is the first tick of the window and runs the full Playwright suite (46/46 baseline, T134 goldens current) per the fixture-due-window rule; dispatch via delegate_task worker per the ops-ref dispatch pattern. Otherwise maintenance — no dispatchable tasks. Re-check CI status each tick (live signal).
