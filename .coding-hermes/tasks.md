@@ -5124,7 +5124,7 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 | 12 | Board-v2 | ✅ NO EVENT (maintenance) | Parquet: 94 complete + 23 pending (CI-002), 0 in_progress. No status changes → no event append (single-write discipline). Header: ticks_total=176, last_commit=d040cd0. |
 | 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 API: enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml pin now 900 (regenerated — file and API AGREE this tick; T209's 7200-vs-900 flip resolved). No PUT. |
 | 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
-| 15 | CI (live) | 🔴 STALLED — ORG-LEVEL (CI-002) | Still zero workflow runs for T209's push d040cd0 (last run remains 31029392039 from T207 push 2026-08-05T17:18Z). T209 push produced no run. Natural-experiment probe: THIS tick's push result checked post-commit (see Actions). |
+| 15 | CI (live) | 🔴 STALLED — ORG-LEVEL (CI-002) | T210 push 3db4b19 received by GitHub (PushEvent 2026-08-06T22:11:43Z) but ZERO workflow runs created (runs?head_sha=3db4b19 total_count=0). **THIRD consecutive zero-run push** (T208 29f1905, T209 d040cd0, T210 3db4b19 — all PushEvents recorded, zero runs). Last run remains 31029392039 (T207 push, 2026-08-05T17:18Z). Block is persistent, NOT transient — org-level Actions block confirmed (billing, per github-actions-billing-2026; human fix: Azure sub / per-user paid). ESCALATE to Bane. |
 | 16 | External signals | ⚠️ CI-002 only | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). Workers: 2 foreign procs seen (rethinkdb-t97, mythos-t181 — both glm-5.2 @ zai-glm on OTHER projects, verified foreign via cmdline paths; no action). |
 | 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/209 present pre-write (32f4ca8a — contiguity OK). POST /ticks/210 → a4ff8c96-de1a-4f36-adf5-98e923f55eda + /project/hermes-canopy/status refresh → 390510e8-027c-41f2-aef6-b9dcffc04432 — both 201 with id in response body. |
 | 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 99h28m). No submit (maintenance — nothing solved). |
@@ -5132,19 +5132,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 ### Actions this tick
 
 - Full gate battery on maintenance path: fresh full -short Go sweep RUN (17th consecutive green), Vitest RUN (460/460), gitleaks RUN (clean).
-- **CI-002 natural experiment:** T209's push d040cd0 produced zero workflow runs — org-level Actions block confirmed for a second consecutive push. THIS tick's push is the next probe: checked post-commit (below).
+- **CI-002 natural experiment RESULT:** T210 push 3db4b19 (22:11:43Z) produced ZERO workflow runs — **THIRD consecutive zero-run push** (T208/T209/T210). Org-level Actions block confirmed persistent, NOT transient. CI-002 stays open (close condition "a push triggers a run" NOT met). **ESCALATED to Bane in this tick's report** — human fix (Azure sub / per-user paid) required.
 - No worker dispatch: no dispatchable tasks (21 post-MVP deferred by design per AGENTS.md; INFRA-001 scheduler-level; CI-002 human/org-level).
 - No E2E run (window 206-211 satisfied at 206; next run Tick 212).
 - Cooldown: file+API both 900 now (flip resolved); no PUT.
 
 ### Remaining open
 
-- **CI-002:** CI runs stopped triggering — confirmed across T208+T209 pushes (zero runs); org-level Actions block suspected (billing); human fix (Azure sub / per-user paid); probe each tick via post-push gh run list (natural experiment). ESCALATE to Bane if third consecutive push yields no run.
+- **CI-002:** CI runs stopped triggering — **THIRD consecutive zero-run push confirmed this tick (T208/T209/T210)**; org-level Actions block CONFIRMED persistent (billing, github-actions-billing-2026). Human fix required (Azure sub / per-user paid). **ESCALATED to Bane.** Probe every tick via post-push gh run list (natural experiment) until a push triggers a run.
 - INFRA-001: tick storm — cooldown back to 900s; scheduler-level.
 - E2E-001: next window 212-217 — RUNS AT TICK 212 (first tick of window; 46/46 baseline, T134 goldens current).
 - 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
 - 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
 
-**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep 17 consecutive green. E2E-001 window 206-211 SATISFIED at Tick 206 (46/46) — next run Tick 212. **CI STREAK STALLED at 16 green** — T208+T209 pushes triggered zero workflow runs (CI-002, org-level block confirmed across two pushes). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. DuckBrain contiguous through 210 (a4ff8c96 / 390510e8).
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep 17 consecutive green. E2E-001 window 206-211 SATISFIED at Tick 206 (46/46) — next run Tick 212. **CI STREAK STALLED at 16 green** — T208/T209/T210 pushes ALL triggered zero workflow runs (CI-002: org-level block CONFIRMED persistent, 3rd consecutive probe — ESCALATED to Bane). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. DuckBrain contiguous through 210 (a4ff8c96 / 390510e8).
 
-**Next tick (211):** maintenance — CI-002 natural experiment (did T210's push trigger a run? if YES, block was transient → reassess CI-002; if NO → third consecutive zero-run push, ESCALATE to Bane). E2E window 206-211 satisfied; next run Tick 212. No dispatchable tasks.
+**Next tick (211):** maintenance — CI-002 natural experiment continues (did T210's push 3db4b19 trigger a run? it did NOT — 3rd consecutive zero-run, org-level confirmed). Keep probing each push; human fix (Azure sub / per-user paid) already escalated to Bane. E2E window 206-211 satisfied; next run Tick 212. No dispatchable tasks.
