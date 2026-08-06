@@ -5018,3 +5018,46 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 15 consecutive green (CI-001 closed). E2E-001 window 206-211 SATISFIED at Tick 206 (46/46, 49.20s, goldens current) — next run Tick 212. Scheduler :9090 healthy (900s cooldown). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 207 (tick + status writes both id-verified).
 
 **Next tick (208):** maintenance — E2E window 206-211 already satisfied at 206; next run Tick 212. No dispatchable tasks. Re-check CI status each tick (live signal).
+
+## Tick 208 — 2026-08-06 19:37 UTC (scheduler tick hermes-canopy-2026-08-06-14-31-39, DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 0b47681 (T207). 0 unpushed. Only untracked: frontend/playwright-report/ (known artifact). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 208'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ VIA GUARD | No source changes since T206's clean run; guard tier-1 go_build + go_lint PASS (see gate 10). |
+| 4 | Frontend | ⏭️ NOT RE-RUN | No FE changes since T206's clean tsc run. |
+| 5 | Vitest | ⏭️ NOT RE-RUN | No FE changes since T206's 460/460 baseline. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0, 15/15 packages (db 87.1s / handler 113.9s — inside T195 envelope). Fifteenth consecutive green sweep since GAP-003 re-scope close (T192). |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 206-211 SATISFIED at Tick 206 (46/46, 49.20s, T134 goldens current). Next window 212-217 — RUNS AT TICK 212. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes. Stable 1390 edges / 219 files. |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | Guard 4/4 PASS (secrets, go_build, go_lint, go_tests; guard-internal gitleaks hit its 30s fallback — standalone scan covered, gate 11). 28 complete, 0 pending/in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 588 commits scanned, 29.94MB, 7.43s, no leaks found. |
+| 12 | Board-v2 | ✅ STABLE (0 writes) | DuckDB parquet: 94 complete + 22 pending, 0 in_progress. Events COUNT=53, MAX(id)=53, MAX(tick)=206 — no event appended (maintenance tick, single-write discipline; E2E window satisfied at 206, no window run this tick). |
+| 13 | Scheduler | ✅ REACHABLE — COOLDOWN 7200s (external change) | :9090 API: enabled=true, cooldown_s=7200 (was 900 at T207), priority=10, weight=10, decay_rate=1, consecutive_failures=0. **External signal:** fleet-cooldown-policy.py --apply ran 2026-08-05 16:22 local and EMPTIED fleet.toml (0 project blocks — policy treats canopy as 0 real pending since all 22 pending are deferred-by-design); schedulerd restarted 2026-08-06 14:27 CDT, so no pin re-applied → DB value 7200 persists. Not PUT back (policy owns it; would revert on next apply). Cadence now 2h — E2E window 212-217 still covered (run at Tick 212 whenever it fires). |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
+| 15 | CI (live) | ✅ GREEN — 16 CONSECUTIVE | 31029392039 (T207 board push) 2m39s success; streak 30982637210→31029392039 = 16 green. gh issue list: 0 open. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/ keys contiguous through 207 pre-write. /ticks/208 → 5e892ddd + /project/hermes-canopy/status/2026-08-06 → cb937c9c — both 201, verified via /api/keys tree (MAX_TICK=208, status/2026-08-06 leaf present). Note: by-id GET 404'd for both (documented sdk-python #49 behavior — tree verification is the dependable route); status key is a DATED-children folder (status/YYYY-MM-DD convention, not the undated key the ops-ref describes — matched existing shape). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200. No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full gate battery on maintenance path: no code changes since T206's clean build+tsc+vitest runs, so those gates are carried; fresh full -short Go sweep RUN this tick (15th consecutive green).
+- No E2E run (window 206-211 already satisfied at 206; next run Tick 212 per fixture-due-window rule).
+- DuckBrain: /ticks/208 + /project/hermes-canopy/status/2026-08-06 written pre-commit and tree-verified (5e892ddd / cb937c9c).
+- No worker dispatch for code work: no dispatchable tasks (INFRA-001 scheduler-level, 21 post-MVP backlog deferred by design per AGENTS.md).
+- Cooldown change 900→7200 documented as external signal (fleet-cooldown-policy.py emptied fleet.toml Aug 5; schedulerd restarted Aug 6 14:27 CDT). No PUT.
+
+### Remaining open
+
+- INFRA-001: tick storm — fleet.toml pin REMOVED by fleet-cooldown-policy.py (2026-08-05); cooldown now 7200s policy default, no pin to restore. Scheduler-level.
+- E2E-001: next window 212-217 — RUNS AT TICK 212 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- Template-DB/TestMain test-reset architecture — documented future perf option, no open task row.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 16 consecutive green (CI-001 closed). E2E-001 window 206-211 SATISFIED at Tick 206 (46/46, 49.20s, goldens current) — next run Tick 212. Scheduler :9090 healthy (cooldown 7200s — fleet policy removed the 900s pin; 2h cadence). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 208 (tick + dated status leaf both tree-verified).
+
+**Next tick (209):** maintenance — E2E window 206-211 already satisfied at 206; next run Tick 212. No dispatchable tasks. Re-check CI status each tick (live signal). Re-verify cooldown 7200s is stable (policy-driven; no PUT).
