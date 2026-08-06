@@ -122,7 +122,8 @@
 || ✅ GAP-004 | DuckDB card storage: 848 lines (duckdb_repo.go + store.go + 6 tests). 6/6 tests PASS (Tick 105, commit 685a850). Root cause: DuckDB does not release PK index slot within a tx — same-tx SELECT+DELETE+INSERT AND parameterized UPDATE both hit PK constraint on indexed multi-column tables. Fix: standalone DELETE then INSERT (no tx wrapper). Create/Get/List/Events/Patch all work. | Medium | 3 | card, db | ++architecture | | | |
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
 | **Continuous** | | | | | | | | |
-| INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | —
+| INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
+| CI-002 | CI runs stopped triggering: T208 push 29f1905 received by GitHub (PushEvent 2026-08-06T19:37:33Z), zero workflow runs created (build.yml active, on:push master intact, repo Actions enabled). Suspected org-level Actions block (billing). Verify: any push creates a run; human fix (Azure sub / per-user paid) per github-actions-billing-2026. | High | 1 | — | — | ADMIN — org-level (Bane) | — | — |
 | TEST-003 | Recursive CTE hang FIXED Tick 110 (17f85ce): node_service.go parent-depth CTE recursed through ALL children (constant join, never walking chain) bounded only by depth<1000000 — combinatorial explosion = 1h21m orphaned queries, db/handler 600s timeouts. Fixed to proper upward walk + depth<10000 cap on all 7 recursive CTEs (node_repo, tree_service, topic_repo). | Critical | 3 | service, db | ++testing, ++db, ++debugging | DeepSeek V4 Flash | High | — |
 || TEST-004 | PG test architecture: 224 tests × fresh DB + 21 migrations each (~5-20s setup/test) = db package ~8min, handler ~15min. NOT a hang — cumulative setup cost. Suites PASS with generous timeout (verified 1800s run). FIXED Tick 111 (9fe210b follow-up): shared integration pool (a2a70f3) + single-statement TRUNCATE 28 tables + all suites migrated (chaos DBOutage keeps isolated pool). Judge PASS f0f68b9e. | Medium | 4 | testutil | ++testing, ++db | DeepSeek V4 Flash | Medium | — |
 || TEST-001 | PG test blocker FIXED Tick 107 (3e31dda): migration 000021 FK referenced nodes(id, tree_id) — no UNIQUE constraint on that pair, Postgres rejected MigrateUp on every fresh test DB. Changed to FK(node_id) REFERENCES nodes(id). All PG-dependent suites (db, handler, sse, testutil, integration) unblocked. | Critical | 2 | migrations | ++testing, ++db | DeepSeek V4 Flash | — | — |
@@ -5061,3 +5062,47 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. CI 16 consecutive green (CI-001 closed). E2E-001 window 206-211 SATISFIED at Tick 206 (46/46, 49.20s, goldens current) — next run Tick 212. Scheduler :9090 healthy (cooldown 7200s — fleet policy removed the 900s pin; 2h cadence). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. Coverage ~40.7%. DuckBrain contiguous through 208 (tick + dated status leaf both tree-verified).
 
 **Next tick (209):** maintenance — E2E window 206-211 already satisfied at 206; next run Tick 212. No dispatchable tasks. Re-check CI status each tick (live signal). Re-verify cooldown 7200s is stable (policy-driven; no PUT).
+
+## Tick 209 — 2026-08-06 20:54 UTC (scheduler tick hermes-canopy-2026-08-06-15-48-34, DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 29f1905 (T208). 0 unpushed. Only untracked: frontend/playwright-report/ (known artifact). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 209'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ VIA GUARD | No source changes since T206's clean run; guard tier-1 go_build + go_lint PASS (see gate 10). |
+| 4 | Frontend | ⏭️ NOT RE-RUN | No FE changes since T206's clean tsc run. |
+| 5 | Vitest | ⏭️ NOT RE-RUN | No FE changes since T206's 460/460 baseline. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0, 15/15 packages (db 77.7s / handler 88.9s / plugin 14.8s / testutil 4.4s). SIXTEENTH consecutive green sweep since GAP-003 re-scope close (T192). |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 206-211 SATISFIED at Tick 206 (46/46, T134 goldens current). Next window 212-217 — RUNS AT TICK 212. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes. Stable 1390 edges / 219 files (T208). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | CLI counts: 28 complete, 0 pending, 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 589 commits scanned, 29.95MB, 2.31s, no leaks found. |
+| 12 | Board-v2 | ✅ EVENT APPENDED (CI-002 created) | Parquet: 94 complete + 23 pending (CI-002 NEW — task_created event id=54), 0 in_progress. Audit event id=55 (tick 209) — task creation = real status change, single-write discipline. Header: ticks_total=176, ticks_idle=0 (task creation resets idle), last_commit=29f1905. |
+| 13 | Scheduler | ⚠️ REACHABLE — COOLDOWN 900 (policy flip-flop) | :9090 API: enabled=true, cooldown_s=900 (was 7200 at T208), priority=10, weight=10, decay_rate=1, consecutive_failures=0. **External signal:** fleet.toml REGENERATED 2026-08-06 15:40 local with canopy pin cooldown_s=7200, but API DB shows 900 (UpdatedAt 19:40:55Z) — fleet-cooldown-policy.py counted stale pending rows and PUT a reduction (KM-195 pattern). File-vs-DB divergence; policy owns cooldown, no PUT. 900s = 15min cadence → tick-storm risk returns (INFRA-001). |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
+| 15 | CI (live) | 🔴 STALLED — ORG-LEVEL (CI-002) | **New signal:** T208's push 29f1905 received by GitHub (PushEvent 2026-08-06T19:37:33Z, confirmed via repo events API) but ZERO workflow runs created — runs?head_sha=0, commit check-runs empty, combined status pending. build.yml active with on:push master intact (unchanged since 6b0e07a), repo Actions enabled (1 workflow active). Last run: 31029392039 (T207 push, 2026-08-05T17:18Z). Streak STALLED at 16 green — T208's push produced no run #17. Org billing/permissions endpoints 403/404 (token not org admin) — suspected free-org Actions overage block (github-actions-billing-2026; human fix: Azure sub / per-user paid). Natural-experiment probe: this tick's own push result checked post-commit. |
+| 16 | External signals | ⚠️ CI-002 + cooldown flip | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/208 present pre-write (contiguity OK), /ticks/209 absent. POST /ticks/209 → 32f4ca8a-e88b-4116-9f64-f85c30f99ffe + /project/hermes-canopy/status/2026-08-06 → 5b639d8d-0798-4470-bc97-a15faf22a374 — both 201 with id in response body. |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 98h7m). No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full gate battery on maintenance path: fresh full -short Go sweep RUN (16th consecutive green).
+- **CI-002 CREATED** (board task + parquet row + tasks.md row + task_created event id=54): CI runs stopped triggering after T208's push — org-level Actions block suspected; natural-experiment probe every tick (board push → gh run list).
+- Board writes: audit event id=55 via append_board_event_parquet.py (--export-tasks, --set ticks_idle=0, last_commit=29f1905).
+- No worker dispatch: no dispatchable tasks (21 post-MVP deferred by design per AGENTS.md; INFRA-001 scheduler-level; CI-002 human/org-level).
+- No E2E run (window 206-211 satisfied at 206; next run Tick 212).
+- Cooldown change 7200→900 documented as external signal (fleet.toml regenerated 15:40 with 7200 pin; API DB 900 — policy PUT reduction). No PUT.
+
+### Remaining open
+
+- **CI-002 (NEW):** CI runs stopped triggering — org-level Actions block suspected (billing); human fix (Azure sub / per-user paid); probe each tick via post-push gh run list (natural experiment).
+- INFRA-001: tick storm — cooldown back to 900s (policy PUT reduction on stale pending rows); scheduler-level.
+- E2E-001: next window 212-217 — RUNS AT TICK 212 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 95/117 board tasks complete (CI-002 added). All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep 16 consecutive green. E2E-001 window 206-211 SATISFIED at Tick 206 (46/46) — next run Tick 212. **CI STREAK STALLED at 16 green** — T208 push 29f1905 triggered zero workflow runs (CI-002, org-level block suspected). Scheduler :9090 healthy (cooldown 900s — policy flip-flop, no PUT). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. DuckBrain contiguous through 209 (32f4ca8a / 5b639d8d).
+
+**Next tick (210):** maintenance — CI-002 natural experiment (did T209's push trigger a run? if YES, block was transient → reassess CI-002; if NO → org-level confirmed, keep probing, escalate to Bane). E2E window 206-211 satisfied; next run Tick 212. Re-verify cooldown 900/7200 flip state (policy-owned, no PUT). No dispatchable tasks.
