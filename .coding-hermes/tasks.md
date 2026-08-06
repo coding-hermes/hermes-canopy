@@ -123,7 +123,7 @@
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
-| CI-002 | CI runs stopped triggering: T208 push 29f1905 received by GitHub (PushEvent 2026-08-06T19:37:33Z), zero workflow runs created (build.yml active, on:push master intact, repo Actions enabled). Suspected org-level Actions block (billing). Verify: any push creates a run; human fix (Azure sub / per-user paid) per github-actions-billing-2026. | High | 1 | — | — | ADMIN — org-level (Bane) | — | — |
+| CI-002 | CI runs stopped triggering: T208 push 29f1905 received by GitHub (PushEvent 2026-08-06T19:37:33Z), zero workflow runs created (build.yml active, on:push master intact, repo Actions enabled). Suspected org-level Actions block (billing). Verify: any push creates a run; human fix (Azure sub / per-user paid) per github-actions-billing-2026. **Probe history: T208 29f1905 → 0 runs; T209 d040cd0 → 0 runs; T210 3db4b19 → 0 runs (PushEvents recorded, zero workflow runs — 3rd consecutive). Org-level block CONFIRMED persistent, not transient. ESCALATED to Bane Tick 210 (human fix: Azure sub / per-user paid). Probe #4 = T211 push (result in Tick 211 post-commit check). Close condition: a push triggers a run.** | High | 1 | — | — | ADMIN — org-level (Bane) | — | — |
 | TEST-003 | Recursive CTE hang FIXED Tick 110 (17f85ce): node_service.go parent-depth CTE recursed through ALL children (constant join, never walking chain) bounded only by depth<1000000 — combinatorial explosion = 1h21m orphaned queries, db/handler 600s timeouts. Fixed to proper upward walk + depth<10000 cap on all 7 recursive CTEs (node_repo, tree_service, topic_repo). | Critical | 3 | service, db | ++testing, ++db, ++debugging | DeepSeek V4 Flash | High | — |
 || TEST-004 | PG test architecture: 224 tests × fresh DB + 21 migrations each (~5-20s setup/test) = db package ~8min, handler ~15min. NOT a hang — cumulative setup cost. Suites PASS with generous timeout (verified 1800s run). FIXED Tick 111 (9fe210b follow-up): shared integration pool (a2a70f3) + single-statement TRUNCATE 28 tables + all suites migrated (chaos DBOutage keeps isolated pool). Judge PASS f0f68b9e. | Medium | 4 | testutil | ++testing, ++db | DeepSeek V4 Flash | Medium | — |
 || TEST-001 | PG test blocker FIXED Tick 107 (3e31dda): migration 000021 FK referenced nodes(id, tree_id) — no UNIQUE constraint on that pair, Postgres rejected MigrateUp on every fresh test DB. Changed to FK(node_id) REFERENCES nodes(id). All PG-dependent suites (db, handler, sse, testutil, integration) unblocked. | Critical | 2 | migrations | ++testing, ++db | DeepSeek V4 Flash | — | — |
@@ -5148,3 +5148,45 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep 17 consecutive green. E2E-001 window 206-211 SATISFIED at Tick 206 (46/46) — next run Tick 212. **CI STREAK STALLED at 16 green** — T208/T209/T210 pushes ALL triggered zero workflow runs (CI-002: org-level block CONFIRMED persistent, 3rd consecutive probe — ESCALATED to Bane). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. DuckBrain contiguous through 210 (a4ff8c96 / 390510e8).
 
 **Next tick (211):** maintenance — CI-002 natural experiment continues (did T210's push 3db4b19 trigger a run? it did NOT — 3rd consecutive zero-run, org-level confirmed). Keep probing each push; human fix (Azure sub / per-user paid) already escalated to Bane. E2E window 206-211 satisfied; next run Tick 212. No dispatchable tasks.
+## Tick 211 — 2026-08-06 23:15 UTC (scheduler tick hermes-canopy-2026-08-06-18-13-24, DeepSeek V4 Flash)
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at f0f9a88 (T210 CI-002 probe commit). 0 unpushed. Only untracked: frontend/playwright-report/ (known artifact). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 211'` exit 1 at start — no prior entry. Single fire. Storm-watch: 0 duplicate running ticks, 5 total running. |
+| 3 | Build+vet | ✅ CLEAN | go build + go vet fresh run both clean. gofmt -l: no output. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit fresh run clean. |
+| 5 | Vitest | ✅ 460/460 | `npx vitest run`: 18 files, 460 tests passed (2.60s). |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 tested pkgs (19 total, 4 no-test), db 99.6s / handler 119.9s / plugin 15.8s / testutil within envelope. EIGHTEENTH consecutive green sweep. |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 206-211 SATISFIED at Tick 206 (46/46, T134 goldens current). Next window 212-217 — RUNS AT TICK 212. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes. Stable 1390 edges / 219 files (live probe this tick). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). 2 FE files carry BUG-024 markers (ShareDialog.tsx + yjsProvider.ts — baseline). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | CLI counts: 28 complete, 0 pending, 0 in_progress. tasks.yaml: 0 pending/in_progress rows. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 592 commits scanned, 29.96MB, 2.9s, no leaks found. |
+| 12 | Board-v2 | ✅ NO EVENT (maintenance) | Parquet: 94 complete + 23 pending (CI-002), 0 in_progress. Events COUNT=55 MAX(id)=55 MAX(tick)=209 (last audit = T209 CI-002 creation; T210 correctly appended none). No status changes → no event append (single-write discipline). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 API: enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0, model=deepseek-v4-flash @ deepseek-foreman. fleet.toml pin 900 — file and API AGREE. No PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
+| 15 | CI (live) | 🔴 STALLED — ORG-LEVEL (CI-002) | gh run list: last run remains 31029392039 (T207 push, 2026-08-05T17:18Z). T208 29f1905 / T209 d040cd0 / T210 3db4b19 all zero-run pushes (PushEvents recorded, no workflow runs). This tick's own push = probe #4 — result in post-commit check. Block persistent, NOT transient; ESCALATED to Bane (human fix: Azure sub / per-user paid per github-actions-billing-2026). |
+| 16 | External signals | ⚠️ CI-002 only | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). Workers: pgrep clean — no canopy or foreign worker processes. |
+| 17 | DuckBrain | ✅ WRITTEN + VERIFIED | /ticks/210 present pre-write (a4ff8c96 — contiguity OK, matches T210 claim). POST /ticks/211 → bc9f19c9 (confirmed in key-prefix recall). Status refresh → c84aa2c6 + retry 7a3862c3 (echo-confirmed; key-recall ranking quirk per T177 rule — status refreshed with retry). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200. No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full gate battery on maintenance path: fresh full -short Go sweep RUN (18th consecutive green), build/vet/gofmt RUN, tsc RUN, Vitest RUN (460/460), gitleaks RUN (clean).
+- **CI-002 natural experiment:** T208/T209/T210 pushes ALL produced zero workflow runs (3rd confirmed probe last tick). This tick's push is probe #4 — result appended post-commit. CI-002 row in Active Tasks refreshed with full probe history + escalation note.
+- No worker dispatch: no dispatchable tasks (21 post-MVP deferred by design per AGENTS.md; INFRA-001 scheduler-level; CI-002 human/org-level).
+- No E2E run (window 206-211 satisfied at 206; next run Tick 212).
+- Cooldown: file+API both 900; no PUT.
+
+### Remaining open
+
+- **CI-002:** CI runs stopped triggering — THREE consecutive zero-run pushes confirmed (T208/T209/T210); org-level Actions block CONFIRMED persistent (billing, github-actions-billing-2026). Human fix required (Azure sub / per-user paid). **ESCALATED to Bane.** Probe #4 = this tick's push (result in post-commit check). Close condition: a push triggers a run.
+- INFRA-001: tick storm — cooldown back to 900s; scheduler-level.
+- E2E-001: next window 212-217 — RUNS AT TICK 212 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep 18 consecutive green. E2E-001 window 206-211 SATISFIED at Tick 206 (46/46) — next run Tick 212. **CI STREAK STALLED at 16 green** — T208/T209/T210 pushes ALL triggered zero workflow runs (CI-002: org-level block CONFIRMED persistent, 3 consecutive probes — ESCALATED to Bane; probe #4 this tick). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. DuckBrain contiguous through 211 (bc9f19c9 / 7a3862c3).
+
+**Next tick (212):** E2E window 212-217 OPENS — Tick 212 is the first tick of the window and runs the full Playwright suite (46/46 baseline, T134 goldens current) per the fixture-due-window rule; dispatch via delegate_task worker per the ops-ref dispatch pattern. Otherwise maintenance — CI-002 probe continues (did T211's push trigger a run? result in this tick's post-commit check). No dispatchable code tasks.
