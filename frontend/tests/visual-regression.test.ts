@@ -324,19 +324,32 @@ async function seedDemoTree(page: TestContext['page']): Promise<void> {
   await page.waitForTimeout(1_000);
 }
 
+// Seeded demo tree the UI-09 goldens were captured against. The API returns
+// trees newest-first, so a naive option[0] selection picks whatever tree was
+// created LAST — any verification/onboarding tree created after the goldens
+// (proven Tick 218: 'My First Tree'/'Gap Test Tree' from the GAP-008 curl
+// walkthrough) silently swaps mockups 2+4 into their empty state and drifts
+// ~32% of pixels. Prefer the demo tree by label; fall back to option[0] when
+// it is absent (VREG-001).
+const DEMO_TREE_LABEL = 'UI-02 Rail Demo';
+
 async function selectFirstTree(
   page: TestContext['page'],
   selector: '#nodes-tree-select' | '#topics-tree-select',
 ): Promise<void> {
   await page.waitForSelector(selector, { state: 'visible', timeout: 10_000 });
-  const optionValues = await page.locator(`${selector} option`).evaluateAll((options) =>
-    options
-      .map((option) => (option as HTMLOptionElement).value)
-      .filter((value) => value.length > 0),
+  const options = await page.locator(`${selector} option`).evaluateAll((elements) =>
+    elements
+      .map((option) => ({
+        value: (option as HTMLOptionElement).value,
+        label: (option as HTMLOptionElement).textContent?.trim() ?? '',
+      }))
+      .filter((option) => option.value.length > 0),
   );
-  const firstValue = optionValues[0];
-  if (firstValue) {
-    await page.locator(selector).selectOption(firstValue);
+  const selected =
+    options.find((option) => option.label.startsWith(DEMO_TREE_LABEL)) ?? options[0];
+  if (selected) {
+    await page.locator(selector).selectOption(selected.value);
     await page.waitForTimeout(1_000);
   } else {
     console.warn(`⚠ No backend tree available for ${selector}; capturing the documented empty state`);
