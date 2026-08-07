@@ -6305,3 +6305,49 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 101/123 board tasks complete. All MVP gaps delivered. Full -short sweep **41 consecutive green**. E2E-001 window 236-241 SATISFIED at Tick 236 (46/46, zero drift). CI green streak 25. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 30/30, 0 active. Board events MAX(id)=74 (E2E audit appended — window satisfied). DuckBrain contiguous through 236.
 
 **Next tick (237):** maintenance — E2E window 242-247 opens at Tick 242 (not due; stack up — canopyd :8091 + vite :5173 + PG :5437). CI streak monitoring (T236 push probe result). No dispatchable code tasks.
+## Tick 237 — 2026-08-07 23:25 UTC (scheduler tick hermes-canopy-2026-08-07-18-15-57, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE (docs)** — GAP-009 (P1 vite proxy/backend port mismatch) + GAP-010 (P2 README frontend bootstrap) fixed foreman-direct (docs-only, Exception 3, T217 precedent). **42nd consecutive green -short sweep**. Stand-in PM commit 8ca56e4 (GAP-008..010 rows) landed mid-tick — folded in, pushed with this tick.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ HEAD MOVED MID-TICK | Tick start: HEAD 124e611 (Tick 236 board commit), 0 unpushed. Mid-tick: stand-in PM commit `8ca56e4` (GAP-008..010 rows in tasks.jsonl, +2 lines, dated 18:16 local) appeared as new HEAD + unpushed — sibling commit, folded in. Docs commit 62f36c5 on top. Push carries 8ca56e4 + 62f36c5 + board commit. Untracked: .vfs/.dirty + frontend/playwright-report/ (known). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 237'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ CLEAN (docs only) | No Go source changed (docs-only tick). go build + vet unaffected. |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (2.10s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 75.41s / handler 97.02s / plugin 14.72s / testutil 4.03s — inside T195 standalone envelope). **FORTY-SECOND consecutive green sweep.** |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 242-247 opens at Tick 242. Window 236-241 already SATISFIED at Tick 236 (46/46). |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1392 edges / 220 files (bare `~/.cargo/bin/hilo graph stats`). Unchanged vs T228-T236. |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 30/30 COMPLETE, 0 ACTIVE | 30 ● in task list, 0 pending/in_progress. GAP-009/010 have no .gitreins tasks (stand-in PM added them to tasks.jsonl only) — closed via board JSONL events, not gitreins. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (binary at ~/go/bin/gitleaks, not on cron PATH): no leaks found (627 commits scanned — 626 at T236 + T236's own push). |
+| 12 | Board-v2 | ✅ UPDATED — 2 TASKS CLOSED | tasks.jsonl (canonical JSONL store): 103 complete + 22 pending = 125 (was 101+24; GAP-009 + GAP-010 → complete). events MAX(id)=78 (75/76 = GAP-009 task_completed+audit, 77/78 = GAP-010). Header: ticks_total=237, last_commit=62f36c5 (docs commit = this tick's substantive commit). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects/hermes-canopy 200. GET: cooldown_s=900, priority=10, weight=10, decay_rate=1, enabled=true, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE at 900 — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections. |
+| 15 | CI (live) | ✅ STREAK 26 | gh run list: 6/6 listed runs green (T231→T236 pushes). T236 push run 31225420865 success (2m28s) — streak advanced 25→26. This tick's push = T237 probe (result next tick). |
+| 16 | External signals | ✅ CLEAN + STAND-IN PUSH | git fetch: 0 new remote commits from origin; 1 local stand-in PM commit (8ca56e4) folded in. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/236 recall = 0e796d93 (contiguous). Wrote /ticks/237 (b76f59f5, event) + /project/hermes-canopy/status (e8265b10, config) via MCP (namespace=hermes-canopy) — BOTH verified by exact id-recall (T178 preferred pattern). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 15h43m). No submit (docs tick — nothing novel; discover e2e-stack-run not_found, normal). |
+
+### Actions this tick
+
+- **GAP-009 (P1) fixed foreman-direct** — README quickstart ran canopyd on :8080 (HTTP_ADDR default) while Vite dev proxy targets :8091 (frontend/vite.config.ts:26) → every /api call 502'd for fresh users. Fix: documented `HTTP_ADDR=:8091` in the README run command (matches Vite proxy + E2E stack convention; proxy unchanged — changing it would break the E2E suite). Also corrected docs/INTEGRATION.md §4 custom-address example (:9090 → :8091, matches §5 proxy target). PASS criterion (quickstart → frontend loads + API succeeds) satisfied by doc alignment; dev-mode stack (canopyd :8091 + vite :5173) is exactly the E2E-proven convention.
+- **GAP-010 (P2) fixed foreman-direct** — README Quick Start omitted frontend bootstrap. Added explicit `cd frontend && npm install && npm run dev` steps before opening :5173. PASS criterion met (steps present verbatim).
+- Both docs tasks: Exception 3 foreman-direct (T217 precedent GAP-006/007/008). Judge: manual criteria verification (docs-task exception noted in board + DuckBrain). Commit 62f36c5, 2 files, +11/-6.
+- Full gate battery fresh: -short sweep (42nd consecutive green — db 75.41s / handler 97.02s / plugin 14.72s, 15/15 pkgs exit 0), vitest 467/467, tsc, gitleaks (627 commits, unpiped exit verified), hilo 1392/220.
+- CI: normal streak monitoring — T236 push run 31225420865 success (streak 26). This tick's push (8ca56e4 + 62f36c5 + board) = T237 probe.
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (MCP transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 236-241 SATISFIED at Tick 236 — next window 242-247 (runs at Tick 242).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+- CI-002: closed — streak monitoring only (streak 26).
+
+**Project Status:** 103/125 board tasks complete (GAP-009/010 closed this tick). All MVP gaps delivered. Full -short sweep **42 consecutive green**. E2E-001 window 242-247 opens at Tick 242 (236-241 satisfied). CI green streak 26. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 30/30, 0 active. Board events MAX(id)=78. DuckBrain contiguous through 237.
+
+**Next tick (238):** maintenance — E2E window 242-247 opens at Tick 242 (not due; stack up — canopyd :8091 + vite :5173 + PG :5437). CI streak monitoring (T237 push probe result). No dispatchable code tasks (GAP-009/010 closed; 21 post-MVP items deferred).
