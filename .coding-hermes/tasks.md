@@ -6034,3 +6034,48 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 101/123 board tasks complete. All MVP gaps delivered. Full -short sweep **35 consecutive green**. E2E-001 window 230-235 SATISFIED at Tick 230 (46/46, zero drift). CI green streak 19. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 30/30, 0 active. Board events MAX(id)=73. DuckBrain contiguous through 230.
 
 **Next tick (231):** Maintenance audit. E2E next due at Tick 236 (window 236-241). CI streak monitoring (T230 push probe result). No dispatchable code tasks.
+## Tick 231 — 2026-08-07 20:35 UTC (scheduler tick hermes-canopy-2026-08-07-15-29-36, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — all 18 gates green, **36th consecutive green -short sweep**. No code changes, no event append, no worker dispatch.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | HEAD f5ad6ed (Tick 230 board commit). 0 unpushed (origin/master..HEAD empty pre + post fetch). Only untracked: .vfs/.dirty (Hilo marker) + frontend/playwright-report/ (known artifact). Stack preserved: canopyd :8091 + vite :5173 + PG :5437. |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 231'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ CLEAN | go build + go vet fresh runs clean. gofmt -l: no output. |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (run from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 77.71s / handler 74.71s / plugin 13.70s — inside T195 standalone envelope). **THIRTY-SIXTH consecutive green sweep.** |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 230-235 SATISFIED at Tick 230 (46/46, zero drift). Next window 236-241 — RUNS AT TICK 236. Stack verified live: canopyd :8091 (raw 401 = no-auth-header trap, expected) + vite :5173 (200, proxied) + PG :5437. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1392 edges / 220 files (direct DuckDB read of .vfs/graph/graph.db — bare `hilo graph stats` returned empty/exit-0, the known T64/T66 variant; fallback query returned the canonical count). Unchanged vs T228-T230 (1392/220). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1). No new TODOs. |
+| 10 | GitReins | ✅ 30/30 COMPLETE, 0 ACTIVE | 30 ● in task list, 0 pending/in_progress ("No tasks found" for both). |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0: 621 commits scanned, 30.50MB, 1m19s, no leaks found (binary at ~/go/bin/gitleaks, not on cron PATH). ⚠️ A piped run printed "leaks found: 25" with tail-masked exit 0 — banner partial-artifact garbage per ops-ref; the unpiped run is authoritative (exit 0, "no leaks found"). |
+| 12 | Board-v2 | ✅ CONSISTENT, NO APPEND | tasks.jsonl (canonical JSONL store — parquet/db on disk are stale pre-migration caches, ignored): 101 complete + 22 pending = 123 (unchanged). events MAX(id)=73 (73 rows, distinct ids 73, 0 nulls — last = T230 E2E audit). NO event appended (pure maintenance, no status change — T225-T230 precedent). Header ticks_total=230 holds. |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects/hermes-canopy 200. hermes-canopy GET: enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE at 900 — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections. |
+| 15 | CI (live) | ✅ STREAK 20 — NO PROBES | gh run list: 6/6 listed runs green (T225→T230 pushes). T230 push run 31214841515 success (20:12Z) — streak advanced 19→20. CI-002 stays closed — normal streak monitoring. This tick's push = T231 probe (result next tick). |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps LIVE this tick: 168 Go + 14 npm outdated (identical to T229/T230 live readings — stable, no drift; non-blocking maintenance backlog). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/230 recall = e300f8c8 (contiguous). Wrote /ticks/231 (1b00b243, event) + /project/hermes-canopy/status (2bd8a217, config) via MCP (namespace=hermes-canopy) — BOTH verified by exact id-recall (T178 preferred pattern). Status key refreshed unconditionally (rolling key, lag expected). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 13h1m17s). No submit (maintenance tick — nothing novel solved). |
+
+### Actions this tick
+
+- Full 18-gate maintenance audit. No code changes, no worker dispatch, no event append, no cooldown PUT.
+- Full gate battery fresh: -short sweep (36th consecutive green — db 77.71s / handler 74.71s / plugin 13.70s, 15/15 pkgs exit 0), vitest 467/467, tsc, build/vet/gofmt, gitleaks (621 commits, unpiped exit verified).
+- CI: normal streak monitoring — T230 push run 31214841515 success (streak 20). No probes — CI-002 close condition long since satisfied.
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (MCP transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Hilo probed fresh (1392/220 via direct DuckDB read — stats empty-output variant T64/T66, fallback canonical).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 230-235 SATISFIED at Tick 230 — next window 236-241 (runs at Tick 236).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog (stable vs T230).
+- CI-002: closed — streak monitoring only (streak 20).
+
+**Project Status:** 101/123 board tasks complete. All MVP gaps delivered. Full -short sweep **36 consecutive green**. E2E-001 window 230-235 SATISFIED at Tick 230 (46/46, zero drift). CI green streak 20. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 30/30, 0 active. Board events MAX(id)=73 (unchanged — pure maintenance). DuckBrain contiguous through 231.
+
+**Next tick (232):** Maintenance audit. E2E next due at Tick 236 (window 236-241). CI streak monitoring (T231 push probe result). No dispatchable code tasks.
