@@ -150,6 +150,9 @@
 ||||| ✅ UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. ✅ Tick 126 (b94adf2, worker Hy3 @ opencode-go): shortcuts.ts 307L registry + typing guard, useShortcuts.ts single-listener hook, ShortcutHelp.tsx accessible overlay (role=dialog/aria-modal), TreeCanvas tree scope + App global scope, NavigationBar kbd strip. 11 files +1374/−3, frontend-only. Foreman verified: go build/vet, tsc, oxlint 0 err, vitest 368/368 (69 new). Judge PASS ed31176f (8/8 ACs). Screenshots docs/screenshots/ui-07/. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
 || ✅ BUG-032 | Yjs bridge missing: composer messages and backend nodes never reach the Tree View canvas. FIXED Tick 216 (9205c19) — TreeView hydrates backend nodes into Yjs doc on open (GET /trees/{id} + /trees/{id}/nodes → mergeBackendNodes), composer POST response mirrored into Yjs doc (canvas shows new node immediately, no reload). mergeBackendNodes: idempotent (existing-id skip + edge dedupe), skips deletedAt, decodes base64 metadata, local-first (never overwrites local edits). 7 new vitest tests (treeStoreMerge.test.ts). Verified: vitest 467/467, tsc clean, integration 46/46 live, guard PASS, judge PASS e22f7c63 (5/5 ACs). Orphaned worker session left uncommitted drafts — foreman verified + committed. | High | 3 | UI-06, FE-02 | ++frontend, ++bug, ++crdt | DeepSeek V4 Flash | Low | — |
 || ✅ JSONL-NORM-001 | Board storage: JSONL canonical (git-friendly) — untrack board.db/parquet. DONE Tick 216 (4b7d731) — exported board.db → tasks/events/fixtures.jsonl (118 tasks / 58 events, read_json_auto round-trip OK), git rm --cached parquet, .gitignore *.parquet, parity probe MATCH (63/63). DB cache re-synced from JSONL (event 59 + BUG-032 row). | High | 2 | — | ++infra, ++board | — | — | — |
+|| ✅ GAP-006 | P1 docker-compose env mismatch: docker-compose.yml set `DB_URL` but config.FromEnv() only reads `CANOPY_DB_URL` — container silently used localhost:5432 defaults instead of postgres:5432. FIXED Tick 217 (ce468fc) — renamed to CANOPY_DB_URL in docker-compose.yml + INTEGRATION.md §2 + SELF_HOST.md §connection-string claim. VERIFIED LIVE: docker compose up -d → logs `db_host=postgres`, /health 200, real data visible. | P1 | 1 | — | ++docker, ++config, ++integration | DeepSeek V4 Flash | Low | — |
+|| ✅ GAP-007 | P1 `make run` documented but missing: INTEGRATION.md §4 + README quickstart told users `make run` → `No rule to make target`. FIXED Tick 217 (ce468fc) — added `run: build` target (exec bin/canopyd) + .PHONY. VERIFIED LIVE: `DB_PORT=5437 HTTP_ADDR=:8091 make run` → /health 200. | P1 | 1 | — | ++docs, ++makefile, ++onboarding | DeepSeek V4 Flash | Low | — |
+|| ✅ GAP-008 | P1 INTEGRATION.md §6 curl walkthrough broken: create-tree example `{"title","description"}` omitted required rootMessage → VALIDATION_ERROR (3 progressive failures). FIXED Tick 217 (ce468fc) — payload now includes `rootMessage:{content,contentFormat,nodeType}`. VERIFIED LIVE: old payload → 400 VALIDATION_ERROR; fixed payload → 201 with root_node_id. | P1 | 1 | — | ++docs, ++api, ++integration | DeepSeek V4 Flash | Low | — |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
 
@@ -5415,3 +5418,37 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 97/119 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Board storage now JSONL canonical (JSONL-NORM-001 ✅). Vitest 467/467, integration 46/46. GitReins 29/29 complete, 0 active. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. DuckBrain /ticks/216 written.
 
 **Next tick (217):** maintenance — E2E window 218-223 opens at Tick 218 (run then). CI streak monitoring. No dispatchable code tasks.
+## Tick 217 — 2026-08-07 07:45 UTC (scheduler tick hermes-canopy-2026-08-07-02-39-56, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — stand-in PM GAP-006..008 all completed foreman-direct (mechanical config + docs exceptions) with LIVE verification. Commit ce468fc. Board 100/122 complete.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | PM injection | ✅ RECOGNIZED | stand-in-pm cycle commit 88e62fb (GAP-006..008) unpushed at tick start (+2 ahead). Triage per coding-hermes-board-external-injection: all 3 are complexity-1 P1 with explicit PASS criteria — mechanical config (GAP-006) + docs (GAP-007/008) → foreman-direct exceptions 2/3. |
+| 2 | GAP-006 | ✅ FIXED + VERIFIED LIVE | docker-compose.yml `DB_URL` → `CANOPY_DB_URL` (+ INTEGRATION.md §2, SELF_HOST.md claim). docker compose up -d --build: canopy-server logs `db_host=postgres`, /health 200, existing data visible (compose re-adopted orphan PG container, volume intact). |
+| 3 | GAP-007 | ✅ FIXED + VERIFIED LIVE | Makefile `run: build` target + .PHONY. `DB_PORT=5437 HTTP_ADDR=:8091 make run` → /health + /healthz 200. |
+| 4 | GAP-008 | ✅ FIXED + VERIFIED LIVE | INTEGRATION.md §6 curl payload + rootMessage {content, contentFormat, nodeType}. Old payload → 400 VALIDATION_ERROR (reproduced); fixed payload → 201 with root_node_id. Doc DEV_JWT still valid (exp 2027). |
+| 5 | Git status | ✅ CLEAN | Start: 4 modified files + PM commits unpushed. Now: fix commit ce468fc + board commit + PM commits, all pushed. |
+| 6 | Build | ✅ CLEAN | make build passed. Guard: go_lint ✓, go_tests ✓ (commit-time, docs/config-only change). |
+| 7 | Board-v2 | ✅ UPDATED | events 64-67 appended (3 task_completed + audit tick 217). tasks.jsonl: GAP-006/007/008 → complete (ce468fc). Header last_tick bumped, ticks_total=217. DB cache rebuilt from JSONL: 100 complete + 22 pending = 122 tasks, 67 events. |
+| 8 | E2E-001 | ⏭️ NOT DUE | Window 218-223 opens at Tick 218 (46/46 baseline, T134 goldens current). |
+| 9 | Scheduler | ✅ STABLE | :9090 healthy. |
+| 10 | PG health | ✅ ACCEPTING | :5437 accepting (compose-managed canopy-pg, same volume). |
+| 11 | Compose stack | ℹ️ LEFT UP | canopyd container (canopy-server) on :8091 + PG on :5437 running as compose project — the verified production deployment per docker-compose.yml, same state prior E2E ticks used. |
+
+### Actions this tick
+- Stand-in PM GAP-006..008 triaged + fixed foreman-direct (all complexity 1, mechanical config/docs, explicit PASS criteria, no design decisions — coding-hermes-foreman exceptions 2/3 + injection skill doc-fix rule).
+- All three PASS criteria verified LIVE (docker compose up + logs + health; make run + health; old-vs-new curl 400→201).
+- PM's unpushed board commits (9ae2c18, 88e62fb) pushed with this tick's commits.
+- No worker dispatch: no dispatchable code tasks remain (100/122 complete; 22 pending = 21 post-MVP deferred by design + INFRA-001 scheduler-level).
+
+### Remaining open
+- INFRA-001: tick storm — scheduler-level.
+- E2E-001: next window 218-223 — RUNS AT TICK 218.
+- 21 post-MVP backlog items — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking.
+- CI-002: closed — streak monitoring only.
+
+**Project Status:** 100/122 board tasks complete (GAP-006..008 closed this tick). All MVP gaps + onboarding docs verified working end-to-end. Scheduler :9090 healthy. PG :5437 healthy. Docker compose stack verified live + left running. Vitest 467/467, integration 46/46 (prior tick). GitReins 29/29 complete, 0 active. Board events MAX(id)=67.
+
+**Next tick (218):** E2E-001 WINDOW OPENS — run E2E battery (46/46 baseline, T134 goldens). CI streak monitoring. No dispatchable code tasks.
