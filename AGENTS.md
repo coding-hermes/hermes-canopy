@@ -45,7 +45,7 @@ Multi-user collaboration, approval gates, arbitrary JS plugins, multi-agent fede
 See `specs/` directory.
 
 ## Tasks
-See `.coding-hermes/tasks.md`.
+See `.coding-hermes/board/tasks.jsonl` (JSONL canonical).
 
 ## Vision
 See `vision-brief.html` — Product Vision & Architecture Brief v2.0 with 4 embedded mockups.

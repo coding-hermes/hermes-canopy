@@ -370,7 +370,7 @@ Import `deploy/grafana/dashboard.json` into Grafana for a pre-built monitoring d
 ## Contributing
 
 1. Read the specs in `specs/` directory
-2. Check `.coding-hermes/tasks.md` for active tasks
+2. Check `.coding-hermes/board/tasks.jsonl` for active tasks
 3. Every commit must include `Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>`
 4. Run `make test && make vet && make lint` before pushing
 5. Never commit secrets, tokens, or passwords
