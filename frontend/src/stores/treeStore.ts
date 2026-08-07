@@ -174,6 +174,120 @@ export function getNode(
   return mapToObject(entry) as unknown as NodeData;
 }
 
+// ─── Backend hydration (BUG-032) ──────────────────────────────────────
+
+/**
+ * Node shape as returned by the REST API (camelCase JSON). `metadata` is a
+ * base64-encoded JSON string (e.g. "e30=" for `{}`), `parentId` is null for
+ * root nodes. Matches internal/model Node JSON tags.
+ */
+export interface BackendNodePayload {
+  id: string;
+  treeId?: string;
+  parentId: string | null;
+  authorId?: string;
+  authorDisplayName?: string;
+  content: string;
+  contentFormat?: string;
+  nodeType?: string;
+  sequenceNum?: number;
+  /** base64-encoded JSON string from the API, or a plain object (tests). */
+  metadata?: string | Record<string, unknown> | null;
+  depth?: number;
+  childCount?: number;
+  createdAt?: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+/** Decode the API's base64-encoded metadata JSON; tolerate plain objects. */
+function decodeMetadata(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw !== 'string') return raw as Record<string, unknown>;
+  try {
+    // atob is global in browsers, jsdom and Node >= 16.
+    return JSON.parse(atob(raw)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Merge backend nodes into the Yjs doc (BUG-032 fix).
+ *
+ * Bridges the authoritative REST state into the local replica that drives
+ * React Flow. Idempotent: nodes already present are skipped, edges are
+ * deduped by (sourceId, targetId), deleted nodes are ignored. Root nodes
+ * (parentId === null) are appended to rootOrder; children get a `reply`
+ * edge to their parent.
+ *
+ * Returns the number of nodes newly added.
+ */
+export function mergeBackendNodes(
+  doc: TreeYDoc,
+  nodes: BackendNodePayload[],
+): number {
+  let added = 0;
+  const now = nowISO();
+
+  doc.ydoc.transact(() => {
+    const existingIds = new Set(doc.nodes.keys());
+
+    for (const n of nodes) {
+      if (!n || !n.id || n.deletedAt) continue;
+      if (existingIds.has(n.id)) continue;
+
+      const nodeMap = objectToMap({
+        id: n.id,
+        content: n.content ?? '',
+        contentFormat: n.contentFormat ?? 'markdown',
+        nodeType: n.nodeType ?? 'message',
+        authorId: n.authorId ?? 'local',
+        metadata: decodeMetadata(n.metadata),
+        createdAt: n.createdAt ?? now,
+        editedAt: n.editedAt ?? null,
+      });
+      doc.nodes.set(n.id, nodeMap);
+      existingIds.add(n.id);
+      added++;
+
+      if (n.parentId == null) {
+        doc.rootOrder.push([n.id]);
+        continue;
+      }
+
+      // Dedupe edges by (sourceId, targetId) so re-hydration never
+      // double-wires a parent/child pair.
+      let hasEdge = false;
+      for (const [, edgeMap] of doc.edges.entries()) {
+        if (
+          edgeMap.get('sourceId') === n.parentId &&
+          edgeMap.get('targetId') === n.id
+        ) {
+          hasEdge = true;
+          break;
+        }
+      }
+      if (hasEdge) continue;
+
+      const edgeId = makeId();
+      doc.edges.set(
+        edgeId,
+        objectToMap({
+          id: edgeId,
+          sourceId: n.parentId,
+          targetId: n.id,
+          edgeType: 'reply',
+          metadata: {},
+          createdAt: n.createdAt ?? now,
+        }),
+      );
+    }
+  });
+
+  return added;
+}
+
 /**
  * Return all node IDs in the tree.
  * Walks rootOrder recursively through edges to build the full list.

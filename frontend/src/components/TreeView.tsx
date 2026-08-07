@@ -26,6 +26,8 @@ import {
   createTreeDoc,
   bindIndexedDB,
   seedDemoTree,
+  mergeBackendNodes,
+  type BackendNodePayload,
   type TreeYDoc,
 } from '../stores/treeStore.ts';
 import { SSESyncProvider } from '../stores/yjsProvider.ts';
@@ -37,7 +39,7 @@ import type {
 } from '../types/multiUser.ts';
 import { getColorForUser } from '../types/multiUser.ts';
 import { token, palette, alpha } from '../theme.ts';
-import { apiPost } from '../lib/api.ts';
+import { apiGet, apiPost } from '../lib/api.ts';
 import {
   buildCreateNodeBody,
   buildSendMetadata,
@@ -127,6 +129,37 @@ export default function TreeView() {
 
       setDoc(treeDoc);
       setError(null);
+
+      // Hydrate the local replica from the authoritative backend (BUG-032).
+      // The Yjs doc starts empty; without this bridge an existing tree's
+      // nodes never reach the React Flow canvas. Idempotent merge — safe
+      // against IndexedDB restoring a partially-populated doc.
+      void (async () => {
+        try {
+          const [treeRes, nodesRes] = await Promise.all([
+            apiGet<{ title?: string; description?: string }>(
+              `/trees/${treeId}`,
+            ),
+            apiGet<{ nodes: BackendNodePayload[] }>(
+              `/trees/${treeId}/nodes`,
+            ),
+          ]);
+          treeDoc.ydoc.transact(() => {
+            if (!treeDoc.meta.get('title') && treeRes?.title) {
+              treeDoc.meta.set('title', treeRes.title);
+            }
+            if (!treeDoc.meta.get('description') && treeRes?.description) {
+              treeDoc.meta.set('description', treeRes.description);
+            }
+          });
+          const added = mergeBackendNodes(treeDoc, nodesRes?.nodes ?? []);
+          if (added > 0) {
+            console.log(`[TreeView] hydrated ${added} nodes for tree ${treeId}`);
+          }
+        } catch (err) {
+          console.warn('[TreeView] hydration failed', err);
+        }
+      })();
 
       // Expose Y.Doc and seed function for E2E tests
       if (typeof window !== 'undefined') {
@@ -249,7 +282,19 @@ export default function TreeView() {
           }) ?? undefined,
       });
 
-      await apiPost<{ node: unknown }>(`/trees/${treeId}/nodes`, body);
+      const created = await apiPost<{ node: BackendNodePayload }>(
+        `/trees/${treeId}/nodes`,
+        body,
+      );
+
+      // BUG-032: mirror the created node into the local Yjs replica so it
+      // appears on the canvas immediately. The canvas renders from the Yjs
+      // doc, not the REST response — without this the message lands in the
+      // backend but never shows up in the graph. The POST response wraps
+      // the node as { node: {...} }.
+      if (created?.node?.id && docRef.current) {
+        mergeBackendNodes(docRef.current, [created.node]);
+      }
 
       // Sending clears the armed reply target (UI-04 ghost slot).
       setReplyToNodeId(null);
