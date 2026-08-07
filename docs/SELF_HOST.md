@@ -238,7 +238,7 @@ The binary builds a connection string from individual `DB_*` env vars:
 postgres://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>?sslmode=<DB_SSLMODE>
 ```
 
-If you're using the Docker Compose setup, the `DB_URL` variable is an alternative format accepted by the container entrypoint:
+If you're using the Docker Compose setup, the `CANOPY_DB_URL` variable is a full-DSN override accepted by the binary (see `internal/config/config.go`):
 
 ```
 postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable

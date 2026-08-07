@@ -34,7 +34,7 @@ This starts two services:
 
 **canopyd** (container name: `canopy-server`)
 - Port: **8091** (host) → 8080 (container)
-- Connects to postgres via `DB_URL=postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable`
+- Connects to postgres via `CANOPY_DB_URL=postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable`
 - Waits for postgres health check before starting
 - Metrics enabled by default (`METRICS_ENABLED=true`)
 - Built from `deploy/Dockerfile`
@@ -202,7 +202,7 @@ BASE="http://localhost:8080"
 curl -s -X POST "$BASE/api/v1/trees" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
-  -d '{"title":"My First Tree","description":"A test tree"}' | jq .
+  -d '{"title":"My First Tree","description":"A test tree","rootMessage":{"content":"Welcome to my first tree","contentFormat":"markdown","nodeType":"message"}}' | jq .
 ```
 
 Response (201 Created):

@@ -16,12 +16,15 @@ BINARY   ?= canopyd
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
 
-.PHONY: all build build-embed test test-short vet lint tidy clean
+.PHONY: all build build-embed test test-short vet lint tidy clean run
 
 all: build test vet lint
 
 build:
 	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
+
+run: build
+	$(BIN_DIR)/$(BINARY)
 
 build-embed:
 	$(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
