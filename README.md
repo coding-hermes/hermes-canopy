@@ -23,13 +23,18 @@ docker run -d --name canopy-pg \
   -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
   -e POSTGRES_DB=canopy -p 5432:5432 postgres:17
 
-# Run
+# Run (dev: backend on :8091 to match the Vite dev proxy target)
 DB_HOST=localhost DB_PORT=5432 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
-  ./bin/canopyd
+  HTTP_ADDR=:8091 ./bin/canopyd
+
+# Frontend (dev mode)
+cd frontend
+npm install
+npm run dev
 
 # Open the frontend
-open http://localhost:5173  # dev mode (from frontend/)
-# or http://localhost:8080  # production (embedded in binary)
+open http://localhost:5173  # dev mode
+# or http://localhost:8080  # production (embedded in binary, default HTTP_ADDR)
 ```
 
 ## Architecture

@@ -109,8 +109,8 @@ make run
 # If using compose's PostgreSQL on port 5437:
 DB_PORT=5437 ./bin/canopyd
 
-# Custom address:
-HTTP_ADDR=:9090 ./bin/canopyd
+# Custom address (use :8091 to match the Vite dev proxy target in §5):
+HTTP_ADDR=:8091 ./bin/canopyd
 ```
 
 ### Health Check
