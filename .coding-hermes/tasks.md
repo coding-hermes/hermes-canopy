@@ -5278,3 +5278,48 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep **20 consecutive green**. E2E-001 window 212-217 SATISFIED at Tick 212 (46/46, zero drift) — next run Tick 218. **CI DURABLY RESTORED — CI-002 probe #5 passed** (T212 push → run 31133009956 success, ~1 min lag). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. Board-v2 95+22, events MAX(id)=57. DuckBrain contiguous through 213 (994bf7ad / 68608c24).
 
 **Next tick (214):** maintenance — E2E window 212-217 already satisfied at 212; next run Tick 218. CI confirmed durably restored (no more probe checks; normal streak monitoring). No dispatchable code tasks.
+## Tick 214 — 2026-08-07 01:58 UTC (scheduler tick hermes-canopy-2026-08-06-20-50-52, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — all 18 gates green, **21st consecutive green -short sweep**, CI green streak 2 (normal monitoring, no probes). No code changes, no event append, no worker dispatch.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Clean at 0393f56 (T213 board update). 0 unpushed (origin/master). Only untracked: frontend/playwright-report/ (known artifact). No workers running (pgrep clean). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 214'` exit 1 at start — no prior entry. Single fire. |
+| 3 | Build+vet | ✅ CLEAN | go build + go vet fresh run both clean. gofmt -l: no output. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit fresh run clean. |
+| 5 | Vitest | ✅ 460/460 | `npx vitest run`: 18 files, 460 tests passed (2.57s). |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 tested pkgs, db 103.1s / handler 93.6s / plugin 14.0s (inside the T195 envelope). **TWENTY-FIRST consecutive green sweep.** |
+| 7 | E2E-001 | ⏭️ NOT DUE | Window 212-217 SATISFIED at Tick 212 (46/46, T134 goldens current). Next window 218-223 — RUNS AT TICK 218. |
+| 8 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes. Stable 1390 edges / 219 files (live probe this tick). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442). 15 FE BUG-024 markers (ShareDialog 1 + yjsProvider 14 — baseline). No new TODOs. |
+| 10 | GitReins | ✅ 28/28 COMPLETE, 0 ACTIVE | CLI counts: 28 complete, 0 pending, 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks exit 0: 596 commits scanned, 29.99MB, 3.26s, no leaks found. |
+| 12 | Board-v2 | ✅ STABLE — NO APPEND | Parquet: **95 complete + 22 pending**, 0 in_progress. Events MAX(id)=57 = COUNT=57. Pure maintenance — no status change, NO event appended (T157/T159 precedent). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 API (snake_case): enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0, model=deepseek-v4-flash @ deepseek-foreman. fleet.toml pin cooldown_s=900 — file and API AGREE. No PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting connections (pg_isready ok). |
+| 15 | CI (live) | ✅ STREAK 2 — NO PROBES | gh run list: T213 push → run 31136394436 completed/success (2m32s, created 00:57Z ~1 min post-push); T212 31133009956 success. 6/6 listed runs green. CI-002 stays closed — normal streak monitoring only. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps not re-scanned (stable since Tick 113: 164 Go + 12 npm outdated — non-blocking). Workers: pgrep clean — no canopy or foreign worker matches. |
+| 17 | DuckBrain | ✅ WRITTEN + TREE-VERIFIED | Pre-write: /ticks/213 present in hermes-canopy ns (contiguity OK; 210-213 contiguous). Wrote /ticks/214 (e4c1e170) + /project/hermes-canopy/status/2026-08-06 (bdf8d667) — BOTH tree-verified in hermes-canopy ns. ⚠️ Instance quirk hit: body-namespace ignored by HTTP POST (lands in default ns) — rewrote with `?namespace=` query param; probe key deleted (204). Fallback ref patched with the lesson. |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 103h10m). No submit (maintenance — nothing solved). |
+
+### Actions this tick
+
+- Full gate battery fresh: -short sweep (21st consecutive green — db 103.1s / handler 93.6s, inside T195 envelope), vitest 460/460, tsc, build/vet/gofmt, gitleaks (596 commits).
+- CI: normal streak monitoring (2 green: T212 + T213). No probes — CI-002 close condition long since satisfied.
+- No event append: pure maintenance, no status changes (parquet untouched, single-write discipline).
+- No worker code dispatch: no dispatchable tasks (21 post-MVP deferred by design per AGENTS.md; INFRA-001 scheduler-level).
+- Cooldown: file+API both 900; no PUT.
+- DuckBrain: HTTP-write namespace quirk diagnosed + documented (body-namespace ignored on this instance; query-param namespace required; by-id verify is default-partition-only — tree verify is authoritative; dated-leaf shape for status).
+
+### Remaining open
+
+- INFRA-001: tick storm — cooldown back to 900s; scheduler-level.
+- E2E-001: next window 218-223 — RUNS AT TICK 218 (first tick of window; 46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog (stable since Tick 113).
+- CI-002: closed — recovery durable (streak 2); no further probes needed.
+
+**Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep **21 consecutive green**. E2E-001 window 212-217 SATISFIED at Tick 212 (46/46, zero drift) — next run Tick 218. CI green streak 2 (T212/T213 runs success, ~1 min trigger lag). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. Board-v2 95+22, events MAX(id)=57. DuckBrain contiguous through 214 (e4c1e170 / bdf8d667, tree-verified).
+
+**Next tick (215):** maintenance — E2E window 212-217 already satisfied at 212; next run Tick 218. CI normal streak monitoring. No dispatchable code tasks.
