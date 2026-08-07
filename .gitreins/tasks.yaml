@@ -551,3 +551,21 @@ tasks:
   status: complete
   created_at: '2026-08-04T14:38:59.437144+00:00'
   completed_at: '2026-08-04T14:39:03.626700+00:00'
+- id: BUG-032
+  title: 'BUG-032: composer messages and backend nodes never reach the Tree View canvas
+    (Yjs bridge missing)'
+  criteria:
+  - 'Tree View hydrates existing backend nodes into the Yjs doc on open: opening a
+    tree whose nodes exist in the backend renders them on the React Flow canvas (canvas
+    node/edge counts match the API)'
+  - 'Sending a message via the composer mirrors the created node into the Yjs doc:
+    the canvas shows the new node immediately without reload'
+  - mergeBackendNodes is idempotent (re-merge adds 0 nodes, no duplicate edges), skips
+    deleted nodes, and decodes base64 metadata
+  - 'New vitest regression tests cover mergeBackendNodes: roots land in rootOrder,
+    children get reply edges, base64 metadata decodes'
+  - 'No regression: vitest full suite + tsc --noEmit pass, integration suite 46/46
+    passes'
+  status: complete
+  created_at: '2026-08-07T06:24:50.148744+00:00'
+  completed_at: '2026-08-07T06:32:15.245278+00:00'

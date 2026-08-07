@@ -148,6 +148,8 @@
 |||| ✅ BUG-029 | Root node creation 503: internal/service/node_service.go:411 unconditionally inserts an edge with source_id = input.ParentID (uuid.Nil when unset) — violates edges_source_id_fkey. FIXED Tick 125 (3c49734) — edge insert wrapped in `if input.ParentID != uuid.Nil`, root nodes return Edge: nil (edge: null). 2 new handler tests (TestAPI_NodeCreate_RootNode_NoEdge_BUG029 + ReplyNode_HasEdge_BUG029) PASS live with PG. Judge PASS 626656ae (7/7 ACs). Worker glm-5.2 @ zai-glm. | High | 3 | UI-06 | ++backend, ++bug, ++db, ++api-contract | DeepSeek V4 Pro | High | GLM-5.2 |
 |||| ✅ BUG-030 | Composer renders read-only for everyone: frontend/src/hooks/usePresence.ts:135 hardcodes permission: 'viewer' in initial local presence → TreeView readOnly={isViewer} is true in live app. FIXED Tick 125 (cdd7c97) — buildInitialPresence defaults to 'editor'; remote peer permission preserved (payload.permission). 6 new usePresence tests. Vitest 299/299. Judge PASS ec8c3ebc (7/7 ACs). Worker hy3 @ custom:opencode-go. | High | 2 | UI-06 | ++frontend, ++bug, ++presence, ++permissions | DeepSeek V4 Flash | Medium | Hy3 |
 ||||| ✅ UI-07 | Keyboard shortcuts — j/k navigate, h/l drill, m merge, ? shortcut help; subtle footer strip. ✅ Tick 126 (b94adf2, worker Hy3 @ opencode-go): shortcuts.ts 307L registry + typing guard, useShortcuts.ts single-listener hook, ShortcutHelp.tsx accessible overlay (role=dialog/aria-modal), TreeCanvas tree scope + App global scope, NavigationBar kbd strip. 11 files +1374/−3, frontend-only. Foreman verified: go build/vet, tsc, oxlint 0 err, vitest 368/368 (69 new). Judge PASS ed31176f (8/8 ACs). Screenshots docs/screenshots/ui-07/. | Low | 2 | UI-01, FE-04 | ++frontend, ++a11y, ++keyboard | Hy3 | Low | DeepSeek V4 Flash |
+|| ✅ BUG-032 | Yjs bridge missing: composer messages and backend nodes never reach the Tree View canvas. FIXED Tick 216 (9205c19) — TreeView hydrates backend nodes into Yjs doc on open (GET /trees/{id} + /trees/{id}/nodes → mergeBackendNodes), composer POST response mirrored into Yjs doc (canvas shows new node immediately, no reload). mergeBackendNodes: idempotent (existing-id skip + edge dedupe), skips deletedAt, decodes base64 metadata, local-first (never overwrites local edits). 7 new vitest tests (treeStoreMerge.test.ts). Verified: vitest 467/467, tsc clean, integration 46/46 live, guard PASS, judge PASS e22f7c63 (5/5 ACs). Orphaned worker session left uncommitted drafts — foreman verified + committed. | High | 3 | UI-06, FE-02 | ++frontend, ++bug, ++crdt | DeepSeek V4 Flash | Low | — |
+|| ✅ JSONL-NORM-001 | Board storage: JSONL canonical (git-friendly) — untrack board.db/parquet. DONE Tick 216 (4b7d731) — exported board.db → tasks/events/fixtures.jsonl (118 tasks / 58 events, read_json_auto round-trip OK), git rm --cached parquet, .gitignore *.parquet, parity probe MATCH (63/63). DB cache re-synced from JSONL (event 59 + BUG-032 row). | High | 2 | — | ++infra, ++board | — | — | — |
 
 ## Completed (Phases 1-4, Migration Fixes, JWT Wiring)
 
@@ -5368,3 +5370,48 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 95/117 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Full -short sweep **22 consecutive green**. E2E-001 window 212-217 SATISFIED at Tick 212 (46/46, zero drift) — next run Tick 218. CI green streak 3 (T214 pushes both success). Scheduler :9090 healthy (cooldown 7200, file+API agree — fleet policy update). PG :5437 healthy. Hilo 1390 edges stable. Vitest 460/460. GitReins 28/28. Board-v2 95+22, events MAX(id)=57. DuckBrain /ticks/215 written + verified (64f2fe5c).
 
 **Next tick (216):** maintenance — E2E window 212-217 already satisfied at 212; next run Tick 218. CI normal streak monitoring. No dispatchable code tasks.
+
+## Tick 216 — 2026-08-07 06:42 UTC (scheduler tick hermes-canopy-2026-08-07-01-27-12, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE** — BUG-032 (Yjs bridge) verified + committed + judge PASS; JSONL-NORM-001 board migration completed (board now canonical JSONL).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ⚠️ DIRTY → CLEAN | Start: orphaned worker drafts (TreeView.tsx +49, treeStore.ts +114 mergeBackendNodes, __tests__/treeStoreMerge.test.ts 130L) + board parquet (JSONL-NORM-001 event) + BUG-032 in .gitreins/tasks.yaml. No worker processes (pgrep clean). Committed: 9205c19 (fix) + 4b7d731 (JSONL migration) + board/tick-log commits. |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 216'` exit 1 at start. Single fire. |
+| 3 | Build+vet | ✅ CLEAN | go build + go vet fresh runs clean. gofmt -l: no output. |
+| 4 | Frontend | ✅ CLEAN | tsc --noEmit fresh run clean. |
+| 5 | Vitest | ✅ 467/467 | Full suite: 19 files, 467 tests passed (460 baseline + 7 new treeStoreMerge). |
+| 6 | Go tests | ✅ GUARD PASS | gitreins guard tier1 full: secrets clean, go_build/go_lint/go_tests OK (exit 0). |
+| 7 | Integration (AC5) | ✅ 46/46 | `vitest run --config vitest.integration.config.ts` live (canopyd :8091 + vite :5173 + PG :5437 up): 6 files, 46/46 PASS in 48.2s incl. 4 visual-regression (T134 goldens current, zero drift). |
+| 8 | E2E-001 | ⏭️ NOT DUE | Window 212-217 SATISFIED at Tick 212. Next run Tick 218. |
+| 9 | Hilo graph | ⏭️ NOT RE-RUN | No Go changes. .vfs graph auto-refreshed on commit (23 edges). |
+| 10 | TODO/FIXME | ✅ pre-existing only | 6 Go (5 stub_adapters + 1 cursor) + FE BUG-024 markers — no new TODOs from BUG-032 work. |
+| 11 | GitReins | ✅ 29/29 COMPLETE, 0 ACTIVE | BUG-032 judged PASS e22f7c63 (5/5 ACs, tier1+tier2). Verdict saved in .gitreins/history/2026-08-07. |
+| 12 | Board-v2 | ✅ JSONL CANONICAL — MIGRATED | JSONL-NORM-001 DONE (4b7d731): board.db → board/tasks/events/fixtures.jsonl (118 tasks/58 events round-trip), parquet untracked, .gitignore *.parquet. Completed: BUG-032 (events 60-61) + JSONL-NORM-001 (62-63). 97 complete + 22 pending = 119 tasks. Events MAX(id)=63. Parity probe MATCH (63/63) after DB cache re-sync (event 59 + BUG-032 row inserted from JSONL). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 healthy (dashboard 200). API: enabled=true, cooldown_s=900, priority=10, weight=10, consecutive_failures=0, updated_at 06:18Z. ⚠️ T215 documented fleet.toml pin 7200 — current file+API AGREE at 900 (fleet-cooldown-policy regenerated since; no PUT). |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg :5437 accepting (pg_isready ok). |
+| 15 | CI (live) | ⏳ T216 PUSH = PROBE | CI-002 closed; streak monitoring only. Push this tick triggers run — result in next tick. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. No new deps scan (stable backlog 164 Go + 12 npm). |
+| 17 | DuckBrain | ✅ WRITTEN | /ticks/216 + /project/hermes-canopy/status written + verified (post-commit check). |
+| 18 | Off-by-One | ✅ HEALTHY + SUBMITTED | :8766 health 200 (uptime ~3h). Submitted Yjs-bridge hydration pattern (frontend-yjs-backend-hydration). |
+
+### Actions this tick
+
+- **BUG-032 verified + committed (9205c19, +291/−2):** orphaned worker drafts found at tick start (written ~06:20-06:25Z, never committed — session died). Foreman verified: tsc clean, vitest 7 new tests PASS, full vitest 467/467, integration 46/46 live. Judge PASS e22f7c63 (5/5 ACs). No re-dispatch needed — worker's implementation satisfied all ACs (hydration on open, composer mirror, idempotence, deleted-skip, base64 decode, local-first).
+- **JSONL-NORM-001 completed (4b7d731):** board migrated to canonical JSONL per Bane 08-07 doctrine — export script (muster-t112-proven), untrack parquet, gitignore *.parquet, parity MATCH. DB cache (gitignored) re-synced from JSONL after create_board_tasks.py's ON CONFLICT insert skip (event 59 + BUG-032 task row).
+- **Integration suite re-run live** as AC5 evidence (46/46, 48.2s) — canopyd + vite were already up from T212's E2E session.
+- **No worker dispatch** — orphaned work was complete and correct; verified + committed foreman-direct.
+- **Cooldown note:** fleet.toml regenerated hermes-canopy to 900 (T215's 7200 pin was transient); file+API agree — no PUT.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy).
+- E2E-001: next window 218-223 — RUNS AT TICK 218 (46/46 baseline, T134 goldens current).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 12 npm outdated deps — non-blocking maintenance backlog.
+- CI-002: closed — streak monitoring only.
+
+**Project Status:** 97/119 board tasks complete. All MVP gaps delivered. Phase 11 mockup parity COMPLETE. Board storage now JSONL canonical (JSONL-NORM-001 ✅). Vitest 467/467, integration 46/46. GitReins 29/29 complete, 0 active. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. DuckBrain /ticks/216 written.
+
+**Next tick (217):** maintenance — E2E window 218-223 opens at Tick 218 (run then). CI streak monitoring. No dispatchable code tasks.
