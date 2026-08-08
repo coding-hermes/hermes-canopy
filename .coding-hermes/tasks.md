@@ -7108,3 +7108,50 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 104/126 board tasks complete. All MVP gaps delivered. Full -short sweep **60 consecutive green**. E2E-001 window 254-259 SATISFIED (46/46, zero drift) — next 260-265 at Tick 260. CI green streak 39 (T255 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=83. DuckBrain contiguous through 255.
 
 **Next tick (256):** Maintenance audit (E2E window 260-265 not due until Tick 260). CI streak monitoring (T255 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 256 — 2026-08-08 12:03 UTC (scheduler tick hermes-canopy-2026-08-08-06-54-06, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE (docs)** — GAP-012 (P1 README graph API paths drift) + GAP-013 (P2 README DB_PORT vs compose 5437) fixed foreman-direct (T217 precedent). 61st consecutive green -short sweep. E2E window 260-265 not due until Tick 260. CI streak 40 (T255 push confirmed) — this tick's push = T256 probe.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (work) | Tick start: HEAD 0d77c52 (stand-in PM commit GAP-012/013, unpushed ahead 1), 0 modified. Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign). README.md modified by this tick's fix (committed d8bff98). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 256'` exit 1 at start. Worker procs: canopyd :8091 = stray Docker container canopy-server (T245-T250 precedent: benign, left running); host `canopyd serve` pid 1123316 (containerized instance, no action); one pgrep self-match wrapper (hermes-snap). No canopy workers. |
+| 3 | Build+vet | ✅ CLEAN | Full -short sweep compiled/built all 15/15 pkgs. No new Go files this tick. |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (2.47s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 68.39s / handler 89.29s / plugin 30.84s / testutil 8.08s). **SIXTY-FIRST consecutive green sweep** (plugin 30.8s above its 10-23s typical window — host-load variation, exit 0, nowhere near 300s cap; handler inside T195 envelope). |
+| 7 | E2E-001 | ✅ NOT DUE | Window 254-259 SATISFIED at T254 (46/46, zero drift) — next window 260-265 runs at Tick 260 (fixture-due-window rule). No E2E run this tick. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (direct DuckDB fallback — `hilo graph stats` empty-output signature T64/T66, uv run --with duckdb read graph.db; matches T250-T255). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 31/31 COMPLETE, 0 ACTIVE | 31 ● in complete list, 0 pending / 0 in_progress. No new state since T242 (GAP-011/VREG-001 verdicts already recorded). |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (30.85 MB scanned in 1.27s). Commit count 650 → 652 (stand-in PM 0d77c52 + this tick's docs commit d8bff98 = +2). |
+| 12 | Board-v2 | ✅ EVENTS APPENDED (task_completed x2) | Canonical JSONL: 104 complete + **24 pending = 128** (GAP-012/013 added by stand-in PM commit 0d77c52 — now both complete). events MAX(id) 83→**85** (events 84 = GAP-012 task_completed, 85 = GAP-013 task_completed, d8bff98). Header ticks_total 255→**256**, last_commit=**d8bff98** (pre-board-commit HEAD, T243-T250 precedent), ticks_idle=0, last_tick UTC. board.db/parquet stale caches (untracked, JSONL canonical per Bane 08-07). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects 200. GET hermes-canopy: cooldown_s=900, priority=10, weight=10, decay_rate=1, enabled=true, consecutive_failures=0. fleet.toml hermes-canopy cooldown_s=900 (line 323) + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg container :5437 up 28h (healthy); canopyd :8091 listening (containerized canopy-server — gate 2, stray left per precedent; raw-curl 401 = expected no-JWT-header behavior, not a fault). |
+| 15 | CI (live) | ✅ STREAK 40 CONFIRMED | gh run list: 6/6 listed runs green (T250→T255 pushes). **T255 push run 31250942816 success (3m3s)** — T255 probe result, streak 39→40. This tick's push = T256 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (0d77c52 was local stand-in work, now pushed with this tick). gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking, unchanged since T113-era backlog). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/255 (d53bd9cb) present — contiguous, NO backfill needed. Wrote /ticks/256 (**17008cda**) + /project/hermes-canopy/status (**85bca7d1**, refreshed from lagging 243 — ranking lag, refreshed unconditionally) — ALL verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 28h27m). No submit (maintenance — no new problem class; discover e2e-stack-run not_found, normal). |
+
+### Actions this tick
+
+- **GAP-012 closed** (docs, commit d8bff98): README Graph API table rows were `/api/v1/graph/subtree/{nodeId}` / `/ancestors/{nodeId}` / `/stats/{treeId}` — actual routes are `/api/v1/graph/trees/{tree_id}/subtree/{node_id}` / `/ancestors/{node_id}` / `/stats` (graph_handler.go:35-37, confirmed by api_integration_test.go:252/457/510 + docs/API.md which already had correct paths). README table aligned to real routes. PASS criterion: every graph path in README now matches a registered handler route (grep-verified, non-404 by construction).
+- **GAP-013 closed** (docs, same commit): README quickstart used `-p 5432:5432` + `DB_PORT=5432` while docker-compose.yml maps host `5437:5432` → connection refused for compose users. Fixed: quickstart container + DB_PORT synced to 5437 with an explicit note; Deployment section corrected to `PostgreSQL on :5437 (host) → :5432 (container)` + `canopyd on :8091 (host) → :8080 (container)` + verify curl `:8091/health` (compose maps 8091:8080). PASS: `docker compose up -d` + README quickstart verbatim now agree on ports (5437).
+- Judge: manual criteria grep (docs-only, imhotep S02 precedent — guard PASS + README/code cross-check is sufficient evidence).
+- Full gate battery fresh, all green: -short sweep (61st consecutive, 15/15 pkgs exit 0), vitest 467/467, tsc clean, gitleaks clean (652 commits), hilo 1394/220 (DuckDB fallback), GitReins 31/31.
+- Events appended (84 = GAP-012, 85 = GAP-013, task_completed, d8bff98); header updated directly (ticks_total=256, last_commit=d8bff98, ticks_idle=0).
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Stand-in PM commit 0d77c52 (GAP-012/013 task rows) pushed along with this tick's commits (was ahead 1).
+- No code worker dispatch (docs-only fixes foreman-direct per T217 precedent; 21 post-MVP items deferred). E2E not run (window 260-265 not due until Tick 260).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 254-259 SATISFIED at Tick 254 — next window 260-265 (runs at Tick 260).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 104/128 board tasks complete. All MVP gaps delivered. Full -short sweep **61 consecutive green**. GAP-012/GAP-013 README fixes shipped (docs, d8bff98). E2E-001 window 254-259 SATISFIED (46/46, zero drift) — next 260-265 at Tick 260. CI green streak 40 (T256 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=85. DuckBrain contiguous through 256.
+
+**Next tick (257):** Maintenance audit (E2E window 260-265 not due until Tick 260). CI streak monitoring (T256 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
