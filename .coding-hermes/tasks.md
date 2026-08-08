@@ -6673,3 +6673,47 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 104/126 board tasks complete. All MVP gaps delivered. Full -short sweep **50 consecutive green**. E2E-001 window 242-247 SATISFIED (46/46). CI green streak 31. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=81. DuckBrain contiguous through 245.
 
 **Next tick (246):** maintenance — E2E window 248-253 opens at Tick 248 (not due). CI streak monitoring (T245 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 246 — 2026-08-08 05:17 UTC (scheduler tick hermes-canopy-2026-08-08-00-11-29, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — full gate battery, all green. **51st consecutive green -short sweep**. CI streak 32 confirmed (T245 probe success).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Tick start: HEAD 1aa511f (T245 board commit), 0 unpushed (origin/master == HEAD), 0 modified. Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign artifacts). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 246'` exit 1 at start. Worker procs: ASCE E2E worker (foreign — /home/kara/asce) + transient tsc/vite build (exited before probe; not canopy) — no canopy workers. canopyd :8091 = Docker container canopy-server (root, 6h+ uptime; T245 precedent: benign, not stopped — docker stop blocked by cron approval gate). |
+| 3 | Build+vet | ✅ CLEAN | Full -short sweep compiled/built all 15/15 pkgs. No new files this tick. |
+| 4 | Frontend | ✅ CLEAN | npx tsc -b exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (3.01s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 103.98s / handler 95.77s / plugin 15.13s / testutil 4.42s, wall 3:48). **FIFTY-FIRST consecutive green sweep**. |
+| 7 | E2E-001 | ✅ NOT DUE | Window 242-247 SATISFIED at Tick 242 (46/46, 44.54s). Next window 248-253 runs at Tick 248. Containerized canopyd still on :8091 (gate 2) — T248 worker should verify/recycle the stack before its run. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (~/.cargo/bin/hilo graph stats — matches T245; ~/.cargo/bin not on session PATH this tick, used full path). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 31/31 COMPLETE, 0 ACTIVE | 31 ● in complete list, 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (641 commits scanned, 30.77 MB in 1.27s). Commit count 640 → 641 (T245 board commit; this tick's commit = +1). |
+| 12 | Board-v2 | ✅ CANONICAL JSONL, NO NEW EVENT | Canonical JSONL: **104 complete + 22 pending = 126** (unchanged). events MAX(id)=**81** (unchanged — maintenance, T235/T243/T244/T245 precedent, no event appended). Header ticks_total 245→**246**, last_commit=**1aa511f** (pre-commit HEAD, T243/T244/T245 precedent). board.db/parquet untracked caches ignored (JSONL canonical). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects 200. GET hermes-canopy: cooldown_s=900, priority=10, weight=10, decay_rate=1, enabled=true, consecutive_failures=0. fleet.toml hermes-canopy cooldown_s=900 (line 323) + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | pg_isready :5437 accepting; canopyd :8091 listening (containerized — gate 2). |
+| 15 | CI (live) | ✅ STREAK 32 CONFIRMED | gh run list: 6/6 listed runs green (T239→T245 pushes). **T245 push run 31238742755 success (3m3s)** — T245 probe result, streak 31→32. This tick's push = T246 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/245 (78d01c50) present — contiguous, NO backfill needed. Status newest = tick 243 (2a9db7eb — expected lag, refreshed unconditionally). Wrote /ticks/246 (**1fe4ddbd**) + /project/hermes-canopy/status (**647908b1**) — ALL verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 21h38m). No submit (maintenance — no new problem class). |
+
+### Actions this tick
+
+- Full gate battery fresh, all green: -short sweep (51st consecutive — db 103.98s / handler 95.77s / plugin 15.13s / testutil 4.42s, 15/15 pkgs exit 0), vitest 467/467, tsc clean, gitleaks clean (641 commits), hilo 1394/220, GitReins 31/31.
+- CI streak monitoring: T245 probe 31238742755 success → streak 32. This tick's push = T246 probe.
+- Docker cleanup attempt: stray canopy-server container (:8091, root, 6h+) — `docker stop` blocked by cron approval gate; left per T245 precedent (benign; T248 E2E worker recycles the stack anyway).
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- No event appended, no worker dispatch (maintenance tick; 21 post-MVP items deferred).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 242-247 SATISFIED at Tick 242 — next window 248-253 (runs at Tick 248).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 104/126 board tasks complete. All MVP gaps delivered. Full -short sweep **51 consecutive green**. E2E-001 window 242-247 SATISFIED (46/46). CI green streak 32. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=81. DuckBrain contiguous through 246.
+
+**Next tick (247):** maintenance — E2E window 248-253 opens at Tick 248 (not due). CI streak monitoring (T246 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
