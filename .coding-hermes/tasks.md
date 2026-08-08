@@ -7332,3 +7332,47 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 106/128 board tasks complete. All MVP gaps delivered. Full -short sweep **65 consecutive green**. E2E-001 window 260-265 SATISFIED at Tick 260 (46/46, 45.63s, zero drift). CI green streak 41 (T260 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=86. DuckBrain contiguous through 260. Bane test session live (canopyd/vite stack reused for E2E; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (261):** E2E window 260-265 SATISFIED at T260 — no E2E run until window 266-271 (Tick 266). CI streak monitoring (T260 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 261 — 2026-08-08 23:27 UTC (scheduler tick hermes-canopy-2026-08-08-18-21-33, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — all 18 gates green. 66th consecutive green -short sweep. E2E window 260-265 already SATISFIED at Tick 260 — no E2E run this tick. Bane test session live (vite.config.ts TEMP allowedHosts uncommitted, untouched).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ WORK TREE (1 modified) | Tick start: HEAD 024d8dc (= origin/master, 0 ahead). `M frontend/vite.config.ts` = Bane test-session TEMP change (trycloudflare tunnel allowedHosts, 2026-08-08) — NOT ours, left untouched, excluded from commit. Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 261'` exit 1 at start. Stack: canopyd :8091 listening (Bane's live session, T258-T260 precedent) + PG :5437 healthy. Sibling 9router FED-014 worker (kimi-k3) on shared host — foreign, no action. No canopy workers. |
+| 3 | Build+vet | ✅ CLEAN | Full -short sweep compiled/built all 15/15 pkgs. No new Go files this tick. |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (2.48s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 88.20s / handler 90.05s / plugin 13.71s / sse 1.23s / testutil 3.48s). **SIXTY-SIXTH consecutive green sweep** (all inside observed envelopes: db 68-129s, handler 85-190s, plugin 10-23s). |
+| 7 | E2E-001 | ✅ WINDOW 260-265 SATISFIED (T260) | Not due this tick — window already satisfied at Tick 260 (46/46, 45.63s, zero drift). Next window 266-271 runs at Tick 266 (fixture-due-window rule). No stack manipulation. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (direct `~/.cargo/bin/hilo graph stats` — binary probe; matches T250-T260). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 31/31 COMPLETE, 0 ACTIVE | 31 ● in complete list, 0 pending / 0 in_progress. No new state. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (30.90 MB scanned in 1.31s, 658 commits scanned). |
+| 12 | Board-v2 | ✅ MAINTENANCE — NO EVENT APPEND | Canonical JSONL: **106 complete + 22 pending = 128** (unchanged statuses). events MAX(id)=86 unchanged, no append (maintenance — no status changes). Header ticks_total 260→**261**, last_commit=**024d8dc** (pre-commit HEAD, T243-T250 precedent), ticks_idle=0, last_tick UTC. board.db/parquet stale caches (untracked, JSONL canonical per Bane 08-07). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: Enabled=true, CooldownS=900, Priority=10, Weight=10, DecayRate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session stack :8091 up — left untouched per T258-T260 precedent. |
+| 15 | CI (live) | ✅ STREAK 42 CONFIRMED | gh run list: 6/6 listed runs green (T255→T260 pushes). **T260 push run 31282088247 success (2m53s)** — streak 41→**42** held. This tick's push = T261 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits (origin/master == HEAD). gh issue list: 0 open. Deps stable (164 Go + 14 npm outdated, non-blocking backlog; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/260 (0044005e) present — contiguous, NO backfill needed. Wrote /ticks/261 (**cc9e4841**) + /project/hermes-canopy/status (**6df4b224**) — ALL verified by exact id-recall (T178 pattern). Status key refreshed unconditionally (newest was T243 — expected 1-19 tick lag, not an anomaly). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 1h43m52s). No submit (routine maintenance — no new problem class). |
+
+### Actions this tick
+
+- Maintenance audit — full gate battery fresh, all green: -short sweep (66th consecutive, 15/15 pkgs exit 0, db 88.20s / handler 90.05s), vitest 467/467, tsc clean, gitleaks clean (658 commits), hilo 1394/220 (direct binary), GitReins 31/31.
+- NO event append (maintenance — no status changes, no window run); header ticks_total 260→261 / last_commit=024d8dc only.
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (transport healthy this session): /ticks/261 cc9e4841, status 6df4b224.
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Bane test session detected + left untouched: canopyd :8091 live; vite.config.ts TEMP allowedHosts change uncommitted — excluded from this tick's commit.
+- No code worker dispatch (maintenance; 21 post-MVP items deferred).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 260-265 SATISFIED at Tick 260 — next window 266-271 (runs at Tick 266).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 106/128 board tasks complete. All MVP gaps delivered. Full -short sweep **66 consecutive green**. E2E-001 window 260-265 SATISFIED at Tick 260 (46/46, 45.63s, zero drift). CI green streak 42 (T261 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=86. DuckBrain contiguous through 261. Bane test session live (canopyd :8091; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (262):** E2E window 260-265 SATISFIED at T260 — no E2E run until window 266-271 (Tick 266). CI streak monitoring (T261 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
