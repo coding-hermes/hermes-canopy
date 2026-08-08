@@ -6935,3 +6935,46 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 104/126 board tasks complete. All MVP gaps delivered. Full -short sweep **56 consecutive green**. E2E-001 window 248-253 SATISFIED (46/46, 48.11s) — next 254-259 at Tick 254. CI green streak 36 (T251 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=82. DuckBrain contiguous through 251.
 
 **Next tick (252):** Maintenance audit (E2E window 254-259 not due until Tick 254). CI streak monitoring (T251 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 252 — 2026-08-08 08:19 UTC (scheduler tick hermes-canopy-2026-08-08-03-14-59, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — all 18 gates green. 57th consecutive green -short sweep. E2E window 254-259 not due (248-253 SATISFIED at T248). CI streak 37 (T251 probe confirmed) — this tick's push = T252 probe.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Tick start: HEAD 4866ff9 (T251 board commit), 0 unpushed (origin/master == HEAD), 0 modified. Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign artifacts). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 252'` exit 1 at start. Worker procs: canopyd :8091 = stray Docker container canopy-server (T245-T250 precedent: benign, left running). Foreign workers seen (ring-runner RR-VIS-002 glm worker, uhlp foreman tick) — verified foreign, no canopy workers. |
+| 3 | Build+vet | ✅ CLEAN | Full -short sweep compiled/built all 15/15 pkgs. No new files this tick. |
+| 4 | Frontend | ✅ CLEAN | npx tsc -b exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (2.69s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 82.98s / handler 115.50s / plugin 16.76s / testutil 4.14s). **FIFTY-SEVENTH consecutive green sweep** (handler inside T195 85-190s envelope). |
+| 7 | E2E-001 | ✅ NOT DUE | Window 248-253 SATISFIED at T248 (46/46, 48.11s) — next window 254-259 runs at Tick 254 (fixture-due-window rule). No E2E run this tick. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (~/.cargo/bin/hilo graph stats — matches T249-T251). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 31/31 COMPLETE, 0 ACTIVE | 31 ● in complete list, 0 pending / 0 in_progress. No new state since T242 (GAP-011/VREG-001 verdicts already recorded). |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (647 commits scanned, 30.81 MB in 1.72s). Commit count 647 → 648 (this tick's commit = +1). |
+| 12 | Board-v2 | ✅ NO EVENT (maintenance) | Canonical JSONL: **104 complete + 22 pending = 126** (unchanged). events MAX(id)=**82** (unchanged, T248 audit; NO append — maintenance, T235/T243-T250 precedent). Header ticks_total 251→**252**, last_commit=**4866ff9** (pre-commit HEAD, T243-T250 precedent), ticks_idle=0. Parquet/board.db caches stale (untracked, JSONL canonical per Bane 08-07 — parquet showed 95/23 stale, JSONL is authoritative, no drift). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects 200. GET hermes-canopy: cooldown_s=900, priority=10, weight=10, decay_rate=1, enabled=true, consecutive_failures=0. fleet.toml hermes-canopy cooldown_s=900 (line 323) + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | canopy-pg container :5437 up 25h (healthy); canopyd :8091 listening (containerized canopy-server — gate 2, stray left per precedent). |
+| 15 | CI (live) | ✅ STREAK 37 CONFIRMED | gh run list: 6/6 listed runs green (T246→T251 pushes). **T251 push run 31247130519 success (3m2s)** — T251 probe result, streak 36→37. This tick's push = T252 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking, unchanged since T113-era backlog; npm count 13→14 minor drift). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/251 (fc9fa9cc) present — contiguous, NO backfill needed. Wrote /ticks/252 (**337297de**) + /project/hermes-canopy/status (**718e87e6**) — ALL verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 24h42m). No submit (maintenance — no new problem class; discover e2e-stack-run not_found, normal). |
+
+### Actions this tick
+
+- Full gate battery fresh, all green: -short sweep (57th consecutive, 15/15 pkgs exit 0), vitest 467/467, tsc clean, gitleaks clean (647 commits), hilo 1394/220, GitReins 31/31.
+- NO event append (maintenance, T235/T243-T250 precedent); board.jsonl header updated directly (ticks_total=252, last_commit=4866ff9, ticks_idle=0). Parquet/board.db caches left stale — untracked, JSONL canonical.
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- No worker dispatch (maintenance tick; 21 post-MVP items deferred). E2E not run (window 254-259 not due until Tick 254).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 248-253 SATISFIED at Tick 248 — next window 254-259 (runs at Tick 254).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 104/126 board tasks complete. All MVP gaps delivered. Full -short sweep **57 consecutive green**. E2E-001 window 248-253 SATISFIED (46/46, 48.11s) — next 254-259 at Tick 254. CI green streak 37 (T252 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=82. DuckBrain contiguous through 252.
+
+**Next tick (253):** Maintenance audit (E2E window 254-259 not due until Tick 254). CI streak monitoring (T252 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
