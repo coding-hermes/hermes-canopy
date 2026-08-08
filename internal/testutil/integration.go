@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -74,12 +76,97 @@ func dropTestDBByName(ctx context.Context, adminURL, dbName string) error {
 	return err
 }
 
+// defaultAdminURL is the fallback admin database URL used when neither
+// CANOPY_ADMIN_DB_URL nor CANOPY_TEST_DB_URL is set. It points at the
+// docker-compose PostgreSQL (canopy-pg, host port 5437 → container 5432).
+const defaultAdminURL = "postgres://canopy:canopy@localhost:5437/postgres?sslmode=disable"
+
+// probeTimeout bounds the short-mode TCP reachability check. Half a second is
+// generous on a loopback or docker-proxy connection and fails fast when PG is
+// not running — so `make test-short` skips instead of hanging against a
+// missing DB (GAP-011).
+const probeTimeout = 500 * time.Millisecond
+
+// resolveAdminURL returns the admin database URL to use for reachability and
+// setup checks, honoring CANOPY_ADMIN_DB_URL (preferred) and
+// CANOPY_TEST_DB_URL (fallback) overrides, then the built-in default.
+func resolveAdminURL() string {
+	if u := os.Getenv("CANOPY_ADMIN_DB_URL"); u != "" {
+		return u
+	}
+	if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
+		return u
+	}
+	return defaultAdminURL
+}
+
+// hostPortFromURL extracts the "host:port" to probe from a Postgres URL. It
+// understands both net/url-parseable schemes (postgres://...) and the libpq
+// key=value DSN form (host=h port=p). For a URL with no explicit port, the
+// postgres default of 5432 is assumed.
+func hostPortFromURL(raw string) (host, port string) {
+	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			host = u.Hostname()
+			port = u.Port()
+			if port == "" {
+				port = "5432"
+			}
+			return host, port
+		}
+	}
+	// libpq key=value DSN form, e.g. "host=localhost port=5432".
+	for _, field := range strings.Fields(raw) {
+		k, v, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "host":
+			host = v
+		case "port":
+			port = v
+		}
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "5432"
+	}
+	return host, port
+}
+
+// pgReachable reports whether a TCP connection to the Postgres host:port can
+// be established within probeTimeout. Used by SkipIfNoDB in short mode to
+// decide whether to skip PG-backed tests without hanging on a missing DB.
+func pgReachable() bool {
+	host, port := hostPortFromURL(resolveAdminURL())
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), probeTimeout)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
 // SkipIfNoDB skips the test if integration tests are disabled.
-// Set CANOPY_SKIP_INTEGRATION=1 to skip.
+// Set CANOPY_SKIP_INTEGRATION=1 to always skip.
+//
+// Under -short, additionally skip when PostgreSQL is not reachable: the guard
+// does a fast TCP probe (probeTimeout) of the admin DB host:port and skips if
+// the connection cannot be established. This lets `make test-short` complete
+// standalone without a running PostgreSQL (GAP-011), while still running the
+// PG-backed tests when PG IS available — so CI's `go test ./... -short` (with
+// a PG service container) keeps full coverage. Full mode (no -short) is
+// unchanged: it never skips on reachability and still requires a live PG.
 func SkipIfNoDB(t *testing.T) {
 	t.Helper()
 	if os.Getenv("CANOPY_SKIP_INTEGRATION") != "" {
 		t.Skip("CANOPY_SKIP_INTEGRATION is set")
+	}
+	if testing.Short() && !pgReachable() {
+		t.Skip("short mode: PostgreSQL not reachable")
 	}
 }
 
@@ -253,6 +340,7 @@ func sweepStaleTestDBs(ctx context.Context, adminURL string) {
 // Callers MUST close the pool when done: pool.Close().
 func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	SkipIfNoDB(t)
 	ctx := context.Background()
 
 	// Admin connection URL (to the default 'postgres' database).

@@ -75,6 +75,67 @@ func TestIntegration_Truncate(t *testing.T) {
 	}
 }
 
+// TestHostPortFromURL exercises the host:port parser used by the short-mode
+// reachability probe. Pure unit test — no PostgreSQL required.
+func TestHostPortFromURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		raw   string
+		wantH string
+		wantP string
+	}{
+		{name: "default admin URL", raw: defaultAdminURL, wantH: "localhost", wantP: "5437"},
+		{name: "postgres scheme with port", raw: "postgres://u:p@db.example.com:6543/db?sslmode=disable", wantH: "db.example.com", wantP: "6543"},
+		{name: "postgresql scheme", raw: "postgresql://u:p@1.2.3.4:5432/db", wantH: "1.2.3.4", wantP: "5432"},
+		{name: "url without port defaults 5432", raw: "postgres://u:p@db.example.com/db", wantH: "db.example.com", wantP: "5432"},
+		{name: "libpq key=value DSN", raw: "host=db.local port=6432 user=canopy", wantH: "db.local", wantP: "6432"},
+		{name: "libpq DSN without port", raw: "host=db.local", wantH: "db.local", wantP: "5432"},
+		{name: "empty string defaults", raw: "", wantH: "localhost", wantP: "5432"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotH, gotP := hostPortFromURL(tt.raw)
+			if gotH != tt.wantH || gotP != tt.wantP {
+				t.Fatalf("hostPortFromURL(%q) = (%q, %q), want (%q, %q)", tt.raw, gotH, gotP, tt.wantH, tt.wantP)
+			}
+		})
+	}
+}
+
+// TestResolveAdminURL confirms env-var precedence for the admin URL used by
+// the reachability probe. Pure unit test — no PostgreSQL required.
+//
+// Note: uses t.Setenv("", "") rather than os.Unsetenv to "unset" vars within
+// each subtest — os.Unsetenv does NOT register cleanup, so it would leak an
+// unset value into sibling tests in the same binary (e.g. TestSweepKeepsFreshDB
+// would see the default URL instead of a caller-provided override).
+func TestResolveAdminURL(t *testing.T) {
+	const adminURL = "postgres://canopy:canopy@db-a:1111/postgres?sslmode=disable"
+	const testURL = "postgres://canopy:canopy@db-b:2222/canopy?sslmode=disable"
+
+	t.Run("admin wins over test", func(t *testing.T) {
+		t.Setenv("CANOPY_ADMIN_DB_URL", adminURL)
+		t.Setenv("CANOPY_TEST_DB_URL", testURL)
+		if got := resolveAdminURL(); got != adminURL {
+			t.Fatalf("resolveAdminURL() = %q, want %q", got, adminURL)
+		}
+	})
+	t.Run("test fallback when admin unset", func(t *testing.T) {
+		t.Setenv("CANOPY_ADMIN_DB_URL", "")
+		t.Setenv("CANOPY_TEST_DB_URL", testURL)
+		if got := resolveAdminURL(); got != testURL {
+			t.Fatalf("resolveAdminURL() = %q, want %q", got, testURL)
+		}
+	})
+	t.Run("default when both unset", func(t *testing.T) {
+		t.Setenv("CANOPY_ADMIN_DB_URL", "")
+		t.Setenv("CANOPY_TEST_DB_URL", "")
+		if got := resolveAdminURL(); got != defaultAdminURL {
+			t.Fatalf("resolveAdminURL() = %q, want %q", got, defaultAdminURL)
+		}
+	})
+}
+
 // TestStaleTestDBs exercises the stale-database decision logic of the
 // pre-run sweep. Pure unit test — no PostgreSQL required, runs in the
 // non-PG gate too.
