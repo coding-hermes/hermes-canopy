@@ -589,3 +589,20 @@ tasks:
   completed_at: '2026-08-07T14:55:17.337161+00:00'
   depends_on:
   - UI-09
+- id: GAP-011
+  title: "GAP-011 \u2014 make -short skip PG tests when PG unreachable"
+  criteria:
+  - SkipIfNoDB in internal/testutil/integration.go skips PG-backed tests under testing.Short()
+    ONLY when PostgreSQL is not reachable (fast TCP probe, 500ms, honoring CANOPY_ADMIN_DB_URL/CANOPY_TEST_DB_URL
+    overrides and libpq DSN form)
+  - NewIntegrationPool in internal/testutil/integration.go calls SkipIfNoDB at the
+    top so db/plugin/chaos tests skip instead of dead-waiting without PG
+  - make test-short exits 0 in <15s with no PostgreSQL running (0 failures)
+  - "With PG up, go test -count=1 -short ./internal/db ./internal/handler still runs\
+    \ the PG-backed tests and passes (CI coverage preserved \u2014 not all-skip)"
+  - 'Full mode (no -short) is unchanged: go test ./internal/db runs PG tests with
+    no skip'
+  - gofmt -l clean and go vet ./... clean on changed files
+  status: complete
+  created_at: '2026-08-08T02:08:27.144009+00:00'
+  completed_at: '2026-08-08T02:17:06.599371+00:00'

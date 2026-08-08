@@ -6533,3 +6533,57 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 103/125 board tasks complete. All MVP gaps delivered. Full -short sweep **46 consecutive green**. E2E-001 window 242-247 SATISFIED (46/46). CI green streak 30. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 30/30, 0 active. Board events MAX(id)=79. DuckBrain contiguous through 242 (240 backfilled).
 
 **Next tick (243):** maintenance — E2E window 242-247 already satisfied at Tick 242 (next run Tick 248). CI streak monitoring (T242 push probe result). GAP-011 likely closed by sibling T241 — verify row status, fold if committed. No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 241 — 2026-08-08 02:23 UTC (scheduler tick hermes-canopy-2026-08-07-20-32-50) — FOLDED by Tick 243 (T241's session wrote board events 80-81 + tasks.jsonl + gitreins record, then terminated before committing its tasks.md entry)
+
+**Verdict: PRODUCTIVE** — GAP-011 (P1 make test-short PG-free) COMPLETED via glm-5 worker: commit **375c55f**.
+
+- **GAP-011 delivered:** `SkipIfNoDB` extended — under `testing.Short()` skip PG-backed tests ONLY when PG is unreachable (500ms TCP probe honoring CANOPY_ADMIN_DB_URL / CANOPY_TEST_DB_URL overrides + libpq DSN form via hostPortFromURL); `NewIntegrationPool` now calls SkipIfNoDB (was missing — db/plugin/chaos dead-waited against a missing DB). Reachability-based guard preserves CI coverage (build.yml runs `go test ./... -short` WITH PG).
+- **Verified:** `make test-short` exits 0 in **4.9s** with PG unreachable (dead-port env override — docker stop approval-blocked in worker session, allowed deviation); full -short sweep 15/15 exit 0 with PG up; AC2/AC3 real-PG execution preserved; gofmt/vet clean; **guard PASS**; **judge PASS** (8ff971b8 / c7de3528, 6/6 criteria, verdicts on gitreins branch).
+- **Sibling T242 (0f7a6a8) landed mid-tick:** ran E2E window 242-247 (46/46), backfilled /ticks/240 (e0b55c1a), left GAP-011 WIP untouched for T241.
+- **DuckBrain:** /ticks/241 written by T241 pre-termination (2a9e4a1c) — contiguous 239/240/241/242 all present.
+- **Record state:** events 80 (task_completed GAP-011) + 81 (audit) appended to events.jsonl; tasks.jsonl GAP-011 → complete (commit 375c55f, guard PASS); board.jsonl header ticks_total=241 (later corrected to 243 by T243); .gitreins/tasks.yaml GAP-011 completion record. All folded into Tick 243's commit.
+## Tick 243 — 2026-08-08 03:12 UTC (scheduler tick hermes-canopy-2026-08-07-22-04-28, DeepSeek V4 Flash)
+
+**Verdict: MAINTENANCE** — sibling T241's orphaned GAP-011 closure folded + full gate battery. **48th consecutive green -short sweep**. CI streak 30 confirmed.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ ORPHANED SIBLING STATE FOLDED | Tick start: HEAD 375c55f (sibling T241's GAP-011 fix), 1 unpushed. Uncommitted: events.jsonl (+events 80-81: T241 GAP-011 task_completed+audit), tasks.jsonl (GAP-011→complete), board.jsonl (header ticks_total=241), .gitreins/tasks.yaml (GAP-011 completion record), edges.jsonl (+2 GAP-011 edges) — all T241's orphaned writes (session terminated pre-commit at 02:23 UTC). Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign). All folded into this tick's commit. |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 243'` exit 1 at start. Sibling T241 (spawn 20-32-50) NOT running — exited after writing board events; no live canopy worker procs (only ring-runner/uhlp sibling foremen on host). |
+| 3 | Build+vet | ✅ CLEAN | Full -short sweep compiled/built everything (15/15 pkgs). `go vet ./internal/testutil/` exit 0, `gofmt -l internal/testutil/` clean (GAP-011 files verified). |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (from frontend/). |
+| 5 | Vitest | ✅ 467/467 | 19 files, 467 passed (2.22s) — from frontend/. |
+| 6 | Go tests | ✅ FULL SWEEP PASS | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 74.53s / handler 98.16s / plugin 16.62s / testutil 5.18s). **FORTY-EIGHTH consecutive green sweep** — GAP-011 change in-tree (testutil 5.18s includes new integration_test.go tests). |
+| 7 | E2E-001 | ✅ NOT DUE | Window 242-247 SATISFIED at Tick 242 (46/46, 44.54s). Next window 248-253 runs at Tick 248. Stack still up (canopyd :8091 root + PG :5437) — no E2E action this tick. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (+2 GAP-011 edges from post-commit warm; bare ~/.cargo/bin/hilo graph stats). |
+| 9 | TODO/FIXME | ✅ pre-existing only | 6 Go non-test (5 stub_adapters.go post-MVP + 1 cursor TODO tree_service.go:442) + FE BUG-024 markers (yjsProvider.ts 14 + ShareDialog.tsx 1 = 15 total). No new TODOs. |
+| 10 | GitReins | ✅ 31/31 COMPLETE, 0 ACTIVE | 31 ● in task list (GAP-011 record added), 0 pending/in_progress. Verdict branch: 8ff971b + c7de352 "verdict: GAP-011 — PASS". |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (binary at ~/go/bin/gitleaks): no leaks found (30.75 MB scanned in 1.16s). Commit count 634 → 638 (GAP-011 fix + 2 verdicts + this board commit). |
+| 12 | Board-v2 | ✅ T241 STATE FOLDED, NO NEW EVENT | Canonical JSONL: **104 complete + 22 pending = 126** (GAP-011→complete). events MAX(id)=**81** (T241's 80-81 already canonical). Header ticks_total **corrected 241→243** (T241's late append ran after T242's and overwrote the header T242 had set to 242; corrected to 243, last_commit=375c55f pre-commit, T242 precedent). No new event appended (maintenance, T235 precedent). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | :9090 /api/v1/projects/hermes-canopy 200. GET: cooldown_s=900, priority=10, weight=10, decay_rate=1, enabled=true, consecutive_failures=0. fleet.toml cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | pg_isready :5437 accepting; canopyd :8091 listening (stack left up from T242 E2E window — noted, not stopped mid-tick). |
+| 15 | CI (live) | ✅ STREAK 30 CONFIRMED | gh run list: 6/6 listed runs green (T236→T242 pushes). **T242 push run 31233898452 success (2m54s)** — T242 probe result, streak 30. This tick's push = T243 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/241 (2a9e4a1c) + /ticks/242 (24c4061d) present — contiguous, NO backfill needed (T241 wrote its own record pre-termination). Wrote /ticks/243 (**016e6678**) + /project/hermes-canopy/status (**2a9db7eb**) — ALL verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ✅ HEALTHY | :8766 health 200 (uptime 19h36m). No submit (maintenance + fold — no new problem class). |
+
+### Actions this tick
+
+- **GAP-011 closure folded (sibling T241):** verified commit 375c55f in HEAD — SkipIfNoDB short-mode reachability guard (500ms TCP probe, CANOPY_ADMIN_DB_URL/CANOPY_TEST_DB_URL + libpq DSN support), NewIntegrationPool calls SkipIfNoDB, full mode unchanged. Code review + gofmt/vet + judge verdicts (8ff971b8/c7de3528, 6/6) consistent; **48th consecutive green sweep with the change in-tree** proves no regression with PG up. Row stays complete in tasks.jsonl; no tasks.md row exists (stand-in filed it only into tasks.jsonl, GAP-008 collision).
+- **T241 orphaned board state folded:** events 80-81 + tasks.jsonl GAP-011=complete + .gitreins/tasks.yaml record + edges.jsonl (+2) committed under this tick — T241's session terminated before its own commit (orphaned-board-state pattern).
+- **Board header corrected:** ticks_total 241→243 — T241's late event append (02:23 UTC, after T242's 01:58 append) overwrote the header with its own tick number, regressing T242's 242; corrected to 243 pre-commit.
+- Full gate battery fresh, all green: -short sweep (48th consecutive — db 74.53s / handler 98.16s / plugin 16.62s, 15/15 pkgs exit 0), vitest 467/467, tsc clean, gofmt/vet clean, gitleaks clean, hilo 1394/220, GitReins 31/31.
+- CI streak monitoring: T242 probe 31233898452 success → streak 30. This tick's push = T243 probe.
+- DuckBrain written + id-verified BEFORE board entry (T183 ordering), via MCP (transport healthy this session).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 242-247 SATISFIED at Tick 242 — next window 248-253 (runs at Tick 248).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 104/126 board tasks complete (GAP-011 closed). All MVP gaps delivered. Full -short sweep **48 consecutive green**. E2E-001 window 242-247 SATISFIED (46/46). CI green streak 30. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=81. DuckBrain contiguous through 243.
+
+**Next tick (244):** maintenance — E2E window 248-253 opens at Tick 248 (not due). CI streak monitoring (T243 push probe result). No dispatchable code tasks (21 post-MVP items deferred).

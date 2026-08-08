@@ -1391,3 +1391,5 @@
 {"from":"internal/testutil/integration.go","to":"pkg:github.com/jackc/pgx/v5/pgconn","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/stores/__tests__/treeStoreMerge.test.ts","to":"pkg:vitest","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"frontend/src/stores/__tests__/treeStoreMerge.test.ts","to":"local:../treeStore.ts","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:net","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"std:net/url","rel":"imports","provenance":"ast_exact","confidence":1.0}
