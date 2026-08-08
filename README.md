@@ -19,12 +19,14 @@ cd hermes-canopy
 make build
 
 # Start PostgreSQL (Docker)
+# Host port 5437 matches docker-compose.yml (which maps 5437:5432) so the same
+# DB_PORT works whether you use the standalone container or `docker compose up`.
 docker run -d --name canopy-pg \
   -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
-  -e POSTGRES_DB=canopy -p 5432:5432 postgres:17
+  -e POSTGRES_DB=canopy -p 5437:5432 postgres:17
 
 # Run (dev: backend on :8091 to match the Vite dev proxy target)
-DB_HOST=localhost DB_PORT=5432 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
+DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
   HTTP_ADDR=:8091 ./bin/canopyd
 
 # Frontend (dev mode)
@@ -137,9 +139,9 @@ open http://localhost:5173  # dev mode
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/graph/subtree/{nodeId}` | Get subtree (all descendants) |
-| `GET` | `/api/v1/graph/ancestors/{nodeId}` | Get ancestor chain |
-| `GET` | `/api/v1/graph/stats/{treeId}` | Graph statistics |
+| `GET` | `/api/v1/graph/trees/{tree_id}/subtree/{node_id}` | Get subtree (all descendants) |
+| `GET` | `/api/v1/graph/trees/{tree_id}/ancestors/{node_id}` | Get ancestor chain |
+| `GET` | `/api/v1/graph/trees/{tree_id}/stats` | Graph statistics |
 
 ### Topics
 
@@ -194,12 +196,12 @@ open http://localhost:5173  # dev mode
 docker compose up -d
 
 # This starts:
-#   - canopyd on :8080
-#   - PostgreSQL 17 on :5432
+#   - canopyd on :8091 (host) → :8080 (container)
+#   - PostgreSQL on :5437 (host) → :5432 (container) — note the non-standard host port!
 #   - Health-gated startup (canopyd waits for PG)
 
 # Verify
-curl http://localhost:8080/health
+curl http://localhost:8091/health
 
 # View logs
 docker compose logs -f canopyd
