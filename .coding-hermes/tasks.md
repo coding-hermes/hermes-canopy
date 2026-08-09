@@ -7898,3 +7898,48 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 117/144 board tasks complete. GAP-014/015/016/017 stand-in PM sweep CLOSED (5266014; SPEC-023-UI-001..004 created — helix UI-001..004 unblocked). Full -short sweep **78 consecutive green** (16/16 pkgs). Vitest 526/526, integration 49/49. GitReins 38/38, 0 active. Hilo 1484/236. CI streak 11. Cooldown 900 file+API agree. Board events MAX(id)=125. DuckBrain contiguous through 273. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (274):** WIRE-004 (P2, share+presence — last Bane directive task) per T272 flag, or first SPEC-023-UI-001 dispatch. CI streak monitoring (T273 board push probe). E2E next window 278-283 at Tick 278.
+## Tick 274 — 2026-08-09 09:05 UTC (scheduler tick hermes-canopy-2026-08-09-03-34-31, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE — WIRE-004 DELIVERED (05df3de)** — last Bane 08-08 directive task closed. Real share + presence endpoints (POST /trees/{id}/share owner-gated; POST /presence + /presence/leave with SSE presence_update broadcast) + de-stubbed ShareDialog + yjsProvider (BUG-024). Worker: glm-5.2 @ zai-glm, ~14 min, honest report (Go handler tests flagged for foreman re-run — fixed uuidv7 ID capture, verified clean). 80th consecutive green -short sweep.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | Tick start: HEAD 8bfc695 in sync with origin/master (0 ahead). `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commit). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (wojons-mythos glm-5.2 worker verified foreign via cmdline path); Bane live session canopyd :8091 + vite :5173 up, left untouched. |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 274'` exit 1 at start; no sibling commits mid-tick. |
+| 3 | Build+vet | ✅ CLEAN | `go build ./...` + `go vet ./...` exit 0 (worker + foreman re-verified). |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0 (foreman independent re-run). |
+| 5 | Vitest | ✅ 530/530 | 23 files, 530 passed (2.82s) — +4 vs T273 baseline (yjsProvider.test.ts presence tests). |
+| 6 | Go tests | ✅ FULL SWEEP PASS (80th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — **all pkgs**: db 95.3s / handler 101.7s / plugin 16.8s / session 0.9s / sse 1.2s / testutil 3.9s. EIGHTIETH consecutive green sweep (sweep #1 ran concurrent with worker — mid-edit; sweep #2 post-worker final state = authoritative). Targeted `-run 'TestAPI_ShareTree\|TestAPI_Presence'` handler suite 10.8s PASS. |
+| 7 | E2E-001 | ✅ NOT DUE | Window 272-277 SATISFIED at Tick 272 (49/49) — next window 278-283 runs at Tick 278 (fixture-due-window rule). |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1484 edges / 236 files (direct `~/.cargo/bin/hilo graph stats` — matches T272/T273; zero code-delta in graph, no edges.jsonl diff). |
+| 9 | TODO/FIXME | ✅ WIRE-004 STUBS GONE | FE: yjsProvider.ts 6 WIRE-004-labeled refs → **0** (all de-stubbed; ts-ignores removed); ShareDialog TODO(BUG-024) removed (1 new WIRE-004 doc-comment remains — intentional header). Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 39/39 COMPLETE, 0 ACTIVE | 38 ● complete at tick start → 39 after WIRE-004 task create+complete. 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (693 commits, 31.90 MB). |
+| 12 | Board-v2 | ✅ WIRE-004 COMPLETE + EVENTS 126-127 | JSONL canonical: **118 complete + 26 pending = 144** (WIRE-004 → complete; SPEC-023-UI-001..004 remain pending). Events: 126 task_completed + 127 audit (tick 274) — MAX(id)=127. WIRE-004 row: status=complete, worker_status=complete, commit_hash=05df3de, guard PASS, judge PASS 5/5 (verdict 3d782156). Header ticks_total 273→**274**, last_commit=**05df3de**, ticks_idle=0. board.db/parquet stale caches (untracked, JSONL canonical). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml 900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + vite :5173 up — left untouched per T258-T272 precedent. |
+| 15 | CI (live) | ✅ STREAK 12 CONFIRMED | gh run list: T273 board push 31303020675 SUCCESS (3m7s) + 31301182453 + 31300155159 + 31298530732 + 31298405830 = 5 visible consecutive SUCCESS (T270 initial-push 31298186670 red = known pre-fix, superseded). This tick's push = T274 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/273 present (04ff5d32 — contiguity intact, no backfill). Wrote /ticks/274 (**e59fdd5c**) + status refresh (**c6210b5c**) — both verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 8h26m). No new problem class to submit — worker clean, no novel failure mode. |
+
+### Actions this tick
+
+- **WIRE-004 DELIVERED (05df3de, +948/−37, 13 files)** — last Bane 08-08 anti-phantom directive task, closing the whole 8-task program (WIRE-001..005 + TEST-REAL-001..003). Backend: POST /api/v1/trees/{tree_id}/share (owner-only via NOT_TREE_OWNER 403, invitee by user_id or email with USER_NOT_FOUND 404, ALREADY_MEMBER 409, permission viewer|editor|admin → tree_role mapping, 201 shareResponse); POST /presence (202) + POST /presence/leave (204) with in-memory presenceRegistry (RWMutex) + presence_update SSE broadcast via existing hub (payload fields exactly match frontend _handlePresenceEvent). TreeHandler.WithShares wires UserRepo + TreeMemberRepo + SSEHub; server.New takes userRepo; PGUserRepo.GetByEmail added (ILIKE, deleted_at IS NULL). Frontend: yjsProvider pushPresence() real POST (debounced) + leavePresence() POST + presence_update/cursor_update dispatched from SSE onmessage (both ts-ignores removed); ShareDialog real POST with coded-error extraction + success/failure feedback (TODO(BUG-024) removed). Tests: share_presence_integration_test.go (324L: share by email/user_id, 4 validation errors, presence push 202, leave 204, presence validation); yjsProvider.test.ts +4.
+- **Worker: glm-5.2 @ zai-glm (~14 min, exit 0)** — clean report with honest flag: Go handler tests had a first-run failure (uuid.New() vs uuidv7 server-assigned IDs); worker fixed all 3 test functions but hit iteration limit before re-running. Foreman re-ran targeted tests (10.8s PASS) + full sweep (80th green, post-worker final state) + tsc + vitest independently. Worker did NOT commit (per foreman review-first pattern); foreman committed 05df3de.
+- **80th consecutive green -short sweep** — two runs this tick: #1 concurrent with worker (db 91.6s / handler 100.9s — mid-edit state), #2 post-worker authoritative (db 95.3s / handler 101.7s / plugin 16.8s, exit 0). Both within 300s per-package cap.
+- Board events 126-127 appended (task_completed + audit); header ticks_total 274, last_commit 05df3de. DuckBrain /ticks/274 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT. CI streak 12 (T274 push probe pending).
+- Bane test session detected + left untouched: canopyd :8091 + vite :5173 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 272-277 SATISFIED at Tick 272 — next window 278-283 (runs at Tick 278).
+- SPEC-023-UI-001..004 (P1, cross-project provider rows for helix UI-001..004) — pending dispatch; SPEC-023 spec = helix/specs/shared-workspace-ui.md (verified exists). UI-001 SSE channels endpoint is the natural next dispatch.
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 118/144 board tasks complete. WIRE-004 DELIVERED (05df3de, judge 5/5 3d782156) — last Bane 08-08 directive task closed; all 8 WIRE/TEST-REAL tasks done. Full -short sweep **80 consecutive green** (all pkgs). Vitest 530/530, integration 49/49. GitReins 39/39, 0 active. Hilo 1484/236. CI streak 12. Cooldown 900 file+API agree. Board events MAX(id)=127. DuckBrain contiguous through 274. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (275):** SPEC-023-UI-001 dispatch (P1 SSE workspace channels — spec at helix/specs/shared-workspace-ui.md), or WIRE-004 follow-up none needed. CI streak monitoring (T274 push probe). E2E next window 278-283 at Tick 278.

@@ -759,3 +759,28 @@ tasks:
   status: complete
   created_at: '2026-08-09T06:57:11.925863+00:00'
   completed_at: '2026-08-09T06:57:15.033080+00:00'
+- id: WIRE-004
+  title: Real share + presence endpoints (de-stub BUG-024)
+  criteria:
+  - "Backend: POST /api/v1/trees/{tree_id}/share exists in internal/handler/tree_handler.go\
+    \ Routes() and creates a tree_members row \u2014 returns 201 with treeId/userId/permission/memberId;\
+    \ owner-only (NOT_TREE_OWNER for non-owner); invitee resolved by user_id or email\
+    \ (USER_NOT_FOUND when no match); ALREADY_MEMBER 409 on duplicate"
+  - "Backend: POST /api/v1/trees/{tree_id}/presence and POST /api/v1/trees/{tree_id}/presence/leave\
+    \ exist in tree_handler.go \u2014 presence push broadcasts a presence_update SSEEvent\
+    \ via the hub (returns 202), leave broadcasts type=leave and removes the user\
+    \ (returns 204); presence payload fields match the frontend's _handlePresenceEvent\
+    \ (userId, userName, avatarColor, permission, cursor, viewport, isActive, lastSeen)"
+  - 'Frontend: frontend/src/stores/yjsProvider.ts pushPresence() POSTs to the real
+    presence endpoint and clearLocalPresence() fires leavePresence (no TODO(WIRE-004)
+    markers remain); presence_update and cursor_update are dispatched from the SSE
+    onmessage stream'
+  - 'Frontend: frontend/src/components/ShareDialog.tsx handleSendInvite POSTs to /api/v1/trees/{treeId}/share
+    with error extraction and success/failure feedback (TODO(BUG-024) removed)'
+  - 'Tests: internal/handler/share_presence_integration_test.go exists and covers
+    share create + validation errors + presence push/leave; go build ./... and go
+    vet ./... exit 0; npx tsc --noEmit exit 0; npx vitest run reports 530 passed (23
+    files)'
+  status: complete
+  created_at: '2026-08-09T09:01:27.539977+00:00'
+  completed_at: '2026-08-09T09:01:27.716179+00:00'
