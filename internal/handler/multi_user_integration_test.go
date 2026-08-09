@@ -790,6 +790,8 @@ func newTestServerWithMembership(t *testing.T, pool *pgxpool.Pool, treeID, membe
 	edgeRepo := db.NewPGEdgeRepo(pool)
 	eventRepo := db.NewEventRepo(pool)
 	snapshotRepo := db.NewSnapshotRepo(pool)
+	userRepo := db.NewPGUserRepo(pool)
+	memberRepo := db.NewPGTreeMemberRepo(pool)
 
 	// Build services.
 	treeSvc := service.NewTreeService(treeRepo, nodeRepo, edgeRepo, pool)
@@ -808,7 +810,8 @@ func newTestServerWithMembership(t *testing.T, pool *pgxpool.Pool, treeID, membe
 		r.Use(authMW)
 		r.Use(membershipMW)
 
-		treeHandler := NewTreeHandler(treeSvc, syncEngine)
+		treeHandler := NewTreeHandler(treeSvc, syncEngine).
+			WithShares(userRepo, memberRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		nodeHandler := NewNodeHandler(nodeSvc, syncEngine)

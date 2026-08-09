@@ -171,4 +171,133 @@ describe('SSESyncProvider', () => {
     expect(init.body).toBeInstanceOf(Uint8Array);
     expect((init.body as Uint8Array).byteLength).toBeGreaterThan(0);
   });
+
+  // ── WIRE-004: de-stubbed presence endpoints ──────────────────────────
+
+  it('setLocalPresence POSTs the presence payload to /trees/{treeId}/presence', async () => {
+    const treeId = 'tree-pres-001';
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId });
+    provider.connect();
+    await vi.waitFor(() => expect(provider.connected).toBe(true));
+
+    // Reset the fetch mock so we only see the presence call.
+    fetchMock.mockClear();
+
+    provider.setLocalPresence({
+      userId: 'user-abc',
+      userName: 'Alice',
+      avatarColor: '#7c3aed',
+      permission: 'editor',
+      cursor: null,
+      viewport: null,
+      isActive: true,
+    });
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { method: string; headers: Record<string, string>; credentials: string; body: string },
+    ];
+    expect(url).toBe(`/api/v1/trees/${treeId}/presence`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['Content-Type']).toBe('application/json');
+
+    const body = JSON.parse(init.body) as { userId: string; userName: string };
+    expect(body.userId).toBe('user-abc');
+    expect(body.userName).toBe('Alice');
+  });
+
+  it('disconnect POSTs a leave to /trees/{treeId}/presence/leave', async () => {
+    const treeId = 'tree-pres-002';
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId });
+    provider.connect();
+    await vi.waitFor(() => expect(provider.connected).toBe(true));
+
+    // Establish local presence first so the leave has a userId to send.
+    provider.setLocalPresence({
+      userId: 'user-leave',
+      userName: 'Leaving',
+      avatarColor: '#3b82f6',
+      permission: 'viewer',
+      cursor: null,
+      viewport: null,
+      isActive: true,
+    });
+    // Drain the presence push so only the leave call is observed next.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    fetchMock.mockClear();
+
+    provider.disconnect();
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const leaveCall = fetchMock.mock.calls.find(
+      (c) => (c[0] as string).endsWith('/presence/leave'),
+    );
+    expect(leaveCall).toBeDefined();
+    const [url, init] = leaveCall as [
+      string,
+      { method: string; headers: Record<string, string>; credentials: string; body?: string },
+    ];
+    expect(url).toBe(`/api/v1/trees/${treeId}/presence/leave`);
+    expect(init.method).toBe('POST');
+    // The leave body carries the userId.
+    if (init.body) {
+      const body = JSON.parse(init.body) as { userId?: string };
+      expect(body.userId).toBe('user-leave');
+    }
+  });
+
+  it('handles an incoming presence_update SSE event and updates remote presence', async () => {
+    const treeId = 'tree-pres-003';
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId });
+    provider.connect();
+    await vi.waitFor(() => expect(provider.connected).toBe(true));
+
+    const es = lastInstance();
+    es.dispatch(
+      'presence_update',
+      makeEnvelope(treeId, 'presence_update', {
+        userId: 'remote-user-1',
+        userName: 'Remote Bob',
+        avatarColor: '#22c55e',
+        permission: 'viewer',
+        isActive: true,
+        lastSeen: '2026-08-09T10:00:00Z',
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(provider.getRemotePresence().get('remote-user-1')).toBeDefined(),
+    );
+    const remote = provider.getRemotePresence().get('remote-user-1')!;
+    expect(remote.userName).toBe('Remote Bob');
+    expect(remote.avatarColor).toBe('#22c55e');
+  });
+
+  it('clearLocalPresence does not crash when fetch rejects (API down)', async () => {
+    const treeId = 'tree-pres-004';
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId });
+
+    // Establish presence, then make fetch reject on the leave call.
+    provider.setLocalPresence({
+      userId: 'crash-user',
+      userName: 'Crash',
+      avatarColor: '#ef4444',
+      permission: 'editor',
+      cursor: null,
+      viewport: null,
+      isActive: true,
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fetchMock.mockRejectedValueOnce(new Error('network down'));
+
+    // Should not throw.
+    expect(() => provider.clearLocalPresence()).not.toThrow();
+  });
 });

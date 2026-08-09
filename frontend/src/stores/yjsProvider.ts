@@ -142,9 +142,11 @@ export class SSESyncProvider {
 
   /** Remove local presence (cleanup on disconnect). */
   clearLocalPresence(): void {
+    const prev = this.localPresence;
     this.localPresence = null;
-    // TODO(WIRE-004): Backend presence/leave endpoint planned but not yet implemented.
-    console.log('[SSESyncProvider] Presence leave (endpoint coming soon — WIRE-004)');
+    // Fire-and-forget the leave broadcast so other subscribers see the
+    // departure. Errors are logged, not thrown — this runs on disconnect.
+    void this.leavePresence(prev?.userId);
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────
@@ -190,6 +192,8 @@ export class SSESyncProvider {
       'edge_deleted',
       'tree_updated',
       'yjs_update',
+      'presence_update',
+      'cursor_update',
     ]) {
       forward(eventName);
     }
@@ -262,6 +266,16 @@ export class SSESyncProvider {
         if (typeof envelope.data === 'string') {
           this.applyGenericUpdate(envelope.data);
         }
+        break;
+      case 'presence_update':
+        this._handlePresenceEvent(
+          (envelope.data as Record<string, unknown>) ?? {},
+        );
+        break;
+      case 'cursor_update':
+        this._handleCursorEvent(
+          (envelope.data as Record<string, unknown>) ?? {},
+        );
         break;
       default:
         if (typeof envelope.data === 'string') {
@@ -435,15 +449,60 @@ export class SSESyncProvider {
 
   // ─── Presence sync ──────────────────────────────────────────────
 
-  /** Push local presence state to server (endpoint coming soon). */
+  /**
+   * Push local presence state to the backend, which broadcasts a
+   * presence_update SSE event to other subscribers of the tree. Called
+   * debounced from setLocalPresence / updateCursor / updateViewport.
+   * Gracefully no-ops when there is no local presence to send. Network
+   * errors are logged and surfaced via onError but never thrown.
+   */
   private async pushPresence(): Promise<void> {
     if (!this.localPresence) return;
-    // TODO(WIRE-004): Backend presence endpoint planned but not yet implemented.
-    console.debug('[SSESyncProvider] Presence push (endpoint coming soon — WIRE-004)');
+    const url = `${this.apiBase}/api/v1/trees/${encodeURIComponent(
+      this.treeId,
+    )}/presence`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.localPresence),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => 'unknown');
+        console.error(
+          `[SSESyncProvider] pushPresence failed: ${response.status} ${text}`,
+        );
+      }
+    } catch (err) {
+      // API down / network error — don't crash the editor.
+      console.error('[SSESyncProvider] pushPresence network error:', err);
+    }
+  }
+
+  /**
+   * Notify the backend that the local user has left the tree. Broadcasts a
+   * presence_update event with type "leave" to other subscribers. Best-effort:
+   * errors are logged, not thrown (runs on disconnect/unmount).
+   */
+  private async leavePresence(userId?: string): Promise<void> {
+    const url = `${this.apiBase}/api/v1/trees/${encodeURIComponent(
+      this.treeId,
+    )}/presence/leave`;
+    const body = userId ? JSON.stringify({ userId }) : '{}';
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('[SSESyncProvider] leavePresence network error:', err);
+    }
   }
 
   /** Handle incoming presence_update SSE event. */
-  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (WIRE-004)
   private _handlePresenceEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;
@@ -477,7 +536,6 @@ export class SSESyncProvider {
   }
 
   /** Handle incoming cursor_update SSE event (lighter variant). */
-  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (WIRE-004)
   private _handleCursorEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;

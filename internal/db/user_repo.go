@@ -36,6 +36,10 @@ type UserRepo interface {
 	// external Hermes auth subject. Returns ErrNotFound if no row matches.
 	GetByHermesUserID(ctx context.Context, hermesUserID string) (*User, error)
 
+	// GetByEmail returns the active user with the given email address.
+	// Returns ErrNotFound if no row matches.
+	GetByEmail(ctx context.Context, email string) (*User, error)
+
 	// Update changes mutable fields and bumps updated_at via trigger.
 	// Only DisplayName and AvatarURL are mutable per SPEC-DM-04 §4.1.
 	Update(ctx context.Context, id uuid.UUID, displayName string, avatarURL *string) (*User, error)
@@ -112,6 +116,25 @@ func (r *PGUserRepo) GetByHermesUserID(ctx context.Context, hermesUserID string)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("db: select user by hermes: %w", err)
+	}
+	return &u, nil
+}
+
+// GetByEmail returns the active user with the given email. Uses the
+// idx_users_email partial index. Case-insensitive via ILIKE match on
+// the stored value (the chk_users_email CHECK enforces a canonical form,
+// but callers may pass either case).
+func (r *PGUserRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
+	var u User
+	err := scanUser(r.pool.QueryRow(ctx, `
+        SELECT `+userColumns+`
+        FROM users
+        WHERE email ILIKE $1 AND deleted_at IS NULL`, email), &u)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: select user by email: %w", err)
 	}
 	return &u, nil
 }

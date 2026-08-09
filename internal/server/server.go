@@ -52,6 +52,7 @@ func New(
 	configRepo db.TransportConfigRepo,
 	eventRepo db.TransportEventRepo,
 	membersRepo db.TreeMemberRepo,
+	userRepo db.UserRepo,
 	profileRouter *hermes.PGProfileRouter,
 	mlsHandler *handler.MLSHandler,
 	topicSvc service.TopicService,
@@ -101,7 +102,8 @@ func New(
 		r.Use(authMW)
 
 		// Tree CRUD (SPEC-API-02).
-		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine)
+		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
+			WithShares(userRepo, membersRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD (SPEC-API-03) — tree-scoped routes get membership check.

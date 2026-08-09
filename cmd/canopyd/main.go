@@ -199,7 +199,7 @@ func main() {
 
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
+		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
 		ctxCompiler, pluginSvc, cfg)
 
 	// Start server in background

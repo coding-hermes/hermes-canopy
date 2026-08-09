@@ -95,7 +95,8 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 		r.Use(authMW)
 
 		// Tree CRUD.
-		treeHandler := NewTreeHandler(treeSvc, syncEngine)
+		treeHandler := NewTreeHandler(treeSvc, syncEngine).
+			WithShares(userRepo, memberRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD.

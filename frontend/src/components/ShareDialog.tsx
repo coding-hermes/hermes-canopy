@@ -5,11 +5,7 @@
  *   - Email input + permission dropdown → send invite
  *   - List of existing members with permission change + remove
  *
- * Backend share endpoint (POST /api/v1/trees/:id/share) is planned but not
- * yet implemented.  The dialog simulates success locally so the UI is
- * fully functional for demos and UX reviews.
- *
- * TODO(BUG-024): Wire up real POST /api/v1/trees/:id/share when backend ships.
+ * WIRE-004 / BUG-024: POSTs to the real /api/v1/trees/:id/share endpoint.
  */
 
 import { useState, useCallback } from 'react';
@@ -91,7 +87,7 @@ export default function ShareDialog({
     onClose();
   }, [onClose]);
 
-  // ── Send invite (coming soon — share API not yet implemented) ──────
+  // ── Send invite (real POST to /api/v1/trees/:id/share) ────────────
   const handleSendInvite = useCallback(async () => {
     if (!email.trim()) return;
 
@@ -105,20 +101,48 @@ export default function ShareDialog({
       message: message.trim() || undefined,
     };
 
-    // Backend share endpoint is planned but not yet implemented.
-    // Simulate a brief network-like delay so the UI feels responsive.
-    console.log(
-      `[ShareDialog] Share invite (coming soon): ${payload.email} / ${payload.permission} / tree=${treeId}`,
-    );
+    try {
+      const response = await fetch(
+        `/api/v1/trees/${encodeURIComponent(treeId)}/share`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'include',
+        },
+      );
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+      if (!response.ok) {
+        // Extract the coded error message from the backend envelope.
+        let detail = `Server error (${response.status})`;
+        try {
+          const body = (await response.json()) as {
+            error?: { message?: string };
+          };
+          if (body?.error?.message) detail = body.error.message;
+        } catch {
+          // Non-JSON error body — keep the generic status text.
+        }
+        setStatus('error');
+        setStatusText(detail);
+        setSending(false);
+        return;
+      }
 
-    setStatus('success');
-    setStatusText(`Invitation sent to ${payload.email}`);
-    onInvite(payload);
-    setEmail('');
-    setMessage('');
-    setSending(false);
+      setStatus('success');
+      setStatusText(`Invitation sent to ${payload.email}`);
+      onInvite(payload);
+      setEmail('');
+      setMessage('');
+    } catch (err) {
+      // Network error / API down.
+      const detail =
+        err instanceof Error ? err.message : 'Network error — try again';
+      setStatus('error');
+      setStatusText(detail);
+    } finally {
+      setSending(false);
+    }
   }, [email, permission, message, treeId, onInvite]);
 
   if (!open) return null;

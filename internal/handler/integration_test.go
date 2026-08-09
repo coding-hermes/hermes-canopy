@@ -50,6 +50,7 @@ func newTestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, func()) 
 	eventRepo := db.NewEventRepo(pool)
 	snapshotRepo := db.NewSnapshotRepo(pool)
 	memberRepo := db.NewPGTreeMemberRepo(pool)
+	userRepo := db.NewPGUserRepo(pool)
 
 	// Build services.
 	treeSvc := service.NewTreeService(treeRepo, nodeRepo, edgeRepo, pool)
@@ -67,7 +68,8 @@ func newTestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, func()) 
 		r.Use(authMW)
 
 		// Tree CRUD.
-		treeHandler := NewTreeHandler(treeSvc, syncEngine)
+		treeHandler := NewTreeHandler(treeSvc, syncEngine).
+			WithShares(userRepo, memberRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD — flat mount now membership-enforced (BUG-025).

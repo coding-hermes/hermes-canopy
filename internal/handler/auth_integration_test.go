@@ -87,7 +87,8 @@ func newTestServerWithApprovals(t *testing.T, pool *pgxpool.Pool) *approvalTestS
 		r.Use(authMW)
 
 		// Tree CRUD.
-		treeHandler := NewTreeHandler(treeSvc, syncEngine)
+		treeHandler := NewTreeHandler(treeSvc, syncEngine).
+			WithShares(userRepo, memberRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD.
