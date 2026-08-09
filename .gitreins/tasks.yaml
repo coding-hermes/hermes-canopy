@@ -623,3 +623,26 @@ tasks:
   status: complete
   created_at: '2026-08-09T00:37:31.258815+00:00'
   completed_at: '2026-08-09T00:37:47.594782+00:00'
+- id: WIRE-002
+  title: 'Wire context manifest panel (frontend: surface /api/v1/context/{node_id})'
+  criteria:
+  - 'GET /api/v1/context/{node_id} is consumed by the frontend: the tree view fetches
+    the compiled-context manifest for the selected node (contextRequestPath in frontend/src/lib/contextManifest.ts
+    builds /context/{id}?budget=8000; useContextManifest in frontend/src/hooks/useContextManifest.ts
+    owns the fetch lifecycle)'
+  - 'Token budget and usage are rendered: the panel shows tokensUsed vs tokenBudget
+    via formatTokenUsage and a BudgetMeter (role=meter, aria-valuenow/min/max) in
+    frontend/src/components/ContextManifestPanel.tsx'
+  - Ancestry items render with kind, title, tokenCount, and truncated markers (ItemRow
+    + manifestItemTitle fallback to short id); omission notes surface omittedCount
+    + omittedReason via omissionNote
+  - 'Graceful failure handling: 404 NODE_NOT_FOUND and 503 SERVICE_UNAVAILABLE resolve
+    to a subtle note (contextErrorNote), never a crash; stale responses and aborts
+    are guarded (generation counter + AbortController in useContextManifest)'
+  - 'Frontend suite green: npx tsc --noEmit exits 0 and npx vitest run reports 522
+    passing tests (22 files), up from 471 baseline with 51 new WIRE-002 tests'
+  - 'Backend Go untouched: no internal/ or *.go files changed by this task (git diff
+    dffd58a^ dffd58a --stat shows only frontend/src files)'
+  status: complete
+  created_at: '2026-08-09T02:02:15.676041+00:00'
+  completed_at: '2026-08-09T02:02:19.339986+00:00'
