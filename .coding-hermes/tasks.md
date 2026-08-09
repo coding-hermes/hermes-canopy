@@ -7420,3 +7420,49 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 106/128 board tasks complete. All MVP gaps delivered. Full -short sweep **67 consecutive green**. E2E-001 window 260-265 SATISFIED at Tick 260 (46/46, 45.63s, zero drift). CI green streak 42 (T262 probe pending). Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 467/467. GitReins 31/31, 0 active. Board events MAX(id)=86. DuckBrain contiguous through 262. Bane test session live (canopyd :8091; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (263):** E2E window 260-265 SATISFIED at T260 — no E2E run until window 266-271 (Tick 266). CI streak monitoring (T262 push probe result). No dispatchable code tasks (21 post-MVP items deferred).
+## Tick 263 — 2026-08-08 19:44 UTC (scheduler tick hermes-canopy-2026-08-08-19-16-26, DeepSeek V4 Flash)
+
+**Verdict: WIRE-001 DELIVERED** — first productive tick of Bane's 08-08 anti-phantom wiring program. Real SSE + Yjs sync wired end-to-end (de-stub BUG-024), guard PASS, judge PASS 6/6. 68th consecutive green -short sweep.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ WORK TREE (1 modified pre-tick) | Tick start: HEAD 2f54cb8 (= origin/master, 0 ahead). `M frontend/vite.config.ts` = Bane test-session TEMP allowedHosts (pre-existing, untouched, excluded from both commits). Untracked: .vfs/.dirty + frontend/playwright-report/ (known benign). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 263'` exit 1 at start. Board header ticks_total 262 (pre-Bane-directive HEAD). No canopy workers at tick start (4 foreign scheduler hermes sessions on shared host verified foreign). |
+| 3 | Build+vet | ✅ CLEAN | `go build ./...` + `go vet ./...` exit 0 (foreman re-verified worker changes). |
+| 4 | Frontend | ✅ CLEAN | npx tsc --noEmit exit 0 (from frontend/, post-worker). |
+| 5 | Vitest | ✅ 471/471 | 20 files, 471 passed (+4 new SSE tests in __tests__/yjsProvider.test.ts; was 467/19). |
+| 6 | Go tests | ✅ FULL SWEEP PASS (68th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 84.74s / handler 92.31s / plugin 25.86s / sse 1.23s / testutil 3.71s). **SIXTY-EIGHTH consecutive green sweep** (concurrent with worker's own guard; envelope normal). |
+| 7 | E2E-001 | ✅ WINDOW 260-265 SATISFIED (T260) | Not due — satisfied at Tick 260 (46/46). Next window 266-271 runs at Tick 266. TEST-REAL-001 (two-context) is pending — WIRE-001 now lands first, so the RED test can be written at any point. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1394 edges / 220 files (direct `~/.cargo/bin/hilo graph stats` — binary probe; matches T250-T262). |
+| 9 | TODO/FIXME | ✅ pre-existing only | FE BUG-024 markers: yjsProvider.ts 14 → **5** (9 connect/pushUpdate markers removed by WIRE-001; presence/share markers remain for WIRE-004) + ShareDialog.tsx 1 = 6 total FE. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 32/32 COMPLETE, 0 ACTIVE | 31 prior + WIRE-001 = 32 ● complete, 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (31.10 MB scanned, 661 commits). |
+| 12 | Board-v2 | ✅ EVENTS 95-97 APPENDED (WIRE-001) | JSONL canonical: **106 complete + 29 pending = 135** (WIRE-001 → complete; 8 Bane-directive tasks created 08-08: WIRE-002..005 + TEST-REAL-001..003 remain pending). Events: 95 task_dispatched, 96 task_completed, 97 audit (tick 263) — MAX(id)=97. WIRE-001 row: status=complete, commit_hash=9360fef, guard PASS, judge PASS (ee08f17b). Header ticks_total 262→**263**, last_commit=**9360fef** (code commit HEAD pre-board-commit), ticks_idle=0, last_tick UTC. board.db/parquet stale caches (untracked, JSONL canonical per Bane 08-07). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session stack canopyd :8091 up — left untouched per T258-T261 precedent. |
+| 15 | CI (live) | ✅ STREAK 43 CONFIRMED | gh run list: Bane directive push run 31285783835 success + T263 code push (9360fef) — streak 43 held. This tick's final push = T263 board probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (164 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/262 (f15b9be7) present — contiguous, no backfill. Wrote /ticks/263 (**4a7c1f4e**) + status (**45eaee72**) — verified by exact id-recall (T178 pattern). Status key refreshed (was lagging at 243). |
+| 18 | Off-by-One | ✅ HEALTHY + SUBMIT | :8766 health 200 (uptime 8m17s at check). Submitted problem class `typescript-golang-phantom-stub-wiring` (sub_…). |
+
+### Actions this tick
+
+- **WIRE-001 delivered** (Bane directive 08-08 anti-phantom wiring): dispatched kimi-for-coding worker (PID 2700559, prompt /tmp/canopy-t263-wire001-prompt.txt). Worker wired: frontend EventSource → tree-scoped /api/v1/trees/{tree_id}/events (withCredentials), pushUpdate → POST /trees/{tree_id}/sync (binary body), backend POST handler HandlePushUpdate + engine.ApplyYjsUpdate (base64 yjs_update event append + SSE broadcast), SSE payload mapping snake_case→Yjs fields, +4 vitest tests + Go engine tests. Worker hit 75/75 iter budget AFTER guard passed (worker-complete-no-commit); foreman independently verified (build/vet, sync+sse tests, vitest 471/471, tsc, guard PASS) and committed **9360fef** with co-author.
+- **Judge PASS 6/6** — gitreins task complete WIRE-001 → verdict ee08f17b (all criteria verified file:line: EventSource connect, fetch pushUpdate, POST / sync handler, base64 broadcast, SSE apply/ignore tests, full suites green).
+- Board events 95-97 appended; WIRE-001 row complete; header ticks_total 263. Code commit pushed (2f54cb8..9360fef).
+- DuckBrain /ticks/263 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Bane test session detected + left untouched: canopyd :8091 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+- Off-by-One: health ok + submit (phantom-stub wiring class — E2E green while real wiring stubbed is a recurring fleet failure mode).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 260-265 SATISFIED at Tick 260 — next window 266-271 (runs at Tick 266).
+- Bane directive 08-08 (7 remaining): WIRE-002 (P0, context manifest panel — endpoint exists, zero UI uses it), WIRE-003 (P1, Hermes session ingestion), WIRE-004 (P2, share+presence — presence stubs remain in yjsProvider), WIRE-005 (P2, backend label from /health), TEST-REAL-001 (P0, two-context E2E — writeable now WIRE-001 landed), TEST-REAL-002 (P1, composer→canvas regression), TEST-REAL-003 (P1, context UI test, needs WIRE-002).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 164 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 106/135 board tasks complete. WIRE-001 realtime sync DELIVERED (9360fef, judge 6/6). Full -short sweep **68 consecutive green**. E2E-001 window 260-265 SATISFIED at Tick 260 (46/46). CI green streak 43. Scheduler :9090 healthy (cooldown 900, file+API agree). PG :5437 healthy. Vitest 471/471. GitReins 32/32, 0 active. Board events MAX(id)=97. DuckBrain contiguous through 263. Bane test session live (canopyd :8091; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (264):** WIRE-002 (P0, context manifest panel — endpoint /api/v1/context/{node_id} exists, wire the UI) or TEST-REAL-001 (P0, two-context E2E now writable). CI streak monitoring (T263 board push probe). E2E window 260-265 SATISFIED — no run until 266-271 (Tick 266).

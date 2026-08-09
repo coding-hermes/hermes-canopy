@@ -606,3 +606,20 @@ tasks:
   status: complete
   created_at: '2026-08-08T02:08:27.144009+00:00'
   completed_at: '2026-08-08T02:17:06.599371+00:00'
+- id: WIRE-001
+  title: 'Wire real-time sync: backend /api/v1/events SSE + frontend EventSource +
+    Yjs pushUpdate (de-stub BUG-024)'
+  criteria:
+  - "frontend/src/stores/yjsProvider.ts connect() opens a real EventSource to /api/v1/trees/{tree_id}/events\
+    \ \u2014 no BUG-024 skip in the connect path"
+  - "yjsProvider.ts pushUpdate() POSTs the Yjs update to /trees/{tree_id}/sync via\
+    \ fetch \u2014 no 'coming soon' stub remains for the push path"
+  - internal/handler/sync_handler.go registers POST / (HandlePushUpdate) calling engine.ApplyYjsUpdate
+  - internal/sync/engine.go ApplyYjsUpdate persists the base64 update as a yjs_update
+    event and broadcasts it via the SSE hub
+  - frontend/src/stores/__tests__/yjsProvider.test.ts proves an SSE message for the
+    tree applies to the Yjs doc and a foreign-tree event is ignored
+  - vitest full suite passes including the new SSE tests and npx tsc --noEmit is clean
+  status: complete
+  created_at: '2026-08-09T00:37:31.258815+00:00'
+  completed_at: '2026-08-09T00:37:47.594782+00:00'
