@@ -7751,3 +7751,8 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 111/135 board tasks complete. WIRE-003 Hermes session ingestion FINALIZED (8b70d5e, judge 6/6 6d7f0597) — last P1 backend directive CLOSED; orphaned tick-269 fire's board state committed + pushed. Full -short sweep **75 consecutive green** (16/16 pkgs). Vitest 522/522, integration 49/49 (9 files). GitReins 37/37, 0 active. Hilo 1427/227. CI streak 8. Cooldown 900 file+API agree. Board events MAX(id)=110. DuckBrain contiguous through 270. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (271):** WIRE-004 (P2, share+presence) or WIRE-005 (P2, backend label from /health) — last two directive tasks. CI streak monitoring (T269/T270 push probe). E2E next window 272-277 at Tick 272.
+### CI follow-up (same tick)
+
+- Initial push (8b70d5e + f6a460a) → run 31298186670 **FAILURE (lint only)**: golangci-lint v2.12.2 errcheck flagged 2 unchecked `rows.Close()` in internal/session/reader.go:116,157 (new code; the 15 pre-existing `defer rows.Close()` in db/plugin repos are scoped out by CI new-issue mode — not this commit's problem). Local `gitreins guard` go_lint (go vet) does NOT include errcheck — CI is the only gate that catches this class.
+- Fixed **bc8764a** (blank-assignment defer pattern, build/vet/gofmt clean, session tests ok) → run 31298405830 **SUCCESS** (1m15s). Push streak restored.
+- Net: Tick 270 = 2 commits (8b70d5e WIRE-003 code + f6a460a board + bc8764a lint fix), all pushed; CI latest run green.
