@@ -22,6 +22,7 @@ import MessageComposer, {
 import PresenceBar from '../components/PresenceBar.tsx';
 import CollaborativeCursors from '../components/CollaborativeCursors.tsx';
 import ShareDialog from '../components/ShareDialog.tsx';
+import ContextManifestPanel from '../components/ContextManifestPanel.tsx';
 import {
   createTreeDoc,
   bindIndexedDB,
@@ -428,6 +429,15 @@ export default function TreeView() {
           }
         />
       </div>
+
+      {/*
+        Context manifest inspector (WIRE-002) — what the compiler would
+        actually send for the selected node, its token cost against the
+        budget, and what it dropped. Sits between the canvas and the
+        composer: it describes the node you are about to reply to.
+        Renders nothing when there is no selection.
+      */}
+      <ContextManifestPanel nodeId={selectedNodeId} />
 
       {/* Message composer — bottom-docked, disabled for viewers */}
       <MessageComposer
