@@ -9,8 +9,8 @@ Every Card is a graph node with structured data.
 
 ```bash
 # Prerequisites
-go 1.24+
-PostgreSQL 17+
+go 1.25+
+PostgreSQL 16+
 Node.js 22+ (for frontend development)
 
 # Clone and build
@@ -23,7 +23,7 @@ make build
 # DB_PORT works whether you use the standalone container or `docker compose up`.
 docker run -d --name canopy-pg \
   -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
-  -e POSTGRES_DB=canopy -p 5437:5432 postgres:17
+  -e POSTGRES_DB=canopy -p 5437:5432 postgres:16
 
 # Run (dev: backend on :8091 to match the Vite dev proxy target)
 DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
@@ -244,8 +244,8 @@ METRICS_ENABLED=true \
 
 ### Prerequisites
 
-- Go 1.24+
-- PostgreSQL 17+ (Docker recommended)
+- Go 1.25+
+- PostgreSQL 16+ (Docker recommended)
 - Node.js 22+ (for frontend development)
 - Make
 

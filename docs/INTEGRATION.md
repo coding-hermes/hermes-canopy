@@ -9,9 +9,9 @@ and every Card is a graph node with structured data.
 
 | Tool       | Minimum Version | Notes                                    |
 |------------|-----------------|------------------------------------------|
-| Go         | 1.24+           | `go version` to check                    |
+| Go         | 1.25+           | `go version` to check                    |
 | Node.js    | 22+             | `node --version` to check                |
-| PostgreSQL | 17+             | Docker/Podman recommended for dev        |
+| PostgreSQL | 16+             | Docker/Podman recommended for dev        |
 | Make       | any             | `make --version` to check                |
 
 ## 2. Docker Compose (Quick Start)
