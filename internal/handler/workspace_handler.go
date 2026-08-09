@@ -185,7 +185,7 @@ func (h *WorkspaceHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sender: explicit body value wins; fall back to authenticated user.
-	senderID := uuid.Nil
+	var senderID uuid.UUID
 	if req.SenderID != nil {
 		senderID = *req.SenderID
 	} else {
