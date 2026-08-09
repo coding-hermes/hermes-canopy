@@ -841,3 +841,47 @@ tasks:
   status: complete
   created_at: '2026-08-09T11:40:02.737470+00:00'
   completed_at: '2026-08-09T11:41:45.649519+00:00'
+- id: VREG-002
+  title: TopicsRail must prefer the seeded demo tree by label (VREG-001 parity)
+  criteria:
+  - frontend/src/components/TopicsRail.tsx resolveTree fallback prefers a tree whose
+    title starts with 'UI-02 Rail Demo' when no URL param or stored tree id exists
+    (fetches /trees?limit=50), falling back to trees[0]
+  - "The TopicsRail fallback no longer uses /trees?limit=1 + trees[0] unconditionally\
+    \ (the pre-fix pattern) \u2014 git diff of 9e80c69 shows the label-preference\
+    \ block"
+  - docs/screenshots/visual-regression/golden/mockup-{1..4}-*.png and pairs were refreshed
+    via UPDATE_VISUAL_GOLDENS=1 for the 9-item nav
+  - E2E-001 window 278-283 integration suite passes 49/49 including all 4 visual-regression
+    tests
+  status: complete
+  created_at: '2026-08-09T12:14:56.302653+00:00'
+  completed_at: '2026-08-09T12:15:07.093140+00:00'
+- id: SPEC-023-UI-004
+  title: 'PR review panel: review surface fed by workspace channel events (SPEC-023,
+    helix UI-004)'
+  criteria:
+  - "internal/handler/review_handler.go exposes GET /api/v1/reviews returning a sorted\
+    \ JSON array of >=3 seeded reviews (risk_score, blast_radius, verdict, status\
+    \ fields in snake_case), GET /api/v1/reviews/{id} returning full detail, 404 REVIEW_NOT_FOUND\
+    \ for unknown ids, and 400 INVALID_REVIEW_ID for malformed ids \u2014 review_handler_test.go\
+    \ covers list/detail/404/400"
+  - "POST /api/v1/reviews/{pr}/trigger creates or updates a review record deterministically\
+    \ (same input -> same verdict, e.g. hash-derived) and broadcasts a review_event\
+    \ on the SSE hub \u2014 covered by a test"
+  - internal/server/server.go mounts the review handler next to /agents (chi sub-router,
+    /api/v1/reviews); go build ./... and go vet ./... pass; golangci-lint v2.12.2
+    on internal/handler + internal/server reports 0 issues
+  - frontend/src/pages/ReviewPage.tsx renders loading/error/empty/filled states, a
+    review rail listing seeded reviews, and a detail panel with RiskGauge + BlastRadiusViz
+    + ChimeraVerdict components (frontend/src/components/review/); frontend/src/hooks/useReviewFeed.ts
+    subscribes to a workspace channel SSE feed and surfaces live review events; types/review.ts
+    mirrors the snake_case wire contract
+  - 'frontend/src/pages/__tests__/ReviewPage.test.tsx passes (9 tests) and the full
+    frontend gate is green: vitest 562/562, tsc --noEmit clean, oxlint 0 errors, npm
+    run build passes'
+  - frontend/src/App.tsx registers the /reviews route and a nav item (lucide icon)
+    alongside /workspace and /agents
+  status: complete
+  created_at: '2026-08-09T12:30:05.533867+00:00'
+  completed_at: '2026-08-09T12:30:12.269833+00:00'
