@@ -8169,3 +8169,28 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 122/144 board tasks complete. SPEC-023 cross-project surface COMPLETE (UI-001→UI-004, all delivered T275-278). Full -short sweep **86 consecutive green** (all pkgs). Vitest 562/562, integration 49/49 (window 278-283 SATISFIED). GitReins 44/44, 0 active. Hilo 1612/257. CI 5/5 SUCCESS. Cooldown 900 file+API agree. Board events MAX(id)=136. DuckBrain contiguous through 279. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (280):** No P1 feature work remains. INFRA-001 (scheduler-level) or post-MVP backlog review; CI streak monitoring (T279 push probe). E2E next window 284-289 at Tick 284.
+## Tick 280 — 2026-08-09 22:50 UTC (scheduler tick hermes-canopy-2026-08-09-17-37-20, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE — BUG-034 dispatched, verified, judged, complete (123/152 complete, 29 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 152 rows (123 complete / 29 pending, 0 in_progress). New P1s from Bane directive 08-09: BUG-034/035, WIRE-006 (+UI-REL-001, PAG-001), stand-in PM GAP-018/019/020. INFRA-001 P0 scheduler-level (not worker-dispatchable) |
+| Stack | canopyd :8091 + vite :5173 LIVE (Bane test session, left untouched — vite.config.ts TEMP allowedHosts still uncommitted by design) |
+| Scheduler | cooldown_s=900 fleet.toml + API agree (no PUT). No sibling canopy tick in flight |
+| Workers | 1 dispatched this tick: glm-5.2 @ zai-glm |
+| DuckBrain | /ticks/279 contiguous; status key refreshed pre-commit |
+
+**Dispatched: BUG-034** (P1, cpx 2, no deps) — set_content_hash trigger `content::bytea` crash (22P02) on real session content with backslash/`\x` escapes (found by WIRE-003 real-data run, session 20260606_155331_5054b7f3).
+
+- Worker: glm-5.2 @ zai-glm, commit **221c855** — `fix: use convert_to for content_hash trigger — ::bytea cast crashes on \x escapes (22P02). Addresses BUG-034.`
+- Files: `migrations/000025_node_content_hash_utf8.up.sql` (+12, convert_to(content,'UTF8')), `.down.sql` (+9), `internal/db/content_hash_test.go` (+67, regression test)
+- Verification: regression test `TestContentHashTrigger_BackslashEscape` — foreman independently re-ran: PASS 4.43s. Full internal/db suite green (`-p 1`, 95.3s per worker). go build/vet clean. gitreins guard PASS (secrets/build/lint/tests).
+- Judge: `gitreins task complete BUG-034` → **Overall PASS**, verdict 325a44ea, all 4 criteria verified (migration rewrites function, real-failing-content test, build/vet clean, guard PASS).
+- Board row updated: status complete, commit_hash 221c855, exit_code 0, guard PASS, judge PASS.
+
+**Deferred:** BUG-035 (P1, no deps — import idempotency/watermark, next natural pick), WIRE-006 (P1, cpx 6, deps BUG-035 — association layer), GAP-018 (P1 docs/legal), GAP-019/020 (P2 docs), PAG-001 (P2), UI-REL-001 (P2, deps WIRE-006), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** /ticks/280 + /project/hermes-canopy/status written + id-recall verified BEFORE board entry (T183 ordering).
+
+**Next tick:** BUG-035 (import idempotency — unblocks WIRE-006 association layer, Bane directive 08-09).
