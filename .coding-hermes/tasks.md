@@ -7658,3 +7658,50 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 109/135 board tasks complete. TEST-REAL-002 composer→canvas E2E regression DELIVERED (6d246a5, judge 7/7 bc29f316) — BUG-032-class anti-phantom proof: composer → POST → Yjs mirror → canvas node, zero mocks. Full -short sweep **72 consecutive green**. Vitest 522/522, integration 48/48 (8 files). GitReins 35/35, 0 active. Hilo 1427/227. CI streak 6. Cooldown 900 file+API agree. Board events MAX(id)=105. DuckBrain contiguous through 267. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (268):** WIRE-003 (P1, Hermes session ingestion) or TEST-REAL-003 (P1, context UI test — unblocked) per directive program. CI streak monitoring (T267 board push probe). E2E next window 272-277 at Tick 272.
+## Tick 268 — 2026-08-09 04:52 UTC (scheduler tick hermes-canopy-2026-08-08-23-31-06, DeepSeek V4 Flash)
+
+**Verdict: TEST-REAL-003 DELIVERED** — fifth productive tick of Bane's 08-08 anti-phantom wiring program. Context manifest UI E2E proves WIRE-002's panel renders the token budget + ancestry chain on real canvas node selection (canvas click → /api/v1/context/{node_id} → token usage + ancestry sections), zero mocks, no reload. 73rd consecutive green -short sweep.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Tick start: HEAD b8fa825 (T267 board), 0 ahead of origin/master. `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (only Bane's canopyd :8091 + vite :5173 live session). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 268'` exit 1 at start. No prior fire. |
+| 3 | Build+vet | ✅ CLEAN | `gitreins guard` (full mode): go_build ok, go_lint ok, Tier 1 PASS. |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0. |
+| 5 | Vitest | ✅ 522/522 | 22 files, 522 passed — unchanged (test-only tick). |
+| 6 | Go tests | ✅ FULL SWEEP PASS (73rd) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 90.85s / handler 87.02s / plugin ~15s / sse ~1.3s / testutil ~4.2s). SEVENTY-THIRD consecutive green sweep (background concurrent with worker, T194 pattern). |
+| 7 | E2E-001 | ✅ WINDOW 266-271 SATISFIED (T266) | Not due — satisfied at Tick 266 (47/47). Next window 272-277 runs at Tick 272. TEST-REAL-003 (context manifest) now WRITTEN and passing — anti-phantom regression for WIRE-002. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1427 edges / 227 files (direct `~/.cargo/bin/hilo graph stats` — matches T266/T267). |
+| 9 | TODO/FIXME | ✅ pre-existing only | FE: ShareDialog.tsx 1 TODO(BUG-024) + yjsProvider.ts 6 WIRE-004-labeled presence/share refs. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 36/36 COMPLETE, 0 ACTIVE | 35 prior + TEST-REAL-003 = 36 ● complete, 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (678 commits, 31.44 MB scanned). |
+| 12 | Board-v2 | ✅ EVENTS 106-107 APPENDED (TEST-REAL-003) | JSONL canonical: **110 complete + 25 pending = 135** (TEST-REAL-003 → complete; 3 directive tasks remain). Events: 106 task_completed, 107 audit (tick 268) — MAX(id)=107. TEST-REAL-003 row: status=complete, worker_status=complete, commit_hash=1534879, guard PASS, judge PASS 7/7 (5642f814). Header ticks_total 267→**268**, last_commit=**1534879** (code commit HEAD pre-board-commit), ticks_idle=0, last_tick UTC. board.db/parquet stale caches (untracked, JSONL canonical per Bane 08-07). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + :8080 + vite :5173 up — left untouched per T258-T267 precedent. |
+| 15 | CI (live) | ✅ STREAK 7 CONFIRMED | gh run list: T267 board push 31294743063 SUCCESS + T266 31293434834 + T265 31291329258 + T264 31290442009 + T263 corrections + count correction = 7 consecutive SUCCESS. This tick's push = T268 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/267 (fc5a47fa) present — contiguous, no backfill. Wrote /ticks/268 (**83e089ba**) + status (**91b7afd1**) — verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 4h22m). Routine e2e-stack-run class — no new problem to submit (T265-T267 precedent). |
+
+### Actions this tick
+
+- **TEST-REAL-003 delivered** (Bane directive 08-08 anti-phantom wiring): dispatched delegate worker with prompt /tmp/canopy-t268-testreal003-prompt.txt. Worker wrote `frontend/tests/context-manifest.test.ts` (189 lines): fresh uniquely-named tree via real REST API, real canvas node click (`.react-flow__node` with root text → onSelectionChange), `expect.poll` (20s) on `[data-testid="context-token-usage"]` matching `/\d[\d,]* \/ [\d,]+ tokens/` + meter role/aria-valuemax=8000, toggle open → `context-manifest-detail` + `context-section-ancestry` containing the unique root text — proving canvas click → /api/v1/context/{node_id} → token budget + ancestry render with zero mocks, no reload. **Reused Bane's live stack** (canopyd :8091 + vite :5173, T266 precedent) — no rebuild, no restart, left running.
+- **Foreman re-verified independently** (worker claims are self-reports): isolated run **1/1 passed (1.5s)** + full integration suite **49/49 passed (9 files; was 48/48 + 1)** + unit 522/522. Verified git scope: only the new test file (zero src/Go changes). Test file read line-by-line: correct design, no mocks, matches composer-to-canvas template.
+- **Judge PASS 7/7** — gitreins task complete TEST-REAL-003 → verdict 5642f814 (all 7 criteria: sole change 1 file/189 lines, real REST tree creation, real canvas click, token-usage format assertion, ancestry content assertion, zero mocks/no reload, isolated + full suite pass). Judge's own tier1 run showed a transient two-context-sync flake (SSE timing, passes in isolation) — not a regression; foreman's own full-suite run was 49/49 clean.
+- Code committed **1534879** (+189, 1 test file) with co-author; board events 106-107 appended; TEST-REAL-003 row complete; header ticks_total 268.
+- **73rd consecutive green -short sweep** ran concurrently in background (T194 pattern): 15/15 pkgs exit 0 (db 90.9s / handler 87.0s / plugin 15.0s / sse 1.3s / testutil 4.2s) — within the 300s per-package cap.
+- Board events appended + DuckBrain /ticks/268 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Bane test session detected + left untouched: canopyd :8091/:8080 + vite :5173 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 266-271 SATISFIED at Tick 266 — next window 272-277 (runs at Tick 272).
+- Bane directive 08-08 (3 remaining): WIRE-003 (P1, Hermes session ingestion), WIRE-004 (P2, share+presence — presence stubs remain in yjsProvider), WIRE-005 (P2, backend label from /health).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 110/135 board tasks complete. TEST-REAL-003 context-manifest E2E DELIVERED (1534879, judge 7/7 5642f814) — anti-phantom proof: canvas node click → context manifest panel → token budget + ancestry chain render, zero mocks. Full -short sweep **73 consecutive green**. Vitest 522/522, integration 49/49 (9 files). GitReins 36/36, 0 active. Hilo 1427/227. CI streak 7. Cooldown 900 file+API agree. Board events MAX(id)=107. DuckBrain contiguous through 268. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (269):** WIRE-003 (P1, Hermes session ingestion — last P1 backend directive) per directive program. CI streak monitoring (T268 board push probe). E2E next window 272-277 at Tick 272.
