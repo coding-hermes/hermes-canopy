@@ -150,6 +150,12 @@ func New(
 		// history timeline. In-memory registry; no DB for MVP.
 		r.Mount("/agents", handler.NewAgentHandler().Routes())
 
+		// PR review panel (SPEC-023 §2 item 2, §4, §5) — review list +
+		// detail incl. blast radius + Chimera verdict, and a trigger
+		// endpoint that broadcasts review events on the SSE hub.
+		// In-memory registry; no DB for MVP.
+		r.Mount("/reviews", handler.NewReviewHandler(sseHub).Routes())
+
 		// Export/import endpoints (GAP-003).
 		// Registered directly (not via Mount) because /trees is already
 		// occupied by the TreeHandler router above.
