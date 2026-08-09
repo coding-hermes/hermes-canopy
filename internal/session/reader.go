@@ -113,7 +113,7 @@ func (r *Reader) ListSessions(ctx context.Context) ([]Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session: list sessions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Session
 	for rows.Next() {
@@ -154,7 +154,7 @@ func (r *Reader) ListMessages(ctx context.Context, sessionID string) ([]Message,
 	if err != nil {
 		return nil, fmt.Errorf("session: list messages for %s: %w", sessionID, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Message
 	for rows.Next() {
