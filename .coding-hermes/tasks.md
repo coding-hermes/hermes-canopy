@@ -7756,3 +7756,53 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 - Initial push (8b70d5e + f6a460a) → run 31298186670 **FAILURE (lint only)**: golangci-lint v2.12.2 errcheck flagged 2 unchecked `rows.Close()` in internal/session/reader.go:116,157 (new code; the 15 pre-existing `defer rows.Close()` in db/plugin repos are scoped out by CI new-issue mode — not this commit's problem). Local `gitreins guard` go_lint (go vet) does NOT include errcheck — CI is the only gate that catches this class.
 - Fixed **bc8764a** (blank-assignment defer pattern, build/vet/gofmt clean, session tests ok) → run 31298405830 **SUCCESS** (1m15s). Push streak restored.
 - Net: Tick 270 = 2 commits (8b70d5e WIRE-003 code + f6a460a board + bc8764a lint fix), all pushed; CI latest run green.
+## Tick 271 — 2026-08-09 06:58 UTC (scheduler tick hermes-canopy-2026-08-09-01-46-08, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE (WIRE-005)** — sixth directive task of Bane's 08-08 anti-phantom wiring program delivered. The 'Backend: localhost:8080' header label was hardcoded (dead port, phantom); it now derives live status from GET /health. One directive task remains (WIRE-004).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | Tick start: HEAD 450ce15 in sync with origin/master. `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commit). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (9router vitest procs verified foreign; canopyd :8091 + vite :5173 = Bane's live stack). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 271'` exit 1 at start; no sibling commits mid-tick. |
+| 3 | Build+vet | ✅ CLEAN (WORKER CLAIM + FOREMAN GUARD) | Worker: `npx tsc --noEmit` exit 0. Guard: `timeout 540 gitreins guard` Tier 1 PASS (test mode: full) — secrets/go_build/go_lint/go_tests all ✓. |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0 (independently re-run by foreman). |
+| 5 | Vitest | ✅ 526/526 | 23 files, 526 passed (was 522, +4 new AppHeader tests). Foreman independently re-ran: `Test Files 23 passed (23) / Tests 526 passed (526)` in 2.79s. |
+| 6 | Go tests | ✅ FULL SWEEP PASS (76th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — **16/16 pkgs**: db 71.9s / handler 91.7s / plugin 13.5s / session 0.75s / sse 1.23s / testutil 3.5s. SEVENTY-SIXTH consecutive green sweep (ran in background concurrent with worker — T194 variant). |
+| 7 | E2E-001 | ✅ WINDOW 266-271 SATISFIED (T266) | Not due — satisfied at Tick 266 (47/47). Next window 272-277 runs at Tick 272. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1427 edges / 227 files (`~/.cargo/bin/hilo graph stats` — matches T266-T270). |
+| 9 | TODO/FIXME | ✅ pre-existing only | FE: ShareDialog.tsx 1 TODO(BUG-024) + yjsProvider.ts 6 WIRE-004-labeled presence/share refs. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 38/38 COMPLETE, 0 ACTIVE | 37 prior + WIRE-005 = 38 ● complete, 0 pending / 0 in_progress. WIRE-005 record folded into this commit. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (688 commits, 31.57 MB scanned). |
+| 12 | Board-v2 | ✅ EVENTS 111-112 + HEADER @271 | JSONL canonical: **112 complete + 27 pending = 139** (WIRE-005 → complete; WIRE-004 is the last directive task). Events: 111 task_completed + 112 audit (tick 271) — MAX(id)=112. WIRE-005 row: status=complete, worker_status=complete, commit_hash=589925b, guard PASS, judge PASS 7/7 (verdict b97348c4). Header ticks_total 270→**271**, last_commit=**589925b**, ticks_idle=0. board.db/parquet stale caches (untracked, JSONL canonical). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). |
+| 15 | CI (live) | ✅ STREAK 9 CONFIRMED | gh run list: T270 follow-up push 31298530732 SUCCESS (2m52s) + 31298405830 SUCCESS + T268 31295372443 + T267 31294743063 + T266 31293434834 + T265 31291329258 + T264 31290442009 + 2 prior = 9 consecutive SUCCESS. This tick's push (589925b) = new probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (non-blocking). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/270 present (df1b6341 — contiguity intact). Wrote /ticks/271 (**427906b8**) + status refresh (**d4112924**) — both verified by exact id-recall (T178 pattern). Status key lagged to 243 pre-write (expected — refreshed unconditionally). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 6h33m). Routine class — no new problem to submit (T265-T270 precedent). |
+
+### Actions this tick
+
+- **WIRE-005 DELIVERED (589925b)** — live backend status pill. Worker: kimi-for-coding (Kimi K2.7, flat-rate), ~5 min, 0 retries, clean report. Foreman independently verified (tsc + vitest re-run + diff review) before guard/judge.
+  - `frontend/src/components/AppHeader.tsx`: removed all 3 hardcoded `Backend: localhost:8080` strings (title + visible + sr-only). Added `HealthResponse`/`HealthState` types, `HEALTH_POLL_MS = 15_000`, mount-time useEffect polling `GET /health` (interval cleared on unmount, cancelled flag). Healthy → `Backend: canopyd` + green `bg-status-success` dot + title/aria-label 'Backend is healthy'; unhealthy (non-ok / fetch reject / unexpected status) → `Backend: unreachable` + red `bg-status-danger` dot + 'Backend is unreachable'. Kept `data-testid="backend-status"`.
+  - `frontend/vite.config.ts`: added `/health` dev-proxy entry → `API_URL` (http://localhost:8091), `changeOrigin: true`, NO JWT (route is public — server.go:87,226-230 returns `{"status":"ok","service":"canopyd"}`). ⚠️ Staged ONLY the /health hunk via scripted `git add -p` — Bane's TEMP `allowedHosts` line remains uncommitted (repo convention, T268).
+  - `frontend/src/components/__tests__/AppHeader.test.tsx` (new, 161 lines, 4 tests): healthy → green + 'Backend: canopyd' + title; non-ok (503) → danger + unreachable; rejected fetch → unreachable; unexpected status field → unreachable. Mirrors ContextManifestPanel.test.tsx conventions (createRoot harness, act, fetch stub).
+- **Judge PASS 7/7 (verdict b97348c4)** — all criteria verified with file:line evidence: 0 hardcoded 'localhost:8080' matches (grep exit 1), live /health fetch with ok-status branch, danger-dot on non-ok/reject, testid preserved, /health proxy entry, 4-case test file, tsc + 526/526 vitest.
+- **76th consecutive green -short sweep** (16/16 pkgs exit 0: db 71.9s / handler 91.7s / plugin 13.5s / session 0.75s / sse 1.23s / testutil 3.5s) — background process ran concurrently with the worker (T194 variant), zero contention.
+- Events 111/112 appended via append_board_task_completed.py; header ticks_total 271, last_commit 589925b.
+- DuckBrain /ticks/271 + status refresh written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Commit: 589925b (WIRE-005 code, 3 files, 215 insertions) + board finalization commit (tasks.md + board JSONL + .gitreins/tasks.yaml) — both pushed to origin/master.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 266-271 SATISFIED at Tick 266 — next window 272-277 (runs at Tick 272).
+- Bane directive 08-08 (1 remaining): WIRE-004 (P2, share+presence — presence stubs remain in yjsProvider).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- GAP-014/015/016 docs-drift tasks (P2/P3) — stand-in PM gate additions, non-blocking.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 112/139 board tasks complete. WIRE-005 DELIVERED (589925b, judge 7/7 b97348c4) — 6th directive task of Bane 08-08 program closed; WIRE-004 is the last. Full -short sweep **76 consecutive green** (16/16 pkgs). Vitest 526/526, integration 49/49 (9 files). GitReins 38/38, 0 active. Hilo 1427/227. CI streak 9. Cooldown 900 file+API agree. Board events MAX(id)=112. DuckBrain contiguous through 271. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (272):** WIRE-004 (P2, share+presence) — last directive task — OR E2E-001 window 272-277 (runs at Tick 272, first tick of window). CI streak monitoring (T271 push probe).
