@@ -8194,3 +8194,31 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/280 + /project/hermes-canopy/status written + id-recall verified BEFORE board entry (T183 ordering).
 
 **Next tick:** BUG-035 (import idempotency — unblocks WIRE-006 association layer, Bane directive 08-09).
+
+## Tick 282 — 2026-08-09 23:33 UTC (scheduler tick hermes-canopy-2026-08-09-18-25-44, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE (steward) — BUG-035 in-flight worker completed, verified, judged (124/152 complete, 28 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 152 rows (124 complete / 28 pending, 0 in_progress). BUG-035 → complete (worker_status done, exit_code 0, commit c33624e, judge PASS b22fb566) |
+| Stack | canopyd :8091 + vite :5173 LIVE (Bane test session, left untouched — vite.config.ts TEMP allowedHosts still uncommitted by design) |
+| Scheduler | cooldown_s=900 live API (no PUT; ops-ref 7200 note stale vs live truth). No sibling canopy tick in flight (HEAD = T281 board commit at start) |
+| Workers | 0 dispatched — steward tick: T281's BUG-035 worker (glm-5.2 @ zai-glm, PID 3160908) still in flight at tick start; committed c33624e at 18:26 local, exited cleanly |
+| CI | Green 5/5 recent runs (org Actions block fully resolved — runs created for T280/T281 pushes) |
+| DuckBrain | /ticks/280 + /ticks/281 were SILENTLY MISSING (T280/T281 writes never landed) — backfilled; /ticks/282 + status written, all 4 id-verified on disk before board entry |
+
+**Completed: BUG-035** (P1, cpx 2) — WIRE-003 session import idempotency: crashed/partial runs left no watermark → re-run duplicates trees. Found by REAL data run of WIRE-003 (48 trees imported pre-fix, child nodes carry session_id metadata).
+
+- Worker: glm-5.2 @ zai-glm (dispatched T281, PID 3160908), commit **c33624e** — `fix: per-session watermark + session_id dedup for session import — re-runs no longer duplicate trees after crashes. Addresses BUG-035.` (4 files, +323/-26)
+- Implementation: per-session `store.Save(lastImported)` inside the import loop (crash re-imports at most the in-flight session); `SessionSeenChecker.ImportedBefore` dedup via `EXISTS(nodes.metadata->>'session_id' = $1 AND deleted_at IS NULL)` OR `trees.metadata` (covers 48 legacy trees); `CreateTreeParams.Metadata json.RawMessage` threaded through service → `trees.metadata` (repo already supported it); `SkippedDuplicates` counter in ImportSummary incl. dry-run
+- Files: `internal/session/importer.go` (+80), `internal/session/importer_test.go` (+218 — TestImporterCrashRecovery/DedupSkip/DedupDryRun/TreeMetadataSessionID), `internal/service/tree_service.go` (+47), `cmd/canopyd/session_cmd.go` (+4)
+- Foreman re-verification (independent): go build/vet clean; `go test ./internal/session/...` 15 tests PASS 1.493s; `timeout 540 gitreins guard` → Tier 1 full PASS exit 0
+- Judge: `gitreins task complete BUG-035` → **Overall PASS**, verdict b22fb566, 5/5 criteria with per-criterion line evidence; record folded into .gitreins/tasks.yaml (chore commit, BUG-034 pattern)
+- Board events: 145 task_completed + 146 audit appended (events.jsonl, ids contiguous from 144)
+
+**Deferred:** WIRE-006 (P1, cpx 6, **unblocked now** — association layer, Bane directive 08-09, next natural pick), UI-REL-001 (P2, deps WIRE-006), PAG-001 (P2, cursor pagination 3,200+ trees), GAP-018 (P1 docs/legal — license MIT-vs-Proprietary contradiction: HUMAN-GATED decision, do not dispatch), GAP-019/020 (P2 docs), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** backfilled /ticks/280 (BUG-034 complete) + /ticks/281 (BUG-035 dispatch); wrote /ticks/282 + /project/hermes-canopy/status; all verified in current.jsonl BEFORE board entry (T183 ordering; ids 2ba2e19d/5cff6deb/9f167e96/1f86cbf7).
+
+**Next tick:** WIRE-006 (association layer — parent_session_id 305 rows + async_delegations 28 rows exist in source; unblocks UI-REL-001; Bane directive 08-09(2)).
