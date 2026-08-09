@@ -161,8 +161,14 @@ export default function TopicsRail() {
     const stored = readStoredTreeId();
     if (stored) return { id: stored, explicit: true };
 
-    const data = await apiGet<ListTreesResponse>('/trees?limit=1');
-    return { id: data.trees[0]?.id ?? '', explicit: false };
+    // Fallback: the API returns trees newest-first, so a naive trees[0]
+    // picks whatever tree was created LAST — E2E test trees (T265/T267/
+    // T268) top the list and carry no topics, rendering the rail empty.
+    // Prefer the seeded demo tree by label (VREG-001 parity with the
+    // nodes/topics page selectors); fall back to trees[0] when absent.
+    const data = await apiGet<ListTreesResponse>('/trees?limit=50');
+    const demo = data.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'));
+    return { id: (demo ?? data.trees[0])?.id ?? '', explicit: false };
   }, [treeParam]);
 
   const load = useCallback(async () => {
