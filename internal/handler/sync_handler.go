@@ -86,7 +86,7 @@ func (h *SyncHandler) HandlePushUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "could not read request body")
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	actorID := UserIDFromContext(r.Context())
 	if err := h.engine.ApplyYjsUpdate(r.Context(), treeID, actorID, body); err != nil {
