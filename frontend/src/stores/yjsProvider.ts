@@ -9,7 +9,7 @@
  *   - Local user presence (cursor, viewport, permission)
  *   - Remote user presence from SSE events
  *
- * The SSE endpoint is /api/v1/events (SPEC-API-01).
+ * The SSE endpoint is /api/v1/trees/{tree_id}/events (tree-scoped, auth-gated).
  * One provider instance per tree.
  */
 
@@ -43,12 +43,15 @@ export interface YjsProviderOptions {
   onPresenceChange?: PresenceChangeHandler;
 }
 
-// ─── SSE Event Types ──────────────────────────────────────────────────
+// ─── SSE Event Envelope ─────────────────────────────────────────────────
 
-interface SSEMessageEvent {
-  type: string;
-  treeId: string;
+interface SSEEnvelope {
+  event_type: string;
+  tree_id: string;
   data: unknown;
+  sequence_num?: number;
+  actor_id?: string;
+  timestamp?: string;
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────
@@ -140,96 +143,63 @@ export class SSESyncProvider {
   /** Remove local presence (cleanup on disconnect). */
   clearLocalPresence(): void {
     this.localPresence = null;
-    // TODO(BUG-024): Backend presence/leave endpoint planned but not yet implemented.
-    console.log('[SSESyncProvider] Presence leave (endpoint coming soon — BUG-024)');
+    // TODO(WIRE-004): Backend presence/leave endpoint planned but not yet implemented.
+    console.log('[SSESyncProvider] Presence leave (endpoint coming soon — WIRE-004)');
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────
 
   /** Connect to the SSE endpoint and begin syncing. */
   connect(): void {
-    // TODO(BUG-024): SSE events endpoint (/api/v1/events) is not yet
-    // implemented on the backend.  The EventSource connection is skipped
-    // so the console stays clean.  Re-enable when the endpoint ships.
-    // Refs: SPEC-API-01
-    console.debug(
-      `[SSESyncProvider] SSE connect skipped for tree ${this.treeId} — ` +
-        "endpoint /api/v1/events not yet available (BUG-024)",
-    );
-    this._connected = true;
-    this.options.onConnected?.();
+    if (this.eventSource) {
+      this.disconnect();
+    }
+
+    const url = `${this.apiBase}/api/v1/trees/${encodeURIComponent(
+      this.treeId,
+    )}/events`;
+
+    this.eventSource = new EventSource(url, { withCredentials: true });
+
+    this.eventSource.onopen = (): void => {
+      this._connected = true;
+      console.debug(`[SSESyncProvider] connected to ${url}`);
+      this.options.onConnected?.();
+    };
+
+    this.eventSource.onerror = (): void => {
+      this._connected = false;
+      console.error(`[SSESyncProvider] SSE connection error for tree ${this.treeId}`);
+      this.options.onDisconnected?.('SSE connection error');
+    };
+
+    const forward = (eventName: string): void => {
+      this.eventSource?.addEventListener(
+        eventName,
+        ((e: MessageEvent) => {
+          this._handleSSEMessage(e.data as string);
+        }) as EventListener,
+      );
+    };
+
+    for (const eventName of [
+      'node_added',
+      'node_updated',
+      'node_deleted',
+      'edge_added',
+      'edge_deleted',
+      'tree_updated',
+      'yjs_update',
+    ]) {
+      forward(eventName);
+    }
 
     // Listen for local Yjs changes and push to server
-    // TODO(BUG-024): pushUpdate is stubbed — sync endpoint not yet available
     this.updateHandler = (update: Uint8Array, origin: unknown): void => {
       if (origin === 'sse-provider') return;
       void this.pushUpdate(update);
     };
     this.doc.ydoc.on('update', this.updateHandler!);
-
-    // Suppress TS6133 for members kept for BUG-024 re-enablement
-    void this.apiBase;
-    void this._handleSSEMessage;
-    void this._handlePresenceEvent;
-    void this._handleCursorEvent;
-
-    return;
-
-    // —— Re-enable below when /api/v1/events is live ———
-    //
-    // if (this.eventSource) {
-    //   this.disconnect();
-    // }
-    //
-    // const url = `${this.apiBase}/api/v1/events?tree_id=${encodeURIComponent(this.treeId)}`;
-    //
-    // this.eventSource = new EventSource(url);
-    //
-    // this.eventSource.onopen = (): void => {
-    //   this._connected = true;
-    //   this.options.onConnected?.();
-    // };
-    //
-    // this.eventSource.onmessage = (event: MessageEvent): void => {
-    //   this._handleSSEMessage(event.data);
-    // };
-    //
-    // this.eventSource.addEventListener('node_added', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('node_updated', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('node_deleted', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('edge_added', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('edge_deleted', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('tree_updated', ((e: MessageEvent) => {
-    //   this._handleSSEMessage(e.data);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('presence_update', ((e: MessageEvent) => {
-    //   this._handlePresenceEvent(JSON.parse(e.data) as Record<string, unknown>);
-    // }) as EventListener);
-    //
-    // this.eventSource.addEventListener('cursor_update', ((e: MessageEvent) => {
-    //   this._handleCursorEvent(JSON.parse(e.data) as Record<string, unknown>);
-    // }) as EventListener);
-    //
-    // this.eventSource.onerror = (): void => {
-    //   this._connected = false;
-    //   this.options.onDisconnected?.('SSE connection error');
-    // };
   }
 
   /** Disconnect from SSE. */
@@ -257,43 +227,98 @@ export class SSESyncProvider {
 
   // ─── Message handling ───────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- TODO(BUG-024): re-enable when /api/v1/events ships
-  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
   private _handleSSEMessage(data: string): void {
+    let envelope: SSEEnvelope | undefined;
     try {
-      const event: SSEMessageEvent = JSON.parse(data) as SSEMessageEvent;
-
-      // Only process events for our tree
-      if (event.treeId && event.treeId !== this.treeId) return;
-
-      switch (event.type) {
-        case 'node_added':
-        case 'node_updated':
-          this.applyNodeUpdate(event.data);
-          break;
-        case 'node_deleted':
-          this.applyNodeDelete(event.data);
-          break;
-        case 'edge_added':
-          this.applyEdgeUpdate(event.data);
-          break;
-        case 'edge_deleted':
-          this.applyEdgeDelete(event.data);
-          break;
-        case 'tree_updated':
-          this.applyTreeUpdate(event.data);
-          break;
-        default:
-          // Unknown event type — attempt generic Yjs update
-          this.applyGenericUpdate(data);
-          break;
-      }
+      envelope = JSON.parse(data) as SSEEnvelope;
     } catch {
       // If JSON parsing fails, try as raw Yjs binary update
       this.applyGenericUpdate(data);
+      this.options.onSynced?.();
+      return;
+    }
+
+    // Only process events for our tree
+    if (envelope.tree_id && envelope.tree_id !== this.treeId) return;
+
+    switch (envelope.event_type) {
+      case 'node_added':
+      case 'node_updated':
+        this.applyNodeUpdate(this.normalizeNodePayload(envelope.data));
+        break;
+      case 'node_deleted':
+        this.applyNodeDelete(this.normalizeDeletePayload(envelope.data));
+        break;
+      case 'edge_added':
+        this.applyEdgeUpdate(this.normalizeEdgePayload(envelope.data));
+        break;
+      case 'edge_deleted':
+        this.applyEdgeDelete(this.normalizeDeletePayload(envelope.data));
+        break;
+      case 'tree_updated':
+        this.applyTreeUpdate(envelope.data);
+        break;
+      case 'yjs_update':
+        if (typeof envelope.data === 'string') {
+          this.applyGenericUpdate(envelope.data);
+        }
+        break;
+      default:
+        if (typeof envelope.data === 'string') {
+          this.applyGenericUpdate(envelope.data);
+        }
+        break;
     }
 
     this.options.onSynced?.();
+  }
+
+  private normalizeNodePayload(data: unknown): Record<string, unknown> {
+    const src = data as Record<string, unknown> | null;
+    if (!src) return {};
+    const out: Record<string, unknown> = {};
+    const map = (snake: string, camel: string): void => {
+      if (Object.prototype.hasOwnProperty.call(src, snake)) {
+        out[camel] = src[snake];
+      }
+    };
+    map('node_id', 'id');
+    map('parent_id', 'parentId');
+    map('content', 'content');
+    map('content_format', 'contentFormat');
+    map('node_type', 'nodeType');
+    map('actor_id', 'actorId');
+    map('timestamp', 'timestamp');
+    map('sequence_num', 'sequenceNum');
+    map('edge_id', 'edgeId');
+    map('edge_type', 'edgeType');
+    map('mutation_type', 'mutationType');
+    return out;
+  }
+
+  private normalizeEdgePayload(data: unknown): Record<string, unknown> {
+    const src = data as Record<string, unknown> | null;
+    if (!src) return {};
+    const out: Record<string, unknown> = {};
+    const map = (snake: string, camel: string): void => {
+      if (Object.prototype.hasOwnProperty.call(src, snake)) {
+        out[camel] = src[snake];
+      }
+    };
+    map('edge_id', 'id');
+    map('edge_type', 'edgeType');
+    map('source_id', 'sourceId');
+    map('target_id', 'targetId');
+    map('actor_id', 'actorId');
+    map('timestamp', 'timestamp');
+    return out;
+  }
+
+  private normalizeDeletePayload(data: unknown): { id?: string } {
+    const src = data as Record<string, unknown> | null;
+    if (!src) return {};
+    const id = (src.node_id ?? src.id) as string | undefined;
+    return { id };
   }
 
   private applyNodeUpdate(data: unknown): void {
@@ -381,12 +406,31 @@ export class SSESyncProvider {
   // ─── Push local changes to server ───────────────────────────────────
 
   private async pushUpdate(update: Uint8Array): Promise<void> {
-    // TODO(BUG-024): Backend Yjs sync endpoint (/trees/:id/sync) is planned
-    // but not yet implemented.  Skip the network call so the console stays clean.
-    void update; // explicitly acknowledge the param (used when endpoint arrives)
-    console.debug(
-      `[SSESyncProvider] Yjs pushUpdate (${update.byteLength} bytes) — sync endpoint coming soon (BUG-024)`,
-    );
+    const url = `${this.apiBase}/api/v1/trees/${encodeURIComponent(
+      this.treeId,
+    )}/sync`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: update as unknown as BodyInit,
+        headers: { 'Content-Type': 'application/octet-stream' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => 'unknown');
+        const err = new Error(`pushUpdate failed: ${response.status} ${text}`);
+        console.error('[SSESyncProvider] pushUpdate error:', err);
+        this.options.onError?.(err);
+        return;
+      }
+      console.debug(
+        `[SSESyncProvider] pushUpdate succeeded (${update.byteLength} bytes)`,
+      );
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error('[SSESyncProvider] pushUpdate network error:', e);
+      this.options.onError?.(e);
+    }
   }
 
   // ─── Presence sync ──────────────────────────────────────────────
@@ -394,12 +438,12 @@ export class SSESyncProvider {
   /** Push local presence state to server (endpoint coming soon). */
   private async pushPresence(): Promise<void> {
     if (!this.localPresence) return;
-    // TODO(BUG-024): Backend presence endpoint planned but not yet implemented.
-    console.debug('[SSESyncProvider] Presence push (endpoint coming soon — BUG-024)');
+    // TODO(WIRE-004): Backend presence endpoint planned but not yet implemented.
+    console.debug('[SSESyncProvider] Presence push (endpoint coming soon — WIRE-004)');
   }
 
   /** Handle incoming presence_update SSE event. */
-  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
+  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (WIRE-004)
   private _handlePresenceEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;
@@ -433,7 +477,7 @@ export class SSESyncProvider {
   }
 
   /** Handle incoming cursor_update SSE event (lighter variant). */
-  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (BUG-024)
+  // @ts-ignore -- TS6133: method kept for future SSE re-enablement (WIRE-004)
   private _handleCursorEvent(data: Record<string, unknown>): void {
     const userId = data.userId as string | undefined;
     if (!userId) return;

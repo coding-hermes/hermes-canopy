@@ -4,6 +4,7 @@ package handler
 
 import (
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -26,6 +27,7 @@ func NewSyncHandler(engine sync.SyncEngine) *SyncHandler {
 func (h *SyncHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.HandleSync)
+	r.Post("/", h.HandlePushUpdate)
 	r.Post("/snapshot", h.HandleTriggerSnapshot)
 	return r
 }
@@ -69,6 +71,30 @@ func (h *SyncHandler) HandleTriggerSnapshot(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeJSON(w, http.StatusCreated, snap)
+}
+
+// HandlePushUpdate serves POST /trees/{tree_id}/sync.
+// It accepts a raw Yjs update and broadcasts it to other tree clients.
+func (h *SyncHandler) HandlePushUpdate(w http.ResponseWriter, r *http.Request) {
+	treeID, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "could not read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	actorID := UserIDFromContext(r.Context())
+	if err := h.engine.ApplyYjsUpdate(r.Context(), treeID, actorID, body); err != nil {
+		h.writeSyncError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // writeSyncError translates sync errors to HTTP status codes.

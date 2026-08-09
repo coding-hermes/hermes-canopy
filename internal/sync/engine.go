@@ -9,6 +9,7 @@ package sync
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,6 +65,10 @@ type TreeMutation struct {
 type SyncEngine interface {
 	// OnNodeMutation is called by services after a node mutation.
 	OnNodeMutation(ctx context.Context, m NodeMutation) error
+
+	// ApplyYjsUpdate receives a raw Yjs update from a client, persists it to
+	// the event log, and broadcasts it to other connected clients.
+	ApplyYjsUpdate(ctx context.Context, treeID, actorID uuid.UUID, update []byte) error
 
 	// OnTreeMutation is called by services after a tree mutation.
 	OnTreeMutation(ctx context.Context, m TreeMutation) error
@@ -129,6 +134,25 @@ func (e *engine) OnNodeMutation(ctx context.Context, m NodeMutation) error {
 
 	// Broadcast via SSE hub
 	e.broadcastMutationEvent(ctx, m.TreeID, eventType, m.ActorID, ev.SequenceNum, payload)
+	return nil
+}
+
+// ApplyYjsUpdate receives a raw Yjs update from a client, persists it to the
+// event log, and broadcasts it to other connected clients as a named SSE event.
+func (e *engine) ApplyYjsUpdate(ctx context.Context, treeID, actorID uuid.UUID, update []byte) error {
+	if len(update) == 0 {
+		return errors.New("sync: empty Yjs update")
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(update)
+	payload := json.RawMessage(fmt.Sprintf("%q", encoded))
+
+	ev, err := e.eventRepo.AppendEvent(ctx, treeID, "yjs_update", nil, nil, payload, nil)
+	if err != nil {
+		return fmt.Errorf("sync: append yjs update event: %w", err)
+	}
+
+	e.broadcastMutationEvent(ctx, treeID, "yjs_update", actorID, ev.SequenceNum, payload)
 	return nil
 }
 
