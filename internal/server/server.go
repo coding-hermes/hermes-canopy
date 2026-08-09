@@ -142,6 +142,10 @@ func New(
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
 		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 
+		// Workspace channels (SPEC-023 §5) — channel list, message POST,
+		// per-channel SSE event stream. In-memory registry; no DB for MVP.
+		r.Mount("/workspace/channels", handler.NewWorkspaceHandler(sseHub).Routes())
+
 		// Export/import endpoints (GAP-003).
 		// Registered directly (not via Mount) because /trees is already
 		// occupied by the TreeHandler router above.

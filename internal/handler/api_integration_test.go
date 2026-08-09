@@ -124,6 +124,9 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 		// Card endpoints.
 		r.Mount("/cards", NewCardHandler(cardSvc).Routes())
 
+		// Workspace channels (SPEC-023 §5).
+		r.Mount("/workspace/channels", NewWorkspaceHandler(sseHub).Routes())
+
 		// SSE endpoint (tree-scoped).
 		sseHandler := sse.NewHandler(sseHub)
 		r.Get("/sse/{tree_id}", sseHandler.HandleTreeEvents)
