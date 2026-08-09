@@ -7852,3 +7852,49 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 113/140 board tasks complete. E2E-001 window 272-277 SATISFIED at Tick 272 (49/49, 51.95s, zero drift — incl. TEST-REAL-001/002/003 realtime + composer→canvas + context-manifest proofs). Full -short sweep **77 consecutive green** (16/16 pkgs). Vitest 526/526, integration 49/49 (9 files). GitReins 38/38, 0 active. Hilo 1484/236. CI streak 10. Cooldown 900 file+API agree. Board events MAX(id)=113. DuckBrain contiguous through 272. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (273):** WIRE-004 (P2, share+presence) — last directive task. CI streak monitoring (T272 board push probe). E2E next window 278-283 at Tick 278.
+## Tick 273 — 2026-08-09 08:12 UTC (scheduler tick hermes-canopy-2026-08-09-03-04-53, DeepSeek V4 Flash)
+
+**Verdict: STAND-IN PM GAP SWEEP — GAP-014/015/016/017 CLOSED** — productive tick. Four gap rows filed by the stand-in PM cycle (2026-08-09) delivered foreman-direct (doc-fix + board-tracking classes): docs version floors synced to reality (Go 1.25+ per go.mod 1.25.0; PostgreSQL 16+ per compose postgres:16-alpine; stale manual-build compose comment removed) in commit 5266014; GAP-017 cross-project blocker (helix UI-001..004 blocked since 08-08) resolved via fix option 1 — 4 canopy-side SPEC-023 provider rows created with helix cross-references. 78th consecutive green -short sweep ran in background (T194 pattern).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | Tick start: HEAD a798f07 in sync with origin/master (0 ahead). `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commit). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (only Bane's canopyd :8091 + vite :5173 live session, left untouched per T266-T272 precedent). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 273'` exit 1 at start; no sibling commits mid-tick. |
+| 3 | Build+vet | ✅ CLEAN (GUARD FULL) | `timeout 540 gitreins guard` Tier 1 PASS (test mode: full) — secrets/go_build/go_lint/go_tests all ✓. go build ./... + go vet ./... exit 0 standalone too. |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0. |
+| 5 | Vitest | ✅ 526/526 | 23 files, 526 passed (3.20s) — unchanged. |
+| 6 | Go tests | ✅ FULL SWEEP PASS (78th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — **16/16 pkgs**: db 83.5s / handler 95.8s / plugin 14.3s / session 0.97s / sse 1.23s / testutil 6.4s. SEVENTY-EIGHTH consecutive green sweep (background concurrent with this tick's work, T194 pattern). |
+| 7 | E2E-001 | ✅ NOT DUE | Window 272-277 SATISFIED at Tick 272 (49/49) — next window 278-283 runs at Tick 278 (fixture-due-window rule). |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1484 edges / 236 files (direct `~/.cargo/bin/hilo graph stats` — matches T272; zero code delta, no edges.jsonl diff). |
+| 9 | TODO/FIXME | ✅ pre-existing only | FE: ShareDialog.tsx 1 TODO(BUG-024) + yjsProvider.ts 6 WIRE-004-labeled presence/share refs. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 38/38 COMPLETE, 0 ACTIVE | 38 ● complete, 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (31.75 MB scanned). |
+| 12 | Board-v2 | ✅ 4 TASKS CLOSED + 4 SPEC-023 ROWS CREATED | JSONL canonical: **117 complete + 27 pending = 144** (GAP-014/015/016/017 → complete @ 5266014; SPEC-023-UI-001..004 added pending — GAP-017 fix option 1). Events: 114-117 task_created (SPEC-023 rows), 118-125 task_completed+audit (GAP-014..017) — MAX(id)=125. Header ticks_total 272→**273**, last_commit=**5266014** (docs commit HEAD pre-board-commit), ticks_idle=0. board.db is gitignored live cache (its insert skipped on the Binder Error quirk — JSONL canonical + tracked; re-syncs on next append). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + vite :5173 up — left untouched per T258-T272 precedent. |
+| 15 | CI (live) | ✅ STREAK 11 CONFIRMED | gh run list: T272 board push 31301182453 SUCCESS (3m20s) + 31300155159 + 31298530732 + 31298405830 + 31295372443 + 31294743063 + 31293434834 + 31291329258 + 31290442009 + 2 prior = 11 consecutive SUCCESS (T270 initial-push 31298186670 red = known pre-fix, superseded). This tick's push = T273 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/272 present (1522a885 — contiguity intact, no backfill). Wrote /ticks/273 (**04ff5d32**) + status refresh (**9fd1547b**) — both verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 7h56m). Routine e2e-stack-run class — no new problem to submit (T266-T272 precedent). |
+
+### Actions this tick
+
+- **GAP-014/015/016 docs drift fixed** foreman-direct (doc-fix class — manual criteria grep verification, judge exception applies): commit **5266014** (+8/−8, 3 files). GAP-014: README.md + docs/INTEGRATION.md Go 1.24+ → **1.25+** (go.mod requires go 1.25.0 — a Go 1.24 user's `make build` failed at go.mod). GAP-015: PostgreSQL 17+ → **16+** + docker-run example postgres:17 → postgres:16 (compose pins postgres:16-alpine and the stack has run 78 consecutive green sweeps on 16 — docs now match the verified floor; no compose image change risk). GAP-016: stale docker-compose.yml:3 "requires npm run build first" comment replaced (deploy/Dockerfile stages 1-2 auto-build + embed the frontend). PASS criteria all verified: `grep 'Go 1.24' README.md docs/` = 0, `grep 'PostgreSQL 17\|postgres:17' README.md docs/` = 0, no manual-build instruction in compose.
+- **GAP-017 cross-project blocker resolved** (P1): created 4 canopy-side SPEC-023 provider rows — **SPEC-023-UI-001** (SSE workspace channels /api/workspace/channels), **SPEC-023-UI-002** (React workspace view), **SPEC-023-UI-003** (agent roster), **SPEC-023-UI-004** (PR review panel) — each cross-referencing the helix row it unblocks (helix UI-001..004 blocked since 2026-08-08). PASS: `grep -c SPEC-023 .coding-hermes/board/tasks.jsonl` = 4 (≥ 1). Helix foreman can now reference canopy-side rows instead of a phantom provider.
+- **78th consecutive green -short sweep** ran concurrently in background (T194 pattern): 16/16 pkgs exit 0 (db 83.5s / handler 95.8s / plugin 14.3s / session 0.97s / sse 1.23s / testutil 6.4s) — within the 300s per-package cap.
+- Board events 114-125 appended (4 task_created + 8 task_completed/audit); header ticks_total 273, last_commit 5266014. DuckBrain /ticks/273 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Bane test session detected + left untouched: canopyd :8091 + vite :5173 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 272-277 SATISFIED at Tick 272 — next window 278-283 (runs at Tick 278).
+- Bane directive 08-08 (1 remaining): WIRE-004 (P2, share+presence — presence stubs remain in yjsProvider). Flagged by T272 as next-tick work.
+- SPEC-023-UI-001..004 (P1, cross-project provider rows for helix UI-001..004) — NEW this tick; pending dispatch.
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 117/144 board tasks complete. GAP-014/015/016/017 stand-in PM sweep CLOSED (5266014; SPEC-023-UI-001..004 created — helix UI-001..004 unblocked). Full -short sweep **78 consecutive green** (16/16 pkgs). Vitest 526/526, integration 49/49. GitReins 38/38, 0 active. Hilo 1484/236. CI streak 11. Cooldown 900 file+API agree. Board events MAX(id)=125. DuckBrain contiguous through 273. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (274):** WIRE-004 (P2, share+presence — last Bane directive task) per T272 flag, or first SPEC-023-UI-001 dispatch. CI streak monitoring (T273 board push probe). E2E next window 278-283 at Tick 278.
