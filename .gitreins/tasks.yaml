@@ -896,3 +896,24 @@ tasks:
   status: complete
   created_at: '2026-08-09T22:45:06.791789+00:00'
   completed_at: '2026-08-09T22:45:10.113258+00:00'
+- id: BUG-035
+  title: 'WIRE-003 session import idempotency: per-session watermark + session_id
+    dedup'
+  criteria:
+  - Importer.Run persists the watermark after EACH successfully imported session (per-session
+    advance), not only at run end
+  - Before creating a tree, the importer skips sessions whose session_id already exists
+    in Canopy (dedup via nodes.metadata->>'session_id' AND trees.metadata, deleted_at
+    IS NULL), increments a SkippedDuplicates counter in ImportSummary, and advances
+    the watermark past skipped duplicates
+  - 'Newly imported trees carry {"session_id": <id>} in trees.metadata (CreateTreeParams.Metadata
+    added and threaded through to the repo layer)'
+  - Unit tests in internal/session/importer_test.go prove crash-mid-run recovery (2nd
+    of 3 sessions fails; re-run imports only remaining, no duplicate of session 1),
+    duplicate-skip (SkippedDuplicates incremented, no tree created), and dry-run duplicate
+    reporting
+  - Existing internal/session tests stay green; go build ./... and go vet ./... clean;
+    gitreins guard PASS
+  status: complete
+  created_at: '2026-08-09T23:29:18.625607+00:00'
+  completed_at: '2026-08-09T23:29:42.299741+00:00'
