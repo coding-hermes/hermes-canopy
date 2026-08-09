@@ -689,3 +689,55 @@ tasks:
   status: complete
   created_at: '2026-08-09T04:25:52.924070+00:00'
   completed_at: '2026-08-09T04:25:57.701200+00:00'
+- id: TEST-REAL-003
+  title: 'Context manifest UI test: assert token budget + ancestry render in node
+    detail'
+  criteria:
+  - "Sole change is frontend/tests/context-manifest.test.ts (1 new test file, ~189\
+    \ lines) \u2014 no src/ or internal/ modifications in commit 1534879"
+  - "Test creates a fresh uniquely-named tree via the real REST API (page.request.post\
+    \ to /api/v1/trees with rootMessage) \u2014 no mocked tree creation"
+  - "Test clicks a real canvas node (.react-flow__node with the unique root text)\
+    \ to trigger selection \u2014 proving onSelectionChange \u2192 ContextManifestPanel\
+    \ mount"
+  - 'Test asserts the token budget renders: [data-testid=context-token-usage] textContent
+    matches /\d[\d,]* \/ [\d,]+ tokens/ AND the budget meter has role=meter with aria-valuemax=8000'
+  - "Test opens the detail via the toggle and asserts [data-testid=context-section-ancestry]\
+    \ contains at least one [data-testid=context-manifest-item] whose text includes\
+    \ the unique root message content \u2014 proving real backend data reached the\
+    \ UI"
+  - "Zero mocks and no reload/navigation after initial page load \u2014 the manifest\
+    \ appears purely from the node-click \u2192 fetch path"
+  - "Isolated run passes (1/1) and the full integration suite stays green (49/49,\
+    \ 9 files \u2014 was 48/48) plus unit 522/522"
+  status: complete
+  created_at: '2026-08-09T04:41:47.633080+00:00'
+  completed_at: '2026-08-09T04:41:50.940137+00:00'
+- id: WIRE-003
+  title: 'Hermes session ingestion: auto-import sessions from state.db into Canopy
+    trees'
+  criteria:
+  - "Sole change set is internal/session/ (reader.go, mapper.go, importer.go, importer_test.go)\
+    \ + cmd/canopyd/{session_cmd.go,cli_test.go,cli.go} in commit 8b70d5e \u2014 no\
+    \ frontend/, .gitreins/, or board files touched"
+  - "internal/session/reader.go opens state.db strictly read-only via modernc.org/sqlite\
+    \ (DSN contains mode=ro) and queries sessions + messages with ORDER BY (started_at,\
+    \ id) \u2014 no new go.mod dependency introduced"
+  - "internal/session/importer.go persists an incremental watermark via FileWatermarkStore\
+    \ (JSON at Path with atomic temp+rename write) and skips sessions whose (started_at,id)\
+    \ is not strictly after the watermark \u2014 re-running imports zero new sessions"
+  - cmd/canopyd/session_cmd.go wires a 'canopyd session import' subcommand with --db/--limit/--include-archived/--dry-run
+    flags, defaulting --db to /home/kara/.hermes/state.db, and cmd/canopyd/cli.go
+    routes 'session' in runCLI with usage text
+  - 'internal/session/importer_test.go builds a fixture SQLite DB (sessions+messages
+    schema subset), runs the importer against fake TreeCreator/NodeCreator fakes,
+    and asserts: happy path (1 session -> 1 tree, root=first user message, 3 role-tagged
+    child nodes chained with reply edges), incremental re-run (0 imports, watermark
+    not re-saved), same-timestamp tie-break, archived skip, dry-run writes nothing,
+    active=0 messages excluded'
+  - go build ./..., go vet ./internal/session/ ./cmd/canopyd/, gofmt -l on all changed
+    files, and go test -count=1 ./internal/session/ (11 tests) all pass; full -short
+    sweep green (16/16 pkgs, 75th consecutive)
+  status: complete
+  created_at: '2026-08-09T05:31:18.610663+00:00'
+  completed_at: '2026-08-09T05:31:23.216682+00:00'
