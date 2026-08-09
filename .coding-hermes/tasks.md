@@ -8127,3 +8127,45 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 122/144 board tasks complete. SPEC-023-UI-004 DELIVERED (7cb24f2, judge PASS 123d2b51) — helix UI-004 unblocked; SPEC-023 cross-project surface COMPLETE (UI-001→UI-004). Full -short sweep **85 consecutive green** (all pkgs). Vitest 562/562, integration 49/49 (window 278-283 SATISFIED). GitReins 44/44, 0 active. Hilo 1484/236. Cooldown 900 file+API agree. Board events MAX(id)=135. DuckBrain contiguous through 278 (4ab778ef). Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (279):** No P1 feature work remains — SPEC-023 fully delivered. INFRA-001 (scheduler-level) or post-MVP backlog review; CI streak monitoring. E2E next window 284-289 at Tick 284.
+## Tick 279 — 2026-08-09 13:10 UTC (scheduler tick hermes-canopy-2026-08-09-10-40-34, DeepSeek V4 Flash)
+
+**Verdict: IDLE — light audit.** No pending code tasks (SPEC-023 UI-001..004 complete since T278; INFRA-001 scheduler-level; 21 post-MVP backlog deferred by design). E2E-001 window 278-283 satisfied at T278 — next window 284-289 runs at Tick 284 (not due). No worker dispatch, no code changes.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | HEAD b391b3d in sync with origin/master (0 unpushed). `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commits). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (canopyd :8091 + vite :5173 = Bane live session stack, left untouched). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 279'` exit 1 at start; scheduler latest_tick id = hermes-canopy-2026-08-09-10-40-34 matches THIS fire. |
+| 3 | Build+vet | ✅ CLEAN | `go build ./...` + `go vet ./...` exit 0. |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0. |
+| 5 | Vitest | ✅ 562/562 | 27 files, 562 passed (3.48s) — matches T278 baseline. |
+| 6 | Go tests | ✅ FULL SWEEP PASS (86th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — db 87.8s / handler 105.4s / plugin 18.8s / testutil 4.4s. EIGHTY-SIXTH consecutive green sweep. |
+| 7 | E2E-001 | ✅ NOT DUE | Window 278-283 SATISFIED at Tick 278 (49/49) — next window 284-289 runs at Tick 284 (fixture-due-window rule). |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1612 edges / 257 files (up from 1484/236 — SPEC-023 code landed T275-278). |
+| 9 | TODO/FIXME | ✅ STABLE | Go 6 pre-existing unchanged (tree_service cursor TODO + 5 stub_adapters post-MVP). FE: 0 markers. |
+| 10 | GitReins | ✅ 44/44 COMPLETE, 0 ACTIVE | 44 complete, 0 pending, 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks real exit 0: no leaks found (712 commits, 32.29 MB, 1.9s). |
+| 12 | Board-v2 | ✅ EVENT 136 APPENDED | JSONL canonical: 122 complete + 22 pending = 144 (INFRA-001 + 21 post-MVP remain). Events: 136 audit (tick 279) — MAX(id)=136 both stores. Header ticks_total 278→**279**, last_commit=b391b3d, ticks_idle=0. Parity: jsonl 136 / db 120 rows, max id 136 both — 16 JSONL-only ids [95-98,108-117,126-127] benign cache-lag signature (JSONL authoritative, no repair per doctrine; deterministic +1 post-append in both stores). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, decay_rate=1, priority=10, weight=10, consecutive_failures=0. fleet.toml 900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + vite :5173 up — left untouched per precedent. |
+| 15 | CI (live) | ✅ 5/5 SUCCESS | gh run list: 31314668778 (T278 hilo chore) + 31314655740 (T278 board) + 31311598080 + 31309066213 + 31308987750 all SUCCESS. T275's red run (31307190973) remains the only failure ever (fixed T276). This tick's push = T279 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + FS-VERIFIED | Pre-write: /ticks/278 present (contiguity intact). Wrote /ticks/279 (7c1dc2e9) + status/2026-08-09 (f17ef34c) via HTTP :3000 — both grep-verified in raw namespace store (event + config JSONL) BEFORE board entry (T183 ordering). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 15h28m). No novel failure mode to submit (idle tick, nothing solved). |
+
+### Actions this tick
+
+- Light audit only: all gates re-verified fresh (build/vet/tsc/vitest 562/562/oxlint/gitleaks/go -short sweep 86th/hilo 1612-257/scheduler GET/parity probe). No worker dispatch — no pending code tasks.
+- Board event 136 appended via append_board_event.py (JSONL + board.db + header in one call); header ticks_total 279, last_commit b391b3d, ticks_idle 0. Parity divergence signature characterized precisely (16 JSONL-only ids [95-98,108-117,126-127], max id 136 both stores) — benign cache-lag, no repair.
+- DuckBrain /ticks/279 + status/2026-08-09 written + fs-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT. Bane test session left untouched (canopyd :8091 + vite :5173 + vite.config.ts TEMP allowedHosts).
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 278-283 SATISFIED at Tick 278 — next window 284-289 (runs at Tick 284).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 122/144 board tasks complete. SPEC-023 cross-project surface COMPLETE (UI-001→UI-004, all delivered T275-278). Full -short sweep **86 consecutive green** (all pkgs). Vitest 562/562, integration 49/49 (window 278-283 SATISFIED). GitReins 44/44, 0 active. Hilo 1612/257. CI 5/5 SUCCESS. Cooldown 900 file+API agree. Board events MAX(id)=136. DuckBrain contiguous through 279. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (280):** No P1 feature work remains. INFRA-001 (scheduler-level) or post-MVP backlog review; CI streak monitoring (T279 push probe). E2E next window 284-289 at Tick 284.
