@@ -802,3 +802,23 @@ tasks:
   status: complete
   created_at: '2026-08-09T09:53:09.838860+00:00'
   completed_at: '2026-08-09T09:53:15.984237+00:00'
+- id: SPEC-023-UI-002
+  title: React workspace view over SSE channels (SPEC-023, helix UI-002)
+  criteria:
+  - frontend/src/pages/WorkspacePage.tsx renders the channel list from GET /api/v1/workspace/channels
+    on mount (channels general + agents visible)
+  - Selecting a channel opens a message feed that connects via EventSource to /api/v1/workspace/channels/{id}/feed
+    and renders incoming channel_message events (content, sender, timestamp) in real
+    time; reconnect on error
+  - frontend/src/components of the composer POSTs to /api/v1/workspace/channels/{id}/message
+    via apiPost, clears input on 202, surfaces 400/404 as visible inline errors
+  - frontend/src/hooks/useChannelFeed.ts exists, tears down on unmount/channel-switch,
+    dedupes by message_id
+  - 'frontend unit tests pass: npx vitest run reports Tests 547 passed (547) including
+    new useChannelFeed.test.ts (10) and WorkspacePage.test.tsx (7); npx tsc --noEmit
+    exit 0; npm run lint 0 errors'
+  - No backend Go files modified; frontend/vite.config.ts unchanged; route /workspace
+    wired in frontend/src/App.tsx with nav item
+  status: complete
+  created_at: '2026-08-09T10:40:43.126385+00:00'
+  completed_at: '2026-08-09T10:40:48.268918+00:00'
