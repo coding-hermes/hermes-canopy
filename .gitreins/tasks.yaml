@@ -646,3 +646,24 @@ tasks:
   status: complete
   created_at: '2026-08-09T02:02:15.676041+00:00'
   completed_at: '2026-08-09T02:02:19.339986+00:00'
+- id: TEST-REAL-001
+  title: Two-context realtime sync E2E (WIRE-001 proof)
+  criteria:
+  - '''frontend/tests/two-context-sync.test.ts exists and opens TWO independent Playwright
+    browser contexts (browser.newContext() twice, one page each), not two pages in
+    one context'''
+  - '''The test creates a fresh uniquely-named tree via the real REST API (POST /api/v1/trees
+    through the Vite proxy) and loads the SAME tree in both contexts'''
+  - '''A message is sent in context A via the real composer UI (textarea[aria-label=Message
+    input] + Send button click), no fetch mocks'''
+  - "'The test asserts the message appears in context B WITHOUT a manual reload using\
+    \ expect.poll on .react-flow__node with the unique message text (timeout 20s)\
+    \ \u2014 proving the SSE/Yjs propagation path'"
+  - '''No production code changed: git show 7caff16 --stat lists only frontend/tests/two-context-sync.test.ts'''
+  - '''npx vitest run --config vitest.integration.config.ts tests/two-context-sync.test.ts
+    reports Tests 1 passed (1)'''
+  - '''npx vitest run --config vitest.integration.config.ts (full suite) reports Tests
+    47 passed (47), 7 files'''
+  status: complete
+  created_at: '2026-08-09T02:50:02.246673+00:00'
+  completed_at: '2026-08-09T02:50:06.681015+00:00'
