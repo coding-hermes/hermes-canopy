@@ -146,6 +146,10 @@ func New(
 		// per-channel SSE event stream. In-memory registry; no DB for MVP.
 		r.Mount("/workspace/channels", handler.NewWorkspaceHandler(sseHub).Routes())
 
+		// Agent roster (SPEC-023 §5 + §7) — list + detail with trust
+		// history timeline. In-memory registry; no DB for MVP.
+		r.Mount("/agents", handler.NewAgentHandler().Routes())
+
 		// Export/import endpoints (GAP-003).
 		// Registered directly (not via Mount) because /trees is already
 		// occupied by the TreeHandler router above.
