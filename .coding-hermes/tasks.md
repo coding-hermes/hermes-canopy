@@ -7611,3 +7611,50 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 108/135 board tasks complete. E2E-001 window 266-271 SATISFIED at Tick 266 (47/47, 46.62s, zero drift — incl. TEST-REAL-001 two-context realtime proof). Full -short sweep **71 consecutive green**. Vitest 522/522, integration 47/47. GitReins 34/34, 0 active. Hilo 1427/227. CI streak 5. Cooldown 900 file+API agree. Board events MAX(id)=103. DuckBrain contiguous through 266. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (267):** WIRE-003 (P1, Hermes session ingestion) or TEST-REAL-002 (P1, composer→canvas — unblocked, no deps) per directive program. CI streak monitoring (T266 board push probe). E2E next window 272-277 at Tick 272.
+## Tick 267 — 2026-08-09 04:32 UTC (scheduler tick hermes-canopy-2026-08-08-23-17-55, DeepSeek V4 Flash)
+
+**Verdict: TEST-REAL-002 DELIVERED** — fourth productive tick of Bane's 08-08 anti-phantom wiring program. Composer→canvas E2E regression test proves the composer POST → Yjs mirror → canvas node path (BUG-032 class) with zero mocks. 72nd consecutive green -short sweep, integration suite 47→48.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN | Tick start: HEAD 6edffd6 (T266 board), 0 ahead of origin/master. `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (only Bane's canopyd :8091 + vite :5173 live session + sibling uhlp foreman wrapper). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 267'` exit 1 at start. No prior fire. |
+| 3 | Build+vet | ✅ CLEAN | `gitreins guard` (full mode): go_build ok, go_lint ok, Tier 1 PASS. |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0. |
+| 5 | Vitest | ✅ 522/522 | 22 files, 522 passed — unchanged (test-only tick). |
+| 6 | Go tests | ✅ FULL SWEEP PASS (72nd) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — 15/15 pkgs (db 84.05s / handler 115.01s / plugin 15.01s / sse 1.28s / testutil 4.25s). SEVENTY-SECOND consecutive green sweep (background concurrent with worker, T194 pattern). |
+| 7 | E2E-001 | ✅ WINDOW 266-271 SATISFIED (T266) | Not due — satisfied at Tick 266 (47/47). Next window 272-277 runs at Tick 272. TEST-REAL-002 (composer→canvas) now WRITTEN and passing — anti-phantom regression for BUG-032 class. |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1427 edges / 227 files (direct `~/.cargo/bin/hilo graph stats` — matches T266). |
+| 9 | TODO/FIXME | ✅ pre-existing only | FE: ShareDialog.tsx 1 TODO(BUG-024) + yjsProvider.ts 6 WIRE-004-labeled presence/share refs. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 35/35 COMPLETE, 0 ACTIVE | 34 prior + TEST-REAL-002 = 35 ● complete, 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0 (~/go/bin/gitleaks): no leaks found (677 commits, 31.43 MB scanned). |
+| 12 | Board-v2 | ✅ EVENTS 104-105 APPENDED (TEST-REAL-002) | JSONL canonical: **109 complete + 26 pending = 135** (TEST-REAL-002 → complete; 4 directive tasks remain). Events: 104 task_completed, 105 audit (tick 267) — MAX(id)=105. TEST-REAL-002 row: status=complete, worker_status=complete, commit_hash=6d246a5, guard PASS, judge PASS 7/7 (bc29f316). Header ticks_total 266→**267**, last_commit=**6d246a5** (code commit HEAD pre-board-commit), ticks_idle=0, last_tick UTC. board.db/parquet stale caches (untracked, JSONL canonical per Bane 08-07). |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml line 323 cooldown_s=900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + :8080 + vite :5173 up — left untouched per T258-T266 precedent. |
+| 15 | CI (live) | ✅ STREAK 6 CONFIRMED | gh run list: T266 board push 31293434834 SUCCESS + T265 31291329258 + T264 31290442009 + count correction + post-entry correction + errcheck fix = 6 consecutive SUCCESS. This tick's push = T267 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. gh issue list: 0 open. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/266 (91921ba2) present — contiguous, no backfill. Wrote /ticks/267 (**fc5a47fa**) + status (**0cdbb0e0**) — verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 4h6m). Routine e2e-stack-run class — no new problem to submit (T265/T266 precedent). |
+
+### Actions this tick
+
+- **TEST-REAL-002 delivered** (Bane directive 08-08 anti-phantom wiring): dispatched delegate worker (139s) with prompt /tmp/canopy-t267-testreal002-prompt.txt. Worker wrote `frontend/tests/composer-to-canvas.test.ts` (123 lines): fresh uniquely-named tree via real REST API, real composer interaction (`textarea[aria-label="Message input"]` → `button[aria-label="Send message"]`), `expect.poll` (20s) on `.react-flow__node` withText — proving composer POST → Yjs mirror → canvas node with zero mocks, no reload. **Reused Bane's live stack** (canopyd :8091 + vite :5173, T266 precedent) — no rebuild, no restart, left running.
+- **Foreman re-verified independently** (worker claims are self-reports): isolated run **1/1 passed (634ms)** + full integration suite **48/48 passed (47.78s, 8 files; was 47/47 + 1)**. Verified git scope: only the new test file (zero src/Go changes). Test file read line-by-line: correct design, no mocks, matches two-context-sync template.
+- **Judge PASS 7/7** — gitreins task complete TEST-REAL-002 → verdict bc29f316 (all 7 criteria: sole change 1 file/123 lines, real REST tree creation, canvas+composer+textarea pre-conditions, real composer send, expect.poll canvas assertion no reload, isolated 1/1, full 48/48).
+- Code committed **6d246a5** (+123, 1 test file) with co-author; board events 104-105 appended; TEST-REAL-002 row complete; header ticks_total 267.
+- **72nd consecutive green -short sweep** ran concurrently in background (T194 pattern): 15/15 pkgs exit 0 (db 84.0s / handler 115.0s / plugin 15.0s / sse 1.3s / testutil 4.2s) — within the 300s per-package cap.
+- Board events appended + DuckBrain /ticks/267 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT.
+- Bane test session detected + left untouched: canopyd :8091/:8080 + vite :5173 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+
+### Remaining open
+
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 266-271 SATISFIED at Tick 266 — next window 272-277 (runs at Tick 272).
+- Bane directive 08-08 (4 remaining): WIRE-003 (P1, Hermes session ingestion), WIRE-004 (P2, share+presence — presence stubs remain in yjsProvider), WIRE-005 (P2, backend label from /health), TEST-REAL-003 (P1, context UI test — WIRE-002 landed, unblocked).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 109/135 board tasks complete. TEST-REAL-002 composer→canvas E2E regression DELIVERED (6d246a5, judge 7/7 bc29f316) — BUG-032-class anti-phantom proof: composer → POST → Yjs mirror → canvas node, zero mocks. Full -short sweep **72 consecutive green**. Vitest 522/522, integration 48/48 (8 files). GitReins 35/35, 0 active. Hilo 1427/227. CI streak 6. Cooldown 900 file+API agree. Board events MAX(id)=105. DuckBrain contiguous through 267. Bane test session live (canopyd :8091/:8080 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (268):** WIRE-003 (P1, Hermes session ingestion) or TEST-REAL-003 (P1, context UI test — unblocked) per directive program. CI streak monitoring (T267 board push probe). E2E next window 272-277 at Tick 272.
