@@ -8035,3 +8035,49 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 120/144 board tasks complete. SPEC-023-UI-002 DELIVERED (8bad604, judge 6/6 aba77abc) — helix UI-002 unblocked. CI RED fixed (c30df9c) — streak restored. Full -short sweep **83 consecutive green** (all pkgs). Vitest 547/547, integration 49/49. GitReins 41/41, 0 active. Hilo 1484/236. Cooldown 900 file+API agree. Board events MAX(id)=131. DuckBrain contiguous through 276. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (277):** SPEC-023-UI-003 dispatch (P1 agent roster — presence panel, complexity 2), or CI streak monitoring. E2E next window 278-283 at Tick 278.
+## Tick 277 — 2026-08-09 11:44 UTC (scheduler tick hermes-canopy-2026-08-09-06-31-31, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE — SPEC-023-UI-003 DELIVERED (dc8687e, +1400/-0, 8 files)** — Agent roster surface per SPEC-023 §5+§7 (unblocks helix UI-003): backend GET /api/v1/agents (roster list) + /{id} (detail with trust_history) via new in-memory seeded agent_handler.go mounted at server.go:151; frontend AgentsPage (roster rail + detail panel + TrustTimeline) at /agents route. Worker glm-5.2 @ zai-glm. 84th consecutive green -short sweep, guard PASS, judge PASS (fb0ddea4).
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | Tick start: HEAD 6377b65 in sync with origin/master (0 ahead). `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commits). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (canopyd :8091 + vite :5173 = Bane live session stack, left untouched; pgrep matched only an escalation-doctrine sibling worker — verified foreign via cmdline path). |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 277'` exit 1 at start; no sibling commits mid-tick. |
+| 3 | CI signal | ✅ GREEN | 5 most recent runs SUCCESS (31309066213 T276 board push, 31308987750 UI-002, 31308447001 lint fix, 31305096562, 31303020675). T275's red run (31307190973) remains the only failure (fixed T276). |
+| 4 | Build+vet | ✅ CLEAN | `go build ./...` + `go vet ./...` exit 0 (foreman re-run post-worker). |
+| 5 | CI lint pre-verify | ✅ 0 ISSUES | golangci-lint v2.12.2 (CI-version match) on internal/handler + internal/server → 0 issues (T276 guard-lint-scope-vs-CI lesson — prevents CI RED on push). |
+| 6 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0 (foreman re-verified). |
+| 7 | Vitest | ✅ 553/553 | 26 files, 553 passed (3.52s) — 547 baseline + 6 new (AgentsPage.test.tsx). oxlint 0 warnings, 0 errors. |
+| 8 | Go tests | ✅ FULL SWEEP PASS (84th) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — db 104.1s / handler 101.8s / plugin 16.8s. Ran CONCURRENTLY with the worker (T194 variant); handler in normal envelope (85-190s). New agent tests 5/5 (0.006s). EIGHTY-FOURTH consecutive green sweep. |
+| 9 | E2E-001 | ✅ NOT DUE | Window 272-277 SATISFIED at Tick 272 (49/49) — next window 278-283 runs at Tick 278 (fixture-due-window rule). |
+| 10 | Hilo graph | ✅ STABLE | 1484 edges / 236 files (unchanged — agent handler is in-package). |
+| 11 | TODO/FIXME | ✅ STABLE | FE: 1 BUG-024 marker file (ShareDialog.tsx only). Go 6 pre-existing unchanged. |
+| 12 | GitReins | ✅ 42/42 COMPLETE, 0 ACTIVE | 41 at start → 42 after SPEC-023-UI-003 create+complete. Judge verdict fb0ddea4 (Overall PASS, passed=true; CLI printed hash 404a8ecc — dir-hash mismatch display quirk). 0 pending / 0 in_progress. |
+| 13 | Secrets | ✅ CLEAN | gitleaks REAL exit 0: no leaks found. |
+| 14 | Board-v2 | ✅ SPEC-023-UI-003 COMPLETE + EVENTS 132-133 | JSONL canonical (board.jsonl/events.jsonl/tasks.jsonl tracked; parquet untracked cache): **121 complete + 23 pending = 144** (SPEC-023-UI-003 → complete; UI-004 + INFRA-001 remain). Events: 132 task_completed + 133 audit (tick 277) — MAX(id)=133. Header ticks_total 276→**277**, last_commit=**dc8687e**, ticks_idle=0. |
+| 15 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml hermes-canopy entry 900 + API AGREE — NO PUT. |
+| 16 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + vite :5173 up — left untouched per precedent. |
+| 17 | External signals | ✅ CLEAN | git fetch: 0 new remote commits. Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). Sibling worker: escalation-doctrine ED-GAP-019 (glm-5.2, verified foreign via cmdline path) — no action. |
+| 18 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/276 present (03cb3c72 — contiguity intact). Wrote /ticks/277 (**25eebf60**) + status refresh (**4e7787be**) — both verified by exact id-recall (T178 pattern; id-recall requires the namespace param). |
+| 19 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok. Discover for next-task class → not_found (routine; no novel problem). |
+
+### Actions this tick
+
+- **SPEC-023-UI-003 DELIVERED (dc8687e, +1400/−0, 8 files)** — Agent roster surface per SPEC-023 §5+§7 (unblocks helix UI-003). Backend: `internal/handler/agent_handler.go` (300L) — in-memory seeded registry (deterministic UUIDs via fixed SHA1 namespace, 3 demo agents covering all tiers: helix-foreman veteran, codex-worker established, kimi-scout provisional), `GET /api/v1/agents` roster list (sorted by name) + `GET /api/v1/agents/{id}` detail with `trust_history` (≥3 {score,at} entries); 404 AGENT_NOT_FOUND / 400 INVALID_AGENT_ID; mounted at `server.go:151` next to workspace channels. Tests: `agent_handler_test.go` 5/5 (list, capability shape, detail full shape, 404, 400) — no PG dependency. Frontend: `AgentsPage.tsx` (479L — roster rail with tier badge + trust %, detail panel with TrustTimeline bar chart + capabilities), `/agents` route + Bot nav item in App.tsx, `types/agents.ts` mirroring the snake_case wire contract, `useAgents.ts` hook; `AgentsPage.test.tsx` 6 tests (mock apiGet).
+- **Worker: glm-5.2 @ zai-glm** — clean report, committed dc8687e with co-author trailer, did not push. No scope creep (vite.config.ts untouched, workspace_handler.go untouched). Foreman independently re-verified all gates (build/vet, handler 5/5, tsc, vitest 553/553, oxlint, golangci-lint).
+- **84th consecutive green -short sweep** — db 104.1s / handler 101.8s / plugin 16.8s, exit 0; ran as a background process CONCURRENTLY with the worker dispatch (T194 variant — no PG contention issues).
+- **CI lint pre-verified** — golangci-lint v2.12.2 on handler+server packages: 0 issues (T276 lesson: guard lint scope ≠ CI repo-wide lint; local pre-verify prevents another CI RED).
+- Board events 132-133 appended via append_board_task_completed.py (task_completed + audit); header ticks_total 277, last_commit dc8687e. GitReins SPEC-023-UI-003 completion record folded into board commit. DuckBrain /ticks/277 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml hermes-canopy 900 + API 900 agree) — no PUT. Bane test session left untouched (canopyd :8091 + vite :5173 + vite.config.ts TEMP allowedHosts).
+
+### Remaining open
+
+- SPEC-023-UI-004 (P1) — PR review panel (review surface fed by workspace channel events) — next natural dispatch at Tick 278.
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 272-277 SATISFIED at Tick 272 — next window 278-283 (runs at Tick 278, fixture-due-window rule).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 121/144 board tasks complete. SPEC-023-UI-003 DELIVERED (dc8687e, judge PASS fb0ddea4) — helix UI-003 unblocked. Full -short sweep **84 consecutive green** (all pkgs). Vitest 553/553, integration 49/49. GitReins 42/42, 0 active. Hilo 1484/236. Cooldown 900 file+API agree. Board events MAX(id)=133. DuckBrain contiguous through 277. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (278):** SPEC-023-UI-004 dispatch (P1 PR review panel), + E2E-001 window 278-283 FIRST TICK OF WINDOW (runs the suite per fixture-due-window rule).

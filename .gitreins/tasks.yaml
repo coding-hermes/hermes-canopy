@@ -822,3 +822,22 @@ tasks:
   status: complete
   created_at: '2026-08-09T10:40:43.126385+00:00'
   completed_at: '2026-08-09T10:40:48.268918+00:00'
+- id: SPEC-023-UI-003
+  title: 'Agent roster: presence/roster panel for agents on the workspace (SPEC-023,
+    helix UI-003)'
+  criteria:
+  - GET /api/v1/agents returns 200 with a JSON array of seeded roster entries, each
+    carrying id, name, tier (provisional|established|veteran), trust_score, capabilities
+    (record of {success,total}), incidents, last_active
+  - GET /api/v1/agents/{id} returns 200 with detail incl. trust_history (>=3 {score,at}
+    entries), 404 AGENT_NOT_FOUND for unknown id, 400 INVALID_AGENT_ID for non-UUID
+  - internal/server/server.go mounts /agents next to /workspace/channels (NewAgentHandler().Routes())
+  - Frontend AgentsPage reachable via /agents route + nav item, renders roster list
+    with tier badge and trust score, detail panel with trust timeline; frontend types
+    mirror the backend JSON contract (snake_case)
+  - 'Verification: go build ./... && go vet ./... exit 0; go test ./internal/handler
+    -run TestAgent passes (5 tests); npx tsc --noEmit exit 0; npx vitest run 553/553;
+    oxlint 0 errors'
+  status: complete
+  created_at: '2026-08-09T11:40:02.737470+00:00'
+  completed_at: '2026-08-09T11:41:45.649519+00:00'
