@@ -54,6 +54,13 @@ interface ListTopicsResponse {
   topics: TopicSummary[];
 }
 
+interface HealthResponse {
+  status: string;
+  service?: string;
+}
+
+type HealthState = { kind: 'healthy'; label: string } | { kind: 'unhealthy' };
+
 interface Segment {
   mode: ViewMode;
   label: string;
@@ -67,6 +74,8 @@ const SEGMENTS: readonly Segment[] = [
   { mode: 'detail', label: 'Detail', icon: List, hint: 'Detail view — node list' },
   { mode: 'merge', label: 'Merge', icon: GitMerge, hint: 'Merge view — approvals' },
 ];
+
+const HEALTH_POLL_MS = 15_000;
 
 // ─── Segmented view selector ───────────────────────────────────────────
 
@@ -201,6 +210,39 @@ export default function AppHeader() {
     trees,
   });
 
+  const [health, setHealth] = useState<HealthState>({ kind: 'unhealthy' });
+  const healthy = health.kind === 'healthy';
+  const backendLabel = healthy ? `Backend: ${health.label}` : 'Backend: unreachable';
+  const backendTitle = healthy ? 'Backend is healthy' : 'Backend is unreachable';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function check() {
+      try {
+        const res = await fetch('/health');
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as HealthResponse;
+        if (data.status === 'ok') {
+          setHealth({ kind: 'healthy', label: data.service ?? data.status });
+        } else {
+          setHealth({ kind: 'unhealthy' });
+        }
+      } catch {
+        if (!cancelled) {
+          setHealth({ kind: 'unhealthy' });
+        }
+      }
+    }
+
+    void check();
+    const id = setInterval(check, HEALTH_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
   return (
     <header
       className="flex h-16 shrink-0 items-center gap-4 border-b border-line-subtle bg-surface-panel/80 px-4 backdrop-blur-md sm:px-6"
@@ -237,16 +279,20 @@ export default function AppHeader() {
       <div className="flex shrink-0 items-center gap-3">
         <span
           data-testid="backend-status"
-          title="Backend: localhost:8080"
+          title={backendTitle}
+          aria-label={backendTitle}
           className="inline-flex items-center gap-1.5 rounded-sm bg-surface-input px-2 py-1 text-xs text-content-muted ring-1 ring-inset ring-line-subtle"
         >
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-status-success"
+            className={[
+              'h-1.5 w-1.5 rounded-full',
+              healthy ? 'bg-status-success' : 'bg-status-danger',
+            ].join(' ')}
           />
           {/* Narrow widths keep the dot; the label folds into the a11y tree. */}
-          <span className="hidden xl:inline">Backend: localhost:8080</span>
-          <span className="sr-only xl:hidden">Backend: localhost:8080</span>
+          <span className="hidden xl:inline">{backendLabel}</span>
+          <span className="sr-only xl:hidden">{backendLabel}</span>
         </span>
       </div>
     </header>

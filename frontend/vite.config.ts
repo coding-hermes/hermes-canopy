@@ -39,6 +39,10 @@ export default defineConfig({
           })
         },
       },
+      '/health': {
+        target: API_URL,
+        changeOrigin: true,
+      },
     },
   },
 })
