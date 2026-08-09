@@ -8214,8 +8214,8 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 - Implementation: per-session `store.Save(lastImported)` inside the import loop (crash re-imports at most the in-flight session); `SessionSeenChecker.ImportedBefore` dedup via `EXISTS(nodes.metadata->>'session_id' = $1 AND deleted_at IS NULL)` OR `trees.metadata` (covers 48 legacy trees); `CreateTreeParams.Metadata json.RawMessage` threaded through service → `trees.metadata` (repo already supported it); `SkippedDuplicates` counter in ImportSummary incl. dry-run
 - Files: `internal/session/importer.go` (+80), `internal/session/importer_test.go` (+218 — TestImporterCrashRecovery/DedupSkip/DedupDryRun/TreeMetadataSessionID), `internal/service/tree_service.go` (+47), `cmd/canopyd/session_cmd.go` (+4)
 - Foreman re-verification (independent): go build/vet clean; `go test ./internal/session/...` 15 tests PASS 1.493s; `timeout 540 gitreins guard` → Tier 1 full PASS exit 0
-- Judge: `gitreins task complete BUG-035` → **Overall PASS**, verdict b22fb566, 5/5 criteria with per-criterion line evidence; record folded into .gitreins/tasks.yaml (chore commit, BUG-034 pattern)
-- Board events: 145 task_completed + 146 audit appended (events.jsonl, ids contiguous from 144)
+- Judge: `gitreins task complete BUG-035` → **Overall PASS**, 5/5 criteria with per-criterion line evidence. Verdict id: 80cab322 canonical (sibling tick-281 fire re-ran judge post-completion; my CLI printed b22fb566 — known printed-vs-stored hash mismatch). Record folded into .gitreins/tasks.yaml (commit 2df5c0b)
+- Board events (canonical, sibling fire): 147 task_completed + 148 audit appended by the tick-281 sibling fire at 18:33:22 (my 145/146 were deduped in its commit b929043); ids contiguous from 144
 
 **Deferred:** WIRE-006 (P1, cpx 6, **unblocked now** — association layer, Bane directive 08-09, next natural pick), UI-REL-001 (P2, deps WIRE-006), PAG-001 (P2, cursor pagination 3,200+ trees), GAP-018 (P1 docs/legal — license MIT-vs-Proprietary contradiction: HUMAN-GATED decision, do not dispatch), GAP-019/020 (P2 docs), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
 
