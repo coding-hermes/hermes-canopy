@@ -885,3 +885,14 @@ tasks:
   status: complete
   created_at: '2026-08-09T12:30:05.533867+00:00'
   completed_at: '2026-08-09T12:30:12.269833+00:00'
+- id: BUG-034
+  title: Fix set_content_hash trigger bytea crash
+  criteria:
+  - migration 000025 rewrites set_content_hash() with convert_to(content,UTF8)
+  - regression test with real failing content (backslash/x escapes) passes without
+    22P02
+  - go build ./... and go vet ./... clean
+  - gitreins guard passes
+  status: complete
+  created_at: '2026-08-09T22:45:06.791789+00:00'
+  completed_at: '2026-08-09T22:45:10.113258+00:00'
