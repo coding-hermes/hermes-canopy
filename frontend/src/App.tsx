@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   ShieldCheck,
   GitBranch,
+  MessageSquare,
 } from 'lucide-react'
 import TreeView from './components/TreeView'
 import ApprovalPanel from './components/ApprovalPanel'
@@ -14,6 +15,7 @@ import TreesPage from './pages/TreesPage'
 import NodesPage from './pages/NodesPage'
 import TopicsPage from './pages/TopicsPage'
 import CardsPage from './pages/CardsPage'
+import WorkspacePage from './pages/WorkspacePage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
 import AppHeader from './components/AppHeader'
@@ -38,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/nodes', label: 'Nodes', ariaLabel: 'Nodes', icon: Network },
   { to: '/topics', label: 'Topics', ariaLabel: 'Topics', icon: Hash },
   { to: '/cards', label: 'Cards', ariaLabel: 'Cards', icon: LayoutGrid },
+  { to: '/workspace', label: 'Workspace', ariaLabel: 'Workspace', icon: MessageSquare },
   { to: '/approvals', label: 'Approvals', ariaLabel: 'Approvals', icon: ShieldCheck },
 ]
 
@@ -159,6 +162,7 @@ export default function App() {
         <Route path="nodes" element={<NodesPage />} />
         <Route path="topics" element={<TopicsPage />} />
         <Route path="cards" element={<CardsPage />} />
+        <Route path="workspace" element={<WorkspacePage />} />
         <Route path="approvals" element={<ApprovalPanel />} />
       </Route>
     </Routes>
