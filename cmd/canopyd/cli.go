@@ -78,7 +78,8 @@ type graphEdgeSummary struct {
 
 // knownSubcommands maps top-level subcommands to their handler.
 var knownSubcommands = map[string]struct{}{
-	"tree": {},
+	"tree":    {},
+	"session": {},
 }
 
 // runCLI detects the subcommand from args and dispatches to the appropriate handler.
@@ -91,6 +92,7 @@ func runCLI() {
 		fmt.Fprintf(os.Stderr, "  tree list                 List all trees\n")
 		fmt.Fprintf(os.Stderr, "  tree delete <id>          Delete a tree\n")
 		fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
+		fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
 		os.Exit(1)
 	}
 
@@ -98,6 +100,8 @@ func runCLI() {
 	switch sub {
 	case "tree":
 		runTreeCmd(os.Args[2:])
+	case "session":
+		runSessionCmd(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", sub)
 		fmt.Fprintf(os.Stderr, "Run 'canopyd' without arguments to see usage.\n")
@@ -438,17 +442,17 @@ func hasSubcommand() bool {
 	return isSubcommand(os.Args[1])
 }
 
-// Filter out server flag arguments when they're passed before a subcommand.
-// This handles the case where someone runs e.g. "canopyd -version tree list".
+// stripServerFlags removes leading server flag arguments (e.g. -version)
+// that appear BEFORE the subcommand token, so main() can route to CLI mode
+// even when server flags precede the subcommand. Everything from the first
+// non-flag token onward — including subcommand flags such as
+// `session import --db …` — is preserved.
 func stripServerFlags(args []string) []string {
-	var filtered []string
-	for _, a := range args {
-		if strings.HasPrefix(a, "-") && !isSubcommand(a) {
-			continue
-		}
-		filtered = append(filtered, a)
+	i := 0
+	for i < len(args) && strings.HasPrefix(args[i], "-") && !isSubcommand(args[i]) {
+		i++
 	}
-	return filtered
+	return args[i:]
 }
 
 // Ensure net/http is used (compile-time check).
