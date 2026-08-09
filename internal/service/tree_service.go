@@ -9,6 +9,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -225,8 +226,9 @@ type CreateTreeParams struct {
 	Title         string
 	Description   string
 	RootContent   string
-	ContentFormat ContentFormat // markdown, plain, code
-	NodeType      NodeType      // message, announcement
+	ContentFormat ContentFormat   // markdown, plain, code
+	NodeType      NodeType        // message, announcement
+	Metadata      json.RawMessage // optional jsonb metadata (defaults to '{}')
 }
 
 // GetTreeOptions controls whether optional fields are included.
@@ -361,16 +363,16 @@ func (s *TreeServiceImpl) CreateTree(ctx context.Context, p CreateTreeParams) (*
 	// best-effort rollback; Commit() on a committed tx is a no-op.
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// 1. Insert tree row. The schema defaults root_node_id, metadata,
-	// created_at, edited_at, and deleted_at server-side; we pass id,
-	// owner_id, title, description explicitly.
+	// 1. Insert tree row. The schema defaults root_node_id, created_at,
+	// edited_at, and deleted_at server-side; we pass id, owner_id, title,
+	// description, and metadata explicitly.
 	var created db.Tree
 	row := tx.QueryRow(ctx, `
-        INSERT INTO trees (id, owner_id, title, description)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO trees (id, owner_id, title, description, metadata)
+        VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::jsonb))
         RETURNING id, owner_id, title, description, root_node_id,
                   metadata, created_at, edited_at, deleted_at`,
-		treeID, p.OwnerID, strings.TrimSpace(p.Title), p.Description,
+		treeID, p.OwnerID, strings.TrimSpace(p.Title), p.Description, p.Metadata,
 	)
 	if err := row.Scan(
 		&created.ID, &created.OwnerID, &created.Title, &created.Description,
@@ -428,6 +430,35 @@ func (s *TreeServiceImpl) CreateTree(ctx context.Context, p CreateTreeParams) (*
 		UpdatedAt:   coalesceTime(created.EditedAt, created.CreatedAt),
 		Role:        RoleOwner,
 	}, nil
+}
+
+// --- ImportedBefore (session import dedup) ----------------------------------
+
+// ImportedBefore reports whether any non-deleted node carries the given
+// session_id in its metadata, OR any non-deleted tree carries it in
+// trees.metadata. This covers both legacy imports (session_id on child
+// nodes only) and new imports (session_id on tree metadata). The query
+// is cheap (indexed jsonb access path) and runs once per candidate
+// session during import.
+func (s *TreeServiceImpl) ImportedBefore(ctx context.Context, sessionID string) (bool, error) {
+	if s.pool == nil {
+		return false, ErrDatabaseUnavailable
+	}
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+        SELECT EXISTS (
+            SELECT 1 FROM nodes
+            WHERE metadata->>'session_id' = $1 AND deleted_at IS NULL
+        ) OR EXISTS (
+            SELECT 1 FROM trees
+            WHERE metadata->>'session_id' = $1 AND deleted_at IS NULL
+        )`,
+		sessionID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("%w: check imported session: %v", ErrDatabaseUnavailable, err)
+	}
+	return exists, nil
 }
 
 // --- ListTrees --------------------------------------------------------------

@@ -94,6 +94,7 @@ func sessionImport(args []string) {
 
 	imp := session.NewImporter(reader, treeSvc, nodeSvc,
 		&session.FileWatermarkStore{Path: watermarkPath}, owner)
+	imp.SetSessionChecker(treeSvc)
 
 	sum, err := imp.Run(ctx, session.ImportOptions{
 		Limit:           *limit,
@@ -127,6 +128,9 @@ func printImportSummary(sum *session.ImportSummary, watermarkPath string) {
 	}
 	if sum.SkippedArchived > 0 {
 		fmt.Printf("  Skipped (archived): %d\n", sum.SkippedArchived)
+	}
+	if sum.SkippedDuplicates > 0 {
+		fmt.Printf("  Skipped (duplicate): %d\n", sum.SkippedDuplicates)
 	}
 	if len(sum.Titles) > 0 {
 		fmt.Println("  Titles:")

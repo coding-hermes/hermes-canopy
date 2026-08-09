@@ -19,6 +19,13 @@ type TreeCreator interface {
 	CreateTree(ctx context.Context, params service.CreateTreeParams) (*service.Tree, error)
 }
 
+// SessionSeenChecker reports whether a session_id has already been
+// imported into Canopy (dedup before create). *service.TreeServiceImpl
+// satisfies it via ImportedBefore.
+type SessionSeenChecker interface {
+	ImportedBefore(ctx context.Context, sessionID string) (bool, error)
+}
+
 // NodeCreator is the subset of service.NodeService the importer needs.
 // *service.NodeServiceImpl satisfies it.
 type NodeCreator interface {
@@ -94,12 +101,13 @@ type ImportOptions struct {
 
 // ImportSummary reports what a run did (or, in dry-run, would do).
 type ImportSummary struct {
-	DryRun           bool
-	SessionsImported int
-	TreesCreated     int
-	NodesCreated     int
-	SkippedArchived  int
-	Titles           []string // imported/would-import titles, oldest first
+	DryRun            bool
+	SessionsImported  int
+	TreesCreated      int
+	NodesCreated      int
+	SkippedArchived   int
+	SkippedDuplicates int
+	Titles            []string // imported/would-import titles, oldest first
 }
 
 // Importer orchestrates state.db → Canopy ingestion.
@@ -109,6 +117,7 @@ type Importer struct {
 	nodes  NodeCreator
 	store  WatermarkStore
 	owner  uuid.UUID
+	seen   SessionSeenChecker // optional; nil = no dedup check
 }
 
 // NewImporter wires the reader, Canopy service dependencies, and watermark
@@ -124,11 +133,25 @@ func NewImporter(reader *Reader, trees TreeCreator, nodes NodeCreator, store Wat
 	}
 }
 
+// SetSessionChecker wires an optional SessionSeenChecker for dedup
+// (skip sessions whose session_id already exists in Canopy). When nil
+// (the default), no dedup check is performed.
+func (i *Importer) SetSessionChecker(seen SessionSeenChecker) {
+	i.seen = seen
+}
+
 // Run imports new sessions into Canopy. Sessions are walked oldest-first
 // in (started_at, id) order; only sessions strictly after the watermark are
-// candidates, and Limit truncates the candidate set. In non-dry-run mode
-// the watermark is persisted after the run — but only when at least one
-// session was imported (skipped-archived sessions do not advance it).
+// candidates, and Limit truncates the candidate set.
+//
+// Crash safety: the watermark is persisted after EACH successfully imported
+// session (not just at run end). A crash mid-run re-imports at most the
+// in-flight session — the per-session advance ensures every completed
+// session is recorded.
+//
+// Dedup: when a SessionSeenChecker is wired (SetSessionChecker), a session
+// whose session_id already exists in Canopy is skipped (no tree created),
+// counted in SkippedDuplicates, and the watermark is still advanced past it.
 func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary, error) {
 	wm, err := i.store.Load()
 	if err != nil {
@@ -159,6 +182,34 @@ func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary,
 
 	lastImported := wm
 	for _, s := range pending {
+		// Dedup check — applies in both dry-run and real mode.
+		if i.seen != nil {
+			seen, err := i.seen.ImportedBefore(ctx, s.ID)
+			if err != nil {
+				return nil, fmt.Errorf("session: dedup check for %s: %w", s.ID, err)
+			}
+			if seen {
+				sum.SkippedDuplicates++
+				// Use the mapped title for consistency with the import path.
+				title := s.Title
+				if title == "" {
+					title = "Hermes session " + s.ID
+				}
+				sum.Titles = append(sum.Titles, title)
+				// Advance the watermark past the duplicate so a later run
+				// does not re-examine it.
+				lastImported.LastSessionID = s.ID
+				lastImported.LastStartedAt = timeToUnix(s.StartedAt)
+				lastImported.LastImportedAt = time.Now().UTC()
+				if !opts.DryRun {
+					if err := i.store.Save(lastImported); err != nil {
+						return nil, err
+					}
+				}
+				continue
+			}
+		}
+
 		msgs, err := i.reader.ListMessages(ctx, s.ID)
 		if err != nil {
 			return nil, fmt.Errorf("session: messages for %s: %w", s.ID, err)
@@ -176,22 +227,26 @@ func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary,
 		if err := i.importSession(ctx, s, spec, sum); err != nil {
 			return nil, err
 		}
+		// Per-session watermark advance — persisted immediately so a
+		// crash after this session does not lose its progress.
 		lastImported.LastSessionID = s.ID
 		lastImported.LastStartedAt = timeToUnix(s.StartedAt)
 		lastImported.LastImportedAt = time.Now().UTC()
-	}
-
-	if !opts.DryRun && sum.SessionsImported > 0 {
 		if err := i.store.Save(lastImported); err != nil {
 			return nil, err
 		}
 	}
+
 	return sum, nil
 }
 
 // importSession creates the tree (with root node) and chains every mapped
 // message as a reply child. Counters on sum are updated on success.
 func (i *Importer) importSession(ctx context.Context, s Session, spec TreeSpec, sum *ImportSummary) error {
+	treeMeta, err := json.Marshal(map[string]string{"session_id": s.ID})
+	if err != nil {
+		return fmt.Errorf("session: encode tree metadata for %s: %w", s.ID, err)
+	}
 	tree, err := i.trees.CreateTree(ctx, service.CreateTreeParams{
 		OwnerID:       i.owner,
 		Title:         spec.Title,
@@ -199,6 +254,7 @@ func (i *Importer) importSession(ctx context.Context, s Session, spec TreeSpec, 
 		RootContent:   spec.RootContent,
 		ContentFormat: service.FormatMarkdown,
 		NodeType:      service.NodeTypeMessage,
+		Metadata:      treeMeta,
 	})
 	if err != nil {
 		return fmt.Errorf("session: create tree for %s: %w", s.ID, err)

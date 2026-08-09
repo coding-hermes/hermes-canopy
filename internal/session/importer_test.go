@@ -138,12 +138,18 @@ func (f *fakeTreeCreator) CreateTree(_ context.Context, p service.CreateTreePara
 }
 
 type fakeNodeCreator struct {
-	calls []service.CreateNodeInput
-	nodes []*service.CreateNodeResult
+	calls  []service.CreateNodeInput
+	nodes  []*service.CreateNodeResult
+	failOn int // if >0, fail on the Nth Create call with a sentinel error
 }
+
+var errFakeNodeCreate = fmt.Errorf("session: fake node create failure")
 
 func (f *fakeNodeCreator) Create(_ context.Context, treeID uuid.UUID, in service.CreateNodeInput) (*service.CreateNodeResult, error) {
 	f.calls = append(f.calls, in)
+	if f.failOn > 0 && len(f.calls) == f.failOn {
+		return nil, errFakeNodeCreate
+	}
 	n := &service.CreateNodeResult{
 		Node: &service.NodeDetail{ID: uuid.New(), TreeID: treeID, ParentID: &in.ParentID},
 		Edge: &service.EdgeDetail{SourceNodeID: in.ParentID},
@@ -306,8 +312,9 @@ func TestImporterIncremental(t *testing.T) {
 	if sum1.SessionsImported != 3 {
 		t.Fatalf("run1 imported %d, want 3", sum1.SessionsImported)
 	}
-	if len(store.save) != 1 {
-		t.Fatalf("run1 watermark saves = %d, want 1", len(store.save))
+	// Per-session watermark advance: 3 sessions = 3 saves.
+	if len(store.save) != 3 {
+		t.Fatalf("run1 watermark saves = %d, want 3 (per-session advance)", len(store.save))
 	}
 	if wm := store.wm; wm.LastSessionID != "sess_later" || wm.LastStartedAt != 200.0 {
 		t.Errorf("run1 watermark = %+v, want (sess_later, 200)", wm)
@@ -324,8 +331,8 @@ func TestImporterIncremental(t *testing.T) {
 	if len(trees.calls) != 3 || len(nodes.calls) != 3 {
 		t.Fatalf("total creations = %d trees / %d nodes, want 3/3", len(trees.calls), len(nodes.calls))
 	}
-	if len(store.save) != 1 {
-		t.Fatalf("run2 re-saved watermark (%d saves), want still 1", len(store.save))
+	if len(store.save) != 3 {
+		t.Fatalf("run2 re-saved watermark (%d saves), want still 3", len(store.save))
 	}
 
 	// A brand-new session after the watermark imports on the next run.
@@ -588,5 +595,204 @@ func TestFileWatermarkStore(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("round trip = %+v, want %+v", got, want)
+	}
+}
+
+// --- Dedup / crash-recovery tests -------------------------------------------
+
+// fakeSeenChecker is a test-only SessionSeenChecker backed by a set.
+type fakeSeenChecker struct {
+	seen   map[string]bool
+	called []string
+}
+
+func (f *fakeSeenChecker) ImportedBefore(_ context.Context, sessionID string) (bool, error) {
+	f.called = append(f.called, sessionID)
+	return f.seen[sessionID], nil
+}
+
+// TestImporterCrashRecovery simulates a crash mid-run: the node creator
+// fails on the 2nd of 3 sessions. Run returns the error. A re-run on the
+// SAME importer (fakes restored) imports only sessions 2+3 — session 1's
+// tree is NOT re-created because the per-session watermark advance
+// persisted its progress before the crash.
+func TestImporterCrashRecovery(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "crash_a", source: "cli", title: "A", startedAt: 100.0})
+		insertSession(t, conn, fixtureSession{id: "crash_b", source: "cli", title: "B", startedAt: 200.0})
+		insertSession(t, conn, fixtureSession{id: "crash_c", source: "cli", title: "C", startedAt: 300.0})
+		// Each session has a user msg (root) + an assistant msg (child node).
+		insertMessage(t, conn, fixtureMessage{id: 1, sessionID: "crash_a", role: "user", content: "a", ts: 10})
+		insertMessage(t, conn, fixtureMessage{id: 2, sessionID: "crash_a", role: "assistant", content: "a-reply", ts: 11})
+		insertMessage(t, conn, fixtureMessage{id: 3, sessionID: "crash_b", role: "user", content: "b", ts: 20})
+		insertMessage(t, conn, fixtureMessage{id: 4, sessionID: "crash_b", role: "assistant", content: "b-reply", ts: 21})
+		insertMessage(t, conn, fixtureMessage{id: 5, sessionID: "crash_c", role: "user", content: "c", ts: 30})
+		insertMessage(t, conn, fixtureMessage{id: 6, sessionID: "crash_c", role: "assistant", content: "c-reply", ts: 31})
+	})
+	ctx := context.Background()
+
+	// --- Run 1: crash on session 2 ---
+	// Each session has 1 child node (assistant reply). Session A = 1 node.Create,
+	// so failOn=2 triggers on session B's first (and only) node.Create.
+	imp1, trees1, nodes1, store := newTestImporter(t, path)
+	nodes1.failOn = 2
+
+	sum1, err := imp1.Run(ctx, ImportOptions{})
+	if err == nil {
+		t.Fatalf("run1 should have returned error, got nil; summary=%+v", sum1)
+	}
+
+	// Session A imported fully (1 tree + 1 child node). Session B's tree was
+	// created by CreateTree but the node insert crashed — B is orphaned
+	// (tree exists, nodes incomplete). That's expected: the crash happens
+	// at node insert, after CreateTree returned. The dedup check will
+	// catch B's orphaned tree on re-run.
+	if len(trees1.calls) != 2 {
+		t.Fatalf("run1 trees = %d, want 2 (A complete + B orphaned)", len(trees1.calls))
+	}
+	if trees1.calls[0].Title != "A" {
+		t.Errorf("first tree title = %q, want A", trees1.calls[0].Title)
+	}
+	// Per-session advance: session A's watermark was persisted before crash.
+	// Session B crashed during importSession (before its watermark save).
+	if len(store.save) != 1 {
+		t.Fatalf("run1 watermark saves = %d, want 1 (crash_a only; crash_b never saved)", len(store.save))
+	}
+	if wm := store.wm; wm.LastSessionID != "crash_a" {
+		t.Fatalf("run1 watermark = %+v, want crash_a", wm)
+	}
+
+	// --- Run 2: re-run with fresh fakes on the SAME store ---
+	// The store already has crash_a persisted, so only crash_b and crash_c
+	// are pending. We need a fresh importer sharing the store.
+	r2, err := OpenReader(path)
+	if err != nil {
+		t.Fatalf("reopen reader: %v", err)
+	}
+	defer r2.Close()
+	trees2 := &fakeTreeCreator{}
+	nodes2 := &fakeNodeCreator{}
+	imp2 := NewImporter(r2, trees2, nodes2, store, defaultOwner)
+
+	sum2, err := imp2.Run(ctx, ImportOptions{})
+	if err != nil {
+		t.Fatalf("run2: %v", err)
+	}
+	// Only sessions B and C should be pending (A's watermark persisted).
+	// B may have an orphaned tree from run1, but without a checker wired
+	// the fake re-creates it — that's fine; the watermark guarantee is
+	// that A is NOT re-imported.
+	if sum2.SessionsImported != 2 {
+		t.Fatalf("run2 imported %d, want 2 (crash_b + crash_c)", sum2.SessionsImported)
+	}
+	// Session A must NOT appear in run2's trees.
+	for _, c := range trees2.calls {
+		if c.Title == "A" {
+			t.Errorf("run2 re-created session A tree — per-session watermark failed")
+		}
+	}
+	// Watermark should now be at crash_c: 1 (from run1) + 2 (from run2) = 3 total saves.
+	if len(store.save) != 3 {
+		t.Fatalf("total watermark saves = %d, want 3 (1+2)", len(store.save))
+	}
+	if wm := store.wm; wm.LastSessionID != "crash_c" {
+		t.Errorf("run2 watermark = %+v, want crash_c", wm)
+	}
+}
+
+// TestImporterDedupSkip verifies that a session already in the dedup
+// source is skipped (no tree created), SkippedDuplicates is incremented,
+// and the watermark advances past it.
+func TestImporterDedupSkip(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "dup_a", source: "cli", title: "DupA", startedAt: 100.0})
+		insertSession(t, conn, fixtureSession{id: "new_b", source: "cli", title: "NewB", startedAt: 200.0})
+		insertMessage(t, conn, fixtureMessage{id: 1, sessionID: "dup_a", role: "user", content: "a", ts: 10})
+		insertMessage(t, conn, fixtureMessage{id: 2, sessionID: "new_b", role: "user", content: "b", ts: 20})
+	})
+	imp, trees, _, store := newTestImporter(t, path)
+	imp.SetSessionChecker(&fakeSeenChecker{seen: map[string]bool{"dup_a": true}})
+	ctx := context.Background()
+
+	sum, err := imp.Run(ctx, ImportOptions{})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	// dup_a skipped, new_b imported.
+	if sum.SkippedDuplicates != 1 {
+		t.Fatalf("SkippedDuplicates = %d, want 1", sum.SkippedDuplicates)
+	}
+	if sum.SessionsImported != 1 || sum.TreesCreated != 1 {
+		t.Fatalf("summary = %+v, want 1 imported / 1 tree", sum)
+	}
+	// Only NewB tree created — DupA was skipped.
+	if len(trees.calls) != 1 || trees.calls[0].Title != "NewB" {
+		t.Fatalf("trees = %+v, want only NewB", trees.calls)
+	}
+	// Watermark advanced past BOTH sessions (dup_a is "imported" from
+	// the watermark's perspective). 2 saves: one for dup_a skip, one for new_b.
+	if len(store.save) != 2 {
+		t.Fatalf("watermark saves = %d, want 2 (skip + import)", len(store.save))
+	}
+	if wm := store.wm; wm.LastSessionID != "new_b" {
+		t.Errorf("watermark = %+v, want new_b", wm)
+	}
+}
+
+// TestImporterDedupDryRun verifies that the dedup check runs in dry-run
+// mode too, reporting would-be skips honestly without creating anything.
+func TestImporterDedupDryRun(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "dup_d", source: "cli", title: "DupD", startedAt: 100.0})
+		insertSession(t, conn, fixtureSession{id: "new_e", source: "cli", title: "NewE", startedAt: 200.0})
+		insertMessage(t, conn, fixtureMessage{id: 1, sessionID: "dup_d", role: "user", content: "d", ts: 10})
+		insertMessage(t, conn, fixtureMessage{id: 2, sessionID: "new_e", role: "user", content: "e", ts: 20})
+	})
+	imp, trees, _, store := newTestImporter(t, path)
+	imp.SetSessionChecker(&fakeSeenChecker{seen: map[string]bool{"dup_d": true}})
+
+	sum, err := imp.Run(context.Background(), ImportOptions{DryRun: true})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !sum.DryRun {
+		t.Error("summary.DryRun = false, want true")
+	}
+	if sum.SkippedDuplicates != 1 {
+		t.Fatalf("SkippedDuplicates = %d, want 1", sum.SkippedDuplicates)
+	}
+	if sum.SessionsImported != 1 || sum.TreesCreated != 1 {
+		t.Fatalf("summary = %+v, want would-be 1 session / 1 tree", sum)
+	}
+	// Dry run must not create anything or persist the watermark.
+	if len(trees.calls) != 0 {
+		t.Fatalf("dry run created %d trees", len(trees.calls))
+	}
+	if len(store.save) != 0 {
+		t.Fatalf("dry run saved watermark %d times, want 0", len(store.save))
+	}
+}
+
+// TestImporterTreeMetadataSessionID verifies that newly imported trees
+// carry {"session_id": <id>} in their metadata.
+func TestImporterTreeMetadataSessionID(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "meta_s", source: "cli", title: "Meta", startedAt: 100.0})
+		insertMessage(t, conn, fixtureMessage{id: 1, sessionID: "meta_s", role: "user", content: "hi", ts: 10})
+	})
+	imp, trees, _, _ := newTestImporter(t, path)
+
+	if _, err := imp.Run(context.Background(), ImportOptions{}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(trees.calls) != 1 {
+		t.Fatalf("trees = %d, want 1", len(trees.calls))
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(trees.calls[0].Metadata, &meta); err != nil {
+		t.Fatalf("tree metadata unmarshal: %v", err)
+	}
+	if meta["session_id"] != "meta_s" {
+		t.Errorf("tree metadata = %v, want session_id=meta_s", meta)
 	}
 }
