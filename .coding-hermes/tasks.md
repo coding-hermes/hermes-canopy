@@ -8222,3 +8222,31 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** backfilled /ticks/280 (BUG-034 complete) + /ticks/281 (BUG-035 dispatch); wrote /ticks/282 + /project/hermes-canopy/status; all verified in current.jsonl BEFORE board entry (T183 ordering; ids 2ba2e19d/5cff6deb/9f167e96/1f86cbf7).
 
 **Next tick:** WIRE-006 (association layer — parent_session_id 305 rows + async_delegations 28 rows exist in source; unblocks UI-REL-001; Bane directive 08-09(2)).
+## Tick 281 — 2026-08-09 18:40 UTC (scheduler tick hermes-canopy-2026-08-09-18-06-10, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE — BUG-035 delivered, verified, judged, committed, pushed (123 complete / 29 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 152 rows (123 complete / 29 pending). BUG-035 → complete (commit c33624e, judge PASS 80cab322) |
+| Stack | canopyd :8091 + vite :5173 LIVE (Bane test session, untouched — vite.config.ts TEMP allowedHosts stays uncommitted) |
+| Scheduler | cooldown_s=900 live API + fleet.toml agree (no PUT). ⚠️ Storm: sibling tick-282 fire overlapped (events 145/146 duplicate — deduped; its board commit 57c13d1 + tasks.md entry stand) |
+| Workers | 1 dispatched: BUG-035 (glm-5.2 @ zai-glm, PID 3160908, prompt /tmp/canopy-t281-bug035-prompt.txt) — committed c33624e, exited clean |
+| CI | Green 5/5 recent runs (T280 pushes 31340384769/31340390725 success) |
+| DuckBrain | /ticks/281 (b0ecd325) + status (aa396aee) written + fs-grep verified. Sibling backfilled duplicate /ticks/280+281 records — benign same-key versions |
+| GitReins | BUG-035 record created by worker, judge re-run by foreman: verdict 80cab322, folded 2df5c0b |
+
+**Completed: BUG-035** (P1, cpx 2) — WIRE-003 session import idempotency: crashed/partial runs left no watermark → re-runs duplicate trees (BUG-034 crash left 48 trees imported, re-run would duplicate).
+
+- Worker: glm-5.2 @ zai-glm, commit **c33624e** — `fix: per-session watermark + session_id dedup for session import — re-runs no longer duplicate trees after crashes. Addresses BUG-035.` (4 files, +323/-26)
+- Implementation: per-session `store.Save(lastImported)` inside the import loop (crash re-imports at most the in-flight session); `SessionSeenChecker.ImportedBefore` dedup via `EXISTS(nodes.metadata->>'session_id' = $1 AND deleted_at IS NULL)` OR `trees.metadata` (covers 48 legacy trees); `CreateTreeParams.Metadata json.RawMessage` threaded through service → `trees.metadata` (repo already supported it); `SkippedDuplicates` counter in ImportSummary incl. dry-run
+- Files: `internal/session/importer.go` (+80), `internal/session/importer_test.go` (+218 — crash-mid-run recovery, dedup-skip, dry-run dedup, tree-metadata session_id), `internal/service/tree_service.go` (+47), `cmd/canopyd/session_cmd.go` (+4)
+- Foreman re-verification (independent): go build/vet clean; `go test ./internal/session/...` PASS (11/11, 2.7s); full `-short -p 1` sweep run post-commit; `gitreins guard` PASS (secrets/build/lint/tests)
+- Judge: `gitreins task complete BUG-035` → **Overall PASS**, verdict 80cab322, 5/5 criteria (worker's own judge b22fb566 superseded by foreman re-run)
+- Board events: 144 dispatch + 147 task_completed + 148 audit (sibling's 145/146 removed as duplicates)
+
+**Deferred:** WIRE-006 (P1, cpx 6, **unblocked now** — association layer, Bane directive 08-09, next natural pick), UI-REL-001 (P2, deps WIRE-006), PAG-001 (P2), GAP-018 (P1 docs/legal — license contradiction, human-gated), GAP-019/020 (P2 docs), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT; storm recurred T281/282), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** /ticks/281 (b0ecd325) + /project/hermes-canopy/status (aa396aee) written + fs-grep verified BEFORE board entry (T183 ordering).
+
+**Next tick:** WIRE-006 (association layer — parent_session_id 305 rows + async_delegations 28 rows; unblocks UI-REL-001; Bane directive 08-09(2)).
