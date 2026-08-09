@@ -784,3 +784,21 @@ tasks:
   status: complete
   created_at: '2026-08-09T09:01:27.539977+00:00'
   completed_at: '2026-08-09T09:01:27.716179+00:00'
+- id: SPEC-023-UI-001
+  title: "Workspace channels SSE surface (SPEC-023 \xA75)"
+  criteria:
+  - GET /api/v1/workspace/channels returns 200 with a JSON array of channels (id +
+    name), implemented in internal/handler/workspace_handler.go and mounted in internal/server/server.go
+  - POST /api/v1/workspace/channels/{channel_id}/message returns 202 with message_id
+    (uuidv7), 400 on empty content, 404 on unknown channel, and broadcasts a channel_message
+    SSE event via sse.ComposeEvent + hub.Broadcast
+  - GET /api/v1/workspace/channels/{channel_id}/feed streams text/event-stream with
+    subscribe-before-write ordering (client subscribed before WriteHeader 200, per
+    HandleTreeEvents pattern) and heartbeat
+  - 'Workspace tests pass: go test -count=1 -p 1 ./internal/handler/ -run ''TestWorkspace|TestAPI_Workspace''
+    -timeout 300s exits 0'
+  - "Only SPEC-023 channels endpoints implemented \u2014 /api/agents, /api/activity,\
+    \ /api/review NOT added; frontend/vite.config.ts untouched"
+  status: complete
+  created_at: '2026-08-09T09:53:09.838860+00:00'
+  completed_at: '2026-08-09T09:53:15.984237+00:00'

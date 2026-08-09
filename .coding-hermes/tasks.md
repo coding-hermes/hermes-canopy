@@ -7943,3 +7943,48 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Project Status:** 118/144 board tasks complete. WIRE-004 DELIVERED (05df3de, judge 5/5 3d782156) — last Bane 08-08 directive task closed; all 8 WIRE/TEST-REAL tasks done. Full -short sweep **80 consecutive green** (all pkgs). Vitest 530/530, integration 49/49. GitReins 39/39, 0 active. Hilo 1484/236. CI streak 12. Cooldown 900 file+API agree. Board events MAX(id)=127. DuckBrain contiguous through 274. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
 
 **Next tick (275):** SPEC-023-UI-001 dispatch (P1 SSE workspace channels — spec at helix/specs/shared-workspace-ui.md), or WIRE-004 follow-up none needed. CI streak monitoring (T274 push probe). E2E next window 278-283 at Tick 278.
+## Tick 275 — 2026-08-09 09:58 UTC (scheduler tick hermes-canopy-2026-08-09-04-26-24, DeepSeek V4 Flash)
+
+**Verdict: PRODUCTIVE — SPEC-023-UI-001 DELIVERED (5149df1)** — real /api/v1/workspace/channels SSE surface (channel list, message POST, per-channel SSE feed) per SPEC-023 §5, unblocking helix UI-001. Worker: glm-5.2 @ zai-glm, ~16 min, clean report, committed 5149df1 (+958/-0, 4 files). 82nd consecutive green -short sweep.
+
+| # | Gate | Result | Detail |
+|---|------|--------|--------|
+| 1 | Git status | ✅ CLEAN (PRE-EXISTING ONLY) | Tick start: HEAD 9cb16ad in sync with origin/master (0 ahead). `M frontend/vite.config.ts` = Bane TEMP allowedHosts (pre-existing, untouched, EXCLUDED from commit). Untracked: .vfs/.dirty + playwright-report/. No canopy workers (9router/helix sibling foreman sessions verified foreign). Bane live session canopyd :8091 + vite :5173 up, left untouched. |
+| 2 | Duplicate-fire | ✅ CLEAN | `grep '^## Tick 275'` exit 1 at start; no sibling commits mid-tick. |
+| 3 | Build+vet | ✅ CLEAN | `go build ./...` + `go vet ./...` exit 0 (foreman re-verified post-worker). |
+| 4 | Frontend tsc | ✅ CLEAN | `npx tsc --noEmit` exit 0. |
+| 5 | Vitest | ✅ 530/530 | 23 files, 530 passed (3.01s) — matches T274 baseline (frontend untouched). |
+| 6 | Go tests | ✅ FULL SWEEP PASS (82nd) | `go test -short -p 1 -count=1 -timeout 300s ./...` exit 0 — all pkgs: db 74.5s / handler 109.1s / plugin 16.1s / session 0.9s / sse 1.2s / testutil 4.1s. EIGHTY-SECOND consecutive green sweep (sweep #1 pre-worker baseline, sweep #2 post-worker authoritative with new workspace code). Targeted `-run 'TestWorkspace\|TestAPI_Workspace'` 5.4s PASS. |
+| 7 | E2E-001 | ✅ NOT DUE | Window 272-277 SATISFIED at Tick 272 (49/49) — next window 278-283 runs at Tick 278 (fixture-due-window rule). |
+| 8 | Hilo graph | ✅ FRESH PROBE | 1484 edges / 236 files (matches T272-T274; zero code-delta in graph). |
+| 9 | TODO/FIXME | ✅ STABLE | FE: yjsProvider + ShareDialog WIRE-004 stubs gone (T274); 0 new markers. Go 6 pre-existing unchanged. |
+| 10 | GitReins | ✅ 40/40 COMPLETE, 0 ACTIVE | 39 ● at tick start → 40 after SPEC-023-UI-001 task create+complete. Judge verdict 46e402d0 (5/5 PASS). 0 pending / 0 in_progress. |
+| 11 | Secrets | ✅ CLEAN | gitleaks REAL exit 0: no leaks found (696 commits, 31.97 MB). |
+| 12 | Board-v2 | ✅ SPEC-023-UI-001 COMPLETE + EVENTS 128-129 | JSONL canonical: **119 complete + 25 pending = 144** (SPEC-023-UI-001 → complete; UI-002..004 + INFRA-001 remain). Events: 128 task_completed + 129 audit (tick 275) — MAX(id)=129. Header ticks_total 274→**275**, last_commit=**5149df1**, ticks_idle=0. |
+| 13 | Scheduler | ✅ STABLE — COOLDOWN 900 | API GET: name=hermes-canopy, enabled=true, cooldown_s=900, priority=10, weight=10, decay_rate=1, consecutive_failures=0. fleet.toml 900 + API AGREE — NO PUT. |
+| 14 | PG health | ✅ ACCEPTING | :5437 listening (canopy-pg). Bane session canopyd :8091 + vite :5173 up — left untouched per T258-T272 precedent. |
+| 15 | CI (live) | ✅ STREAK 6 CONFIRMED | gh run list: T274 board push 31305096562 SUCCESS (3m10s) + 31303020675 + 31301182453 + 31300155159 + 31298530732 + 31298405830 = 6 visible consecutive SUCCESS. This tick's push = T275 probe. |
+| 16 | External signals | ✅ CLEAN | git fetch: 0 new remote commits, 0 unpushed. gh issue list: 0 open (checked T274). Deps stable (168 Go + 14 npm outdated, non-blocking; no criticals). |
+| 17 | DuckBrain | ✅ WRITTEN + ID-VERIFIED | Pre-write: /ticks/274 present (e59fdd5c — contiguity intact). Wrote /ticks/275 (**3a6ed27f**) + status refresh (**7e732fe8**) — both verified by exact id-recall (T178 pattern). |
+| 18 | Off-by-One | ⏳ HEALTH OK | `curl :8766/health` → ok (uptime 9h20m). No new problem class to submit — clean worker, no novel failure mode. |
+
+### Actions this tick
+
+- **SPEC-023-UI-001 DELIVERED (5149df1, +958/−0, 4 files)** — first canopy-side provider row closed, unblocking helix UI-001 (cross-project GAP-017 fix option 1). New internal/handler/workspace_handler.go (357L): WorkspaceHandler with in-memory RWMutex channel registry (deterministic SHA1 UUIDs from fixed namespace a1b2c3d4-…, seeded general + agents). Routes mounted at /api/v1/workspace/channels: GET / → channel list 200; POST /{channel_id}/message → 202 with uuidv7 message_id, 400 empty content, 404 unknown channel, broadcasts channel_message via sse.ComposeEvent + hub.Broadcast; GET /{channel_id}/feed → SSE stream mirroring HandleTreeEvents' subscribe-before-write race-safe structure (subscribe → headers → flush → Last-Event-ID replay → heartbeat + 50ms drain flush). Tests: workspace_handler_test.go (594L, 9 unit + 2 integration through full-API server). server.go mounts under /api/v1 (SPEC-023 §5 shorthand /api/workspace/channels → repo convention /api/v1/…).
+- **Worker: glm-5.2 @ zai-glm (~16 min, exit 0)** — clean report, guard Tier 1 PASS on first run, committed itself (5149df1) with co-author trailer, did not push. No scope creep: /api/agents, /api/activity, /api/review correctly untouched. Only deviation: handler writeError takes 4 args (no details map) so connection-limit SSE errors omit optional details — error code/message preserved.
+- **82nd consecutive green -short sweep** — sweep #1 pre-worker baseline (db 90.4s / handler 104.2s), sweep #2 post-worker authoritative (db 74.5s / handler 109.1s / plugin 16.1s, exit 0).
+- Board events 128-129 appended (task_completed + audit) via append_board_task_completed.py; header ticks_total 275, last_commit 5149df1. GitReins SPEC-023-UI-001 completion record folded into board commit. DuckBrain /ticks/275 + status written + id-verified BEFORE board entry (T183 ordering).
+- Scheduler cooldown verified live (fleet.toml 900 + API 900 agree) — no PUT. CI streak 6 visible (T275 push probe pending).
+- Bane test session detected + left untouched: canopyd :8091 + vite :5173 live; vite.config.ts TEMP allowedHosts uncommitted — excluded from commits.
+
+### Remaining open
+
+- SPEC-023-UI-002..004 (P1) — React workspace view, agent roster, PR review panel — next natural dispatch: UI-002 (depends on UI-001, now satisfied).
+- INFRA-001: tick storm — scheduler-level, cooldown 900 (fleet policy, file+API agree).
+- E2E-001: window 272-277 SATISFIED at Tick 272 — next window 278-283 (runs at Tick 278).
+- 21 post-MVP backlog items (FTR-01..07, PL-01..06, STACK-01..04, TM-02..04, DPL-05) — deferred by design per AGENTS.md.
+- 168 Go + 14 npm outdated deps — non-blocking maintenance backlog.
+
+**Project Status:** 119/144 board tasks complete. SPEC-023-UI-001 DELIVERED (5149df1, judge 5/5 46e402d0) — helix UI-001 unblocked. Full -short sweep **82 consecutive green** (all pkgs). Vitest 530/530, integration 49/49. GitReins 40/40, 0 active. Hilo 1484/236. CI streak 6. Cooldown 900 file+API agree. Board events MAX(id)=129. DuckBrain contiguous through 275. Bane test session live (canopyd :8091 + vite :5173; vite.config.ts TEMP allowedHosts uncommitted).
+
+**Next tick (276):** SPEC-023-UI-002 dispatch (P1 React workspace view — spec at helix/specs/shared-workspace-ui.md, depends on UI-001 now satisfied), or CI streak monitoring (T275 push probe). E2E next window 278-283 at Tick 278.
