@@ -26,6 +26,18 @@ type TreeRepo interface {
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, limit, offset int) ([]Tree, error)
 	Search(ctx context.Context, query string, limit, offset int) ([]Tree, error)
+	// Count returns the number of active (non-soft-deleted) trees. Used
+	// by the service to report a REAL total in ListTrees instead of the
+	// fetched window size. PAG-002.
+	Count(ctx context.Context) (int, error)
+	// ListKeyset returns a page of active trees ordered by
+	// (created_at DESC, id DESC). When cursorID is nil, the first page
+	// is returned. When non-nil, only rows strictly before (newer
+	// created_at wins, id DESC tiebreak) the cursor row are returned —
+	// Postgres row-value comparison makes this gap-free. limit is the
+	// max page size (NOT limit+1; the caller passes its own window).
+	// PAG-002.
+	ListKeyset(ctx context.Context, cursorID *uuid.UUID, limit int) ([]Tree, error)
 }
 
 // PGTreeRepo is the pgx-backed TreeRepo implementation.
@@ -167,6 +179,66 @@ func (r *PGTreeRepo) List(ctx context.Context, limit, offset int) ([]Tree, error
         LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("db: list trees: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Tree
+	for rows.Next() {
+		var t Tree
+		if err := scanTree(rows, &t); err != nil {
+			return nil, fmt.Errorf("db: scan tree: %w", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// Count returns the number of active (non-soft-deleted) trees. This is
+// the REAL total used by ListTrees pagination metadata. PAG-002.
+func (r *PGTreeRepo) Count(ctx context.Context) (int, error) {
+	var n int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT count(*)::int FROM trees WHERE deleted_at IS NULL`,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("db: count trees: %w", err)
+	}
+	return n, nil
+}
+
+// ListKeyset returns a page of active trees using keyset (cursor)
+// pagination on (created_at DESC, id DESC). When cursorID is nil the
+// first page is returned; when non-nil, only rows strictly before the
+// cursor row (by the same ordering) are returned via Postgres row-value
+// comparison. The (created_at, id) tiebreak makes pages deterministic
+// and gap-free even when created_at values collide (UUIDv7 ids are
+// time-ordered but created_at can still collide under rapid inserts).
+// limit is clamped to [1, 200]. PAG-002.
+func (r *PGTreeRepo) ListKeyset(ctx context.Context, cursorID *uuid.UUID, limit int) ([]Tree, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var rows pgx.Rows
+	var err error
+	if cursorID == nil {
+		rows, err = r.pool.Query(ctx, `
+            SELECT `+treeColumns+`
+            FROM trees
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC, id DESC
+            LIMIT $1`, limit)
+	} else {
+		rows, err = r.pool.Query(ctx, `
+            SELECT `+treeColumns+`
+            FROM trees
+            WHERE deleted_at IS NULL
+              AND (created_at, id) < (
+                  SELECT created_at, id FROM trees WHERE id = $1
+              )
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`, *cursorID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: list trees keyset: %w", err)
 	}
 	defer rows.Close()
 

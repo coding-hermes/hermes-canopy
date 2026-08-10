@@ -357,3 +357,128 @@ func TestPGTreeRepo_Search_NoMatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
+
+// ---------------------------------------------------------------------------
+// Count (PAG-002)
+// ---------------------------------------------------------------------------
+
+func TestPGTreeRepo_Count(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+	repo := db.NewPGTreeRepo(pool)
+
+	// Seed 3 active trees.
+	for i := 0; i < 3; i++ {
+		_, err := repo.Create(ctx, testTree(uuid.New()))
+		require.NoError(t, err)
+	}
+
+	n, err := repo.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 3, n, "Count should return the number of active trees")
+}
+
+func TestPGTreeRepo_Count_ExcludesDeleted(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+	repo := db.NewPGTreeRepo(pool)
+
+	// Create 2 active + 1 deleted.
+	active1, err := repo.Create(ctx, testTree(uuid.New()))
+	require.NoError(t, err)
+	_, err = repo.Create(ctx, testTree(uuid.New()))
+	require.NoError(t, err)
+	deleted, err := repo.Create(ctx, testTree(uuid.New()))
+	require.NoError(t, err)
+	require.NoError(t, repo.SoftDelete(ctx, deleted.ID))
+
+	n, err := repo.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 2, n, "Count should exclude soft-deleted trees")
+
+	// active1 must still be findable.
+	_, err = repo.GetByID(ctx, active1.ID)
+	require.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// ListKeyset (PAG-002)
+// ---------------------------------------------------------------------------
+
+func TestPGTreeRepo_ListKeyset_FirstPage(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+	repo := db.NewPGTreeRepo(pool)
+
+	// Seed 5 trees.
+	owner := uuid.New()
+	for i := 0; i < 5; i++ {
+		_, err := repo.Create(ctx, testTree(owner))
+		require.NoError(t, err)
+	}
+
+	// First page (nil cursor), limit=2.
+	page, err := repo.ListKeyset(ctx, nil, 2)
+	require.NoError(t, err)
+	assert.Len(t, page, 2)
+}
+
+func TestPGTreeRepo_ListKeyset_TwoPageWalk(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+	repo := db.NewPGTreeRepo(pool)
+
+	// Seed 5 trees.
+	owner := uuid.New()
+	for i := 0; i < 5; i++ {
+		_, err := repo.Create(ctx, testTree(owner))
+		require.NoError(t, err)
+	}
+
+	// Page 1.
+	page1, err := repo.ListKeyset(ctx, nil, 2)
+	require.NoError(t, err)
+	assert.Len(t, page1, 2)
+
+	// Page 2: cursor = last ID of page1.
+	cursor := page1[len(page1)-1].ID
+	page2, err := repo.ListKeyset(ctx, &cursor, 2)
+	require.NoError(t, err)
+	assert.Len(t, page2, 2)
+
+	// No overlap.
+	seen := make(map[uuid.UUID]bool)
+	for _, tr := range append(page1, page2...) {
+		assert.False(t, seen[tr.ID], "tree %s appeared twice", tr.ID)
+		seen[tr.ID] = true
+	}
+
+	// Page 3: cursor = last ID of page2 → should have 1 tree.
+	cursor = page2[len(page2)-1].ID
+	page3, err := repo.ListKeyset(ctx, &cursor, 2)
+	require.NoError(t, err)
+	assert.Len(t, page3, 1)
+
+	// Verify all 5 are covered.
+	for _, tr := range page3 {
+		seen[tr.ID] = true
+	}
+	assert.Len(t, seen, 5)
+}
+
+func TestPGTreeRepo_ListKeyset_EmptyCursor(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+	repo := db.NewPGTreeRepo(pool)
+
+	// Non-existent cursor → no rows match (subquery returns NULL → NULL < anything is false).
+	phantom := uuid.New()
+	page, err := repo.ListKeyset(ctx, &phantom, 10)
+	require.NoError(t, err)
+	assert.Empty(t, page)
+}

@@ -494,15 +494,18 @@ func (s *TreeServiceImpl) ImportedBefore(ctx context.Context, sessionID string) 
 
 // --- ListTrees --------------------------------------------------------------
 
-// ListTrees returns a page of trees. The underlying repositories expose
-// offset-based pagination over active rows; cursor-based traversal is
-// approximated by treating the cursor as an offset seed (the offset of
-// the matching row in the active-only set). When the cursor resolves
-// to a position past the end the call returns an empty page rather
-// than an error.
+// ListTrees returns a page of trees.
 //
-// TODO(cursor): once the treeRepo exposes a cursor-aware List variant
-// (BE-XX), switch the offset derivation to true UUIDv7 cursor logic.
+// The DEFAULT path (Status=active, no search, Sort=created_desc — what
+// the frontend uses) uses true keyset pagination: a (created_at, id)
+// cursor query at the repo level plus a real COUNT for the total. This
+// means every page returns the correct set and the total reflects the
+// actual number of active trees, not a window estimate. PAG-002.
+//
+// Non-default paths (other sorts, Status=deleted/all, search) still use
+// the older offset-window + client-side sort + client-side cursor filter
+// approach. Their total stays a window estimate unless the repo's Count
+// is available — see the per-path comments below.
 func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*ListTreesResult, error) {
 	if err := validateListTrees(p); err != nil {
 		return nil, err
@@ -518,13 +521,26 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 		sortOrder = SortCreatedDesc
 	}
 
-	// The existing repositories expose active rows only. For Status=active
-	// we can use them as-is; for Status=deleted / Status=all we fall back
-	// to a direct query so soft-deleted rows are reachable.
+	// --- DEFAULT PATH: keyset pagination on (created_at, id) ----------
+	// This is the path the frontend hits: active trees, no search,
+	// created_desc (the default). It uses the repo's keyset query +
+	// real COUNT so total and cursor pages are correct for any dataset
+	// size. PAG-002.
+	isDefaultSort := sortOrder == SortCreatedDesc
+	hasSearch := strings.TrimSpace(p.Search) != ""
+	if status == TreeStatusActive && !hasSearch && isDefaultSort {
+		return s.listTreesKeyset(ctx, p, limit)
+	}
+
+	// --- LEGACY PATH: offset window + client-side sort + cursor filter --
+	// Used by non-default sorts, Status=deleted/all, and search. The
+	// cursor filter still runs over the fetched window, so cursor pages
+	// beyond limit+1 may be incomplete — this is accepted scope for
+	// PAG-002 (the default path is the one the frontend uses).
 	var rows []db.Tree
 	var err error
 	switch {
-	case strings.TrimSpace(p.Search) != "":
+	case hasSearch:
 		rows, err = s.searchTrees(ctx, p.Search, limit+1, 0)
 	case status == TreeStatusActive:
 		rows, err = s.treeRepo.List(ctx, limit+1, 0)
@@ -533,7 +549,7 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 	case status == TreeStatusDeleted:
 		rows, err = s.listDeletedOnly(ctx, limit+1, 0)
 	}
-	if err != nil && (!errors.Is(err, db.ErrNotFound) || strings.TrimSpace(p.Search) == "") {
+	if err != nil && (!errors.Is(err, db.ErrNotFound) || !hasSearch) {
 		return nil, fmt.Errorf("%w: list trees: %v", ErrDatabaseUnavailable, err)
 	}
 	if rows == nil {
@@ -543,9 +559,7 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 	// Sort client-side: the repo's ORDER BY is fixed (created_at DESC).
 	sortTreeRows(rows, sortOrder)
 
-	// Apply cursor — for now treat the cursor as the UUIDv7 boundary by
-	// string comparison (UUIDv7 is time-ordered so this is approximately
-	// correct for created/updated sorts; it is a no-op for title sorts).
+	// Apply cursor — client-side filter over the fetched window.
 	if p.Cursor != nil {
 		filtered := rows[:0]
 		for _, t := range rows {
@@ -563,10 +577,64 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 		rows = nil
 	}
 
+	// Total: try a real COUNT for the active path; otherwise fall back
+	// to the window size (acceptable scope for non-default paths).
 	total := len(rows)
-	hasMore := total > limit
+	if status == TreeStatusActive && !hasSearch {
+		if n, countErr := s.treeRepo.Count(ctx); countErr == nil {
+			total = n
+		}
+	}
+
+	hasMore := len(rows) > limit
 	if hasMore {
 		rows = rows[:limit]
+	}
+
+	summaries := make([]TreeSummary, 0, len(rows))
+	for _, t := range rows {
+		summaries = append(summaries, treeToSummary(t))
+	}
+
+	var next *uuid.UUID
+	if hasMore && len(summaries) > 0 {
+		id := summaries[len(summaries)-1].ID
+		next = &id
+	}
+
+	return &ListTreesResult{
+		Trees:      summaries,
+		NextCursor: next,
+		HasMore:    hasMore,
+		Total:      total,
+		Limit:      limit,
+	}, nil
+}
+
+// listTreesKeyset is the default-path keyset pagination implementation.
+// It queries limit+1 rows from the repo's keyset method (the +1 detects
+// hasMore without an extra round-trip) and uses Count for the real
+// total. nextCursor is the id of the last row in the returned page.
+// PAG-002.
+func (s *TreeServiceImpl) listTreesKeyset(ctx context.Context, p ListTreesParams, limit int) (*ListTreesResult, error) {
+	rows, err := s.treeRepo.ListKeyset(ctx, p.Cursor, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("%w: list trees keyset: %v", ErrDatabaseUnavailable, err)
+	}
+
+	total := 0
+	if n, countErr := s.treeRepo.Count(ctx); countErr == nil {
+		total = n
+	}
+
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
+
+	// Role filter — same MVP semantics as the legacy path.
+	if p.Role != nil && *p.Role != RoleOwner {
+		rows = nil
 	}
 
 	summaries := make([]TreeSummary, 0, len(rows))

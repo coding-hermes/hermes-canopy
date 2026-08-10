@@ -50,6 +50,12 @@ func (s *stubExportTreeRepo) List(_ context.Context, _, _ int) ([]db.Tree, error
 func (s *stubExportTreeRepo) Search(_ context.Context, _ string, _, _ int) ([]db.Tree, error) {
 	panic("not used")
 }
+func (s *stubExportTreeRepo) Count(_ context.Context) (int, error) {
+	panic("not used")
+}
+func (s *stubExportTreeRepo) ListKeyset(_ context.Context, _ *uuid.UUID, _ int) ([]db.Tree, error) {
+	panic("not used")
+}
 
 type stubExportNodeRepo struct {
 	nodesByTree map[uuid.UUID][]db.Node
