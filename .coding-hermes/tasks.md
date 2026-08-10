@@ -8410,3 +8410,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 | Signals | 0 unpushed pre-tick, no remote-only commits, off-by-one alive (health OK; no cached solution for detection-engine class), gh issues none new |
 
 **Next tick:** TM-05 (topic lifecycle & sidebar) is the remaining P2-ish TM-series item (P3 per board) or P3 backlog (FTR/PL/STACK/DPL deferred by design per AGENTS.md). E2E-001 next window 296-301 (runs at Tick 296).
+## Tick 292 (2026-08-10 ~14:52 UTC) — IDLE / light-audit (no dispatchable tasks)
+
+**Verdict: IDLE — all gates green; 2 findings logged (tick-289 CI lint failure confirmed root-caused + fixed at T290; gofmt -l = go1.26.5 alignment drift, benign). No code changes, no worker dispatch.**
+
+| Gate | Result |
+|------|--------|
+| Task | None dispatchable — board 136 complete / 18 pending (all P3 spec backlog FTR-01..07 / PL-01..06 / STACK-01..04 / DPL-05, deferred by design per AGENTS.md) |
+| Guard | PASS 4/4 (secrets, go_build, go_lint, go_tests — full mode) |
+| Tests | go test -count=1 -p 1 (handler-excluded) PASS; go build + go vet PASS |
+| gofmt | -l lists 16 files (TM-02/TM-03/TM-04/WIRE-006-era) — ALL alignment-only diffs (const/var/struct alignment). Local go1.26.5 vs CI matrix go1.25; .golangci.yml enables no gofmt linter → toolchain drift, NOT repo hygiene. No change made |
+| gitreins | 53 complete / 0 pending / 0 in_progress |
+| CI | Runs 31389615510 (tick-291 push) + 31374306697/31374286872 (tick-290 pushes) GREEN. Tick-289 failure (31367407507: golangci-lint 9 staticcheck QF1003/QF1012 in internal/db/topic_search_repo.go + internal/search/context.go) confirmed root-caused + fixed by tick-290's b90ccd6 (commit message documents guard-lint-scope vs CI full-tree) — CLOSED, no task needed |
+| Storm | scheduler-storm-watch: 0 duplicate ticks, 4 running — clean |
+| Cooldown | 7200 live — fleet.toml + API agree, no PUT, no wake stomp |
+| E2E-001 | NOT DUE — window 290-295 satisfied at Tick 290; next window 296-301 (runs at Tick 296) |
+| DuckBrain | /ticks/291 present pre-write (contiguity OK); /ticks/292 written (c5d781d0) + status refreshed (3c5485b3) — keys-tree verified post-write |
+| Signals | 0 unpushed, no remote-only commits, gh issues none open, deps minor-only (cel.dev/expr, cloud.google.com/go family), TODO/FIXME 5 (all intentional post-MVP markers in internal/transport/stub_adapters.go per SPEC-FTR-04 §9), off-by-one alive (uptime 1h16m; idle tick — no submit) |
+| Stack | canopy-server up 8h + canopy-pg healthy — Bane live stack untouched |
+
+**Next tick:** E2E-001 full battery at Tick 296 (window 296-301 opens). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md — no dispatchable code tasks on the board.
