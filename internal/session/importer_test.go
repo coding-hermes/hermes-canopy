@@ -33,7 +33,8 @@ CREATE TABLE sessions (
     message_count INTEGER DEFAULT 0,
     input_tokens INTEGER DEFAULT 0,
     output_tokens INTEGER DEFAULT 0,
-    archived INTEGER NOT NULL DEFAULT 0
+    archived INTEGER NOT NULL DEFAULT 0,
+    parent_session_id TEXT
 );
 CREATE TABLE messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +46,27 @@ CREATE TABLE messages (
     token_count INTEGER,
     timestamp REAL NOT NULL,
     active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE async_delegations (
+    delegation_id TEXT PRIMARY KEY,
+    origin_session TEXT NOT NULL,
+    origin_ui_session_id TEXT NOT NULL DEFAULT '',
+    parent_session_id TEXT,
+    state TEXT NOT NULL,
+    dispatched_at REAL NOT NULL,
+    completed_at REAL,
+    updated_at REAL NOT NULL,
+    event_json TEXT,
+    result_json TEXT,
+    delivery_state TEXT NOT NULL DEFAULT 'pending',
+    delivery_attempts INTEGER NOT NULL DEFAULT 0,
+    delivered_at REAL,
+    owner_pid INTEGER,
+    owner_started_at INTEGER,
+    task_json TEXT,
+    delivery_claim TEXT,
+    delivery_claimed_at REAL,
+    origin_session_id TEXT
 );`
 
 // buildFixture creates a temp SQLite state.db with the fixture schema and
@@ -67,21 +89,26 @@ func buildFixture(t *testing.T, insert func(conn *sql.DB)) string {
 }
 
 type fixtureSession struct {
-	id        string
-	source    string
-	display   string
-	title     string
-	model     string
-	startedAt float64
-	archived  int
+	id              string
+	source          string
+	display         string
+	title           string
+	model           string
+	startedAt       float64
+	archived        int
+	parentSessionID string
 }
 
 func insertSession(t *testing.T, conn *sql.DB, s fixtureSession) {
 	t.Helper()
+	var parentID any
+	if s.parentSessionID != "" {
+		parentID = s.parentSessionID
+	}
 	_, err := conn.Exec(`INSERT INTO sessions
-		(id, source, display_name, title, model, started_at, archived)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		s.id, s.source, s.display, s.title, s.model, s.startedAt, s.archived)
+		(id, source, display_name, title, model, started_at, archived, parent_session_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.id, s.source, s.display, s.title, s.model, s.startedAt, s.archived, parentID)
 	if err != nil {
 		t.Fatalf("insert session %s: %v", s.id, err)
 	}
@@ -114,6 +141,34 @@ func insertMessage(t *testing.T, conn *sql.DB, m fixtureMessage) {
 		m.id, m.sessionID, m.role, m.content, m.toolName, tc, m.ts, active)
 	if err != nil {
 		t.Fatalf("insert message %d: %v", m.id, err)
+	}
+}
+
+type fixtureDelegation struct {
+	delegationID  string
+	originSession string
+	state         string
+	taskJSON      string
+	dispatchedAt  float64
+	updatedAt     float64
+}
+
+func insertDelegation(t *testing.T, conn *sql.DB, d fixtureDelegation) {
+	t.Helper()
+	var taskJSON any
+	if d.taskJSON != "" {
+		taskJSON = d.taskJSON
+	}
+	updated := d.updatedAt
+	if updated == 0 {
+		updated = d.dispatchedAt
+	}
+	_, err := conn.Exec(`INSERT INTO async_delegations
+		(delegation_id, origin_session, state, dispatched_at, updated_at, task_json)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		d.delegationID, d.originSession, d.state, d.dispatchedAt, updated, taskJSON)
+	if err != nil {
+		t.Fatalf("insert delegation %s: %v", d.delegationID, err)
 	}
 }
 
@@ -794,5 +849,122 @@ func TestImporterTreeMetadataSessionID(t *testing.T) {
 	}
 	if meta["session_id"] != "meta_s" {
 		t.Errorf("tree metadata = %v, want session_id=meta_s", meta)
+	}
+}
+
+// --- Reader tests (WIRE-006) -------------------------------------------------
+
+// TestReaderParentSessionID verifies that the reader surfaces
+// parent_session_id from the sessions table.
+func TestReaderParentSessionID(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "parent_1", source: "cli", title: "Parent", startedAt: 100.0})
+		insertSession(t, conn, fixtureSession{id: "child_1", source: "subagent", title: "Child", startedAt: 200.0, parentSessionID: "parent_1"})
+		insertSession(t, conn, fixtureSession{id: "orphan_1", source: "cli", title: "Orphan", startedAt: 300.0})
+	})
+	r, err := OpenReader(path)
+	if err != nil {
+		t.Fatalf("open reader: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	sessions, err := r.ListSessions(context.Background())
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	byID := make(map[string]Session, len(sessions))
+	for _, s := range sessions {
+		byID[s.ID] = s
+	}
+	if byID["parent_1"].ParentSessionID != "" {
+		t.Errorf("parent_1.ParentSessionID = %q, want empty", byID["parent_1"].ParentSessionID)
+	}
+	if byID["child_1"].ParentSessionID != "parent_1" {
+		t.Errorf("child_1.ParentSessionID = %q, want parent_1", byID["child_1"].ParentSessionID)
+	}
+	if byID["orphan_1"].ParentSessionID != "" {
+		t.Errorf("orphan_1.ParentSessionID = %q, want empty", byID["orphan_1"].ParentSessionID)
+	}
+}
+
+// TestReaderDelegations verifies that the reader parses async_delegations
+// rows and extracts the task goal from task_json.
+func TestReaderDelegations(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "sess_a", source: "cli", title: "A", startedAt: 100.0})
+		insertDelegation(t, conn, fixtureDelegation{
+			delegationID:  "deleg_1",
+			originSession: "sess_a",
+			state:         "completed",
+			taskJSON:      `{"goal": "Fix BUG-034 in hermes-canopy", "goals": ["Fix BUG-034"]}`,
+			dispatchedAt:  150.0,
+		})
+		insertDelegation(t, conn, fixtureDelegation{
+			delegationID:  "deleg_2",
+			originSession: "sess_a",
+			state:         "error",
+			taskJSON:      `{"goal": "Run E2E suite"}`,
+			dispatchedAt:  160.0,
+		})
+		insertDelegation(t, conn, fixtureDelegation{
+			delegationID:  "deleg_3",
+			originSession: "sess_b",
+			state:         "completed",
+			taskJSON:      ``, // no task_json
+			dispatchedAt:  170.0,
+		})
+	})
+	r, err := OpenReader(path)
+	if err != nil {
+		t.Fatalf("open reader: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	delegations, err := r.ListDelegations(context.Background())
+	if err != nil {
+		t.Fatalf("list delegations: %v", err)
+	}
+	if len(delegations) != 3 {
+		t.Fatalf("delegations = %d, want 3", len(delegations))
+	}
+	byID := make(map[string]Delegation, len(delegations))
+	for _, d := range delegations {
+		byID[d.DelegationID] = d
+	}
+	if byID["deleg_1"].TaskGoal != "Fix BUG-034 in hermes-canopy" {
+		t.Errorf("deleg_1.TaskGoal = %q", byID["deleg_1"].TaskGoal)
+	}
+	if byID["deleg_1"].State != "completed" {
+		t.Errorf("deleg_1.State = %q", byID["deleg_1"].State)
+	}
+	if byID["deleg_1"].OriginSession != "sess_a" {
+		t.Errorf("deleg_1.OriginSession = %q", byID["deleg_1"].OriginSession)
+	}
+	if byID["deleg_2"].TaskGoal != "Run E2E suite" {
+		t.Errorf("deleg_2.TaskGoal = %q", byID["deleg_2"].TaskGoal)
+	}
+	if byID["deleg_3"].TaskGoal != "" {
+		t.Errorf("deleg_3.TaskGoal = %q, want empty (no task_json)", byID["deleg_3"].TaskGoal)
+	}
+}
+
+// TestReaderDelegationsEmpty verifies that ListDelegations returns an
+// empty slice (not an error) when the table has no rows.
+func TestReaderDelegationsEmpty(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		insertSession(t, conn, fixtureSession{id: "s", source: "cli", title: "S", startedAt: 100.0})
+	})
+	r, err := OpenReader(path)
+	if err != nil {
+		t.Fatalf("open reader: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	delegations, err := r.ListDelegations(context.Background())
+	if err != nil {
+		t.Fatalf("list delegations: %v", err)
+	}
+	if len(delegations) != 0 {
+		t.Fatalf("delegations = %d, want 0", len(delegations))
 	}
 }

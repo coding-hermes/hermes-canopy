@@ -44,6 +44,7 @@ package session
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -52,14 +53,15 @@ import (
 
 // Session is one row from the Hermes sessions table (schema subset).
 type Session struct {
-	ID          string
-	Source      string
-	DisplayName string
-	Title       string
-	Model       string
-	StartedAt   time.Time
-	EndedAt     *time.Time
-	Archived    bool
+	ID              string
+	Source          string
+	DisplayName     string
+	Title           string
+	Model           string
+	StartedAt       time.Time
+	EndedAt         *time.Time
+	Archived        bool
+	ParentSessionID string // sessions.parent_session_id; empty when NULL (WIRE-006)
 }
 
 // Message is one row from the Hermes messages table (schema subset).
@@ -107,7 +109,8 @@ func (r *Reader) Close() error {
 // Archived filtering is the importer's policy, so every row is returned.
 func (r *Reader) ListSessions(ctx context.Context) ([]Session, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, source, display_name, title, model, started_at, ended_at, archived
+		SELECT id, source, display_name, title, model, started_at, ended_at, archived,
+		       parent_session_id
 		FROM sessions
 		ORDER BY started_at ASC, id ASC`)
 	if err != nil {
@@ -118,17 +121,18 @@ func (r *Reader) ListSessions(ctx context.Context) ([]Session, error) {
 	var out []Session
 	for rows.Next() {
 		var s Session
-		var displayName, title, model sql.NullString
+		var displayName, title, model, parentSessionID sql.NullString
 		var endedAt sql.NullFloat64
 		var archived int
 		var startedAt float64
 		if err := rows.Scan(&s.ID, &s.Source, &displayName, &title, &model,
-			&startedAt, &endedAt, &archived); err != nil {
+			&startedAt, &endedAt, &archived, &parentSessionID); err != nil {
 			return nil, fmt.Errorf("session: scan session: %w", err)
 		}
 		s.DisplayName = displayName.String
 		s.Title = title.String
 		s.Model = model.String
+		s.ParentSessionID = parentSessionID.String
 		s.StartedAt = unixToTime(startedAt)
 		if endedAt.Valid {
 			t := unixToTime(endedAt.Float64)
@@ -179,6 +183,74 @@ func (r *Reader) ListMessages(ctx context.Context, sessionID string) ([]Message,
 		return nil, fmt.Errorf("session: list messages for %s: %w", sessionID, err)
 	}
 	return out, nil
+}
+
+// Delegation is one row from the Hermes async_delegations table (schema
+// subset). The TaskGoal field is extracted from task_json->>'goal' at
+// read time (best-effort — empty when the JSON is absent or malformed).
+type Delegation struct {
+	DelegationID    string
+	OriginSession   string
+	ParentSessionID string
+	State           string
+	TaskGoal        string
+}
+
+// ListDelegations returns all async_delegations rows ordered by
+// dispatched_at ascending. The task goal is extracted from task_json
+// (best-effort). Rows whose task_json is absent or malformed still
+// appear — with an empty TaskGoal — so the caller never loses the
+// delegation record itself.
+func (r *Reader) ListDelegations(ctx context.Context) ([]Delegation, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT delegation_id, origin_session, parent_session_id, state, task_json
+		FROM async_delegations
+		ORDER BY dispatched_at ASC, delegation_id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("session: list delegations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Delegation
+	for rows.Next() {
+		var d Delegation
+		var parentSessionID, taskJSON sql.NullString
+		if err := rows.Scan(&d.DelegationID, &d.OriginSession, &parentSessionID,
+			&d.State, &taskJSON); err != nil {
+			return nil, fmt.Errorf("session: scan delegation: %w", err)
+		}
+		d.ParentSessionID = parentSessionID.String
+		d.TaskGoal = extractDelegationGoal(taskJSON.String)
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("session: list delegations: %w", err)
+	}
+	return out, nil
+}
+
+// extractDelegationGoal parses the "goal" field from a delegation's
+// task_json column. The live Hermes schema stores the task payload as a
+// JSON object with a top-level "goal" key (and sometimes a "goals"
+// array). We extract "goal" only — it is always present on real rows
+// and is the human-readable summary the association layer needs.
+func extractDelegationGoal(taskJSON string) string {
+	if taskJSON == "" {
+		return ""
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(taskJSON), &raw); err != nil {
+		return ""
+	}
+	goalBytes, ok := raw["goal"]
+	if !ok {
+		return ""
+	}
+	var goal string
+	if err := json.Unmarshal(goalBytes, &goal); err != nil {
+		return ""
+	}
+	return goal
 }
 
 // unixToTime converts SQLite REAL unix seconds to UTC time.Time.
