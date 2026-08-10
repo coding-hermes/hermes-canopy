@@ -1017,3 +1017,29 @@ tasks:
   status: complete
   created_at: '2026-08-10T07:43:11.140849+00:00'
   completed_at: '2026-08-10T07:43:16.554824+00:00'
+- id: TM-04
+  title: '#Reference resolution: parse #topic-slug refs, resolve at send, context
+    DAG integration'
+  criteria:
+  - 'Canonical #slug parsing (regex [a-z]([a-z0-9-]*[a-z0-9])? or single [a-z]) server-side
+    in internal/reference/parser.go with offsets + client mirror in frontend/src/lib/topic-reference.ts'
+  - GET /trees/{id}/references/autocomplete returns prefix/contains ranked suggestions
+    with active/archived/all include filter
+  - 'Send-time resolution: node create persists node_resolved_refs rows, bumps topics.ref_count
+    + nodes.resolved_ref_count, dedupes duplicate slugs, lenient not-found (message
+    still persists)'
+  - POST /trees/{id}/references/inject with topic_ids + references, 5-topic cap, boundary-marker
+    merged MultiTopicContext
+  - SSE events reference_resolved / reference_not_found / references_too_many emitted
+    on resolution
+  - Context compiler merges node_resolved_refs topics with scope topics (deduped),
+    soft cap 5 / hard cap 10 warnings, budget truncation; GetReferencedContext cache-backed
+    with hit_count bump + expiry + trigger invalidation
+  - 'Frontend: composer # autocomplete popover (80ms debounce, Arrow/Enter/Tab/Escape/click,
+    inserts #slug) + resolved/unresolved reference rendering with tooltips'
+  - 'Migrations 000027-000029 present; full battery green: golangci-lint 0 issues,
+    gitreins guard PASS, go test -short -p 1 sweep PASS, vitest 611 passed, E2E 49/49
+    zero drift'
+  status: complete
+  created_at: '2026-08-10T09:11:31.247838+00:00'
+  completed_at: '2026-08-10T09:11:35.894488+00:00'
