@@ -175,7 +175,8 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	opts := service.GetTreeOptions{
-		IncludeStats: q.Get("include_stats") != "false",
+		IncludeStats:   q.Get("include_stats") != "false",
+		IncludeRelated: true, // WIRE-006: always surface associations when present
 	}
 	out, err := h.svc.GetTree(r.Context(), id, opts)
 	if err != nil {

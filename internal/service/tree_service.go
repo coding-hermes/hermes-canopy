@@ -235,6 +235,7 @@ type CreateTreeParams struct {
 type GetTreeOptions struct {
 	IncludeStats   bool
 	IncludeMembers bool
+	IncludeRelated bool // populate Related from metadata (WIRE-006)
 }
 
 // Tree is the response from CreateTree.
@@ -274,6 +275,32 @@ type TreeDetail struct {
 	DeletedAt *time.Time      `json:"deleted_at,omitempty"`
 	Stats     *TreeStats      `json:"stats,omitempty"`
 	Members   []MemberSummary `json:"members,omitempty"`
+	Related   *Related        `json:"related,omitempty"`
+}
+
+// Related holds session-lineage associations extracted from tree
+// metadata (WIRE-006). It is additive and optional — every field is
+// null/empty when the tree has no association metadata (e.g. trees not
+// imported from Hermes sessions).
+type Related struct {
+	Parent           *RelatedRef     `json:"parent,omitempty"`
+	Children         []RelatedRef    `json:"children,omitempty"`
+	BoardTask        *string         `json:"board_task,omitempty"`
+	Project          *string         `json:"project,omitempty"`
+	CommitHash       *string         `json:"commit_hash,omitempty"`
+	DelegationGoals  []DelegationRef `json:"delegation_goals,omitempty"`
+}
+
+// RelatedRef is a lightweight {id, title} reference to a related tree.
+type RelatedRef struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+}
+
+// DelegationRef is a delegation goal extracted from tree metadata.
+type DelegationRef struct {
+	DelegationID string `json:"delegation_id"`
+	Goal         string `json:"goal"`
 }
 
 // TreeStats holds computed aggregate statistics.
@@ -306,6 +333,10 @@ type TreeService interface {
 	GetTree(ctx context.Context, treeID uuid.UUID, opts GetTreeOptions) (*TreeDetail, error)
 	// UpdateTree partially updates a tree's title and/or description.
 	UpdateTree(ctx context.Context, treeID uuid.UUID, title, description *string) (*Tree, error)
+	// UpdateTreeMetadata replaces the metadata jsonb column of a tree
+	// (WIRE-006 backfill). Used by the session associations-backfill
+	// command to enrich already-imported trees without re-creating them.
+	UpdateTreeMetadata(ctx context.Context, treeID uuid.UUID, metadata json.RawMessage) error
 	// DeleteTree soft-deletes a tree and returns the deletion timestamp.
 	DeleteTree(ctx context.Context, treeID uuid.UUID) (deletedAt time.Time, err error)
 }
@@ -609,7 +640,93 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
 		detail.Members = []MemberSummary{}
 	}
 
+	if opts.IncludeRelated {
+		detail.Related = s.extractRelated(ctx, tree.Metadata)
+	}
+
 	return detail, nil
+}
+
+// extractRelated parses session-lineage metadata from a tree's metadata
+// jsonb and resolves session IDs to Canopy tree refs. It is best-effort
+// — any error (missing metadata, missing session_id key, no matching
+// trees) produces a nil/empty Related rather than failing the request.
+func (s *TreeServiceImpl) extractRelated(ctx context.Context, metadata []byte) *Related {
+	var meta struct {
+		SessionID       string `json:"session_id"`
+		ParentSessionID string `json:"parent_session_id"`
+		ChildSessionIDs []string `json:"child_session_ids"`
+		Project         string `json:"project"`
+		BoardTask       string `json:"board_task"`
+		CommitHash      string `json:"commit_hash"`
+		DelegationGoals []struct {
+			DelegationID string `json:"delegation_id"`
+			Goal         string `json:"goal"`
+		} `json:"delegation_goals"`
+	}
+	if err := json.Unmarshal(metadata, &meta); err != nil {
+		return nil
+	}
+	if meta.SessionID == "" {
+		return nil // not an imported session tree
+	}
+
+	related := &Related{}
+
+	// Collect all session IDs we need to resolve to tree UUIDs.
+	needed := make([]string, 0, 1+len(meta.ChildSessionIDs))
+	if meta.ParentSessionID != "" {
+		needed = append(needed, meta.ParentSessionID)
+	}
+	needed = append(needed, meta.ChildSessionIDs...)
+
+	// Resolve to trees (best-effort — pool may be nil in tests).
+	if s.pool != nil && len(needed) > 0 {
+		lookup, err := s.GetTreesBySessionIDs(ctx, needed)
+		if err == nil {
+			if meta.ParentSessionID != "" {
+				if parent, ok := lookup[meta.ParentSessionID]; ok && parent != nil {
+					related.Parent = &RelatedRef{ID: parent.ID, Title: parent.Title}
+				}
+			}
+			for _, childID := range meta.ChildSessionIDs {
+				if child, ok := lookup[childID]; ok && child != nil {
+					related.Children = append(related.Children, RelatedRef{ID: child.ID, Title: child.Title})
+				}
+			}
+		}
+	}
+
+	// Scalar fields — nil when empty so they're omitted from JSON.
+	if meta.BoardTask != "" {
+		v := meta.BoardTask
+		related.BoardTask = &v
+	}
+	if meta.Project != "" {
+		v := meta.Project
+		related.Project = &v
+	}
+	if meta.CommitHash != "" {
+		v := meta.CommitHash
+		related.CommitHash = &v
+	}
+
+	// Delegation goals.
+	for _, dg := range meta.DelegationGoals {
+		related.DelegationGoals = append(related.DelegationGoals, DelegationRef{
+			DelegationID: dg.DelegationID,
+			Goal:         dg.Goal,
+		})
+	}
+
+	// Return nil when nothing was found (cleaner JSON).
+	if related.Parent == nil && len(related.Children) == 0 &&
+		related.BoardTask == nil && related.Project == nil &&
+		related.CommitHash == nil && len(related.DelegationGoals) == 0 {
+		return nil
+	}
+
+	return related
 }
 
 // --- DeleteTree -------------------------------------------------------------
@@ -710,6 +827,81 @@ func (s *TreeServiceImpl) UpdateTree(ctx context.Context, treeID uuid.UUID, titl
 		svcTree.RootNodeID = *updated.RootNodeID
 	}
 	return svcTree, nil
+}
+
+// --- UpdateTreeMetadata (WIRE-006) ------------------------------------------
+
+// UpdateTreeMetadata replaces the metadata jsonb column of an active
+// tree. Used by the session associations-backfill command to enrich
+// already-imported trees with parent/children/delegation/task metadata
+// without re-creating them. The caller is responsible for the content
+// of metadata; this method only validates the tree exists and is active.
+func (s *TreeServiceImpl) UpdateTreeMetadata(ctx context.Context, treeID uuid.UUID, metadata json.RawMessage) error {
+	if treeID == uuid.Nil {
+		return ErrTreeNotFound
+	}
+	if s.pool == nil {
+		return ErrDatabaseUnavailable
+	}
+	// Verify the tree exists and is active.
+	if _, err := s.treeRepo.GetByID(ctx, treeID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ErrTreeNotFound
+		}
+		return fmt.Errorf("%w: get tree for metadata update: %v", ErrDatabaseUnavailable, err)
+	}
+	// Replace metadata. Default to '{}' when nil/empty.
+	if len(metadata) == 0 {
+		metadata = json.RawMessage(`{}`)
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE trees SET metadata = $2, edited_at = clock_timestamp() WHERE id = $1 AND deleted_at IS NULL`,
+		treeID, metadata,
+	)
+	if err != nil {
+		return fmt.Errorf("%w: update tree metadata: %v", ErrDatabaseUnavailable, err)
+	}
+	return nil
+}
+
+// GetTreesBySessionIDs returns active trees whose metadata->>'session_id'
+// matches any of the given session IDs. Used by the association layer
+// to resolve session IDs to Canopy tree UUIDs + titles for the Related
+// field. Trees not found (no matching session_id) are simply absent
+// from the result — the caller handles missing entries.
+func (s *TreeServiceImpl) GetTreesBySessionIDs(ctx context.Context, sessionIDs []string) (map[string]*TreeSummary, error) {
+	if s.pool == nil {
+		return nil, ErrDatabaseUnavailable
+	}
+	if len(sessionIDs) == 0 {
+		return map[string]*TreeSummary{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+treeColumns+`
+		FROM trees
+		WHERE deleted_at IS NULL AND metadata->>'session_id' = ANY($1)`,
+		sessionIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: get trees by session ids: %v", ErrDatabaseUnavailable, err)
+	}
+	defer rows.Close()
+	trees, err := collectTreeRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*TreeSummary, len(trees))
+	for i := range trees {
+		var meta struct {
+			SessionID string `json:"session_id"`
+		}
+		_ = json.Unmarshal(trees[i].Metadata, &meta)
+		if meta.SessionID != "" {
+			summary := treeToSummary(trees[i])
+			out[meta.SessionID] = &summary
+		}
+	}
+	return out, nil
 }
 
 // --- Validation helpers -----------------------------------------------------
