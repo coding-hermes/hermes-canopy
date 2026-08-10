@@ -8472,3 +8472,26 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Next tick:** E2E-001 full battery at Tick 296 (window 296-301 opens). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md — no dispatchable code tasks on the board.
 
 Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
+
+## Tick 295 (2026-08-10 ~22:25 UTC) — IDLE / light-audit (no dispatchable tasks)
+
+**Verdict: IDLE — all gates green, no new findings. No code changes, no worker dispatch.**
+
+| Gate | Result |
+|------|--------|
+| Task | None dispatchable — board 136 complete / 18 pending (all P3 spec backlog FTR-01..07 / PL-01..06 / STACK-01..04 / DPL-05, deferred by design per AGENTS.md) |
+| Guard | PASS 4/4 (secrets, go_build, go_lint, go_tests — full mode, 85s) |
+| Tests | go build + go vet PASS; vitest 647/647 (33 files) |
+| gofmt | -l lists same 16 files as T292-T294 (TM-02/TM-03/TM-04/WIRE-006-era) — ALL alignment-only diffs (const/var/struct alignment). Local go1.26.5 vs CI matrix go1.25; .golangci.yml enables no gofmt linter → toolchain drift, NOT repo hygiene. No change made |
+| gitreins | 53 complete / 0 pending / 0 in_progress (CLI 0.11.0) |
+| CI | Last 6 runs GREEN (T294 push 31427837044, T293 31416801187 + 31416753865, T292 31401127697, T291 31389615510, T290 31374306697/31374286872). Tick-289 failure already root-caused + fixed at T290 — no action |
+| Storm | scheduler-storm-watch: 0 canopy dups, 5 running total (ring-runner 3-way duplicate = their project, not canopy) — clean for this board |
+| Cooldown | 7200 live — fleet.toml + API agree, no PUT, no wake stomp |
+| E2E-001 | NOT DUE — window 290-295 satisfied at Tick 290; next window 296-301 (runs at Tick 296) |
+| DuckBrain | /ticks/294 present pre-write (contiguity OK, tree-verified); /ticks/295 written (55fcbd65) + status refreshed (eb968f93) — tree-verified |
+| Signals | 0 unpushed, 0 remote-only commits, gh issues none open, deps minor-only (cel.dev/expr, cloud.google.com/go family), TODO/FIXME 5 (all intentional post-MVP markers in internal/transport/stub_adapters.go), off-by-one alive (idle tick — no submit) |
+| Stack | canopyd :8091 up (401 TOKEN_MISSING on /api/v1/health = auth gate live, expected) + vite :5173 (200) — Bane live stack untouched |
+
+**Next tick:** E2E-001 full battery at Tick 296 (window 296-301 opens). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md — no dispatchable code tasks on the board.
+
+Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
