@@ -18,6 +18,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
@@ -61,6 +62,7 @@ func New(
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
 	pluginSvc plugin.Service,
+	topicSearchSvc search.TopicSearchService,
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
@@ -135,6 +137,13 @@ func New(
 
 		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
 		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
+
+		// Topic search + context injection (TM-03). Tree-scoped, membership-gated.
+		// Spec: SPEC-TM-03 §6.
+		if topicSearchSvc != nil {
+			searchHandler := handler.NewTopicSearchHandler(topicSearchSvc, sseHub)
+			r.With(membershipMW).Mount("/trees/{tree_id}", searchHandler.Routes())
+		}
 
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
