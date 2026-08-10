@@ -110,6 +110,11 @@ func roleTaggedContent(m *Message, maxBody int) string {
 		tag = fmt.Sprintf("**tool (%s):**", strings.TrimSpace(m.ToolName))
 	}
 	body := truncate(m.Content, maxBody, true)
+	// PG text columns reject NUL bytes (0x00) and invalid UTF-8 — real
+	// session content contains both (binary tool output). Sanitize the
+	// imported copy; the source state.db stays untouched (BUG-037).
+	body = strings.ReplaceAll(body, "\x00", "")
+	body = strings.ToValidUTF8(body, "\uFFFD")
 	if body == "" {
 		return tag
 	}
