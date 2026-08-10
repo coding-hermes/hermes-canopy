@@ -357,3 +357,45 @@ type TopicUpdateInput struct {
 	Description *string   `json:"description,omitempty"`
 	TopicTags   *[]string `json:"topicTags,omitempty"`
 }
+
+// ── Topic detection (SPEC-TM-02 §8.1) ───────────────────────────────────
+
+// TopicProposal represents a pending, confirmed, dismissed, or expired
+// auto-detected topic proposal. Maps to topic_proposals (migration 000030).
+type TopicProposal struct {
+	ID            uuid.UUID       `db:"id"             json:"id"`
+	TreeID        uuid.UUID       `db:"tree_id"        json:"treeId"`
+	RootNodeID    uuid.UUID       `db:"root_node_id"   json:"rootNodeId"`
+	Title         string          `db:"title"          json:"title"`
+	Description   string          `db:"description"    json:"description"`
+	DetectionType string          `db:"detection_type" json:"detectionType"`
+	Confidence    float32         `db:"confidence"     json:"confidence"`
+	SubjectKey    string          `db:"subject_key"    json:"subjectKey"`
+	Status        string          `db:"status"         json:"status"`
+	ExpiresAt     time.Time       `db:"expires_at"     json:"expiresAt"`
+	CreatedAt     time.Time       `db:"created_at"     json:"createdAt"`
+	ResolvedAt    *time.Time      `db:"resolved_at"    json:"resolvedAt,omitempty"`
+	Evidence      json.RawMessage `db:"evidence"       json:"evidence"`
+}
+
+// DetectionConfigRecord is the per-tree topic-detection configuration row.
+// Maps to topic_detection_config (migration 000030).
+type DetectionConfigRecord struct {
+	TreeID                uuid.UUID `db:"tree_id"                 json:"treeId"`
+	AutoCreate            bool      `db:"auto_create"             json:"autoCreate"`
+	AlwaysAsk             bool      `db:"always_ask"              json:"alwaysAsk"`
+	DetectionLevel        string    `db:"detection_level"         json:"detectionLevel"`
+	MinMessagesPerTopic   int       `db:"min_messages_per_topic"  json:"minMessagesPerTopic"`
+	ProposalCooldown      int       `db:"proposal_cooldown"       json:"proposalCooldown"`
+	LastProposalSeq       int64     `db:"last_proposal_seq"       json:"lastProposalSeq"`
+	MessagesSinceProposal int       `db:"messages_since_proposal" json:"messagesSinceProposal"`
+	UpdatedAt             time.Time `db:"updated_at"              json:"updatedAt"`
+}
+
+// SubjectCooldown represents a rejection cooldown for a subject key in a tree.
+type SubjectCooldown struct {
+	TreeID        uuid.UUID `db:"tree_id"        json:"treeId"`
+	SubjectKey    string    `db:"subject_key"    json:"subjectKey"`
+	CooldownUntil time.Time `db:"cooldown_until" json:"cooldownUntil"`
+	CreatedAt     time.Time `db:"created_at"     json:"createdAt"`
+}
