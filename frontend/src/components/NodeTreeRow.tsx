@@ -193,6 +193,7 @@ function NodeTreeRowComponent({
           node={node}
           authorNames={authorNames}
           topicTitles={topicTitles}
+          treeId={node.treeId}
           onEdit={onEdit}
           onDelete={onDelete}
           onOpenTopic={onOpenTopic}

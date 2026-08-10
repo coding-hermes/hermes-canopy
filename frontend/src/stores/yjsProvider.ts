@@ -23,6 +23,11 @@ import type {
   ViewportState,
   PresenceChangeHandler,
 } from '../types/multiUser.ts';
+import {
+  addProposal,
+  handleTopicCreated,
+} from './topicProposalStore.ts';
+import { notifyTopicsChanged } from '../lib/activeTree.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -194,6 +199,8 @@ export class SSESyncProvider {
       'yjs_update',
       'presence_update',
       'cursor_update',
+      'topic_proposed',
+      'topic_created',
     ]) {
       forward(eventName);
     }
@@ -274,6 +281,16 @@ export class SSESyncProvider {
         break;
       case 'cursor_update':
         this._handleCursorEvent(
+          (envelope.data as Record<string, unknown>) ?? {},
+        );
+        break;
+      case 'topic_proposed':
+        this._handleTopicProposed(
+          (envelope.data as Record<string, unknown>) ?? {},
+        );
+        break;
+      case 'topic_created':
+        this._handleTopicCreated(
           (envelope.data as Record<string, unknown>) ?? {},
         );
         break;
@@ -556,5 +573,52 @@ export class SSESyncProvider {
     });
 
     this.options.onPresenceChange?.(this.remotePresence);
+  }
+
+  /**
+   * Handle incoming `topic_proposed` SSE event. Dispatches to the topic
+   * proposal store (NOT Yjs — proposals are transient UI state, spec §7).
+   * Idempotent: replay on SSE reconnect does not duplicate cards.
+   */
+  private _handleTopicProposed(data: Record<string, unknown>): void {
+    const proposalId = data.proposalId as string | undefined;
+    if (!proposalId) return;
+    // Only process events for our tree
+    const treeId = data.treeId as string | undefined;
+    if (treeId && treeId !== this.treeId) return;
+
+    addProposal({
+      proposalId,
+      treeId: treeId ?? this.treeId,
+      rootNodeId: (data.rootNodeId as string) ?? '',
+      title: (data.title as string) ?? '',
+      description: (data.description as string) ?? '',
+      detectionType: (data.detectionType as 'explicit' | 'implicit' | 'structural') ?? 'implicit',
+      confidence: typeof data.confidence === 'number' ? data.confidence : 0,
+      subjectKey: (data.subjectKey as string) ?? '',
+      status: (data.status as string) ?? 'pending',
+      expiresAt: (data.expiresAt as string) ?? '',
+    });
+  }
+
+  /**
+   * Handle incoming `topic_created` SSE event. Marks the proposal card as
+   * created, then notifies the topics rail to refresh its list.
+   */
+  private _handleTopicCreated(data: Record<string, unknown>): void {
+    const proposalId = data.proposalId as string | undefined;
+    const topic = data.topic as { id?: string; title?: string; slug?: string } | undefined;
+    if (!proposalId || !topic?.id) return;
+
+    handleTopicCreated({
+      proposalId,
+      topic: {
+        id: topic.id,
+        title: topic.title ?? '',
+        slug: topic.slug ?? '',
+      },
+    });
+    // Refresh the topics rail so the new topic appears
+    notifyTopicsChanged();
   }
 }

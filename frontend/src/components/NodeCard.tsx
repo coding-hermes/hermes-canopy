@@ -44,6 +44,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { NodeAvatar } from './nodes/NodeChrome.tsx';
+import { NodeProposalAttach } from './NodeProposalAttach.tsx';
 import { describeNodeAvatar } from '../lib/nodeAvatar.ts';
 import {
   formatNodeMeta,
@@ -63,6 +64,8 @@ export interface NodeCardProps {
   authorNames?: ReadonlyMap<string, string>;
   /** Topic id/slug → title, so a metadata ref can render a real label. */
   topicTitles?: ReadonlyMap<string, string>;
+  /** Tree id for topic proposal links (TM-02). Optional — defaults to ''. */
+  treeId?: string;
   onEdit: () => void;
   onDelete: () => void;
   /** Opens the node's topic. Omit to render the pill as static. */
@@ -274,6 +277,7 @@ function NodeCardComponent({
   node,
   authorNames,
   topicTitles,
+  treeId,
   onEdit,
   onDelete,
   onOpenTopic,
@@ -366,6 +370,11 @@ function NodeCardComponent({
           />
         </div>
       )}
+
+      {/* Auto-topic detection proposals (TM-02) — inline cards attached
+          to this node when the detection engine proposes a topic rooted
+          here. Non-blocking: never steals focus or prevents sending. */}
+      <NodeProposalAttach nodeId={node.id} treeId={treeId ?? ''} />
     </article>
   );
 }
