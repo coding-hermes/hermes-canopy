@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPatch, apiDelete } from '../lib/api';
 import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
 import { BulkActionBar } from '../components/BulkActionBar';
+import RelatedPanel from '../components/RelatedPanel';
 import {
   indexTopicTitles,
   nodeAuthorNames,
@@ -267,12 +268,15 @@ export default function NodesPage() {
     }
   }, []);
 
-  const handleTreeSelect = (treeId: string) => {
-    setSelectedTreeId(treeId);
-    void fetchNodes(treeId);
-    if (treeId) void fetchTopics(treeId);
-    else setTopics([]);
-  };
+  const handleTreeSelect = useCallback(
+    (treeId: string) => {
+      setSelectedTreeId(treeId);
+      void fetchNodes(treeId);
+      if (treeId) void fetchTopics(treeId);
+      else setTopics([]);
+    },
+    [fetchNodes, fetchTopics],
+  );
 
   const handleDeleteNode = async () => {
     if (!deleteNodeId) return;
@@ -405,6 +409,37 @@ export default function NodesPage() {
     [navigate, selectedTreeId],
   );
 
+  /**
+   * Related-panel drill-down (UI-REL-001). A parent/child session click
+   * switches the page to that tree through the same selection mechanism
+   * as the dropdown — the tree view, node list and related panel all
+   * follow. The title is passed through so the panel can surface a tree
+   * that is not in the page's list (e.g. a session imported elsewhere).
+   */
+  const handleNavigateToTree = useCallback(
+    (treeId: string, title?: string) => {
+      if (title) {
+        setTrees((prev) =>
+          prev.some((t) => t.id === treeId)
+            ? prev
+            : [
+                ...prev,
+                {
+                  id: treeId,
+                  title,
+                  description: '',
+                  node_count: 0,
+                  root_node_id: '',
+                  created_at: '',
+                },
+              ],
+        );
+      }
+      handleTreeSelect(treeId);
+    },
+    [handleTreeSelect],
+  );
+
   const selectedTree = trees.find((t) => t.id === selectedTreeId);
 
   return (
@@ -466,6 +501,19 @@ export default function NodesPage() {
           </p>
         )}
       </div>
+
+      {/* Related panel (UI-REL-001) — session lineage for the selected
+          tree: parent/child sessions, task/project/commit chips and
+          delegation goals. Fetches GET /trees/{id} itself; renders
+          nothing with no selection, compact empty state otherwise. */}
+      {selectedTreeId && (
+        <div className="mb-4 max-w-md">
+          <RelatedPanel
+            treeId={selectedTreeId}
+            onNavigateToTree={handleNavigateToTree}
+          />
+        </div>
+      )}
 
       {/* Search within nodes */}
       {selectedTree && (

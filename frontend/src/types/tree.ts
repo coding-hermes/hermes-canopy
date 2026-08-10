@@ -118,6 +118,77 @@ export interface CreateTreePayload {
   metadata?: Record<string, unknown>;
 }
 
+// ─── Tree Detail / Related (WIRE-006) ─────────────────────────────────
+
+/**
+ * Lightweight {id, title} reference to a related tree (WIRE-006).
+ * Mirrors the backend `RelatedRef` struct.
+ */
+export interface RelatedRef {
+  id: string;
+  title: string;
+}
+
+/** A delegation goal extracted from tree metadata (WIRE-006). */
+export interface DelegationRef {
+  delegation_id: string;
+  goal: string;
+}
+
+/**
+ * Session-lineage associations for a tree imported from a Hermes session
+ * (WIRE-006). Mirrors the backend `Related` struct — every field is
+ * `omitempty`, so a key is ABSENT when empty (never `null`), and the
+ * whole object is absent for trees with no association metadata.
+ */
+export interface TreeRelated {
+  parent?: RelatedRef;
+  children?: RelatedRef[];
+  board_task?: string;
+  project?: string;
+  commit_hash?: string;
+  delegation_goals?: DelegationRef[];
+}
+
+/** Computed aggregate statistics on the tree detail payload (WIRE-006). */
+export interface TreeStats {
+  node_count: number;
+  member_count: number;
+  branch_count: number;
+  max_depth: number;
+  pending_approvals: number;
+}
+
+/** Lightweight member representation on the tree detail payload. */
+export interface MemberSummary {
+  user_id: string;
+  display_name: string;
+  role: string;
+  joined_at: string;
+}
+
+/**
+ * Full tree detail — `GET /trees/{id}`. Mirrors the backend `TreeDetail`
+ * struct: the base summary fields plus optional stats/members/related.
+ */
+export interface TreeDetail {
+  id: string;
+  title: string;
+  description: string;
+  owner_id: string;
+  owner_display_name: string;
+  node_count: number;
+  member_count: number;
+  root_node_id: string;
+  created_at: string;
+  updated_at: string;
+  role: string;
+  deleted_at?: string | null;
+  stats?: TreeStats | null;
+  members?: MemberSummary[] | null;
+  related?: TreeRelated;
+}
+
 // ─── React Flow Node/Edge Types ───────────────────────────────────────
 
 /** React Flow node type identifiers for custom rendering. */
