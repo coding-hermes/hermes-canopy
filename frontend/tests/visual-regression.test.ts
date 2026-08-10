@@ -346,14 +346,45 @@ async function selectFirstTree(
       }))
       .filter((option) => option.value.length > 0),
   );
-  const selected =
-    options.find((option) => option.label.startsWith(DEMO_TREE_LABEL)) ?? options[0];
-  if (selected) {
-    await page.locator(selector).selectOption(selected.value);
+  const byLabel = options.find((option) => option.label.startsWith(DEMO_TREE_LABEL));
+  if (byLabel) {
+    await page.locator(selector).selectOption(byLabel.value);
     await page.waitForTimeout(1_000);
-  } else {
-    console.warn(`⚠ No backend tree available for ${selector}; capturing the documented empty state`);
+    return;
   }
+
+  // Pagination (PAG-001/002): with 3,600+ trees the seeded demo tree
+  // predates the first page of the tree selects, so the label lookup above
+  // misses it and option[0] would pick the newest (empty) tree — VREG-001
+  // drift again. Resolve the demo tree through the API title search and
+  // preselect it via the app's own persisted-active-tree mechanism, then
+  // reload: both pages initialize from storage and prepend the active tree
+  // into the select.
+  const searchResp = await page.request.get(
+    `http://localhost:5173/api/v1/trees?search=${encodeURIComponent(DEMO_TREE_LABEL)}&limit=1`,
+  );
+  let demoId = '';
+  if (searchResp.ok()) {
+    const body = (await searchResp.json()) as {
+      trees?: Array<{ id: string; title: string }>;
+    };
+    demoId = body.trees?.find((t) => t.title.startsWith(DEMO_TREE_LABEL))?.id ?? '';
+  }
+  if (demoId) {
+    await page.addInitScript(
+      (id) => window.localStorage.setItem('canopy.activeTreeId', id),
+      demoId,
+    );
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(selector, { state: 'visible', timeout: 10_000 });
+    const current = await page.locator(selector).inputValue();
+    if (current !== demoId) {
+      await page.locator(selector).selectOption(demoId);
+    }
+    await page.waitForTimeout(1_000);
+    return;
+  }
+  console.warn(`⚠ No backend tree available for ${selector}; capturing the documented empty state`);
 }
 
 const VISUAL_CASES: readonly VisualCase[] = [

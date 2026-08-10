@@ -103,6 +103,18 @@ func New(
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
+		// Topic search + context injection (TM-03). Tree-scoped, membership-gated.
+		// Registered BEFORE the /trees mount so chi's radix router resolves
+		// these specific patterns before the wildcard subrouter.
+		// Spec: SPEC-TM-03 §6.
+		if topicSearchSvc != nil {
+			searchHandler := handler.NewTopicSearchHandler(topicSearchSvc, sseHub)
+			r.With(membershipMW).Get("/trees/{tree_id}/topics/search", searchHandler.SearchTopics)
+			r.With(membershipMW).Get("/trees/{tree_id}/topics/recent", searchHandler.GetRecentTopics)
+			r.With(membershipMW).Get("/trees/{tree_id}/topics/{topic_id}/preview", searchHandler.GetTopicPreview)
+			r.With(membershipMW).Post("/trees/{tree_id}/context/inject", searchHandler.InjectContext)
+		}
+
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
 			WithShares(userRepo, membersRepo, sseHub)
@@ -137,13 +149,6 @@ func New(
 
 		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
 		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
-
-		// Topic search + context injection (TM-03). Tree-scoped, membership-gated.
-		// Spec: SPEC-TM-03 §6.
-		if topicSearchSvc != nil {
-			searchHandler := handler.NewTopicSearchHandler(topicSearchSvc, sseHub)
-			r.With(membershipMW).Mount("/trees/{tree_id}", searchHandler.Routes())
-		}
 
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())

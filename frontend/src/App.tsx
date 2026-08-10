@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, Routes, Route, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -22,6 +23,7 @@ import AgentsPage from './pages/AgentsPage'
 import ReviewPage from './pages/ReviewPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
+import TopicSearchPanel from './components/TopicSearchPanel'
 import AppHeader from './components/AppHeader'
 import ShortcutHelp from './components/ShortcutHelp'
 import { useShortcuts } from './hooks/useShortcuts'
@@ -73,6 +75,20 @@ function Dashboard() {
 
 function Layout() {
   const navigate = useNavigate()
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // Ctrl/Cmd+K toggles the topic search panel (TM-03). Kept keyboard-only
+  // so the default layout stays pixel-identical for the UI-09 goldens.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   /*
    * App-shell shortcut scope (UI-07): `m` jumps to the merge view and `?`
@@ -133,6 +149,13 @@ function Layout() {
           <p className="text-xs text-content-faint">Hermes Canopy v0.1.0</p>
         </div>
       </aside>
+
+      {/* Topic search panel (TM-03) — 360px right panel, toggled from the sidebar header */}
+      {searchOpen && (
+        <div className="w-[360px] shrink-0 border-l border-line-subtle bg-surface-panel flex flex-col">
+          <TopicSearchPanel />
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">

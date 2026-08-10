@@ -168,7 +168,20 @@ export default function TopicsRail() {
     // nodes/topics page selectors); fall back to trees[0] when absent.
     const data = await apiGet<ListTreesResponse>('/trees?limit=50');
     const demo = data.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'));
-    return { id: (demo ?? data.trees[0])?.id ?? '', explicit: false };
+    if (demo) return { id: demo.id, explicit: false };
+
+    // Pagination (PAG-001/002): with 3,600+ trees the demo tree predates
+    // the first page — find it through the API title search instead.
+    try {
+      const found = await apiGet<ListTreesResponse>(
+        `/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`,
+      );
+      const hit = found.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'));
+      if (hit) return { id: hit.id, explicit: false };
+    } catch {
+      // Fall through to trees[0] — search is best-effort here.
+    }
+    return { id: data.trees[0]?.id ?? '', explicit: false };
   }, [treeParam]);
 
   const load = useCallback(async () => {

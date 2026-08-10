@@ -111,6 +111,10 @@ func (h *TopicSearchHandler) SearchTopics(w http.ResponseWriter, r *http.Request
 		"query_time_ms":  elapsed.Milliseconds(),
 	})
 
+	// Ensure non-nil slice so empty results marshal as [] not null (spec §9).
+	if results == nil {
+		results = []search.TopicSearchResult{}
+	}
 	writeJSON(w, http.StatusOK, searchResponse{
 		Results:     results,
 		Total:       total,
@@ -139,6 +143,10 @@ func (h *TopicSearchHandler) GetRecentTopics(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Ensure non-nil slice so empty topics marshal as [] not null (spec §9).
+	if topics == nil {
+		topics = []search.TopicSearchResult{}
+	}
 	writeJSON(w, http.StatusOK, recentTopicsResponse{Topics: topics})
 }
 

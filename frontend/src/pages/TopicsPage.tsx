@@ -279,11 +279,23 @@ export default function TopicsPage() {
     // Loading state handled by trees array being empty
     try {
       const data = await apiGet<ListTreesResponse>('/trees?limit=100');
-      setTrees(data.trees);
+      let list = data.trees;
+      // Pagination (PAG-001/002): a deep-linked/stored tree may predate the
+      // first page — the select must still be able to display the active
+      // tree, so fetch it by id and prepend it (TM-03 / VREG-001 durability).
+      if (selectedTreeId && !list.some((t) => t.id === selectedTreeId)) {
+        try {
+          const single = await apiGet<TreeSummary>(`/trees/${selectedTreeId}`);
+          list = [single, ...list];
+        } catch {
+          // Active tree missing/forbidden — keep the paged list as-is.
+        }
+      }
+      setTrees(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trees');
     }
-  }, []);
+  }, [selectedTreeId]);
 
   useEffect(() => {
     void fetchTrees();

@@ -20,8 +20,9 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiGet, apiPatch, apiDelete } from '../lib/api';
+import { readStoredTreeId } from '../lib/activeTree';
 import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
 import { BulkActionBar } from '../components/BulkActionBar';
 import RelatedPanel from '../components/RelatedPanel';
@@ -197,8 +198,15 @@ function EditNodeDialog({
 
 export default function NodesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const treeParam = searchParams.get('tree') ?? '';
   const [trees, setTrees] = useState<TreeSummary[]>([]);
-  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null);
+  // Preselect from deep link or the persisted active tree (TopicsPage/
+  // TopicsRail parity — PAG-001/002 pagination means the newest page may
+  // not contain a stored tree; the select is still corrected below).
+  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(
+    () => treeParam || readStoredTreeId() || null,
+  );
   const [nodes, setNodes] = useState<NodeDetail[]>([]);
   const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [nodesLoading, setNodesLoading] = useState(false);
@@ -223,17 +231,39 @@ export default function NodesPage() {
     setTreesLoading(true);
     try {
       const data = await apiGet<ListTreesResponse>('/trees?limit=100&sort=created_desc');
-      setTrees(data.trees);
+      let list = data.trees;
+      // Pagination (PAG-001/002): a deep-linked/stored tree may predate the
+      // first page — the select must still be able to display the active
+      // tree, so fetch it by id and prepend it (VREG-001 durability).
+      if (selectedTreeId && !list.some((t) => t.id === selectedTreeId)) {
+        try {
+          const single = await apiGet<TreeSummary>(`/trees/${selectedTreeId}`);
+          list = [single, ...list];
+        } catch {
+          // Active tree missing/forbidden — keep the paged list as-is.
+        }
+      }
+      setTrees(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trees');
     } finally {
       setTreesLoading(false);
     }
-  }, []);
+  }, [selectedTreeId]);
 
   useEffect(() => {
     void fetchTrees();
   }, [fetchTrees]);
+
+  // Fetch nodes/topics for the initial preselected tree (deep link or
+  // persisted active tree). Later changes flow through handleTreeSelect.
+  useEffect(() => {
+    if (selectedTreeId) {
+      void fetchNodes(selectedTreeId);
+      void fetchTopics(selectedTreeId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch nodes when tree is selected
   const fetchNodes = useCallback(async (treeId: string) => {
