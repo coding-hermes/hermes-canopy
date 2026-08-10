@@ -163,6 +163,17 @@ func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary,
 		return nil, err
 	}
 
+	// Load delegations and build the session lineage index. This is
+	// best-effort — if the table is missing or the query fails, we
+	// proceed with an empty index (associations simply won't be
+	// attached). WIRE-006.
+	delegations, derr := i.reader.ListDelegations(ctx)
+	var idx *SessionIndex
+	if derr != nil {
+		delegations = nil // proceed without associations
+	}
+	idx = BuildSessionIndex(sessions, delegations)
+
 	sum := &ImportSummary{DryRun: opts.DryRun}
 
 	var pending []Session
@@ -224,7 +235,7 @@ func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary,
 			continue
 		}
 
-		if err := i.importSession(ctx, s, spec, sum); err != nil {
+		if err := i.importSession(ctx, s, spec, idx, sum); err != nil {
 			return nil, err
 		}
 		// Per-session watermark advance — persisted immediately so a
@@ -241,9 +252,13 @@ func (i *Importer) Run(ctx context.Context, opts ImportOptions) (*ImportSummary,
 }
 
 // importSession creates the tree (with root node) and chains every mapped
-// message as a reply child. Counters on sum are updated on success.
-func (i *Importer) importSession(ctx context.Context, s Session, spec TreeSpec, sum *ImportSummary) error {
-	treeMeta, err := json.Marshal(map[string]string{"session_id": s.ID})
+// message as a reply child. The session index is used to compute
+// association metadata (parent/children/delegation goals + title-parsed
+// fields). Counters on sum are updated on success.
+func (i *Importer) importSession(ctx context.Context, s Session, spec TreeSpec, idx *SessionIndex, sum *ImportSummary) error {
+	assoc := ComputeAssociations(s, idx)
+	treeMeta := NewTreeMetadata(s.ID, assoc)
+	treeMetaJSON, err := treeMeta.Marshal()
 	if err != nil {
 		return fmt.Errorf("session: encode tree metadata for %s: %w", s.ID, err)
 	}
@@ -254,7 +269,7 @@ func (i *Importer) importSession(ctx context.Context, s Session, spec TreeSpec, 
 		RootContent:   spec.RootContent,
 		ContentFormat: service.FormatMarkdown,
 		NodeType:      service.NodeTypeMessage,
-		Metadata:      treeMeta,
+		Metadata:      treeMetaJSON,
 	})
 	if err != nil {
 		return fmt.Errorf("session: create tree for %s: %w", s.ID, err)

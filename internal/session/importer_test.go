@@ -968,3 +968,93 @@ func TestReaderDelegationsEmpty(t *testing.T) {
 		t.Fatalf("delegations = %d, want 0", len(delegations))
 	}
 }
+
+// TestImporterAssociationMetadata verifies that the importer attaches
+// parent/children/delegation goals + title-parsed fields to tree
+// metadata (WIRE-006).
+func TestImporterAssociationMetadata(t *testing.T) {
+	path := buildFixture(t, func(conn *sql.DB) {
+		// Parent session with a delegation.
+		insertSession(t, conn, fixtureSession{id: "parent", source: "cli", title: "Scheduler tick", startedAt: 100.0})
+		insertMessage(t, conn, fixtureMessage{id: 1, sessionID: "parent", role: "user", content: "go", ts: 10})
+
+		// Child session with lineage and title-parsed fields.
+		insertSession(t, conn, fixtureSession{
+			id:              "child",
+			source:          "subagent",
+			title:           "hermes-canopy: Fix WIRE-006 in a1b2c3d",
+			startedAt:       200.0,
+			parentSessionID: "parent",
+		})
+		insertMessage(t, conn, fixtureMessage{id: 2, sessionID: "child", role: "user", content: "fix", ts: 20})
+
+		// Delegation originating from parent.
+		insertDelegation(t, conn, fixtureDelegation{
+			delegationID:  "deleg_1",
+			originSession: "parent",
+			state:         "completed",
+			taskJSON:      `{"goal": "Run E2E suite"}`,
+			dispatchedAt:  150.0,
+		})
+	})
+	imp, trees, _, _ := newTestImporter(t, path)
+
+	if _, err := imp.Run(context.Background(), ImportOptions{}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(trees.calls) != 2 {
+		t.Fatalf("trees = %d, want 2", len(trees.calls))
+	}
+
+	// Parent tree: has child + delegation goal.
+	parentMeta := unmarshalMeta(t, trees.calls[0].Metadata)
+	if parentMeta["session_id"] != "parent" {
+		t.Errorf("parent session_id = %v", parentMeta["session_id"])
+	}
+	children, ok := parentMeta["child_session_ids"].([]any)
+	if !ok || len(children) != 1 {
+		t.Fatalf("parent child_session_ids = %v, want [child]", parentMeta["child_session_ids"])
+	}
+	if children[0] != "child" {
+		t.Errorf("child[0] = %v, want child", children[0])
+	}
+	goals, ok := parentMeta["delegation_goals"].([]any)
+	if !ok || len(goals) != 1 {
+		t.Fatalf("parent delegation_goals = %v, want 1 goal", parentMeta["delegation_goals"])
+	}
+	goalMap, ok := goals[0].(map[string]any)
+	if !ok {
+		t.Fatalf("delegation goal[0] is not a map: %T", goals[0])
+	}
+	if goalMap["goal"] != "Run E2E suite" {
+		t.Errorf("goal = %v, want 'Run E2E suite'", goalMap["goal"])
+	}
+
+	// Child tree: has parent + title-parsed fields.
+	childMeta := unmarshalMeta(t, trees.calls[1].Metadata)
+	if childMeta["session_id"] != "child" {
+		t.Errorf("child session_id = %v", childMeta["session_id"])
+	}
+	if childMeta["parent_session_id"] != "parent" {
+		t.Errorf("child parent_session_id = %v, want parent", childMeta["parent_session_id"])
+	}
+	if childMeta["project"] != "hermes-canopy" {
+		t.Errorf("child project = %v, want hermes-canopy", childMeta["project"])
+	}
+	if childMeta["board_task"] != "WIRE-006" {
+		t.Errorf("child board_task = %v, want WIRE-006", childMeta["board_task"])
+	}
+	if childMeta["commit_hash"] != "a1b2c3d" {
+		t.Errorf("child commit_hash = %v, want a1b2c3d", childMeta["commit_hash"])
+	}
+}
+
+// unmarshalMeta deserializes tree metadata JSON into a map.
+func unmarshalMeta(t *testing.T, raw []byte) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	return m
+}
