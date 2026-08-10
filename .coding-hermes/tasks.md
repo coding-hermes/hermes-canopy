@@ -8339,3 +8339,30 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/286 (7f48f0f9-f115-4524-aa9c-4d79c7cbaa83) + /project/hermes-canopy/status (bf6f6125-9ccc-459a-84fd-12ac739a1efc) — HTTP /api/memories POST + fs-grep verified in current.jsonl pre-entry.
 
 **Next tick:** PAG-001 (real cursor pagination for GET /trees — 3,200+ trees; backend keyset + Trees page load-more + total count).
+
+## Tick 287 — 2026-08-09 22:32 local (2026-08-10 03:32 UTC) — INFRA-001 ROOT FIX (foreman-direct)
+
+**Verdict: PRODUCTIVE (infra root fix, no worker — storm window closed this tick).**
+
+**What happened:** Tick-286's INFRA-001 fix (cooldown 7200) was STOMPED 21 minutes after landing: the 22:00 stand-in wake cycle PUT `cooldown_s=900` at 22:05:34 and `fleet-cooldown-policy.py` regenerated fleet.toml from API state → 900 became "operator tier". The tick-storm window reopened (this tick itself fired 24s after the fleet.toml rewrite).
+
+**Root fix delivered:**
+1. **Pin re-asserted:** `PUT /api/v1/projects/hermes-canopy {"cooldown_s":7200}` + fleet.toml canopy block 900→7200. Verified file+API agree (GET 7200), held through the wake cycle's completion (22:30 report, agent closed 22:31).
+2. **Wake tooling patched (the actual root cause):** the wake's G5 gate and picker briefing only PUT 900 when CooldownS ≥ 14400 — but the agent widened the sweep and woke a 7200-pinned project anyway. Patched three touchpoints so an operator 7200 pin is never overridden:
+   - `~/.hermes/scripts/standin-pick.py` briefing → "NEVER PUT below the operator pin; when pin is 7200, skip the wake entirely"
+   - `coding-hermes-project-manager` skill G5 gate → same guard
+   - `coding-hermes-dogfood/references/stand-in-gap-pusher.md` → same guard
+3. **Policy script safety net:** `fleet-cooldown-policy.py` now REVERTs wake-900→7200 when the operator pin is 7200 EVEN WITH pending work (previously only reverted when no work — canopy with 22 pending stayed 900 forever). Dry-run verified: `hermes-canopy 7200 7200 ok`. Skill copy synced.
+
+**Gates:**
+
+| Gate | Result |
+|---|---|
+| Scheduler | cooldown_s=7200 live API + fleet.toml agree; daemon healthy; wake cycle completed 22:30 without re-stomp |
+| Stack | canopyd :8091 / vite :5173 untouched (Bane session) |
+| GitReins | No task record (scheduler-level + fleet-tooling patch, zero repo code); judge-skip per mechanical-infra exception |
+| DuckBrain | /ticks/287 (9a7f85b0) + /project/hermes-canopy/status (057a0120) — HTTP POST + fs-grep verified before board entry |
+| Board | Events 165 appended (audit, tick 287); INFRA-001 row foreman_note updated with root-fix record; header ticks_total 287 |
+| Signals | No remote-only commits; CI green 4/4 prior runs |
+
+**Next tick:** PAG-001 (P2, cursor pagination for GET /trees — 3,200+ trees; backend keyset + Trees page load-more + total count). Storm window now closed (7200 pin + wake guard), so a worker dispatch is safe next tick.
