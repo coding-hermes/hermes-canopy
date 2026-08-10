@@ -93,6 +93,11 @@ type NodeReader interface {
 type TopicReader interface {
 	GetBySlug(ctx context.Context, treeID uuid.UUID, slug string) (*db.Topic, error)
 	GetTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error)
+	// GetResolvedTopicsForNode returns topics explicitly referenced by the node
+	// via node_resolved_refs (spec §8.1 — context-compiler reference handling).
+	// Unlike GetTopicsForNode (scope membership via topic_member_nodes), this
+	// captures references the author wrote as #topic-slug in the message.
+	GetResolvedTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error)
 }
 
 // CardReader is satisfied by *card.SQLiteCardRepo.

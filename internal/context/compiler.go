@@ -193,6 +193,11 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 }
 
 // compileReferences resolves topic references and renders them, budget-gated.
+// Per spec §8.1, the merged topic set includes BOTH:
+//   - scope-membership topics (GetTopicsForNode — topic_member_nodes)
+//   - explicitly referenced topics (GetResolvedTopicsForNode — node_resolved_refs)
+//
+// The two sets are deduplicated by topic ID before cap/budget application.
 func (c *compilerImpl) compileReferences(
 	ctx context.Context,
 	req CompileRequest,
@@ -207,6 +212,16 @@ func (c *compilerImpl) compileReferences(
 		// Partial failure: add warning, don't fail
 		warnings = append(warnings, fmt.Sprintf("reference resolution failed: %v", err))
 		return nil, nil, warnings
+	}
+
+	// Spec §8.1: also include topics explicitly referenced via node_resolved_refs.
+	// These are #topic-slug references the author wrote, resolved at send time.
+	resolvedTopics, err := c.topics.GetResolvedTopicsForNode(ctx, req.NodeID)
+	if err != nil {
+		// Partial failure — proceed with scope-membership topics only.
+		warnings = append(warnings, fmt.Sprintf("resolved-reference lookup failed: %v", err))
+	} else {
+		topics = mergeTopics(topics, resolvedTopics)
 	}
 
 	// Deduplicate by topic ID
@@ -259,6 +274,22 @@ func (c *compilerImpl) compileReferences(
 	}
 
 	return sections, items, warnings
+}
+
+// mergeTopics appends src topics to dst, skipping duplicates by topic ID.
+// The caller is expected to have already populated dst; this does a simple
+// linear append for each unique src entry. Final dedup is handled by the
+// caller's seen-map, so we don't need to check dst here — just avoid adding
+// the same topic from src twice.
+func mergeTopics(dst, src []db.Topic) []db.Topic {
+	srcSeen := make(map[uuid.UUID]bool, len(src))
+	for _, t := range src {
+		if !srcSeen[t.ID] {
+			srcSeen[t.ID] = true
+			dst = append(dst, t)
+		}
+	}
+	return dst
 }
 
 // compileCards fetches and renders cards, budget-gated.

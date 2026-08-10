@@ -41,6 +41,9 @@ func (s *stubNodeReader) GetAncestors(ctx context.Context, id uuid.UUID) ([]db.N
 type stubTopicReader struct {
 	topics      map[uuid.UUID][]db.Topic
 	getTopicsFn func(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error)
+	// resolvedTopics simulates node_resolved_refs topics for the compiler merge test.
+	resolvedTopics      map[uuid.UUID][]db.Topic
+	getResolvedTopicsFn func(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error)
 }
 
 func (s *stubTopicReader) GetBySlug(ctx context.Context, treeID uuid.UUID, slug string) (*db.Topic, error) {
@@ -52,6 +55,16 @@ func (s *stubTopicReader) GetTopicsForNode(ctx context.Context, nodeID uuid.UUID
 		return s.getTopicsFn(ctx, nodeID)
 	}
 	return s.topics[nodeID], nil
+}
+
+func (s *stubTopicReader) GetResolvedTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error) {
+	if s.getResolvedTopicsFn != nil {
+		return s.getResolvedTopicsFn(ctx, nodeID)
+	}
+	if s.resolvedTopics != nil {
+		return s.resolvedTopics[nodeID], nil
+	}
+	return nil, nil
 }
 
 type stubCardReader struct {
@@ -648,5 +661,186 @@ func TestCompile_BudgetTooSmall(t *testing.T) {
 	}
 	if !foundWarning {
 		t.Errorf("expected 'budget too small' warning, got: %v", result.Manifest.Warnings)
+	}
+}
+
+// 16. Compiler merge: scope-membership topics + node_resolved_refs topics
+// are deduplicated and merged (spec §8.1).
+func TestCompile_ReferenceMerge_ScopeAndResolved(t *testing.T) {
+	nid := uuid.New()
+	// t1 appears in BOTH scope-membership and resolved refs → must dedupe to 1.
+	t1 := makeTopic(uuid.New(), "shared-topic", "Shared", "Desc shared")
+	// t2 is ONLY in scope-membership.
+	t2 := makeTopic(uuid.New(), "scope-topic", "Scope", "Desc scope")
+	// t3 is ONLY in node_resolved_refs (the author wrote #ref-only-topic).
+	t3 := makeTopic(uuid.New(), "ref-only-topic", "RefOnly", "Desc ref")
+
+	nodes := &stubNodeReader{
+		nodes: map[uuid.UUID]*db.Node{
+			nid: makeNode(nid, uuid.New(), "message with #ref-only-topic"),
+		},
+		getAncFn: func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
+			return []db.Node{*makeNode(nid, uuid.New(), "message with #ref-only-topic")}, nil
+		},
+	}
+
+	topics := &stubTopicReader{
+		topics:         map[uuid.UUID][]db.Topic{nid: {t1, t2}},
+		resolvedTopics: map[uuid.UUID][]db.Topic{nid: {t1, t3}},
+	}
+
+	c := NewCompiler(nodes, topics, &stubCardReader{}, NewTokenEstimator(), 5)
+	result, err := c.Compile(context.Background(), CompileRequest{
+		NodeID:      nid,
+		TokenBudget: 10000,
+		ResolveRefs: true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Merged set: t1, t2, t3 — 3 unique topics (t1 deduped).
+	if len(result.Manifest.References) != 3 {
+		t.Errorf("expected 3 merged references (scope+resolved, deduped), got %d", len(result.Manifest.References))
+	}
+
+	// All three topics must appear in the content.
+	if !strings.Contains(result.Content, "shared-topic") {
+		t.Error("content missing shared-topic (should appear once after dedup)")
+	}
+	if !strings.Contains(result.Content, "scope-topic") {
+		t.Error("content missing scope-topic (scope-membership only)")
+	}
+	if !strings.Contains(result.Content, "ref-only-topic") {
+		t.Error("content missing ref-only-topic (node_resolved_refs only)")
+	}
+}
+
+// 17. Compiler includes resolved ref with boundary marker (scenario 23).
+func TestCompile_ResolvedRef_HasBoundaryMarker(t *testing.T) {
+	nid := uuid.New()
+	refTopic := makeTopic(uuid.New(), "db-schema", "Database Schema", "Schema docs")
+
+	nodes := &stubNodeReader{
+		nodes: map[uuid.UUID]*db.Node{
+			nid: makeNode(nid, uuid.New(), "See #db-schema"),
+		},
+		getAncFn: func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
+			return []db.Node{*makeNode(nid, uuid.New(), "See #db-schema")}, nil
+		},
+	}
+
+	topics := &stubTopicReader{
+		topics:         map[uuid.UUID][]db.Topic{}, // no scope-membership
+		resolvedTopics: map[uuid.UUID][]db.Topic{nid: {refTopic}},
+	}
+
+	c := NewCompiler(nodes, topics, &stubCardReader{}, NewTokenEstimator(), 5)
+	result, err := c.Compile(context.Background(), CompileRequest{
+		NodeID:      nid,
+		TokenBudget: 10000,
+		ResolveRefs: true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(result.Manifest.References) != 1 {
+		t.Fatalf("expected 1 resolved reference, got %d", len(result.Manifest.References))
+	}
+	if result.Manifest.References[0].Title != "db-schema" {
+		t.Errorf("expected ref slug 'db-schema', got %q", result.Manifest.References[0].Title)
+	}
+	if !strings.Contains(result.Content, "topic boundary: db-schema") {
+		t.Error("content missing boundary marker for resolved ref topic")
+	}
+}
+
+// 18. Budget truncation: more topics than budget allows → remaining dropped.
+func TestCompile_ResolvedRefs_BudgetTruncation(t *testing.T) {
+	nid := uuid.New()
+	var refTopics []db.Topic
+	for i := 0; i < 5; i++ {
+		// Long descriptions to consume budget.
+		desc := strings.Repeat("desc-content-"+string(rune('a'+i))+" ", 30)
+		refTopics = append(refTopics, makeTopic(uuid.New(), "topic-"+string(rune('a'+i)), "Title", desc))
+	}
+
+	nodes := &stubNodeReader{
+		nodes: map[uuid.UUID]*db.Node{
+			nid: makeNode(nid, uuid.New(), "msg"),
+		},
+		getAncFn: func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
+			return []db.Node{*makeNode(nid, uuid.New(), "msg")}, nil
+		},
+	}
+
+	topics := &stubTopicReader{
+		resolvedTopics: map[uuid.UUID][]db.Topic{nid: refTopics},
+	}
+
+	c := NewCompiler(nodes, topics, &stubCardReader{}, NewTokenEstimator(), 5)
+	result, err := c.Compile(context.Background(), CompileRequest{
+		NodeID:      nid,
+		TokenBudget: 200, // tight budget — ancestry takes most of it
+		ResolveRefs: true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// At least one topic should be dropped by budget. The exact count depends
+	// on the estimator, but with budget=200 and 5 large topics, we expect
+	// fewer than 5 references.
+	if len(result.Manifest.References) >= 5 {
+		t.Errorf("expected budget truncation (<5 refs), got %d", len(result.Manifest.References))
+	}
+}
+
+// 19. GetResolvedTopicsForNode failure → warning, scope topics still work.
+func TestCompile_ResolvedRefLookupFailure_PartialDegrade(t *testing.T) {
+	nid := uuid.New()
+	scopeTopic := makeTopic(uuid.New(), "scope-only", "Scope", "Desc")
+
+	nodes := &stubNodeReader{
+		nodes: map[uuid.UUID]*db.Node{
+			nid: makeNode(nid, uuid.New(), "msg"),
+		},
+		getAncFn: func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
+			return []db.Node{*makeNode(nid, uuid.New(), "msg")}, nil
+		},
+	}
+
+	topics := &stubTopicReader{
+		topics: map[uuid.UUID][]db.Topic{nid: {scopeTopic}},
+		getResolvedTopicsFn: func(ctx context.Context, nodeID uuid.UUID) ([]db.Topic, error) {
+			return nil, errors.New("simulated db failure")
+		},
+	}
+
+	c := NewCompiler(nodes, topics, &stubCardReader{}, NewTokenEstimator(), 5)
+	result, err := c.Compile(context.Background(), CompileRequest{
+		NodeID:      nid,
+		TokenBudget: 10000,
+		ResolveRefs: true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error (partial degrade), got %v", err)
+	}
+
+	// Scope topic still included.
+	if len(result.Manifest.References) != 1 {
+		t.Errorf("expected 1 scope reference despite resolved-ref failure, got %d", len(result.Manifest.References))
+	}
+
+	// Warning about resolved-reference failure.
+	foundWarning := false
+	for _, w := range result.Manifest.Warnings {
+		if strings.Contains(w, "resolved-reference lookup failed") {
+			foundWarning = true
+		}
+	}
+	if !foundWarning {
+		t.Errorf("expected resolved-reference lookup failure warning, got: %v", result.Manifest.Warnings)
 	}
 }

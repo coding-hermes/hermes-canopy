@@ -63,6 +63,7 @@ type TopicRepo interface {
 	GetChildTopics(ctx context.Context, parentTopicID uuid.UUID) ([]Topic, error)
 	RefreshNodeCount(ctx context.Context, topicID uuid.UUID) (int32, error)
 	GetTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]Topic, error)
+	GetResolvedTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]Topic, error)
 	ListArchived(ctx context.Context, treeID uuid.UUID, limit, offset int) ([]Topic, int, error)
 }
 
@@ -346,6 +347,28 @@ func (r *PGTopicRepo) GetTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([
         WHERE tmn.node_id = $1 AND t.deleted_at IS NULL`, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("db: topics for node: %w", err)
+	}
+	defer rows.Close()
+	return scanTopicArray(rows)
+}
+
+// GetResolvedTopicsForNode returns topics explicitly referenced by the node
+// via node_resolved_refs (spec §8.1). These are the #topic-slug references
+// the author wrote in the message, resolved and persisted at send time.
+// Distinct from GetTopicsForNode, which returns scope-membership topics.
+func (r *PGTopicRepo) GetResolvedTopicsForNode(ctx context.Context, nodeID uuid.UUID) ([]Topic, error) {
+	// Use explicit t. prefix to avoid ambiguous column references when
+	// joining with node_resolved_refs (topicColumns has unqualified names).
+	rows, err := r.pool.Query(ctx, `
+        SELECT DISTINCT t.id, t.tree_id, t.root_node_id, t.title, t.description,
+            t.slug, t.parent_topic_id, t.status, t.topic_tags,
+            t.node_count, t.created_at,
+            t.archived_at, t.deleted_at
+        FROM topics t
+        JOIN node_resolved_refs nrr ON nrr.topic_id = t.id
+        WHERE nrr.node_id = $1 AND t.deleted_at IS NULL`, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("db: resolved topics for node: %w", err)
 	}
 	defer rows.Close()
 	return scanTopicArray(rows)

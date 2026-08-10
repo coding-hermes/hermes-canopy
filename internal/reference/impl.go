@@ -336,6 +336,72 @@ func (s *referenceService) InjectWithReferences(ctx context.Context, treeID uuid
 	return merged, nil
 }
 
+// ── GetReferencedContext (spec §8.1-8.4) ─────────────────────────────────
+
+// GetReferencedContext builds per-topic context for the context compiler's
+// reference-handling path. For each topic: check the cache → if hit AND the
+// cached context_hash matches the current topic's context hash, return the
+// cached TopicContext (parsed via parseTopicContextPayload); otherwise build
+// the TopicContext via the search inject machinery, cache it, and return.
+func (s *referenceService) GetReferencedContext(ctx context.Context, treeID uuid.UUID, topicIDs []uuid.UUID, maxNodes int) ([]search.TopicContext, error) {
+	if len(topicIDs) == 0 {
+		return []search.TopicContext{}, nil
+	}
+
+	maxNodesPerTopic := maxNodes
+	if maxNodesPerTopic <= 0 {
+		maxNodesPerTopic = search.DefaultMaxNodes
+	}
+
+	// Build all topic contexts via the search inject machinery (which computes
+	// the canonical context hash from node IDs — search.contextHash).
+	// We use a single CompileInjectContext call for efficiency, then compare
+	// each topic's computed hash against the cache.
+	merged, results, err := search.CompileInjectContext(ctx, s.searchRepo, treeID, search.InjectContextRequest{
+		TopicIDs: topicIDs,
+		MaxNodes: maxNodesPerTopic,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInjectionFailed, err)
+	}
+
+	out := make([]search.TopicContext, 0, len(merged.Topics))
+
+	for _, tc := range merged.Topics {
+		// Check cache: is there a valid entry whose context_hash matches?
+		cached, cacheErr := s.repo.GetReferenceCache(ctx, tc.TopicID)
+		if cacheErr != nil {
+			// Non-fatal: log and rebuild.
+			cached = nil
+		}
+
+		if cached != nil && cached.ContextHash == tc.ContextHash {
+			// Cache hit with matching hash — parse and return cached payload.
+			parsed, parseErr := parseTopicContextPayload(cached.Payload)
+			if parseErr == nil {
+				out = append(out, parsed)
+				continue
+			}
+			// Parse failed — fall through to rebuild + cache.
+		}
+
+		// Cache miss or hash mismatch — store the freshly computed context.
+		payload, marshalErr := json.Marshal(tc)
+		if marshalErr == nil {
+			cacheErr := s.repo.UpsertReferenceCache(ctx, tc.TopicID, treeID, tc.ContextHash, tc.TotalNodes, payload)
+			if cacheErr != nil {
+				log.Warn().Err(cacheErr).Stringer("topic_id", tc.TopicID).
+					Msg("reference: failed to cache topic context")
+			}
+		}
+
+		out = append(out, tc)
+	}
+
+	_ = results // per-topic results not needed here
+	return out, nil
+}
+
 // parseTopicContextPayload deserializes a cached TopicContext from JSON.
 func parseTopicContextPayload(payload json.RawMessage) (search.TopicContext, error) {
 	var tc search.TopicContext

@@ -44,9 +44,6 @@ const (
 // URLs).
 
 var (
-	// referenceSlugRe matches a single topic slug (without the '#').
-	referenceSlugRe = regexp.MustCompile(`^[a-z]([a-z0-9-]*[a-z0-9])?$`)
-
 	// referenceRe matches #topic-slug references in message content.
 	// The '(?:^|[^a-zA-Z0-9#])' lookbehind ensures the '#' is at the start
 	// of the text or preceded by a non-word, non-'#' character.

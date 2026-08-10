@@ -71,4 +71,11 @@ type ReferenceService interface {
 	// InjectWithReferences merges explicitly requested topic IDs with references
 	// and returns a MultiTopicContext.
 	InjectWithReferences(ctx context.Context, treeID uuid.UUID, req InjectWithReferencesRequest, requesterID uuid.UUID) (*search.MultiTopicContext, error)
+
+	// GetReferencedContext builds the context for a set of referenced topics,
+	// using the cache-backed path described in spec §8.1-8.4. For each topic:
+	// check reference_resolution_cache → if hit AND context_hash matches the
+	// current topic context hash, return the cached payload; otherwise rebuild
+	// the TopicContext via the search machinery, upsert into cache, and return.
+	GetReferencedContext(ctx context.Context, treeID uuid.UUID, topicIDs []uuid.UUID, maxNodes int) ([]search.TopicContext, error)
 }
