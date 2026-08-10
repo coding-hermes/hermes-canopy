@@ -27,8 +27,9 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/mls"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/server"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
@@ -161,6 +162,10 @@ func main() {
 	topicSearchLogRepo := db.NewPGTopicSearchLogRepo(database.Pool)
 	topicSearchSvc := search.NewTopicSearchService(topicSearchRepo, topicSearchLogRepo)
 
+	// Reference resolution service — TM-04 implementation (SPEC-TM-04).
+	referenceRepo := db.NewPGReferenceRepo(database.Pool)
+	referenceSvc := reference.NewReferenceService(referenceRepo, topicSearchRepo)
+
 	// Graph service — BE-16 implementation (ARCHITECTURE.md §3).
 	graphSvc := service.NewGraphServiceImpl(
 		database.Nodes,
@@ -206,7 +211,7 @@ func main() {
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
-		ctxCompiler, pluginSvc, topicSearchSvc, cfg)
+		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, cfg)
 
 	// Start server in background
 

@@ -12,20 +12,33 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
 )
 
 // NodeHandler wires the node CRUD HTTP routes to the NodeService interface
 // and broadcasts mutations through the SyncEngine.
 type NodeHandler struct {
-	svc  service.NodeService
-	sync sync.SyncEngine
+	svc    service.NodeService
+	sync   sync.SyncEngine
+	refSvc reference.ReferenceService
+	sseHub sse.SSEHub
 }
 
 // NewNodeHandler returns a handler wired to the given NodeService and SyncEngine.
 func NewNodeHandler(svc service.NodeService, se sync.SyncEngine) *NodeHandler {
 	return &NodeHandler{svc: svc, sync: se}
+}
+
+// WithReferences wires the send-time reference resolution hook.
+// When set, node creation triggers reference parsing, resolution, and
+// SSE broadcasts (spec §2, §7).
+func (h *NodeHandler) WithReferences(refSvc reference.ReferenceService, hub sse.SSEHub) *NodeHandler {
+	h.refSvc = refSvc
+	h.sseHub = hub
+	return h
 }
 
 // Routes mounts the node endpoints.
@@ -158,6 +171,16 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			Timestamp:     time.Now().UTC(),
 		})
 	}
+
+	// ── Send-time reference resolution (SPEC-TM-04 §2) ──────────────────
+	// Resolve #references AFTER the node exists (FK constraint on
+	// node_resolved_refs) but BEFORE the response is sent. Non-fatal:
+	// resolution failures don't block the message. Lenient: not_found refs
+	// are logged + emit reference_not_found but the message persists.
+	if h.refSvc != nil && out != nil {
+		h.resolveReferencesAtSend(r, treeID, out.Node.ID, out.Node.Content, authorID)
+	}
+
 	w.Header().Set("Location", "/trees/"+treeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -405,5 +428,73 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 }
 
 // --- Helpers ----------------------------------------------------------------
+
+// resolveReferencesAtSend performs send-time #reference resolution for a
+// newly created node (SPEC-TM-04 §2, §7). Emits SSE events for each resolved
+// and not_found reference, plus references_too_many when over the soft cap.
+// All operations are non-fatal: the message is already persisted.
+func (h *NodeHandler) resolveReferencesAtSend(r *http.Request, treeID, nodeID uuid.UUID, content string, requesterID uuid.UUID) {
+	result, err := h.refSvc.ResolveAtSend(r.Context(), treeID, nodeID, content, requesterID)
+	if err != nil {
+		log.Ctx(r.Context()).Warn().Err(err).Msg("send-time reference resolution failed")
+		return
+	}
+
+	if h.sseHub == nil {
+		return
+	}
+
+	// Emit reference_resolved / reference_not_found events in order.
+	for _, resolved := range result.References {
+		payload, _ := json.Marshal(map[string]any{
+			"nodeId":      nodeID,
+			"treeId":      treeID,
+			"reference":   resolved.Reference,
+			"topicId":     resolved.Topic.ID,
+			"slug":        resolved.Topic.Slug,
+			"title":       resolved.Topic.Title,
+			"nodeCount":   resolved.Topic.NodeCount,
+			"contextHash": "",
+		})
+		h.sseHub.Broadcast(treeID, sse.SSEEvent{
+			Type:    "reference_resolved",
+			Data:    payload,
+			TreeID:  treeID,
+			ActorID: requesterID,
+		})
+	}
+
+	for _, nf := range result.NotFound {
+		payload, _ := json.Marshal(map[string]any{
+			"nodeId":    nodeID,
+			"treeId":    treeID,
+			"reference": nf,
+		})
+		h.sseHub.Broadcast(treeID, sse.SSEEvent{
+			Type:    "reference_not_found",
+			Data:    payload,
+			TreeID:  treeID,
+			ActorID: requesterID,
+		})
+	}
+
+	// Emit references_too_many when over soft cap.
+	if result.TooMany {
+		payload, _ := json.Marshal(map[string]any{
+			"nodeId":  nodeID,
+			"treeId":  treeID,
+			"count":   len(result.References) + len(result.NotFound),
+			"softCap": reference.SoftCap,
+			"hardCap": reference.HardCap,
+			"warning": result.Warning,
+		})
+		h.sseHub.Broadcast(treeID, sse.SSEEvent{
+			Type:    "references_too_many",
+			Data:    payload,
+			TreeID:  treeID,
+			ActorID: requesterID,
+		})
+	}
+}
 
 // End of node_handler.go — parseNodeID is in handler_util.go

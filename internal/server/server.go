@@ -18,6 +18,7 @@ import (
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/handler"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/hermes"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
+	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
 	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
@@ -63,6 +64,7 @@ func New(
 	ctxCompiler ctxpkg.Compiler,
 	pluginSvc plugin.Service,
 	topicSearchSvc search.TopicSearchService,
+	referenceSvc reference.ReferenceService,
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
@@ -115,13 +117,23 @@ func New(
 			r.With(membershipMW).Post("/trees/{tree_id}/context/inject", searchHandler.InjectContext)
 		}
 
+		// Reference resolution (TM-04). Tree-scoped, membership-gated.
+		// Spec: SPEC-TM-04 §6.
+		if referenceSvc != nil {
+			refHandler := handler.NewReferenceHandler(referenceSvc, sseHub)
+			r.With(membershipMW).Get("/trees/{tree_id}/references/autocomplete", refHandler.Autocomplete)
+			r.With(membershipMW).Post("/trees/{tree_id}/references/resolve", refHandler.Resolve)
+			r.With(membershipMW).Post("/trees/{tree_id}/references/inject", refHandler.Inject)
+		}
+
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
 			WithShares(userRepo, membersRepo, sseHub)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD (SPEC-API-03) — tree-scoped routes get membership check.
-		nodeHandler := handler.NewNodeHandler(nodeSvc, syncEngine)
+		nodeHandler := handler.NewNodeHandler(nodeSvc, syncEngine).
+			WithReferences(referenceSvc, sseHub)
 		treeNodes := chi.NewRouter()
 		treeNodes.Use(membershipMW)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
