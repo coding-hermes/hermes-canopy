@@ -33,11 +33,11 @@ func compileMultiTopicContext(contexts []TopicContext, globalMaxNodes int) *Mult
 		}
 
 		// Topic boundary marker
-		sb.WriteString(fmt.Sprintf("\n--- topic boundary: %s (id: %s) ---\n", tc.Slug, tc.TopicID))
-		sb.WriteString(fmt.Sprintf("Topic: %s\n", tc.Title))
-		sb.WriteString(fmt.Sprintf("Root node: %s\n", tc.RootNodeID))
-		sb.WriteString(fmt.Sprintf("Total nodes in topic: %d\n", tc.TotalNodes))
-		sb.WriteString(fmt.Sprintf("Nodes included: %d\n\n", len(tc.Nodes)))
+		fmt.Fprintf(&sb, "\n--- topic boundary: %s (id: %s) ---\n", tc.Slug, tc.TopicID)
+		fmt.Fprintf(&sb, "Topic: %s\n", tc.Title)
+		fmt.Fprintf(&sb, "Root node: %s\n", tc.RootNodeID)
+		fmt.Fprintf(&sb, "Total nodes in topic: %d\n", tc.TotalNodes)
+		fmt.Fprintf(&sb, "Nodes included: %d\n\n", len(tc.Nodes))
 
 		budget := globalMaxNodes - totalNodes
 		included := 0
@@ -53,13 +53,13 @@ func compileMultiTopicContext(contexts []TopicContext, globalMaxNodes int) *Mult
 		}
 
 		if included < len(tc.Nodes) {
-			sb.WriteString(fmt.Sprintf("\n[... %d more nodes in topic %s — truncated by context budget]\n",
-				tc.TotalNodes-included, tc.Slug))
+			fmt.Fprintf(&sb, "\n[... %d more nodes in topic %s — truncated by context budget]\n",
+				tc.TotalNodes-included, tc.Slug)
 		}
 	}
 
 	if truncated {
-		sb.WriteString(fmt.Sprintf("\n[CONTEXT WARNING: %d topics requested, total nodes exceed budget. Some nodes omitted. Consider re-injecting with fewer topics or higher max_nodes.]\n", len(contexts)))
+		fmt.Fprintf(&sb, "\n[CONTEXT WARNING: %d topics requested, total nodes exceed budget. Some nodes omitted. Consider re-injecting with fewer topics or higher max_nodes.]\n", len(contexts))
 	}
 
 	merged.MergedText = sb.String()
@@ -71,7 +71,7 @@ func compileMultiTopicContext(contexts []TopicContext, globalMaxNodes int) *Mult
 // formatNodeForContext renders a single node into the merged context text.
 func formatNodeForContext(node ContextNode) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("--- node %s (author: %s) ---\n", node.ID, node.AuthorID))
+	fmt.Fprintf(&sb, "--- node %s (author: %s) ---\n", node.ID, node.AuthorID)
 	content := stripMarkdown(node.Content)
 	sb.WriteString(content)
 	return sb.String()

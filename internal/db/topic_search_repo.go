@@ -85,9 +85,10 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
 
 	// Status filter.
 	statusClause := "AND t.status = 'active'"
-	if opts.StatusFilter == "all" {
+	switch opts.StatusFilter {
+	case "all":
 		statusClause = "AND t.status != 'deleted'"
-	} else if opts.StatusFilter == "archived" {
+	case "archived":
 		statusClause = "AND t.status = 'archived'"
 	}
 
