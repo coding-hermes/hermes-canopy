@@ -14,7 +14,7 @@
 - Design-system overhaul (UI-01..UI-10): dark navy theme + tokens, topics sidebar rail, header upgrade, branching canvas (glow connectors, ghost nodes), node card redesign, composer bar, keyboard shortcuts, node-list hierarchy, visual-regression baseline (4 mockup goldens), sidebar consolidation
 - Bug fixes: BUG-024 endpoint stubs, BUG-025 flat /nodes access control, BUG-029 root node 503, BUG-030 composer read-only, BUG-031 SSE goroutine leak, BUG-032 Yjs replica bridge, BUG-034 `set_content_hash` bytea crash (real-data), BUG-035 session import idempotency
 - Docs/devx sweep (GAP-006..020): compose env var, `make run`, curl walkthrough, Vite proxy port, frontend bootstrap, `make test-short` without PG, README graph API routes, DB_PORT sync, Go 1.25+/PG 17 version drift, license alignment (MIT)
-- Current test state (2026-08-09): vitest 522/522, Playwright 48/48, Go integration 46/46 (PG), judge-verified per task
+- Current test state (2026-08-09): vitest 583/583, Playwright 48/48, Go integration 46/46 (PG), judge-verified per task
 
 ### Phase 10 — Hardening (2026-07-28)
 - Fixed MLS key reuse (BUG-013): domain-separated encryption/signing keys
