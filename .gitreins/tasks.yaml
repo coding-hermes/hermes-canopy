@@ -988,3 +988,32 @@ tasks:
   status: complete
   created_at: '2026-08-10T05:23:24.399053+00:00'
   completed_at: '2026-08-10T05:39:15.125836+00:00'
+- id: TM-03
+  title: Topic FTS search + one-button context injection (SPEC-TM-03)
+  criteria:
+  - Migration 000026 applies on fresh DB (golang-migrate, embed) and down works; topic_node_content_search
+    + topic_search_log tables, last_active_at column, setweight A/B trigger replace
+    without collision
+  - GET /trees/{tree_id}/topics/search?q= returns results ordered by ts_rank with
+    <mark> snippets, total, query_time_ms; q 2-200 validated; SEARCH_QUERY_TOO_SHORT
+    / SEARCH_QUERY_TOO_LONG / SEARCH_INVALID_SORT / SEARCH_STOP_WORDS_ONLY errors
+    per spec section 8; empty results marshal as [] not null
+  - GET /trees/{tree_id}/topics/recent returns last_active_at DESC excluding deleted
+  - GET /trees/{tree_id}/topics/{topic_id}/preview returns snippets, participant_count,
+    node_count, last_active_rel; 404 TOPIC_NOT_FOUND
+  - POST /trees/{tree_id}/context/inject compiles MultiTopicContext with boundary
+    markers and deterministic context_hash; max 5 topics -> 400 CONTEXT_TOO_MANY_TOPICS;
+    >5000 nodes -> 413 CONTEXT_TOO_LARGE; archived -> 409; deleted -> 410; emits context_injected
+    SSE per topic
+  - search_logged analytics row written per search; refresh_topic_node_content_index
+    upserts content rows; cascade delete on topic delete
+  - Backend tests cover spec section 10.1 scenarios (integration, real PG); go build/vet
+    clean; gitreins guard PASS
+  - 'Frontend: TopicSearchPanel wired into app (Ctrl+K), search/recent/preview/inject
+    through real endpoints; tsc clean; vitest + integration suites green (594 unit,
+    49 E2E incl. visual regression)'
+  - All commits carry Co-authored-by trailer; verify script scripts/canopy-tm03-verify.mjs
+    passes 14/14 against live server
+  status: complete
+  created_at: '2026-08-10T07:43:11.140849+00:00'
+  completed_at: '2026-08-10T07:43:16.554824+00:00'
