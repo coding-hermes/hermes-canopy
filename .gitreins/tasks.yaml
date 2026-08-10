@@ -917,3 +917,20 @@ tasks:
   status: complete
   created_at: '2026-08-09T23:29:18.625607+00:00'
   completed_at: '2026-08-09T23:29:42.299741+00:00'
+- id: WIRE-006
+  title: 'Association layer: session lineage + task/commit/project links in tree metadata
+    and GET /trees/{id}'
+  criteria:
+  - Reader exposes parent_session_id and async_delegations with parsed task goal
+  - Import attaches association metadata (parent/children/delegation goals + parsed
+    project/board_task/commit_hash) to tree metadata
+  - Title parser is a pure unit-tested function handling project/task/tick/commit
+    patterns with graceful no-op on unmatched titles
+  - Backfill command (canopyd session associations-backfill) updates existing imported
+    trees' metadata idempotently
+  - GET /trees/{id} returns additive related object (parent/children/task/commit/delegation
+    goals)
+  - 'Full suite passes: go test -short -p 1 -count=1 -timeout 300s ./...'
+  status: complete
+  created_at: '2026-08-10T01:13:42.517240+00:00'
+  completed_at: '2026-08-10T01:27:27.047934+00:00'
