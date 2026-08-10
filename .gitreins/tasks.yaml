@@ -968,5 +968,22 @@ tasks:
     id, updates pagination state
   - Refresh resets to first page; delete/create still update local list
   - npm run build (tsc) passes; frontend unit tests pass; no backend changes
-  status: pending
+  status: complete
   created_at: '2026-08-10T05:15:18.561442+00:00'
+  completed_at: '2026-08-10T05:20:31.164304+00:00'
+- id: PAG-002
+  title: 'ListTrees cursor pagination correctness: real total + keyset pages'
+  criteria:
+  - GET /trees?limit=N returns pagination.total = REAL active-tree count (currently
+    3,611), not the fetched window size
+  - GET /trees?limit=N&cursor=X (X = previous page nextCursor) returns the NEXT N
+    trees in created_at DESC order (non-empty while more exist); hasMore and nextCursor
+    advance correctly
+  - Walking all pages with limit=50 covers every active tree exactly once (no dupes,
+    no gaps); tiebreak on id for equal created_at
+  - No API response-shape change; no frontend changes; backend tests updated to assert
+    real total + a two-page walk
+  - go test ./internal/service/ ./internal/db/ -short passes; handler integration
+    tests pass (PG up)
+  status: pending
+  created_at: '2026-08-10T05:23:24.399053+00:00'
