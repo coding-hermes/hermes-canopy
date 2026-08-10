@@ -8313,3 +8313,29 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/284 (f6aa90f5-db9e-4f45-8194-b16b2bd3256b) + /project/hermes-canopy/status (c55657d9-d9e4-478f-a983-b4414c66d9f3) — HTTP /api/memories POST + fs-grep verified in current.jsonl pre-entry.
 
 **Next tick:** PAG-001 (real cursor pagination for GET /trees — 3,200+ trees; backend keyset + Trees page load-more + total count).
+## Tick 286 — 2026-08-10 02:45 UTC (scheduler tick hermes-canopy-2026-08-09-21-37-02, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE — INFRA-001 P0 tick-storm root fix delivered (cooldown pin restored 900→7200, fleet.toml + live API agree), P0 backlog closed (129 complete / 23 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 152 rows (129 complete / 23 pending, 0 in_progress). Events 163-164 appended (INFRA-001 task_completed + audit); header ticks_total 286, last_commit updated this commit |
+| Scheduler | **INFRA-001 FIXED**: cooldown_s=900→**7200** — live API PUT (GET verified cooldown_s=7200) + fleet.toml pin 900→7200 (durable across daemon restarts; loader reads config at startup, no hot-reload). File+API agree. Other projects untouched (9router/hermes-dagger/inference-estimator remain at 900 — their own operator pins). Daemon health ok (uptime 5h37m). E2E window 284-289 satisfied 278-283 (not due) |
+| Stack | canopyd :8091 + vite :5173 not touched this tick (scheduler-level fix, no stack interaction; last known state from tick 284 — old binary + Bane's test session) |
+| Workers | 0 dispatched (scheduler-level config fix, foreman-direct — no code task) |
+| CI | Green 4/4 prior runs (latest 31349561265 tick-284 board push); this tick's push pending |
+| GitReins | No gitreins task for INFRA-001 (scheduler-level, zero repo code). Judge-skip per mechanical-infra exception — evidence: live API GET cooldown_s=7200 + fleet.toml pin agree |
+| DuckBrain | /ticks/286 + /project/hermes-canopy/status — HTTP POST + fs-grep verified BEFORE board entry (T183 ordering) |
+
+**Completed: INFRA-001** (P0) — tick-storm root fix (cooldown < tick_timeout).
+
+- Root cause: hermes-canopy cooldown_s=900 (fleet.toml pin + scheduler DB) << tick_timeout 7200s → a sibling tick can fire while the previous foreman tick is still running (storms: tick 285 fired mid-284; tick-282 dispatch-session storm earlier). The 7200 pin from the post-T214 fleet policy had regressed to 900 — stand-in wake pattern: wake PUT 900 → fleet-cooldown-policy.py regenerated the fleet.toml pin from API state → 900 became "operator priority tier" and was left untouched forever.
+- Fix (foreman-direct, no worker): `PUT /api/v1/projects/hermes-canopy {"cooldown_s":7200}` (snake_case accepted, live GET confirms 7200) + fleet.toml hermes-canopy block 900→7200 (survives daemon restart — schedulerd loads config at startup only; no fsnotify). Scheduler daemon NOT restarted (PUT took effect live; pin guards future restarts).
+- Verification: `GET /api/v1/projects/hermes-canopy` → cooldown_s=7200, enabled=true; fleet.toml canopy block cooldown_s=7200; `/api/v1/health` ok; count of remaining 900-pins = 3 (9router, hermes-dagger, inference-estimator — untouched, their own pins).
+- Impact: next canopy tick can no longer overlap a running tick — sibling-storm reconciliation patterns become unnecessary. Cooldown policy script (fleet-cooldown-policy.py) will NOT revert: 7200-with-work is the stable default tier.
+
+**Deferred:** PAG-001 (P2, cursor pagination — backend has offset-seeded cursor approximation; real keyset + Trees page load-more), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** /ticks/286 (7f48f0f9-f115-4524-aa9c-4d79c7cbaa83) + /project/hermes-canopy/status (bf6f6125-9ccc-459a-84fd-12ac739a1efc) — HTTP /api/memories POST + fs-grep verified in current.jsonl pre-entry.
+
+**Next tick:** PAG-001 (real cursor pagination for GET /trees — 3,200+ trees; backend keyset + Trees page load-more + total count).
