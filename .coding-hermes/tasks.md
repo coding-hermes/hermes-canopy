@@ -8387,3 +8387,26 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 | Signals | 0 unpushed, no remote-only commits, off-by-one alive (sub_6f16c6 submitted), gh issues none new |
 
 **Next tick:** TM-02 (P2, auto-topic detection — NLP topic extraction from node content; depends GAP-001 complete; SPEC-TM-02 25,783 words). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md. E2E-001 next window 296-301 (runs at Tick 296).
+
+## Tick 291 (2026-08-10 ~12:50 UTC) — TM-02 Auto-Topic Detection COMPLETE
+
+**Verdict: PRODUCTIVE — TM-02 delivered (7 commits: 4 backend + 3 frontend, judge PASS 7c1dcee9 5/5).**
+
+| Gate | Result |
+|------|--------|
+| Task | TM-02 — Auto-topic detection: explicit/implicit/structural signals, proposal lifecycle, per-tree config, SSE + frontend cards |
+| Worker | glm-5.2 @ zai-glm x2 (backend: 9332f3d migrations+repos, 8f4a2a0 detection engine, ada5d1b node hook+handlers+CLI, a58a271 tests; frontend: eb88e4e types+api client, e9526d5 proposal cards+store+SSE, bb834f0 settings UI) |
+| Judge | PASS 7c1dcee9 (5/5 criteria, tier1+tier2) |
+| Guard | PASS (foreman re-ran: secrets/build/lint/tests full) |
+| Batteries | golangci-lint 0, go build/vet clean, go test -run TestTM02 PASS (25 unit + 19 integration), vitest 647/647 (33 files, +36 new), tsc + vite build clean, gitleaks 779 commits / 0 leaks |
+| Migrations | 000030 topic_proposals + topic_detection_config + subject_cooldowns (+ defaults for existing trees) |
+| Backend | Detection engine (internal/service/topic_detection.go): explicit regex patterns w/ subject extraction, implicit keyword/entity Jaccard fallback w/ Analyzer interface seam (no LLM client in repo — agent analysis deferred w/ FTR-07), structural fork detection; orchestration w/ frequency limits, subject cooldown, duplicate suppression, AutoCreate/AlwaysAsk; idempotent ConfirmProposal (mutex), expiry sweep on ListPending; SSE topic_proposed/topic_created; handlers + 16-code error catalog; canopyd topic detect/proposals/config CLI |
+| Frontend | ProposalCard (Accept/Rename/Reject + Enter/Esc keyboard, 1-200 char validation, stale reconciliation), idempotent topicProposalStore (SSE reconnect dedupe), NodeProposalAttach in NodeCard, DetectionSettings in TopicsRail, apiPut helper, types + confidence bands |
+| DuckBrain | /ticks/285 backfilled (1a33e947 — gap found pre-write), /ticks/291 written (226bed24), status refreshed (7741a424) — id-recall-confirmed |
+| Board | Events 180 (task_completed TM-02) + 181 (audit) appended (shapes corrected post-append; append_board_event.py is audit-only — task_completed events need manual JSONL+DB write); tasks.jsonl TM-02 row complete; header ticks_total 291 last_commit 88e774e; gitreins fold commit 88e774e (verdict 7c1dcee9) |
+| E2E-001 | NOT DUE — window 290-295 satisfied at Tick 290; next window 296-301 (runs at Tick 296) |
+| Cooldown | 7200 live (file+API agree) — no wake stomp this cycle |
+| CI | Runs 31374306697 + 31374286872 (tick-290 pushes) green; tick-289 lint failure root-fixed in b90ccd6 |
+| Signals | 0 unpushed pre-tick, no remote-only commits, off-by-one alive (health OK; no cached solution for detection-engine class), gh issues none new |
+
+**Next tick:** TM-05 (topic lifecycle & sidebar) is the remaining P2-ish TM-series item (P3 per board) or P3 backlog (FTR/PL/STACK/DPL deferred by design per AGENTS.md). E2E-001 next window 296-301 (runs at Tick 296).
