@@ -1043,3 +1043,19 @@ tasks:
   status: complete
   created_at: '2026-08-10T09:11:31.247838+00:00'
   completed_at: '2026-08-10T09:11:35.894488+00:00'
+- id: tm-02
+  title: TM-02 auto-topic detection
+  criteria:
+  - Auto-topic detection engine emits proposals via explicit, implicit, and structural
+    signals
+  - Proposal lifecycle (confirm/rename/reject/expire) works with idempotent concurrent
+    confirms
+  - Per-tree DetectionConfig (off|explicit_only|full, auto_create, always_ask) is
+    persisted and enforced
+  - SSE topic_proposed and topic_created events are emitted; frontend renders proposal
+    cards with accept/rename/reject
+  - Frequency limits, subject cooldown, duplicate-topic suppression, and error catalog
+    per SPEC-TM-02
+  status: complete
+  created_at: '2026-08-10T12:25:30.004899+00:00'
+  completed_at: '2026-08-10T12:40:48.183470+00:00'
