@@ -27,9 +27,11 @@ func runSessionCmd(args []string) {
 	switch args[0] {
 	case "import":
 		sessionImport(args[1:])
+	case "associations-backfill":
+		sessionAssociationsBackfill(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown session subcommand: %s\n", args[0])
-		fmt.Fprintf(os.Stderr, "Available: import\n")
+		fmt.Fprintf(os.Stderr, "Available: import, associations-backfill\n")
 		os.Exit(1)
 	}
 }
@@ -145,4 +147,127 @@ func printImportSummary(sum *session.ImportSummary, watermarkPath string) {
 			fmt.Printf("    … and %d more\n", len(sum.Titles)-10)
 		}
 	}
+}
+
+// sessionAssociationsBackfill recomputes and updates tree metadata for
+// already-imported Hermes sessions (WIRE-006). It reads sessions +
+// delegations from state.db, computes association metadata (parent/
+// children/delegation goals + title-parsed project/task/commit), looks
+// up the matching Canopy tree by metadata->>'session_id', and replaces
+// the tree's metadata JSON.
+//
+// Safe to re-run: a second invocation produces identical metadata (the
+// session store is read-only, and the computation is deterministic).
+// Sessions whose trees don't exist in Canopy are silently skipped.
+//
+// Usage: canopyd session associations-backfill [--db path] [--dry-run]
+func sessionAssociationsBackfill(args []string) {
+	fs := flag.NewFlagSet("session associations-backfill", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dbPath := fs.String("db", "", "path to Hermes state.db (default $HOME/.hermes/state.db)")
+	dryRun := fs.Bool("dry-run", false, "print what would be updated without writing")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: home directory: %v\n", err)
+		os.Exit(1)
+	}
+	if *dbPath == "" {
+		*dbPath = filepath.Join(home, ".hermes", "state.db")
+	}
+
+	owner := defaultOwnerID
+	if v := os.Getenv("CANOPY_OWNER_ID"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid CANOPY_OWNER_ID %q: %v\n", v, err)
+			os.Exit(1)
+		}
+		owner = id
+	}
+	_ = owner // not used for metadata updates, but kept for consistency
+
+	ctx := context.Background()
+
+	reader, err := session.OpenReader(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() { _ = reader.Close() }()
+
+	sessions, err := reader.ListSessions(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: list sessions: %v\n", err)
+		os.Exit(1)
+	}
+	delegations, _ := reader.ListDelegations(ctx) // best-effort
+	idx := session.BuildSessionIndex(sessions, delegations)
+
+	// Canopy services.
+	cfg := config.FromEnv()
+	database, err := db.New(ctx, db.PoolConfig{DSN: cfg.DSN()})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: connect to Canopy database: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	treeSvc := service.NewTreeService(database.Trees, database.Nodes, database.Edges, database.Pool)
+
+	// Build a lookup of all session IDs → tree IDs by querying Canopy.
+	// We batch the session IDs to resolve them to trees.
+	allSessionIDs := make([]string, 0, len(sessions))
+	for _, s := range sessions {
+		allSessionIDs = append(allSessionIDs, s.ID)
+	}
+	treeLookup, err := treeSvc.GetTreesBySessionIDs(ctx, allSessionIDs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: resolve trees by session ids: %v\n", err)
+		os.Exit(1)
+	}
+
+	var updated, skipped, notFound int
+	for _, s := range sessions {
+		tree, ok := treeLookup[s.ID]
+		if !ok || tree == nil {
+			notFound++
+			continue
+		}
+		assoc := session.ComputeAssociations(s, idx)
+		meta := session.NewTreeMetadata(s.ID, assoc)
+		metaJSON, err := meta.Marshal()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: marshal metadata for %s: %v\n", s.ID, err)
+			skipped++
+			continue
+		}
+
+		if *dryRun {
+			updated++
+			fmt.Printf("  [dry-run] would update tree %s (session %s)\n", tree.ID, s.ID)
+			continue
+		}
+
+		if err := treeSvc.UpdateTreeMetadata(ctx, tree.ID, metaJSON); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: update metadata for tree %s: %v\n", tree.ID, err)
+			skipped++
+			continue
+		}
+		updated++
+	}
+
+	if *dryRun {
+		fmt.Println("Associations backfill dry run — nothing was written.")
+	} else {
+		fmt.Println("Associations backfill complete.")
+	}
+	fmt.Printf("  Trees updated:    %d\n", updated)
+	if skipped > 0 {
+		fmt.Printf("  Skipped (error):  %d\n", skipped)
+	}
+	fmt.Printf("  Sessions skipped (no tree): %d\n", notFound)
 }
