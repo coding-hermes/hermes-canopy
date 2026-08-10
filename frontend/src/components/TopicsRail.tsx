@@ -40,6 +40,7 @@ import {
   readStoredTreeId,
   storeTreeId,
 } from '../lib/activeTree';
+import { DetectionSettings } from './DetectionSettings';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -411,6 +412,7 @@ export default function TopicsRail() {
 
       {/* Pinned footer — settings + refresh */}
       <div className="flex shrink-0 items-center gap-1 border-t border-line-subtle px-3 py-2">
+        <DetectionSettings treeId={treeId} />
         <button
           type="button"
           onClick={() =>
