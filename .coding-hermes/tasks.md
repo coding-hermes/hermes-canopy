@@ -8250,3 +8250,36 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/281 (b0ecd325) + /project/hermes-canopy/status (aa396aee) written + fs-grep verified BEFORE board entry (T183 ordering).
 
 **Next tick:** WIRE-006 (association layer — parent_session_id 305 rows + async_delegations 28 rows; unblocks UI-REL-001; Bane directive 08-09(2)).
+## Tick 283 — 2026-08-09 20:40 UTC (scheduler tick hermes-canopy-2026-08-09-19-24-57, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE — WIRE-006 association layer delivered, verified, judged, committed (125 complete / 27 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 152 rows (125 complete / 27 pending, 0 in_progress). WIRE-006 → complete (worker_status done, exit_code 0, commit a163d4e, judge PASS 699f12c0). Events 149 dispatch / 150 task_completed / 151 audit; header ticks_total 283 |
+| Stack | canopyd :8091 + vite :5173 still LIVE from Bane's 08-08 test session (2-day-old binary, untouched; vite.config.ts TEMP allowedHosts committed as 677067a to clean the tree for dispatch) |
+| Scheduler | cooldown_s=900 live API + fleet.toml agree (no PUT). No sibling tick in flight; last_tick_started 18:37 local (tick 282). E2E window 284-289 NOT due (satisfied 278-283 at T278) |
+| Workers | 1 dispatched: WIRE-006 (glm-5.2 @ zai-glm, PID 772209, prompt /tmp/canopy-t283-worker-prompt.txt) — 7 commits in 41 min, exited clean, zero steering needed |
+| CI | Green 5/5 prior runs; T283 pushes pending (fold 02c956a + board commit below trigger new runs) |
+| GitReins | WIRE-006 task created post-commit; judge re-run after first run timed out at 540s (verdict not recorded — tail masked exit code): Overall PASS 6/6, verdict 699f12c0, fold 02c956a |
+| DuckBrain | /ticks/283 (fa16afe3) + /project/hermes-canopy/status (3765fc95) written via HTTP /api/memories + fs-grep verified BEFORE board entry (T183 ordering) |
+
+**Completed: WIRE-006** (P1, cpx 6) — Association layer: session lineage + task/commit/project links. Read sessions.parent_session_id (309/3343 populated) + async_delegations (29 rows, goals from task_json->>'goal'); tree metadata now carries parent/children/delegation goals + title-parsed project/board_task/commit_hash; GET /trees/{id} returns additive `related` object; `canopyd session associations-backfill` (idempotent) recomputes metadata for the ~3,200 pre-imported trees.
+
+- Worker: glm-5.2 @ zai-glm (PID 772209, 41 min, 7 commits, +1602/-29 across 12 files):
+  - `3a2a85d` feat(reader): ParentSessionID + Delegation/TaskGoal from async_delegations (task_json->>'goal')
+  - `2c503cd` feat(titleparse): pure ParseTitle — board task (WIRE-006/BUG-034), commit hash (7-40 hex w/ hex-letter filter), project slug (sync/standalone/colon patterns); graceful no-op on prose titles
+  - `f738027` feat(associations): SessionIndex (children reverse-lookup + delegations by origin) + ComputeAssociations
+  - `d65ad62` feat(importer): tree metadata JSON enriched via NewTreeMetadata (session_id preserved for ImportedBefore dedup)
+  - `e1e3610` feat(service): TreeDetail.Related (*Related, omitempty) — parent/children resolved to tree id+title, board_task/project/commit_hash, delegation_goals; UpdateTreeMetadata + GetTreesBySessionIDs for backfill
+  - `74964e4` feat(cli): `canopyd session associations-backfill [--db path] [--dry-run]` (default --db = $HOME/.hermes/state.db)
+  - `a163d4e` test(wire006): handler integration tests — Related resolution, nil-when-no-session-id, backfill idempotency
+- Foreman re-verification (independent): all 7 commits carry the co-author trailer; scope review clean (no forbidden files); guard → Tier 1 PASS (test mode full); full sweep `go test -short -p 1 -count=1 -timeout 300s ./...` PASS exit 0 (db 80.2s, handler 98.6s, session 2.0s)
+- Judge: first `gitreins task complete` run hit the 540s timeout mid-tier2 with status already flipped and NO verdict file (tail masked exit code — JUDGE_EXIT=0 was tail's) — re-ran with 900s timeout + full log: **Overall PASS**, 6/6 criteria with per-criterion code evidence, verdict saved 699f12c0, fold commit 02c956a
+- Board: events 149 (dispatch) / 150 (task_completed) / 151 (audit); tasks.jsonl WIRE-006 status complete; header ticks_total 283 / last_commit a163d4e
+
+**Deferred:** UI-REL-001 (P2, **unblocked now** — Related panel UI, deps WIRE-006 API), PAG-001 (P2, cursor pagination — backend has offset-seeded cursor approximation; real keyset + Trees page load-more), GAP-018 (P1 docs/legal — license contradiction: HUMAN-GATED, do not dispatch), GAP-019/020 (P2 docs), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** /ticks/283 (fa16afe3-7541-4edf-ac3f-a907b67bd751) + /project/hermes-canopy/status (3765fc95-0ff2-45f0-871b-a11579a6fedf) — HTTP /api/memories POST + fs-grep verified in current.jsonl BEFORE board entry (T183 ordering).
+
+**Next tick:** UI-REL-001 (Related panel — consumes GET /trees/{id} related object; frontend worker) or PAG-001 (real cursor pagination + load-more).
