@@ -384,4 +384,4 @@ Import `deploy/grafana/dashboard.json` into Grafana for a pre-built monitoring d
 
 ## License
 
-Proprietary — Total Windup Flight Systems
+MIT License — see [LICENSE](LICENSE). Copyright (c) 2026 Alexis Okuwa and Hermes Canopy contributors.
