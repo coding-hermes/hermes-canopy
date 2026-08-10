@@ -70,6 +70,24 @@ function formatTimeAgo(iso: string): string {
   }
 }
 
+/**
+ * Append an incoming page of trees to the existing list, deduplicating by id.
+ * The create/delete handlers mutate the list and load-more can refetch a
+ * cursor boundary, so duplicates are possible — keep the first occurrence
+ * (the already-loaded/newer one) and preserve existing order.
+ */
+export function appendTrees<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
+  const seen = new Set(existing.map((t) => t.id));
+  const merged = existing.slice();
+  for (const tree of incoming) {
+    if (!seen.has(tree.id)) {
+      seen.add(tree.id);
+      merged.push(tree);
+    }
+  }
+  return merged;
+}
+
 // ─── Create Tree Dialog ────────────────────────────────────────────────
 
 function CreateTreeDialog({
@@ -315,6 +333,8 @@ export default function TreesPage() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [errorMore, setErrorMore] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TreeSummary | null>(null);
 
@@ -331,6 +351,23 @@ export default function TreesPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (!pagination?.hasMore || !pagination.nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setErrorMore(null);
+    try {
+      const data = await apiGet<ListTreesResponse>(
+        `/trees?limit=50&cursor=${encodeURIComponent(pagination.nextCursor)}`,
+      );
+      setTrees((prev) => appendTrees(prev, data.trees));
+      setPagination(data.pagination);
+    } catch (err) {
+      setErrorMore(err instanceof Error ? err.message : 'Failed to load more trees');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [pagination, loadingMore]);
 
   useEffect(() => {
     void fetchTrees();
@@ -438,6 +475,33 @@ export default function TreesPage() {
               onDelete={() => setDeleteTarget(tree)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Load more (cursor pagination) */}
+      {!loading && !error && pagination?.hasMore === true && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <button
+            id="load-more-trees"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-surface-input hover:bg-surface-hover text-content-secondary ring-1 ring-inset ring-line-subtle transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingMore ? 'animate-spin' : ''}`} />
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+          {errorMore && (
+            <div
+              className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs"
+              role="alert"
+            >
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+              <span>{errorMore}</span>
+              <button onClick={loadMore} className="ml-auto text-xs underline hover:text-red-300">
+                Retry
+              </button>
+            </div>
+          )}
         </div>
       )}
 
