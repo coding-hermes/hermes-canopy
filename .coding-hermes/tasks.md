@@ -8283,3 +8283,33 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/283 (fa16afe3-7541-4edf-ac3f-a907b67bd751) + /project/hermes-canopy/status (3765fc95-0ff2-45f0-871b-a11579a6fedf) — HTTP /api/memories POST + fs-grep verified in current.jsonl BEFORE board entry (T183 ordering).
 
 **Next tick:** UI-REL-001 (Related panel — consumes GET /trees/{id} related object; frontend worker) or PAG-001 (real cursor pagination + load-more).
+## Tick 284 — 2026-08-09 21:25 UTC (scheduler tick hermes-canopy-2026-08-09-20-58-33, DeepSeek V4 Flash)
+
+**Project status:** PRODUCTIVE — UI-REL-001 Related panel delivered + judged + GAP-018/019/020 docs sweep closed (128 complete / 24 pending).
+
+| Gate | Result |
+|------|--------|
+| Board | JSONL canonical, 155 rows (128 complete / 24 pending, 0 in_progress). Events 152 (dispatch UI-REL-001) / 153-158 (GAP completions) / 159 (sibling 285 audit) / 160-161 (UI-REL-001 complete); header ticks_total 285 (sibling) + last_commit updated this commit |
+| Stack | canopyd :8091 (Aug-7 binary, pre-WIRE-006) + vite :5173 live from Bane's test session — untouched; live `related` payload NOT verifiable on old binary (worker's Playwright smoke verified panel UI + empty state on 68 real trees, zero console errors) |
+| Scheduler | cooldown_s=900 live API + fleet.toml agree (no PUT). Sibling tick 285 fired mid-tick (see storm below). E2E window 284-289 satisfied 278-283 (not due) |
+| Workers | 1 dispatched: UI-REL-001 (deepseek-v4-flash @ ollama-cloud, PID 3318292, ~11 min, 2 commits) |
+| CI | Green 5/5 prior runs (latest 31347686113); this tick's pushes pending |
+| GitReins | UI-REL-001 task created post-commit (6 criteria); judge run 1 FAIL c8858290 (criterion-2 wording: required apiGet, worker used abortable fetch — documented deviation) → criterion fixed → re-judge **PASS 25d5f1e3 (6/6)**; fold 6777cb0 |
+| DuckBrain | /ticks/284 (f6aa90f5) + /project/hermes-canopy/status (c55657d9) — HTTP POST + fs-grep verified BEFORE board entry (T183 ordering) |
+
+**Completed: UI-REL-001** (P2) — Related panel UI consuming the WIRE-006 `related` object from GET /trees/{id}.
+
+- Worker: deepseek-v4-flash @ ollama-cloud (PID 3318292, ~11 min):
+  - `bd58861` feat(ui): RelatedPanel.tsx + useTreeRelated.ts (abortable fetch) + TreeDetail/Related TS types + NodesPage wiring + RelatedPanel.test.tsx (+1168/-6, 5 files)
+  - `4fbe9fd` docs: GAP-018 license alignment (MIT), GAP-019 changelog Phase 11+, GAP-020 E2E evidence trail — **scope deviation**: worker edited docs/ despite prompt forbidding it, unreported in its summary; content verified against each GAP's PASS criteria (grep-verified), accepted
+- Foreman re-verification (independent): tsc --noEmit clean + npx vitest run 583/583 (28 files, 4.5s) — matches worker claim; commit scope frontend-only; trailers correct on both commits
+- Judge: run 1 FAIL (criterion-2 wording "via apiGet" — worker's raw fetch with AbortController is a documented, defensible deviation since apiGet lacks a signal param); criterion amended in .gitreins/tasks.yaml → re-judge **PASS 25d5f1e3, 6/6**
+- GAP-018/019/020 marked complete (docs fixes, judge-skip per doc-only exception; PASS criteria grep-verified): GAP-018 single MIT declaration, GAP-019 Phase 11 entry dated 2026-08-08/09 + zero '41/41', GAP-020 evidence-location doc
+
+**Sibling storm (tick 285, eec1e34):** tick 285 fired at ~21:17 while the judge was in flight. It reset --hard to origin/master (discarding the foreman's in-progress amend 9752143 — worker had pushed bd58861+4fbe9fd), committed canonical board state (events deduped to 159, UI-REL-001 row complete, header ticks_total 285, "judge in flight" note) and pushed. Reconciliation: patched UI-REL-001 row (exit_code 0, judge PASS 25d5f1e3), re-applied CHANGELOG vitest 522→583 (9b045a7), committed .gitreins/tasks.yaml criterion fix as fold (6777cb0). Verified sibling rows/events correct; no duplicate events; tasks.md untouched by sibling (single entry here).
+
+**Deferred:** PAG-001 (P2, cursor pagination — backend has offset-seeded cursor approximation; real keyset + Trees page load-more), INFRA-001 (P0 scheduler-level — cooldown 900 pin, no PUT), 21 post-MVP backlog (FTR/PL/STACK/TM/DPL).
+
+**DuckBrain:** /ticks/284 (f6aa90f5-db9e-4f45-8194-b16b2bd3256b) + /project/hermes-canopy/status (c55657d9-d9e4-478f-a983-b4414c66d9f3) — HTTP /api/memories POST + fs-grep verified in current.jsonl pre-entry.
+
+**Next tick:** PAG-001 (real cursor pagination for GET /trees — 3,200+ trees; backend keyset + Trees page load-more + total count).
