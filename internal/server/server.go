@@ -162,6 +162,13 @@ func New(
 		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
 		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
 
+		// Topic detection endpoints (TM-02). Proposal-scoped routes are
+		// mounted directly (no tree scope); config routes are tree-scoped.
+		// Spec: SPEC-TM-02 §8.2.
+		topicDetectionHandler := handler.NewTopicDetectionHandler(topicSvc)
+		r.Mount("/topic-proposals", topicDetectionHandler.ProposalRoutes())
+		r.With(membershipMW).Mount("/trees/{tree_id}", topicDetectionHandler.TreeRoutes())
+
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
 

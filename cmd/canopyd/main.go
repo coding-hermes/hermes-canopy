@@ -149,13 +149,23 @@ func main() {
 	kpMgr := newPGMLSKeyPackageManager(database.MLSKeyPackages)
 	mlsHandler := handler.NewMLSHandler(mlsBridge, kpMgr)
 
-	// Topic service — BE-14 implementation (SPEC-TM-01 §4.4).
+	// Topic service — BE-14 implementation (SPEC-TM-01 §4.4, SPEC-TM-02).
 	topicSvc := service.NewTopicServiceImpl(
 		database.Topics,
 		database.TopicMembers,
 		database.Trees,
 		database.Nodes,
+	).WithDetection(
+		database.Edges,
+		sseHub,
+		db.NewPGTopicProposalRepo(database.Pool),
+		db.NewPGDetectionConfigRepo(database.Pool),
+		db.NewPGSubjectCooldownRepo(database.Pool),
 	)
+
+	// Wire topic detection into node persistence (TM-02). nodeService was
+	// created before topicSvc, so we attach the detection hook here.
+	nodeService = nodeService.WithTopicDetection(topicSvc)
 
 	// Topic search service — TM-03 implementation (SPEC-TM-03).
 	topicSearchRepo := db.NewPGTopicSearchRepo(database.Pool)

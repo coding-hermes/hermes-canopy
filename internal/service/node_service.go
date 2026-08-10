@@ -245,11 +245,19 @@ type NodeService interface {
 // can be tested with stubs; pool is the underlying pgxpool used to
 // open the Create transaction and run depth/child-count queries.
 type NodeServiceImpl struct {
-	nodeRepo db.NodeRepo
-	edgeRepo db.EdgeRepo
-	pool     *pgxpool.Pool
-	now      func() time.Time // injectable for testing
-	sseHub   sse.SSEHub       // BE-18 — SSE broadcast after mutations
+	nodeRepo    db.NodeRepo
+	edgeRepo    db.EdgeRepo
+	pool        *pgxpool.Pool
+	now         func() time.Time // injectable for testing
+	sseHub      sse.SSEHub       // BE-18 — SSE broadcast after mutations
+	topicSvc    TopicDetector    // TM-02 — auto-detection hook (optional)
+}
+
+// TopicDetector is the subset of TopicService needed by NodeService for
+// auto-detection. Kept as a narrow interface so NodeService tests can
+// construct without the full TopicService.
+type TopicDetector interface {
+	AutoDetect(ctx context.Context, node db.Node, contextNodes []db.Node) (*TopicProposal, error)
 }
 
 // NewNodeService wires the repositories, pool, and SSE hub into a
@@ -263,6 +271,14 @@ func NewNodeService(nodeRepo db.NodeRepo, edgeRepo db.EdgeRepo, pool *pgxpool.Po
 		now:      time.Now,
 		sseHub:   sseHub,
 	}
+}
+
+// WithTopicDetection wires the topic detection hook and returns the same
+// instance for fluent construction. Safe to call with nil to leave
+// detection disabled.
+func (s *NodeServiceImpl) WithTopicDetection(td TopicDetector) *NodeServiceImpl {
+	s.topicSvc = td
+	return s
 }
 
 // --- Create ----------------------------------------------------------------
@@ -436,6 +452,11 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 
 	// BE-18: Broadcast node_added to tree subscribers.
 	s.broadcastNodeEvent(ctx, treeID, "node_added", created.ID, created.AuthorID)
+
+	// TM-02: Auto-detection hook — invoked after the node is committed and
+	// broadcast. Detection must NEVER fail node creation: errors are logged
+	// and swallowed. The topicSvc is optional (nil for tests).
+	s.runTopicDetection(ctx, created)
 
 	// Build NodeDetail. Depth = parentDepth + 1 (root parentDepth = 0).
 	detail := nodeToDetail(created)
@@ -942,6 +963,55 @@ func (s *NodeServiceImpl) broadcastNodeEvent(ctx context.Context, treeID uuid.UU
 		Timestamp: time.Now().UTC(),
 		ActorID:   actorID,
 	})
+}
+
+// runTopicDetection invokes auto-topic-detection for a newly persisted node.
+// It loads up to 10 preceding sibling/ancestor messages as context and calls
+// the TopicDetector. All errors are logged and swallowed — detection must
+// never fail node creation (SPEC-TM-02 §4). Structural signals (fork edges)
+// are detected inside AutoDetect via the edgeRepo. No-op when topicSvc is nil.
+func (s *NodeServiceImpl) runTopicDetection(ctx context.Context, node db.Node) {
+	if s.topicSvc == nil {
+		return
+	}
+	// Load context nodes: up to 10 preceding messages in the tree.
+	contextNodes := s.loadDetectionContext(ctx, node)
+	if _, err := s.topicSvc.AutoDetect(ctx, node, contextNodes); err != nil {
+		log.Ctx(ctx).Warn().Err(err).
+			Str("node_id", node.ID.String()).
+			Str("tree_id", node.TreeID.String()).
+			Msg("node service: topic detection failed (non-fatal)")
+	}
+}
+
+// loadDetectionContext fetches up to 10 active nodes preceding the given node
+// in sequence order (newest-first). Used to provide conversation history for
+// implicit and structural signal evaluation.
+func (s *NodeServiceImpl) loadDetectionContext(ctx context.Context, node db.Node) []db.Node {
+	if s.nodeRepo == nil {
+		return nil
+	}
+	all, err := s.nodeRepo.GetByTree(ctx, node.TreeID)
+	if err != nil {
+		return nil
+	}
+	// Find the node's position and collect up to 10 preceding nodes.
+	var contextNodes []db.Node
+	for i := len(all) - 1; i >= 0; i-- {
+		if all[i].ID == node.ID {
+			// Collect nodes before this index (lower index = earlier).
+			start := i - 10
+			if start < 0 {
+				start = 0
+			}
+			// Return newest-first: iterate backwards from i-1 down to start.
+			for j := i - 1; j >= start; j-- {
+				contextNodes = append(contextNodes, all[j])
+			}
+			break
+		}
+	}
+	return contextNodes
 }
 
 // nullableUUID returns nil when the UUID is uuid.Nil so the DB sees

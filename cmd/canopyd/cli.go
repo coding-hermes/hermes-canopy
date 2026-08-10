@@ -80,6 +80,7 @@ type graphEdgeSummary struct {
 var knownSubcommands = map[string]struct{}{
 	"tree":    {},
 	"session": {},
+	"topic":   {},
 }
 
 // runCLI detects the subcommand from args and dispatches to the appropriate handler.
@@ -93,6 +94,7 @@ func runCLI() {
 		fmt.Fprintf(os.Stderr, "  tree delete <id>          Delete a tree\n")
 		fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
 		fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
+		fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
 		os.Exit(1)
 	}
 
@@ -102,6 +104,8 @@ func runCLI() {
 		runTreeCmd(os.Args[2:])
 	case "session":
 		runSessionCmd(os.Args[2:])
+	case "topic":
+		runTopicCmd(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", sub)
 		fmt.Fprintf(os.Stderr, "Run 'canopyd' without arguments to see usage.\n")
