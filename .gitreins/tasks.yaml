@@ -1059,3 +1059,27 @@ tasks:
   status: complete
   created_at: '2026-08-10T12:25:30.004899+00:00'
   completed_at: '2026-08-10T12:40:48.183470+00:00'
+- id: e2e-route-001
+  title: 'Fix chi route shadowing: topic-detection mount at /trees/{tree_id} shadows
+    tree CRUD bare routes'
+  criteria:
+  - GET /api/v1/trees/{id} returns 200 (previously chi 404) for an existing tree with
+    a fresh binary
+  - GET /api/v1/trees/{id}/topic-detection still returns 200
+  - PATCH/DELETE /api/v1/trees/{id} and POST /api/v1/trees/{id}/share + /presence
+    routes restored (no chi 404)
+  - topic_detection_integration_test + server tests pass
+  - E2E visual-regression suite 4/4 with the fixed binary
+  status: complete
+  created_at: '2026-08-11T15:50:44.504462+00:00'
+  completed_at: '2026-08-11T16:03:08.227426+00:00'
+- id: e2e-sync-001
+  title: "Fix tree_events chk_event_type CHECK rejecting yjs_update \u2014 every sync\
+    \ push 500s"
+  criteria:
+  - POST /api/v1/trees/{id}/sync with a yjs update returns 204 (previously 500 INTERNAL_ERROR)
+  - tree_events chk_event_type includes 'yjs_update'
+  - WIRE-001 two-context-sync E2E test passes
+  status: complete
+  created_at: '2026-08-11T15:59:38.779521+00:00'
+  completed_at: '2026-08-11T19:42:05.901737+00:00'

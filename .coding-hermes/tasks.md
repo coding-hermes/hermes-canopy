@@ -8643,3 +8643,24 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Stack notes:** sibling agent active in repo (own canopyd :8091 + vite :5173 — left untouched). Docker PG (380370eda742_canopy-pg) healthy on :5437, 3,643 trees / 199,316 nodes intact. Next E2E window 308-313.
 
 **Board:** tasks 139 complete / 21 pending (18 P3 backlog + VREG-003 + INFRA-002 + GAP-024). Events 193-196 appended (3× task_created + audit). DuckBrain /ticks/302 + status written.
+## Tick 303 (2026-08-11 ~19:42 UTC) — E2E window 302-307 SATISFIED at second tick: 49/49 PASS with b454f00 fixes live
+
+**Verdict: E2E WINDOW SATISFIED** — window 302-307 closed green at tick 303 after T302's env-drift failure. The route-shadow + yjs_update fixes (b454f00, authored by T302 session, verified + pushed this tick) resolve the exact failures T302 hit.
+
+**E2E battery: 49/49 PASS (9 files)** — first run 48/49 (WIRE-001 two-context-sync failed: events SSE stream took 20.8s under parallel suite load vs 20s SYNC_TIMEOUT — known render-timing flake, documented T302); isolated WIRE-001 PASS; full re-run 49/49 PASS, zero drift, T134 goldens untouched, no re-baseline. Visual-regression 4/4 (mockups 1-4) with golden tree b1655761 UI-02 Rail Demo first-in-dropdown.
+
+**Stack (fresh, canonical):** stale T302 stack killed (canopyd was running DB_PORT=5432 = wrong near-empty DB; duplicate vite). Rebuilt /tmp/canopyd-t303 from b454f00, started with DB_PORT=5437 (compose canopy-pg), default JWT secret (no override), vite :5173, prewarm via Playwright chromium (google-chrome dump-dom hung; playwright navigation OK, react-flow rendered).
+
+**Backend fixes verified LIVE (probe with dev JWT):** GET /api/v1/trees/{id} 200 (was chi 404 — route shadow gone), POST /api/v1/trees/{id}/sync 204 (was 500 chk_event_type CHECK violation), GET topic-detection 200, PATCH /trees/{id} 200, POST share 400 = validation (route mounted, not 404). tree_events chk_event_type includes 'yjs_update' (migration 000031 applied); yjs_update events persisting.
+
+**GitReins:** e2e-route-001 COMPLETE (T302), e2e-sync-001 COMPLETE this tick — judge PASS 9894b4c5 (3/3 criteria live-verified by evaluator: sync 204, constraint includes yjs_update, WIRE-001 passes). 0 pending.
+
+**Gates:** vitest 647/647 (33 files) · go test -short -p 1 -count=1 -timeout 300s ./... exit 0 (15 pkgs) · guard PASS (test mode full) · gitleaks clean · gitreins 55/0/0 · CI: T302 push run 31508870561 success; b454f00 push = new run (verify next tick) · gh issues: 0 open · git fetch: 0 new remote commits.
+
+**Board:** 140 complete / 20 pending (18 post-MVP deferred by design + INFRA-002 P1 docker image stale + GAP-024 P2 seed docs). VREG-003 complete row folded from T302 uncommitted state (premise disproven — root cause was route shadowing, fixed by E2E-ROUTE-001). Restored 4 frontend/test-results/ files deleted by vitest suite cleanup.
+
+**Cooldown 7200 file+API agree — NO PUT.** Scheduler healthy (:9090), enabled=true, consecutive_failures=0. Stack left running for next window ticks (canopyd :8091 + vite :5173).
+
+**DuckBrain:** /ticks/303 + /project/hermes-canopy/status written + id-recall verified.
+
+**Next tick:** E2E window satisfied → maintenance ticks resume; next E2E-001 window 308-313. Pending: INFRA-002 (docker deploy), GAP-024 (docs).
