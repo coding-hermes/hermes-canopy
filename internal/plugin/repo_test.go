@@ -19,6 +19,9 @@ import (
 
 func newTestRepo(t *testing.T) (*PGPluginRepo, uuid.UUID, uuid.UUID) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("short mode: plugin PG integration")
+	}
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewIntegrationPool(t)
 	repo := NewPGPluginRepo(pool)
