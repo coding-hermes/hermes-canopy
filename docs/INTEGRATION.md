@@ -379,6 +379,39 @@ cd frontend && npx playwright test
 cd frontend && npx vitest run --config vitest.integration.config.ts
 ```
 
+### 8.1 E2E Stack Prep (required once per fresh local PG)
+
+The E2E / visual-regression suites and the dev UI's tree-create flows need two
+things that a fresh local database does not have:
+
+1. **The canonical E2E database is the compose PostgreSQL on host port 5437**
+   (`docker compose up -d postgres`), NOT a local `localhost:5432` instance.
+   The compose PG carries the seeded demo tree ("UI-02 Rail Demo") that the
+   visual-regression goldens depend on; an empty local DB on :5432 will make
+   tree creation 503 (`tree_members` FK violation, wrapped as
+   "database unavailable") and mockup captures will drift.
+
+2. **The dev JWT user must exist.** The Vite proxy auto-injects a dev JWT with
+   `sub=00000000-0000-0000-0000-000000000001`; every write path inserts a
+   `tree_members` row for that actor, so the `users` row must be seeded:
+
+```bash
+docker compose up -d postgres   # canonical E2E DB on :5437
+PGPASSWORD=canopy psql -h localhost -p 5437 -U canopy -d canopy -c \
+  "INSERT INTO users (id, hermes_user_id, email, display_name, is_active)
+   VALUES ('00000000-0000-0000-0000-000000000001','dev','dev@canopy.dev','Dev User',true)
+   ON CONFLICT (id) DO NOTHING;"
+
+# Start canopyd against the canonical DB:
+DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy \
+DB_NAME=canopy ./bin/canopyd   # or: DB_PORT=5437 make run
+```
+
+**Green probe:** `curl -s -X POST http://localhost:8091/api/v1/trees \
+-H 'Authorization: Bearer <dev-jwt>' -H 'Content-Type: application/json' \
+-d '{"title":"E2E Probe","description":"","root_message":{"content":"hi","content_format":"markdown","node_type":"message"}}'`
+returns HTTP 201 (not 503).
+
 ## 9. Environment Variable Reference
 
 | Variable              | Default               | Description                              |
