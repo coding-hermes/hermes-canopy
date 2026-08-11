@@ -31,11 +31,11 @@ func NewTopicDetectionHandler(svc service.TopicService) *TopicDetectionHandler {
 }
 
 // TreeRoutes mounts the tree-scoped detection endpoints (config GET/PUT).
-// These are mounted under /trees/{tree_id} by the server.
+// These are mounted under /trees/{tree_id}/topic-detection by the server.
 func (h *TopicDetectionHandler) TreeRoutes() chi.Router {
 	r := chi.NewRouter()
-	r.Get("/topic-detection", h.GetDetectionConfig)
-	r.Put("/topic-detection", h.UpdateDetectionConfig)
+	r.Get("/", h.GetDetectionConfig)
+	r.Put("/", h.UpdateDetectionConfig)
 	return r
 }
 

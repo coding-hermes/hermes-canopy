@@ -167,7 +167,7 @@ func New(
 		// Spec: SPEC-TM-02 §8.2.
 		topicDetectionHandler := handler.NewTopicDetectionHandler(topicSvc)
 		r.Mount("/topic-proposals", topicDetectionHandler.ProposalRoutes())
-		r.With(membershipMW).Mount("/trees/{tree_id}", topicDetectionHandler.TreeRoutes())
+		r.With(membershipMW).Mount("/trees/{tree_id}/topic-detection", topicDetectionHandler.TreeRoutes())
 
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())

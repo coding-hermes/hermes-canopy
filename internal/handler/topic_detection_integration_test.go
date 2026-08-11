@@ -58,7 +58,7 @@ func newTM02TestServer(t *testing.T, pool *pgxpool.Pool) (*httptest.Server, serv
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 		r.Mount("/topic-proposals", tdHandler.ProposalRoutes())
-		r.Mount("/trees/{tree_id}", tdHandler.TreeRoutes())
+		r.Mount("/trees/{tree_id}/topic-detection", tdHandler.TreeRoutes())
 	})
 
 	srv := httptest.NewServer(r)
