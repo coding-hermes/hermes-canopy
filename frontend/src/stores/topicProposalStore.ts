@@ -49,9 +49,19 @@ const cards = new Map<string, ProposalCard>();
 const listeners = new Set<Listener>();
 /** Monotonically increasing version — listeners use this to detect change. */
 let version = 0;
+/**
+ * Snapshot caches — useSyncExternalStore REQUIRES getSnapshot to return a
+ * stable reference between emits (a fresh array per call triggers
+ * "Maximum update depth exceeded" — React re-renders forever). Invalidated
+ * on every emit; rebuilt lazily on read.
+ */
+let cardsCache: ProposalCard[] | null = null;
+const cardsByNodeCache = new Map<string, ProposalCard[]>();
 
 function emit(): void {
   version++;
+  cardsCache = null;
+  cardsByNodeCache.clear();
   for (const fn of listeners) fn();
 }
 
@@ -68,16 +78,21 @@ export function getVersion(): number {
   return version;
 }
 
-/** Get a snapshot of all cards (for rendering). Returns a fresh array. */
+/** Get a snapshot of all cards (for rendering). Returns a stable cached array. */
 export function getCards(): ProposalCard[] {
-  return Array.from(cards.values());
+  if (cardsCache === null) cardsCache = Array.from(cards.values());
+  return cardsCache;
 }
 
 /** Get cards for a specific root node (the node the proposal is attached to). */
 export function getCardsForNode(rootNodeId: string): ProposalCard[] {
-  return Array.from(cards.values()).filter(
+  const cached = cardsByNodeCache.get(rootNodeId);
+  if (cached !== undefined) return cached;
+  const result = Array.from(cards.values()).filter(
     (c) => c.proposal.rootNodeId === rootNodeId,
   );
+  cardsByNodeCache.set(rootNodeId, result);
+  return result;
 }
 
 /** Get a single card by proposalId. */
