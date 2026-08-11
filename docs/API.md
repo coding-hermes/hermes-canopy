@@ -92,7 +92,7 @@ POST /api/v1/trees
   "title": "string (required)",
   "description": "string (optional)",
   "rootMessage": {
-    "content": "string (optional)",
+    "content": "string (required)",
     "contentFormat": "string (optional)",
     "nodeType": "string (optional)"
   }
@@ -220,7 +220,7 @@ GET /api/v1/nodes/{tree_id}/nodes/{node_id}   (flat tree-scoped form)
 ### Update Node
 
 ```
-PATCH /api/v1/nodes/{node_id}   (flat mount)
+PATCH /api/v1/nodes/nodes/{node_id}
 ```
 
 **Request body:** (partial)
@@ -237,7 +237,7 @@ PATCH /api/v1/nodes/{node_id}   (flat mount)
 ### Delete Node
 
 ```
-DELETE /api/v1/nodes/{node_id}   (flat mount)
+DELETE /api/v1/nodes/nodes/{node_id}
 ```
 
 **Response (200):** Soft-deleted node detail (includes `deleted_at`).
@@ -245,7 +245,7 @@ DELETE /api/v1/nodes/{node_id}   (flat mount)
 ### Reply to Node
 
 ```
-POST /api/v1/nodes/{node_id}/reply   (flat mount)
+POST /api/v1/nodes/nodes/{node_id}/reply
 ```
 
 **Request body:**
@@ -263,7 +263,7 @@ POST /api/v1/nodes/{node_id}/reply   (flat mount)
 ### Fork from Node
 
 ```
-POST /api/v1/nodes/{node_id}/fork   (flat mount)
+POST /api/v1/nodes/nodes/{node_id}/fork
 ```
 
 **Request body:**
@@ -1035,7 +1035,7 @@ actual code:
    `POST /api/v1/nodes` as flat endpoints, but the actual flat mount
    (`/api/v1/nodes`) uses a `NodeAccessMiddleware` that expects paths like
    `/api/v1/nodes/{tree_id}/nodes[/{node_id}]` (tree-scoped flat form) or
-   bare `/api/v1/nodes/{node_id}` for update/delete/reply/fork. The tree-scoped
+   `/api/v1/nodes/nodes/{node_id}` for update/delete/reply/fork. The tree-scoped
    mount at `/api/v1/trees/{tree_id}/nodes` is the primary list/create path.
 
 5. **Export/Import:** Registered directly on the `/api/v1/trees` router (not
