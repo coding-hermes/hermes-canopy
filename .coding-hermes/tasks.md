@@ -8512,3 +8512,24 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Stack:** Bane's live canopyd :8091 + vite :5173 untouched (no restart, no rebuild). Cooldown 7200 fleet.toml + API agree, no PUT, no wake stomp. gitreins 53/0/0.
 
 **Board:** 139 complete / 18 pending (all P3 spec backlog FTR/PL/STACK/DPL, deferred by design per AGENTS.md). Events 185-191 appended (dispatch + 3× task_completed + audit). DuckBrain /ticks/296 (d39916a8) + status (e1d7c39d) written, tree-verified. Off-by-one alive (idle submit this tick — E2E regression pattern valuable).
+## Tick 297 (2026-08-10 ~22:12 UTC) — IDLE / light-audit (no dispatch)
+
+**Verdict:** MAINTENANCE. No E2E window due (296-301 satisfied at T296; next 302-307 opens at Tick 302), no dispatchable tasks — 18 pending all P3 post-MVP backlog (FTR/PL/STACK/DPL, deferred by design per AGENTS.md). No code changes, no event append (pure maintenance, T157/T159 precedent).
+
+| Gate | Result |
+|------|--------|
+| vitest | 647/647 (33 files, 5.81s) |
+| go test gate | `-count=1 -p 1 $(go list ./... \| grep -v /handler)` — 18 packages ok, exit 0 (~2min) |
+| gitreins guard | PASS 4/4 (secrets, go_build, go_lint, go_tests — 18s, warm cache) |
+| gitleaks | clean, exit 0 |
+| gitreins | 53 complete / 0 pending / 0 in_progress (CLI) |
+| Hilo | 1920 edges / 308 files (graph grew with TM-02-era code; no impact re-run on maintenance tick) |
+| CI | Last 6 runs GREEN (T296 push 31447575959, T295 31438378646, T294 31427837044, T293 ×2, T292) |
+| Storm | storm-watch PASS running=0 dups=0 (ring-runner has its own workers — foreign, not canopy) |
+| Cooldown | 7200 live — fleet.toml + API agree, no PUT, no wake stomp |
+| E2E-001 | NOT DUE — window 296-301 satisfied at Tick 296 (49/49); next window 302-307 (runs at Tick 302) |
+| DuckBrain | /ticks/296 present pre-write (d39916a8 — contiguity OK); /ticks/297 written (9e12b6a9, recall-verified); status refreshed (81c46a0c + retry d3d63d8d — both on disk in namespaces/hermes-canopy/config/2026-08/current.jsonl; first write absent from recall ranking, retried once per T177 rule; status-key recall ranking unreliable, disk grep is ground truth) |
+| Signals | 0 unpushed, 0 remote-only commits, gh issues none open, deps minor-only (cel.dev/expr, cloud.google.com/go family — same as T295 baseline), npm outdated 14 (stable), off-by-one alive (13h32m uptime, idle tick — no submit) |
+| Stack | Bane's live stack untouched: canopyd :8091 (401 TOKEN_MISSING on /api/v1/health = auth gate live, expected) + vite :5173 (200) + PG :5432 accepting |
+
+**Next tick:** E2E-001 full battery at Tick 302 (window 302-307 opens). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md — no dispatchable code tasks on the board.
