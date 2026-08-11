@@ -8495,3 +8495,20 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Next tick:** E2E-001 full battery at Tick 296 (window 296-301 opens). P3 backlog (FTR/PL/STACK/DPL) remains deferred by design per AGENTS.md — no dispatchable code tasks on the board.
 
 Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
+## Tick 296 (2026-08-10 ~19:55 UTC) — PRODUCTIVE: GAP-021/022/023 complete + E2E regression fixed
+
+**Dispatch:** Paired dispatch of the stand-in PM's gate (f509153) — GAP-021/022/023, all CMPX 1. Worker deepseek-v4-flash @ ollama-cloud (PID 2161767, 13m45s).
+
+| Task | Pri | Fix | Commit | Guard | Judge |
+|------|-----|-----|--------|-------|-------|
+| GAP-021 | P1 | docs/INTEGRATION.md §4.6 BASE 8080→8091 (KrakenD gateway 404s /api/v1/*; real backend :8091) | e6fdfc1 | PASS | manual criteria grep (docs judge-skip, T190 precedent) |
+| GAP-022 | P1 | testing.Short() skip for internal/plugin live-PG tests (SkipIfNoDB doesn't skip with PG up → NewIntegrationPool stall, infinite hang; matches chaos_test.go pattern) | 6699761 | PASS | manual criteria: `timeout 60 go test -short -count=1 ./internal/plugin/...` exit 0 in 0.007s |
+| GAP-023 | P2 | docs/API.md: node ops corrected to /api/v1/nodes/nodes/{node_id} (real chi patterns; bare {node_id} 404s) + rootMessage.content marked required | 6f57f07 | PASS | manual criteria grep (docs judge-skip) |
+
+**E2E-001 window 296-301 (satisfied T296):** First battery run 47/49 — 2 failures both on /nodes (crud-pages populated-tree + visual mockup 2): page blanked when a tree was selected. **Root cause: TM-02 regression** — `useTopicProposal` hooks passed a fresh array per call to `useSyncExternalStore` getSnapshot (getCards/getCardsForNode in topicProposalStore.ts) → React "Maximum update depth exceeded" infinite loop; NodeCard renders NodeProposalAttach per node. TM-02 shipped at T291, AFTER T290's green 49/49 — the battery caught it first run. **Fix (foreman-direct, Exception 7):** cached snapshot arrays in topicProposalStore.ts, invalidated on emit. Commit 82be3c2. Re-run: 18/18 then full battery **49/49 PASS** (9 files, 47.9s).
+
+**Verification:** vitest unit 647/647 (33 files), tsc clean, `go build`/`go vet` clean, gitreins guard PASS 4/4 full mode (secrets, go_build, go_lint, go_tests). Worker also ran guard itself (PASS) + full `go test -short -p 1` sweep (plugin 0.014s — no stall; db/handler consumed the 400s envelope as known).
+
+**Stack:** Bane's live canopyd :8091 + vite :5173 untouched (no restart, no rebuild). Cooldown 7200 fleet.toml + API agree, no PUT, no wake stomp. gitreins 53/0/0.
+
+**Board:** 139 complete / 18 pending (all P3 spec backlog FTR/PL/STACK/DPL, deferred by design per AGENTS.md). Events 185-191 appended (dispatch + 3× task_completed + audit). DuckBrain /ticks/296 (d39916a8) + status (e1d7c39d) written, tree-verified. Off-by-one alive (idle submit this tick — E2E regression pattern valuable).
