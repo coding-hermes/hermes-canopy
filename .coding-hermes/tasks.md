@@ -8664,3 +8664,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/303 + /project/hermes-canopy/status written + id-recall verified.
 
 **Next tick:** E2E window satisfied → maintenance ticks resume; next E2E-001 window 308-313. Pending: INFRA-002 (docker deploy), GAP-024 (docs).
+## Tick 305 (2026-08-12 ~01:47 UTC) — IDLE light-audit (no dispatch)
+
+**Verdict: IDLE** — no dispatchable tasks (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md), E2E-001 window 302-307 SATISFIED at T303 (49/49, b454f00 fixes live); next window 308-313 opens at Tick 308 — NOT due this tick.
+
+**Gates:** guard PASS 4/4 (71s: secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 3.74s) · go test -short -p 1 -count=1 -timeout 300s ./... exit 0 (full sweep) · gitleaks clean (~35.5MB scanned, 0 leaks) · gitreins 55 complete / 0 pending / 0 in_progress · CI last 6 green (T304 push run 31544114590 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 142 complete / 18 pending. Events max id 198 (tick 304) — no event appended this tick (idle, per T157/T159 precedent). Header ticks_total 304 -> 305.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0. Daemon :9090 health ok (uptime 4h36m, db connected, 4 active ticks). Off-by-one :8766 health ok (uptime 12h10m).
+
+**Stack:** docker canopyd (root, INFRA-002 deploy) + vite :5173 still up from T303/T304 stack — left running, not workers (pgrep: no codex/opencode/glm/luna/hermes-chat workers). Next E2E window uses this stack at T308.
+
+**DuckBrain:** /ticks/305 + /project/hermes-canopy/status written, id-recall verified on disk mirror. Status key refreshed (was lagging at tick 303 — known benign lag pattern).
+
+**Next tick:** maintenance; E2E-001 window 308-313 opens at Tick 308. Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
