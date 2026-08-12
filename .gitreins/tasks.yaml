@@ -1109,3 +1109,35 @@ tasks:
   status: complete
   created_at: '2026-08-12T05:24:21.535604+00:00'
   completed_at: '2026-08-12T05:31:16.347636+00:00'
+- id: GAP-028
+  title: Document dev-mode auth token story (no auth endpoints in MVP)
+  criteria:
+  - README documents how a user gets a token in dev mode without auth endpoints (Vite
+    dev proxy auto-injected JWT, VITE_DEV_JWT override, direct-API JWT with JWT_SECRET)
+  - README env var table includes JWT_SECRET row
+  - docs/API.md Auth section is accurate vs internal/handler/auth.go and internal/server/server.go
+  status: complete
+  created_at: '2026-08-12T13:55:59.633865+00:00'
+  completed_at: '2026-08-12T14:01:28.956827+00:00'
+- id: GAP-029
+  title: Align make run with Vite proxy port (HTTP_ADDR=:8091, DB_PORT=5437)
+  criteria:
+  - Makefile run target defaults to HTTP_ADDR=:8091 and DB_PORT=5437 with ?= overridable
+    variables
+  - Verbatim make build && make run && cd frontend && npm run dev results in frontend
+    API calls succeeding (health 200 through :8091, proxy 200 through :5173) without
+    manual env intervention
+  status: complete
+  created_at: '2026-08-12T13:55:59.746439+00:00'
+  completed_at: '2026-08-12T13:58:52.650257+00:00'
+- id: GAP-030
+  title: Friendly startup error when PostgreSQL unreachable
+  criteria:
+  - ./bin/canopyd with PG unreachable (e.g. DB_PORT=59999) prints clear PostgreSQL
+    required/unreachable message referencing docs/INTEGRATION.md section 2 or CANOPY_DB_URL
+    and exits code 1 without panic/stack trace
+  - Non-connection DB errors (migration/auth) stay on existing log.Fatal path
+  - IsConnectError helper unit-tested (internal/db/connect_error_test.go)
+  status: complete
+  created_at: '2026-08-12T13:55:59.862074+00:00'
+  completed_at: '2026-08-12T13:57:41.812570+00:00'
