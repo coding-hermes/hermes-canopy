@@ -8679,3 +8679,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/305 + /project/hermes-canopy/status written, id-recall verified on disk mirror. Status key refreshed (was lagging at tick 303 — known benign lag pattern).
 
 **Next tick:** maintenance; E2E-001 window 308-313 opens at Tick 308. Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
+## Tick 307 (2026-08-12 ~08:25 UTC) — IDLE light-audit (no dispatch)
+
+**Verdict: IDLE** — no dispatchable tasks (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL), E2E-001 window 302-307 SATISFIED at T303 (49/49, b454f00 fixes live); next window 308-313 opens at Tick 308 — NOT due this tick.
+
+**Gates:** guard PASS 4/4 (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 4.10s) · gitleaks clean (823 commits, 35.6MB scanned, 0 leaks) · gitreins 58 complete / 0 pending / 0 in_progress · go test -short -p 1 -count=1 -timeout 480s ./... (full sweep, standalone) · CI last 6 green (T306 push 31568202725 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 145 complete / 18 pending. Events max id 199 (tick 306) — no event appended this tick (idle, per T157/T159 precedent). Header ticks_total 306 -> 307.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0. Daemon :9090 health ok. Scheduler DB: single running tick for this window (03-23-01), no duplicate fire. Off-by-one :8766 health ok.
+
+**Stack:** docker canopy-server (up 10h) + vite :5173 still up from the T303-T307 window stack — left running, not workers (pgrep: no canopy codex/opencode/glm/luna/hermes-chat workers; one foreign rethinkdb worker noted, not canopy). canopy-pg :5437 healthy. Next E2E window 308-313 uses this stack at T308.
+
+**DuckBrain:** /ticks/307 (e852a26e) + /project/hermes-canopy/status (d25128df) written, id-recall verified on disk mirror (event + config partitions). Status key was lagging at tick 305 (known benign lag pattern) — refreshed.
+
+**Next tick:** maintenance; E2E-001 window 308-313 opens at Tick 308 (E2E stack already up). Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
