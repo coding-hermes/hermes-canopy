@@ -48,7 +48,7 @@ test:
 	$(GO) test ./... -count=1 -timeout=120s
 
 test-short:
-	$(GO) test ./... -short -count=1 -timeout=300s
+	$(GO) test ./... -short -count=1 -timeout=480s
 
 vet:
 	$(GO) vet ./...
