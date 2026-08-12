@@ -1083,3 +1083,29 @@ tasks:
   status: complete
   created_at: '2026-08-11T15:59:38.779521+00:00'
   completed_at: '2026-08-11T19:42:05.901737+00:00'
+- id: GAP-025
+  title: make test-short completes without timeout
+  criteria:
+  - make test-short completes without 'test timed out'
+  - test-short timeout raised to >=300s in Makefile
+  status: complete
+  created_at: '2026-08-12T05:24:21.316457+00:00'
+  completed_at: '2026-08-12T05:45:37.071180+00:00'
+- id: GAP-026
+  title: README env vars wired
+  criteria:
+  - LOG_FORMAT=json produces JSON log lines
+  - CORS_ORIGIN sets Access-Control-Allow-Origin header
+  - DB_SCHEMA wired into DSN search_path
+  - config.go parses DB_SCHEMA LOG_FORMAT CORS_ORIGIN
+  status: complete
+  created_at: '2026-08-12T05:24:21.425583+00:00'
+  completed_at: '2026-08-12T05:30:30.969130+00:00'
+- id: GAP-027
+  title: make docker builds image
+  criteria:
+  - make docker builds the Docker image successfully
+  - Makefile has docker target added to PHONY
+  status: complete
+  created_at: '2026-08-12T05:24:21.535604+00:00'
+  completed_at: '2026-08-12T05:31:16.347636+00:00'
