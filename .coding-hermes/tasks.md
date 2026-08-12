@@ -8694,3 +8694,22 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/307 (e852a26e) + /project/hermes-canopy/status (d25128df) written, id-recall verified on disk mirror (event + config partitions). Status key was lagging at tick 305 (known benign lag pattern) — refreshed.
 
 **Next tick:** maintenance; E2E-001 window 308-313 opens at Tick 308 (E2E stack already up). Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
+## Tick 308 (2026-08-12 ~11:25 UTC) — E2E window 308-313 SATISFIED on first tick: 49/49 PASS (74.6s) on live T303-T308 stack
+
+**Verdict: E2E WINDOW SATISFIED** — window 308-313 opened this tick (fixture rule: first tick of window); battery green on first run, zero drift, no re-baseline. No worker dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md).
+
+**E2E battery: 49/49 PASS (9 files, 74.59s, exit 0)** — full `npx vitest run --config vitest.integration.config.ts` (tests/: accessibility, approval-panel, composer-to-canvas, context-manifest, crud-pages, navigation, tree-rendering, two-context-sync, visual-regression). Visual-regression 4/4 with golden tree b1655761 UI-02 Rail Demo; T134 goldens untouched. No WIRE-001 flake this window (SSE/Yjs render timing fine under load).
+
+**Stack (canonical, live since T303-T304):** docker canopy-server :8091 (INFRA-002 deploy, up 13h) + vite :5173 + canopy-pg :5437 healthy (compose PG, dev user seeded). Auth pre-verified: GET /api/v1/trees with dev JWT = 200 (not 401); demo tree searchable. Prewarmed via headless chromium .react-flow render before suite (T303 pattern). Stack left running.
+
+**Gates:** guard PASS 4/4 (secrets clean, go_build/go_lint/go_tests ok) · vitest 647/647 (33 files, 3.86s) · go test -short -p 1 -count=1 -timeout 480s ./... exit 0 full sweep concurrent-with-E2E (db 63.1s / handler 125.0s — inside T195 envelope) · gitleaks clean (824 commits, 35.6MB, 0 leaks) · gitreins 58 complete / 0 pending / 0 in_progress · hilo 1921 edges / 308 files (was 1920/308 — benign +1) · CI last 6 green (T307 push run 31578594205 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 145 complete / 18 pending. Event 200 appended (audit). Header ticks_total 307 -> 308.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0. Daemon :9090 health ok. Scheduler DB: single running tick (06-22-30), no duplicate fire. Off-by-one :8766 n/a (not probed this tick).
+
+**Workers:** no canopy codex/opencode/glm/luna/hermes-chat workers (pgrep clean of foreign match after cwd check; vite + canopyd are the E2E stack, not workers).
+
+**DuckBrain:** /ticks/308 (47947cf5) + /project/hermes-canopy/status (116252b6) written, id-recall verified on disk mirror (event + config partitions). Pre-write contiguity: /ticks/307 (e852a26e) present.
+
+**Next tick:** maintenance (window satisfied); next E2E-001 window 314-319 opens at Tick 314. Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
