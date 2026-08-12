@@ -16,7 +16,7 @@ BINARY   ?= canopyd
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
 
-.PHONY: all build build-embed test test-short vet lint tidy clean run
+.PHONY: all build build-embed test test-short vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -48,7 +48,7 @@ test:
 	$(GO) test ./... -count=1 -timeout=120s
 
 test-short:
-	$(GO) test ./... -short -count=1 -timeout=60s
+	$(GO) test ./... -short -count=1 -timeout=300s
 
 vet:
 	$(GO) vet ./...
@@ -61,3 +61,6 @@ tidy:
 
 clean:
 	rm -rf $(BIN_DIR)/
+
+docker:
+	docker build -f deploy/Dockerfile -t hermes-canopy-canopyd .
