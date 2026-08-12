@@ -321,12 +321,17 @@ cd frontend && npm install
 # Start dev database
 docker compose up -d postgres
 
-# Run backend
+# Run backend (make run defaults to :8091 to match the Vite dev proxy)
 make run
 
 # Run frontend (separate terminal)
 cd frontend && npm run dev
 ```
+
+> `make run` uses `HTTP_ADDR=:8091` and `DB_PORT=5437` by default so it matches
+> the Vite dev proxy target (`frontend/vite.config.ts`) and the compose PG host
+> port. Override with `HTTP_ADDR=:8080 make run` or `export DB_PORT=5432` as
+> needed.
 
 ### Testing
 
@@ -352,7 +357,7 @@ cd frontend && npx vitest run --config vitest.integration.config.ts
 | Target | Description |
 |--------|-------------|
 | `build` | Build the canopyd binary |
-| `run` | Build and run with development defaults |
+| `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |
 | `vet` | Run go vet |
