@@ -39,6 +39,60 @@ open http://localhost:5173  # dev mode
 # or http://localhost:8080  # production (embedded in binary, default HTTP_ADDR)
 ```
 
+## Authentication (dev mode)
+
+Canopy uses HS256 JWT Bearer tokens for authentication. In development you **never
+need to create a token manually** — but there are no `/api/v1/auth/register|login`
+endpoints (multi-user auth is deferred post-MVP per AGENTS.md).
+
+### Frontend (`npm run dev`)
+
+The Vite dev proxy (`frontend/vite.config.ts`) auto-injects a pre-generated dev JWT
+on every `/api` request. The token is HS256-signed with the backend's default secret
+`dev-secret-change-me`, with `sub=00000000-0000-0000-0000-000000000001` and a
+365-day expiry. This means `npm run dev` → instant authenticated access, zero
+manual auth.
+
+Override the token with `VITE_DEV_JWT` if you need a different subject or expiry.
+
+### Direct API access (curl, scripts, etc.)
+
+Sign your own HS256 JWT with `JWT_SECRET` (default `dev-secret-change-me`), then
+send it as a Bearer token:
+
+```bash
+# Using node (quick one-liner)
+node -e "
+const crypto = require('crypto');
+const header = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+const payload = Buffer.from(JSON.stringify({
+  sub:'00000000-0000-0000-0000-000000000001',
+  iat:Math.floor(Date.now()/1000),
+  exp:Math.floor(Date.now()/1000)+86400
+})).toString('base64url');
+const sig = crypto.createHmac('sha256','dev-secret-change-me').update(header+'.'+payload).digest('base64url');
+console.log(header+'.'+payload+'.'+sig);
+"
+```
+
+Then:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8091/api/v1/trees
+```
+
+### Public paths (no auth)
+
+`/health`, `/healthz`, `/version` — no token required.
+
+### Production
+
+**MUST** set a real `JWT_SECRET` environment variable. The dev secret
+`dev-secret-change-me` must never leave the dev environment (see the comment in
+`frontend/vite.config.ts`).
+
+For full auth details (claims, error codes, middleware), see [docs/API.md](docs/API.md) §Auth.
+
 ## Architecture
 
 ### Backend (canopyd)
@@ -239,6 +293,12 @@ METRICS_ENABLED=true \
 | `LOG_FORMAT` | `text` | Log format (text, json) |
 | `METRICS_ENABLED` | `false` | Enable Prometheus metrics |
 | `CORS_ORIGIN` | `*` | CORS allowed origins |
+| `JWT_SECRET` | `dev-secret-change-me` | HS256 signing secret (set a real value in production) |
+| `CANOPY_DB_URL` | *(unset)* | Override DSN; takes priority over all `DB_*` fields |
+| `CONTEXT_MAX_ANCESTORS` | `50` | Max ancestors in context compilation |
+| `CONTEXT_MAX_REFS` | `5` | Max topic references (soft; hard cap is 2×) |
+| `CONTEXT_DEFAULT_BUDGET` | `8000` | Default token budget for context compilation |
+| `PLUGIN_MAX_SIZE` | `1048576` | Max plugin source size in bytes (1 MB) |
 
 ## Development
 
