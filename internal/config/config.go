@@ -17,12 +17,17 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+	DBSchema   string
 
 	// HTTP
 	HTTPAddr string
 
 	// Logging
-	LogLevel string
+	LogLevel  string
+	LogFormat string
+
+	// CORS
+	CORSOrigin string
 
 	// JWT
 	JWTSecret string
@@ -45,9 +50,14 @@ func (c *Config) DSN() string {
 	if sslmode == "" {
 		sslmode = "disable"
 	}
+	schema := c.DBSchema
+	if schema == "" {
+		schema = "public"
+	}
 	return "postgres://" + c.DBUser + ":" + c.DBPassword +
 		"@" + c.DBHost + ":" + strconv.Itoa(c.DBPort) +
-		"/" + c.DBName + "?sslmode=" + sslmode
+		"/" + c.DBName + "?sslmode=" + sslmode +
+		"&search_path=" + schema
 }
 
 // Default returns a Config with sensible development defaults.
@@ -59,8 +69,11 @@ func Default() *Config {
 		DBPassword:           "canopy",
 		DBName:               "canopy",
 		DBSSLMode:            "disable",
+		DBSchema:             "public",
 		HTTPAddr:             ":8080",
 		LogLevel:             "info",
+		LogFormat:            "text",
+		CORSOrigin:           "*",
 		JWTSecret:            "dev-secret-change-me",
 		MetricsEnabled:       false,
 		ContextMaxAncestors:  50,
@@ -99,6 +112,15 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.LogLevel = v
+	}
+	if v := os.Getenv("LOG_FORMAT"); v != "" {
+		c.LogFormat = v
+	}
+	if v := os.Getenv("CORS_ORIGIN"); v != "" {
+		c.CORSOrigin = v
+	}
+	if v := os.Getenv("DB_SCHEMA"); v != "" {
+		c.DBSchema = v
 	}
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		c.JWTSecret = v

@@ -63,13 +63,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Init logger
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
 	// Load config
 	cfg := config.FromEnv()
 	if err := cfg.Validate(); err != nil {
 		log.Fatal().Err(err).Msg("invalid configuration")
+	}
+
+	// Init logger — LOG_FORMAT=json uses structured JSON, otherwise human-friendly console.
+	if cfg.LogFormat == "json" {
+		log.Logger = zerolog.New(os.Stderr)
+	} else {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
 	// Set log level

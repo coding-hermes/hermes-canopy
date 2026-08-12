@@ -76,7 +76,7 @@ func New(
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
-	r.Use(corsMiddleware())
+	r.Use(corsMiddleware(cfg.CORSOrigin))
 	r.Use(handler.BodySizeLimit(1024 * 1024)) // 1MB per SPEC-API-02 §10.1
 
 	// Rate limiter: 100 req/s per IP, burst 200.
@@ -285,11 +285,11 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"version":"dev"}`))
 }
 
-// corsMiddleware provides permissive CORS for local development.
-func corsMiddleware() func(http.Handler) http.Handler {
+// corsMiddleware provides configurable CORS for local development.
+func corsMiddleware(origin string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id")
 			w.Header().Set("Access-Control-Max-Age", "86400")

@@ -56,7 +56,7 @@ func TestVersionHandler(t *testing.T) {
 }
 
 func TestCorsMiddleware(t *testing.T) {
-	mw := corsMiddleware()
+	mw := corsMiddleware("*")
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -86,6 +86,21 @@ func TestCorsMiddleware(t *testing.T) {
 		resp := w.Result()
 		if resp.StatusCode != http.StatusNoContent {
 			t.Errorf("expected 204 No Content for OPTIONS, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("respects custom origin", func(t *testing.T) {
+		customMW := corsMiddleware("http://example.com")
+		customHandler := customMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		customHandler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.Header.Get("Access-Control-Allow-Origin") != "http://example.com" {
+			t.Errorf("expected Access-Control-Allow-Origin 'http://example.com', got %q", resp.Header.Get("Access-Control-Allow-Origin"))
 		}
 	})
 }
