@@ -11,10 +11,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for migrate
 
 	// Imported for its side-effect of publishing an embed.FS via FS().
@@ -178,6 +180,26 @@ func (db *DB) Close() {
 		return
 	}
 	db.Pool.Close()
+}
+
+// IsConnectError reports whether err represents a network-level connection
+// failure (host unreachable, port closed, connection refused). It is used by
+// main() to print a friendly startup message guiding the user to start
+// PostgreSQL. Non-connection errors (bad migrations, auth failures, etc.)
+// return false and stay on the existing log.Fatal path.
+func IsConnectError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ce *pgconn.ConnectError
+	if errors.As(err, &ce) {
+		// ConnectError wraps the underlying dial/network error.
+		var netErr *net.OpError
+		return errors.As(err, &netErr)
+	}
+	// Also catch bare net.OpError (e.g. database/sql path in Migrate).
+	var netErr *net.OpError
+	return errors.As(err, &netErr)
 }
 
 // dsn extracts the DSN from the pool config so that golang-migrate can

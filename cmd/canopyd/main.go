@@ -95,6 +95,10 @@ func main() {
 	// Initialize the database and inject the tree service into HTTP routes.
 	database, err := db.New(ctx, db.PoolConfig{DSN: cfg.DSN()})
 	if err != nil {
+		if db.IsConnectError(err) {
+			fmt.Fprintln(os.Stderr, "PostgreSQL required/unreachable — see docs/INTEGRATION.md §2 (docker compose up -d postgres) or set CANOPY_DB_URL")
+			os.Exit(1)
+		}
 		log.Fatal().Err(err).Msg("database initialization failed")
 	}
 	defer database.Close()
