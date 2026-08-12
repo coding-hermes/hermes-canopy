@@ -8733,3 +8733,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** pre-write contiguity /ticks/308 present (HTTP :3000, namespace hermes-canopy); /ticks/309 (6775e984) + /project/hermes-canopy/status (1e82d51a) written, id-recall verified.
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 314-319 opens at Tick 314.
+## Tick 310 (2026-08-12 ~17:38 UTC) — IDLE light-audit (no dispatch)
+
+**Verdict: IDLE** — no dispatchable tasks (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). E2E-001 window 308-313 SATISFIED at T308 (49/49); next window 314-319 opens at Tick 314 — NOT due this tick.
+
+**Gates:** guard PASS 4/4 full mode (59s: secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 3.86s) · go build + go vet PASS · gofmt -l 5 files = go1.26.5 alignment-only drift vs CI go1.25 (no gofmt linter enabled, benign — T293 class) · gitleaks clean (836 commits, 35.8MB scanned, 0 leaks) · gitreins 61 complete / 0 pending / 0 in_progress (CLI 0.11.0) · hilo 1927 edges / 309 files (not re-run) · CI last 6 green (T309 push 31604822772 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — T157/T159 + ticks 305/307 precedent). Header ticks_total 309 -> 310, last_commit 3226b4b, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Daemon :9090 health ok — storm-watch 4 running / 0 canopy dups, SpawnedAt 12:33:41 matches this fire (tick 310, no duplicate). Off-by-one :8766 health ok (1015 problems / 1167 answers / verified 1167 / queue 4 — idle tick, no submit).
+
+**Stack:** docker canopy-server Exited(0) ~4h ago (intentional T309 stop freeing :8091 for GAP-029 verification; image current per INFRA-002) + vite :5173 up (17h, canopy frontend, cwd verified) — between-window state; next stack start at E2E window 314-319 (Tick 314). canopy-pg :5437 healthy (Up 25h). Worker scan clean (no canopy codex/opencode/glm/luna/hermes-chat procs).
+
+**DuckBrain:** /ticks/309 contiguous pre-write (6775e984 on disk, HTTP :3000, namespace hermes-canopy); /ticks/310 (7d1e8a73) + /project/hermes-canopy/status (ff9b2289) written, fs-grep verified (hits=1 each).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 314-319 opens at Tick 314.
