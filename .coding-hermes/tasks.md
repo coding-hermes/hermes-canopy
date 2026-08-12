@@ -8713,3 +8713,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/308 (47947cf5) + /project/hermes-canopy/status (116252b6) written, id-recall verified on disk mirror (event + config partitions). Pre-write contiguity: /ticks/307 (e852a26e) present.
 
 **Next tick:** maintenance (window satisfied); next E2E-001 window 314-319 opens at Tick 314. Pending: 18 P3 backlog deferred (FTR/PL/STACK/TM/DPL post-MVP).
+## Tick 309 (2026-08-12 ~13:45 UTC) — GAP-028/029/030 complete (stand-in PM batch 2): auth docs, port alignment, PG-unreachable UX
+
+**Verdict: PRODUCTIVE** — 3/3 stand-in PM gap tasks (GAP-028/029/030) dispatched to one worker (glm-5.2 @ zai-glm, session 20260812_084324_62f06f, ~13 min) and completed; judge PASS on all three.
+
+**Worker commits:**
+- **GAP-028** `5e9923c` — docs: dev-mode auth token story. README gains "Authentication (dev mode)" section (Vite dev-proxy JWT auto-injection, VITE_DEV_JWT override, direct-API HS256 JWT with JWT_SECRET) + env table rows JWT_SECRET/CANOPY_DB_URL; docs/API.md §Auth verified accurate vs internal/handler/auth.go + server.go. Docs route taken per AC — auth endpoints stay deferred post-MVP (AGENTS.md); BE-12c tests remain SKIP'd ("gap documented").
+- **GAP-029** `4f53baa` — fix: Makefile run target defaults `HTTP_ADDR ?= :8091` / `DB_PORT ?= 5437` (user-env overridable) matching Vite proxy default + compose PG host port. Verbatim Quick Start verified LIVE: `make build && make run` → :8091 /health 200; through vite :5173 proxy → GET /api/v1/trees 200 + POST 201 (dev JWT auto-injection); no-auth direct curl → 401 TOKEN_MISSING (proves injection is what makes it work). Leftover docker canopy-server stopped to free :8091 for verification (E2E window already satisfied; image current per INFRA-002).
+- **GAP-030** `ec98b3b` — feat: `db.IsConnectError` helper (pgconn.ConnectError + net.OpError detection; 6-subtest unit test internal/db/connect_error_test.go) + main.go prints `PostgreSQL required/unreachable — see docs/INTEGRATION.md §2 (docker compose up -d postgres) or set CANOPY_DB_URL` and exits 1. Live verified: `DB_PORT=59999 ./bin/canopyd` → friendly message, exit 1, no panic/stack trace; normal start on :5437 unaffected.
+
+**Judges:** GAP-028 PASS `2620101f` (3/3) · GAP-029 PASS `f12f3210` (2/2) · GAP-030 PASS `b339c9cc` (3/3 — first verdict INCOMPLETE truncation, retry-once protocol). gitreins tasks created AFTER worker commits (guard-restore pitfall); all 3 complete. tasks.yaml fold committed as chore.
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests) on foreman run + per-judge tier1 · hilo 1921 edges / 308 files (no new dependents for Makefile/main.go/config.go; config.go tested_by config_test.go — low blast radius) · CI last 6 green pre-push (T308 push 31578594205); post-push run pending · gitreins 61 complete / 0 pending / 0 in_progress · gitleaks clean.
+
+**Board:** 148 complete / 18 pending (18 = P3 backlog deferred per AGENTS.md). Events 201-209: 3× task_dispatched + 3× task_completed + 3× audit. Header ticks_total 308 → 309, last_commit ec98b3b, ticks_idle 0. Board dispatch commit a2fdc0f; PM cycle commit 231b06e (GAP-028..030 creation) carried in push.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0. No duplicate fire (grep '^## Tick 309' = 0 pre-write). Worker processes: none (9router vitest verified foreign, left alone).
+
+**DuckBrain:** pre-write contiguity /ticks/308 present (HTTP :3000, namespace hermes-canopy); /ticks/309 (6775e984) + /project/hermes-canopy/status (1e82d51a) written, id-recall verified.
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 314-319 opens at Tick 314.
