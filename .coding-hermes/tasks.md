@@ -8859,3 +8859,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/316 contiguous pre-write (0185b066 on disk, HTTP :3000, namespace hermes-canopy); /ticks/317 (31e53c0a) + /project/hermes-canopy/status (55b67bbf) written, fs-grep verified (event + config partitions hit, 1 each).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
+
+## Tick 318 (2026-08-13 ~13:33 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 314-319 satisfied at T314 on first tick; next 320-325 opens at T320). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL).
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 4.22s — run from frontend/) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T317 push 31695978806 success) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-317 baseline) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — T157/T159 + ticks 310-317 precedent). Header ticks_total 317 -> 318, last_commit 7fe6914, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Daemon :9090 responding (API + health page reachable).
+
+**Stack:** canopyd stopped (between-window state; :8091 closed) + vite :5173 up (pre-existing) + canopy-pg :5437 healthy (Up 45h). Docker canopy-server not running (intentional). Worker scan clean (no foreign workers).
+
+**DuckBrain:** /ticks/318 (0da2d129) + /project/hermes-canopy/status/2026-08-13 (bd5b893b) written, fs-grep verified (event + config partitions hit).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
