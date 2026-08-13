@@ -128,17 +128,24 @@ curl http://localhost:8080/version
 
 ### CLI Subcommands
 
-The binary also supports CLI subcommands for tree management:
+The binary supports CLI subcommands for tree management plus an explicit
+`serve` subcommand:
 
 ```bash
 export CANOPY_SERVER_URL=http://localhost:8080
 export CANOPY_TOKEN=your-jwt-token
 
+./bin/canopyd serve              # start the API server (default mode; env-only config)
+./bin/canopyd serve --help       # print usage and exit — does NOT start the server
 ./bin/canopyd tree create "My Tree"
 ./bin/canopyd tree list
 ./bin/canopyd tree navigate <tree-id>
 ./bin/canopyd tree delete <tree-id>
 ```
+
+Server configuration is **environment-only** — there are no server flags
+(only `-version`). See the "Environment Variables" table in the README and
+§4 above. `canopyd serve --help` lists the key variables.
 
 ## 5. Frontend Dev Server
 
@@ -184,6 +191,22 @@ cd frontend
 npm run build
 # Produces: frontend/dist/ (static files)
 ```
+
+**Serving the PWA:** `canopyd` is **API-only** in MVP — the binary serves the
+REST/SSE API on `HTTP_ADDR` (default `:8080`) and does **not** embed or serve
+the frontend. The PWA must be served separately:
+
+```bash
+# Option A — any static file server
+npx serve -l 3000 frontend/dist
+
+# Option B — nginx / Caddy / your CDN pointed at frontend/dist/
+```
+
+The deployed PWA talks to the API through a reverse proxy or by setting the
+API base URL at build time (`VITE_API_URL`, see §5 Configuration above). The
+Docker deployment builds `frontend/dist` as a release artifact in the image
+builder stage for exactly this purpose (deploy/Dockerfile).
 
 ## 6. API Walkthrough (curl)
 

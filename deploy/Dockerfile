@@ -10,7 +10,9 @@ RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-# Stage 2: Build the Go binary with embedded frontend
+# Stage 2: Build the Go API binary.
+# NOTE: canopyd is API-only in MVP — frontend/dist is built as a release
+# artifact for external serving, NOT embedded in the binary.
 FROM golang:1.25-alpine AS go-builder
 
 RUN apk add --no-cache git ca-certificates tzdata

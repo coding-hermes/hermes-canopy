@@ -47,3 +47,26 @@ func TestIsSubcommand(t *testing.T) {
 		}
 	}
 }
+
+func TestWantsServeHelp(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"no args", nil, false},
+		{"plain serve", []string{}, false},
+		{"short help", []string{"-h"}, true},
+		{"long help", []string{"--help"}, true},
+		{"help after other args", []string{"-version", "--help"}, true},
+		{"non-help flags", []string{"-version"}, false},
+		{"subcommand args are not help", []string{"tree", "list"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := wantsServeHelp(tt.args); got != tt.want {
+				t.Errorf("wantsServeHelp(%v) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
+	}
+}

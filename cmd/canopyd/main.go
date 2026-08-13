@@ -42,6 +42,18 @@ import (
 var version = "dev"
 
 func main() {
+	// `serve` is an explicit alias for server mode (configuration is
+	// env-only). Handle it BEFORE subcommand routing so `canopyd serve --help`
+	// prints usage and exits 0 WITHOUT starting a server (GAP-033).
+	if len(os.Args) >= 2 && os.Args[1] == "serve" {
+		if wantsServeHelp(os.Args[2:]) {
+			printServerUsage()
+			os.Exit(0)
+		}
+		// Rebuild os.Args so server flag parsing sees only real flags.
+		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+	}
+
 	// If a known subcommand is present, route to CLI mode.
 	// Parse flags AFTER detecting the subcommand so server flags don't
 	// interfere with CLI flags.
@@ -56,6 +68,7 @@ func main() {
 
 	// Server mode: parse server flags.
 	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Usage = printServerUsage
 	flag.Parse()
 
 	if *showVersion {

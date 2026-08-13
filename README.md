@@ -35,8 +35,9 @@ npm install
 npm run dev
 
 # Open the frontend
-open http://localhost:5173  # dev mode
-# or http://localhost:8080  # production (embedded in binary, default HTTP_ADDR)
+open http://localhost:5173  # dev mode (Vite dev server)
+# The canopyd binary is API-only in MVP — the PWA is served separately:
+# production: serve frontend/dist/ with any static server (see "Deployment").
 ```
 
 ## Authentication (dev mode)
@@ -160,34 +161,46 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 
 ## API Reference
 
+> **Canonical reference: [docs/API.md](docs/API.md)** — this table is a
+> quick-reference of the primary endpoints, generated from
+> `internal/server/server.go` + handler `Routes()` (verified live, GAP-032).
+> All paths are under `/api/v1` and require a JWT Bearer token unless noted.
+
 ### Trees
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/trees` | List all trees |
 | `POST` | `/api/v1/trees` | Create a tree |
-| `GET` | `/api/v1/trees/{id}` | Get tree details |
-| `PATCH` | `/api/v1/trees/{id}` | Update tree metadata |
-| `DELETE` | `/api/v1/trees/{id}` | Soft-delete a tree |
+| `GET` | `/api/v1/trees/{tree_id}` | Get tree details |
+| `PATCH` | `/api/v1/trees/{tree_id}` | Update tree metadata |
+| `DELETE` | `/api/v1/trees/{tree_id}` | Soft-delete a tree |
+| `POST` | `/api/v1/trees/{tree_id}/share` | Share a tree with a user |
+| `POST` | `/api/v1/trees/{tree_id}/presence` | Push presence heartbeat |
+| `POST` | `/api/v1/trees/{tree_id}/presence/leave` | Leave presence session |
 
 ### Nodes
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/nodes` | List nodes (filtered by tree_id, parent_id) |
-| `POST` | `/api/v1/nodes` | Create a node |
-| `GET` | `/api/v1/nodes/{id}` | Get node details |
-| `PATCH` | `/api/v1/nodes/{id}` | Update node content |
-| `DELETE` | `/api/v1/nodes/{id}` | Soft-delete a node |
-| `POST` | `/api/v1/nodes/{id}/fork` | Fork a node (create child branch) |
-
-### Edges
+Tree-scoped (primary, membership-gated):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/edges` | List edges (filtered by tree_id) |
-| `POST` | `/api/v1/edges` | Create an edge |
-| `DELETE` | `/api/v1/edges/{id}` | Delete an edge |
+| `GET` | `/api/v1/trees/{tree_id}/nodes` | List nodes in a tree |
+| `POST` | `/api/v1/trees/{tree_id}/nodes` | Create a node |
+| `GET` | `/api/v1/trees/{tree_id}/nodes/{node_id}` | Get node details |
+
+Flat (by UUID, access-gated via `NodeAccessMiddleware`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/nodes/{tree_id}/nodes/{node_id}` | Get node details (flat form) |
+| `PATCH` | `/api/v1/nodes/nodes/{node_id}` | Update node content |
+| `DELETE` | `/api/v1/nodes/nodes/{node_id}` | Soft-delete a node |
+| `POST` | `/api/v1/nodes/nodes/{node_id}/reply` | Reply to a node |
+| `POST` | `/api/v1/nodes/nodes/{node_id}/fork` | Fork a node (create child branch) |
+
+> Edges are managed **implicitly** through node operations (reply/fork/synthesis)
+> — there is no standalone edge API.
 
 ### Graph
 
@@ -197,15 +210,23 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 | `GET` | `/api/v1/graph/trees/{tree_id}/ancestors/{node_id}` | Get ancestor chain |
 | `GET` | `/api/v1/graph/trees/{tree_id}/stats` | Graph statistics |
 
+### Sync (Yjs)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/trees/{tree_id}/sync` | Fetch Yjs snapshot |
+| `POST` | `/api/v1/trees/{tree_id}/sync` | Push Yjs update |
+| `POST` | `/api/v1/trees/{tree_id}/sync/snapshot` | Trigger a snapshot |
+
 ### Topics
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/topics` | List topics |
 | `POST` | `/api/v1/topics` | Create a topic |
-| `GET` | `/api/v1/topics/{id}` | Get topic details |
-| `PATCH` | `/api/v1/topics/{id}` | Update topic |
-| `DELETE` | `/api/v1/topics/{id}` | Delete a topic |
+| `GET` | `/api/v1/topics/{topic_id}` | Get topic details |
+| `PATCH` | `/api/v1/topics/{topic_id}` | Update topic |
+| `DELETE` | `/api/v1/topics/{topic_id}` | Delete a topic |
 
 ### Cards
 
@@ -213,28 +234,31 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 |--------|------|-------------|
 | `GET` | `/api/v1/cards` | List cards |
 | `POST` | `/api/v1/cards` | Create a card |
-| `GET` | `/api/v1/cards/{id}` | Get card details |
-| `PATCH` | `/api/v1/cards/{id}` | Update card |
-| `DELETE` | `/api/v1/cards/{id}` | Delete a card |
+| `GET` | `/api/v1/cards/{card_id}` | Get card details |
+| `PATCH` | `/api/v1/cards/{card_id}` | Update card |
+| `DELETE` | `/api/v1/cards/{card_id}` | Delete a card |
 
 ### Approvals
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/approvals` | List approvals (pending/history) |
-| `POST` | `/api/v1/approvals` | Create an approval request |
-| `GET` | `/api/v1/approvals/{id}` | Get approval details |
-| `POST` | `/api/v1/approvals/{id}/approve` | Approve |
-| `POST` | `/api/v1/approvals/{id}/deny` | Deny |
+| `GET` | `/api/v1/approvals` | List approvals |
+| `GET` | `/api/v1/approvals/pending` | List pending approvals |
+| `GET` | `/api/v1/approvals/history` | List approval history |
+| `GET` | `/api/v1/approvals/{approval_id}` | Get approval details |
+| `POST` | `/api/v1/approvals/{approval_id}/approve` | Approve |
+| `POST` | `/api/v1/approvals/{approval_id}/deny` | Deny |
+
+> Approval requests are created internally by merge operations — there is no
+> public create endpoint.
 
 ### SSE (Server-Sent Events)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/events` | SSE event stream |
-| `GET` | `/api/v1/events?tree_id={id}` | Filter by tree |
+| `GET` | `/api/v1/trees/{tree_id}/events` | Tree event stream (SSE) |
 
-### Health
+### Health (no auth)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -276,6 +300,19 @@ LOG_LEVEL=warn \
 METRICS_ENABLED=true \
   ./bin/canopyd
 ```
+
+> **Note:** `canopyd` is **API-only** in MVP — it does not serve the PWA.
+> The binary exposes the REST/SSE API on `HTTP_ADDR` (`:8080` by default);
+> the frontend must be served separately. Production setup:
+>
+> ```bash
+> cd frontend && npm ci && npm run build   # produces frontend/dist/
+> # serve the static build with any static server, e.g.:
+> npx serve -l 3000 frontend/dist           # → http://localhost:3000
+> ```
+>
+> Point the deployed PWA at the API base URL (`VITE_API_URL` at build time, or
+> the Vite proxy target in dev). See docs/INTEGRATION.md §5 for details.
 
 ### Environment Variables
 

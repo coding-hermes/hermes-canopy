@@ -95,6 +95,7 @@ func runCLI() {
 		fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
 		fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
 		fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
+		fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
 		os.Exit(1)
 	}
 
@@ -457,6 +458,35 @@ func stripServerFlags(args []string) []string {
 		i++
 	}
 	return args[i:]
+}
+
+// wantsServeHelp reports whether the arguments following the `serve`
+// subcommand request help (-h / --help). `canopyd serve --help` must print
+// usage and exit 0 WITHOUT starting the server (GAP-033).
+func wantsServeHelp(args []string) bool {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+// printServerUsage documents the env-only server configuration. It is the
+// custom flag.Usage for server mode and the output of `canopyd serve --help`.
+func printServerUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd [serve] [flags]\n\n")
+	fmt.Fprintf(os.Stderr, "Server mode (default). Configuration is environment-based — see\n")
+	fmt.Fprintf(os.Stderr, "docs/INTEGRATION.md §4 and README \"Environment Variables\".\n\n")
+	fmt.Fprintf(os.Stderr, "Flags:\n")
+	fmt.Fprintf(os.Stderr, "  -version    print version and exit\n")
+	fmt.Fprintf(os.Stderr, "  -h, --help  print this help and exit\n\n")
+	fmt.Fprintf(os.Stderr, "Key environment variables:\n")
+	fmt.Fprintf(os.Stderr, "  HTTP_ADDR       listen address (default :8080)\n")
+	fmt.Fprintf(os.Stderr, "  CANOPY_DB_URL   postgres:// DSN (overrides all DB_* fields)\n")
+	fmt.Fprintf(os.Stderr, "  DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SCHEMA, DB_SSLMODE\n")
+	fmt.Fprintf(os.Stderr, "  JWT_SECRET      HS256 signing secret (default dev-secret-change-me)\n")
+	fmt.Fprintf(os.Stderr, "  LOG_LEVEL, LOG_FORMAT, METRICS_ENABLED, CORS_ORIGIN\n")
 }
 
 // Ensure net/http is used (compile-time check).

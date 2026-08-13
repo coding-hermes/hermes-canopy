@@ -1,6 +1,8 @@
 # Canopy — Production deployment
 # Start: docker compose -f docker-compose.yml up -d
-# Multi-stage deploy/Dockerfile auto-builds + embeds the frontend — no manual `npm run build` needed
+# Multi-stage deploy/Dockerfile builds the frontend release artifact (frontend/dist)
+# alongside the canopyd API binary; canopyd is API-only in MVP — serve the PWA
+# separately (e.g. a static file server in front of the API host).
 
 services:
   postgres:
