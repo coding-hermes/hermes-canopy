@@ -8829,3 +8829,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/314 contiguous pre-write (910fbb98 on disk, HTTP :3000, namespace hermes-canopy); /ticks/315 (2b37c6fa) + /project/hermes-canopy/status (9577a677) written, fs-grep verified (event + config partitions hit, 1 each).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
+## Tick 316 (2026-08-13 ~09:26 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 314-319 satisfied at T314 on first tick; next 320-325 opens at T320). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL).
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 5.48s) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T315 push 31677589240 success) · gitleaks clean (0 leaks, 35.87MB scanned) · hilo not re-run (light-tick rule) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-315 baseline) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — T157/T159 + ticks 310-313/315 precedent). Header ticks_total 315 -> 316, last_commit d2e632d, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Daemon :9090 healthy.
+
+**Stack:** canopyd stopped (between-window state; :8091 closed) + vite :5173 up (canopy frontend, pre-existing) + canopy-pg :5437 healthy (Up 41h). Docker canopy-server Exited (intentional; image current per INFRA-002). Worker scan clean (only pre-existing vite procs under hermes-canopy/frontend, no foreign workers).
+
+**DuckBrain:** /ticks/315 contiguous pre-write (2b37c6fa on disk, HTTP :3000, namespace hermes-canopy); /ticks/316 (0185b066) + /project/hermes-canopy/status (065b673c) written, fs-grep verified (event + config partitions hit, 1 each).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
