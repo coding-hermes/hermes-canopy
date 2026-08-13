@@ -8814,3 +8814,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/313 contiguous pre-write (5fc743e7 on disk, HTTP :3000, namespace hermes-canopy); /ticks/314 (910fbb98) + /project/hermes-canopy/status (b0e8ff38) written, fs-grep verified (event + config partitions hit, 1 each).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
+## Tick 315 (2026-08-13 ~07:23 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 314-319 satisfied at T314 on first tick; next 320-325 opens at T320). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL).
+
+**Gates:** guard PASS 4/4 (secrets clean; go_build/go_lint/go_tests no staged files) · vitest 647/647 (33 files, 7.41s) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T314 push 31669714012 success) · gitleaks clean (841 commits, 35.87MB, 0 leaks) · hilo 1927 edges / 309 files · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-314 baseline) · Go TODOs 5 (all stub_adapters.go post-MVP) · FE BUG-024 markers 1 (ShareDialog.tsx only) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — T157/T159 + ticks 310-313 precedent). Header ticks_total 314 -> 315, last_commit e32fb7ee, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Daemon :9090 healthy. Off-by-one :8766 health ok (uptime 12h36m — idle tick, no submit).
+
+**Stack:** canopyd stopped (between-window state) + vite :5173 up (canopy frontend, pre-existing) + canopy-pg :5437 healthy (Up 39h). Docker canopy-server container Exited (intentional; image current per INFRA-002). Worker scan clean (ring-runner vite :4174 = foreign project, no action).
+
+**DuckBrain:** /ticks/314 contiguous pre-write (910fbb98 on disk, HTTP :3000, namespace hermes-canopy); /ticks/315 (2b37c6fa) + /project/hermes-canopy/status (9577a677) written, fs-grep verified (event + config partitions hit, 1 each).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
