@@ -8875,3 +8875,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/318 (0da2d129) + /project/hermes-canopy/status/2026-08-13 (bd5b893b) written, fs-grep verified (event + config partitions hit).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
+## Tick 319 (2026-08-13 ~15:40 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 314-319 satisfied at T314 on first tick; next 320-325 opens at T320). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL).
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 3.64s — run from frontend/) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T318 push 31705697268 success) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-318 baseline) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — T157/T159 + ticks 310-318 precedent). Header ticks_total 318 -> 319, last_commit fa0bebb, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Daemon :9090 healthy (uptime 2h27m, db connected, evaluation_age ~77s, active_ticks 3).
+
+**Stack:** canopyd stopped (between-window state; :8091 closed) + vite :5173 up (pre-existing) + canopy-pg :5437 healthy (Up 2 days). Docker canopy-server not running (intentional). Worker scan clean (only rabbit-hole workers visible — foreign project, no canopy workers).
+
+**DuckBrain:** /ticks/318 contiguous pre-write (0da2d129 on disk, HTTP :3000, namespace hermes-canopy); /ticks/319 (7af30a60) + /project/hermes-canopy/status/2026-08-13 (4df46c15) written, HTTP read-back verified.
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 320-325 opens at Tick 320.
