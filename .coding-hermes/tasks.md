@@ -8908,3 +8908,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/319 contiguous pre-write (7af30a60 on disk, HTTP :3000, namespace hermes-canopy); /ticks/320 (0543b635-e006-48dd-bcd6-12fc7780f1ff) + /project/hermes-canopy/status (f7b10f9f-4d8c-40ca-bc31-bac2cc9d55d0) written, HTTP response id verified (event + config partitions).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
+
+## Tick 321 (2026-08-13 ~19:54 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 320-325 satisfied at T320 on first tick; next 326-331 opens at T326). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL).
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 5.30s — run from frontend/) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T320 dedupe push 31727842709 success) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-320 baseline) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 148 complete / 18 pending. No event appended (IDLE maintenance — ticks 310-320 precedent). Header ticks_total 320 -> 321, last_commit b658da0, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1.
+
+**Stack:** canopyd stopped (between-window state; :8091 closed, canopy-server container Exited 30h — intentional per T319/T320) + vite :5173 up (pre-existing, HTTP 200) + canopy-pg :5437 healthy (Up 2 days). Worker scan clean (no canopy or foreign hermes-chat workers).
+
+**DuckBrain:** /ticks/320 contiguous pre-write (0543b635 on disk, HTTP :3000, namespace hermes-canopy); /ticks/321 (73a702f7-53aa-4b3f-9c93-8b948dd19771) + /project/hermes-canopy/status/2026-08-13 (aabf9f81-9425-43aa-84a4-ca61d98acd57) written, HTTP read-back verified (prefix GET = 1 item).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
