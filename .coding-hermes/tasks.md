@@ -8940,3 +8940,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/323 (841426e8-bd9b-48ce-a771-1352c981da29) + /project/hermes-canopy/status/2026-08-13 (b386122e-26a5-4972-b72e-a590c842a3f6) written before board commit, HTTP read-back verified (prefix GET /ticks/323 = 1 item).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
+## Tick 324 (2026-08-14 ~02:15 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 320-325 satisfied at T320 on first tick; next 326-331 opens at T326). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). GAP-033 live re-probe PASS: `./bin/canopyd serve --help` prints usage + exits 0, starts no server — the PM's 23:2xZ evidence predated tick 323's 19:10 rebuild; row stands closed (no reopen).
+
+**Gates:** vitest 647/647 (33 files, 4.81s — run from frontend/) · go 18/18 packages PASS with canopy-pg :5437 (db 67.6s, plugin 34.3s, cmd 0.004s) · gitleaks clean (854 commits, 36.12MB, 0 leaks) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 5 green (T323 push 31756555777 success) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-323 baseline) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed.
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL). No event appended (IDLE maintenance — T157/T159 + ticks 310-323 precedent; events.jsonl MAX(id)=218 unchanged). Header ticks_total 323 -> 324, last_commit 371be5d, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1.
+
+**Stack:** canopyd stopped (between-window state; :8091 closed — 000 probe, container Exited per T319-T323 convention) + vite :5173 up (HTTP 200, pre-existing Bane stack) + canopy-pg :5437 healthy + local PG :5432 up. Worker scan clean (no canopy or foreign hermes-chat workers). Off-by-one :8766 health ok — no submit (routine maintenance, no new problem class).
+
+**DuckBrain:** /ticks/323 contiguous pre-write (841426e8 on disk, HTTP :3000, namespace hermes-canopy); /ticks/324 (b06569a4) + /project/hermes-canopy/status (2deea794) + /project/hermes-canopy/status/2026-08-13 (822fd717) written, HTTP read-back verified (prefix GET /ticks/324 = 1 item).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
