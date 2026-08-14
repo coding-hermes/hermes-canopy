@@ -8970,3 +8970,20 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/324 contiguous pre-write (b06569a4 on disk, HTTP :3000, namespace hermes-canopy); /ticks/325 (093eea98-97d9-4f2c-a449-79c0749996c4) + /project/hermes-canopy/status (473ab48a-4fde-48d2-9da9-20392e4b8515) written, fs-verified (hits=1 each on partition JSONL).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
+## Tick 326 (2026-08-14 ~01:36 UTC) — E2E window 326-331 SATISFIED on first tick: 49/49 PASS (58.0s) on live stack
+
+**Verdict: E2E WINDOW SATISFIED** — window 326-331 opened this tick (fixture rule: first tick of window); battery green on first run, zero drift, no re-baseline. No worker dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md).
+
+**E2E battery: 49/49 PASS (9 files, 58.02s, exit 0)** — full `npx vitest run --config vitest.integration.config.ts` (tests/: accessibility, approval-panel, composer-to-canvas, context-manifest, crud-pages, navigation, tree-rendering, two-context-sync, visual-regression). Visual-regression goldens untouched (golden tree b1655761 UI-02 Rail Demo present). No WIRE-001 flake this window. Report committed: `e2e-output/tick326.md`.
+
+**Stack:** canopyd was DOWN at tick start (between-window convention since T321) → rebuilt fresh (01:32 UTC, embeds current migrations — stale-binary rule) and started as host binary on :8091 (DB env vars, NO JWT_SECRET override) + vite :5173 (pre-existing) + canopy-pg :5437 healthy (Up 2 days). Auth verified: `/health` 200, `GET /api/v1/trees?limit=1` via vite proxy 200. Prewarmed headless chromium golden-tree load (.react-flow rendered) before suite. canopyd left running for the window (T308 pattern).
+
+**Gates:** unit vitest 647/647 (33 files, 4.18s — run from frontend/) · go 18/18 packages PASS with canopy-pg :5437 (`go test -count=1 -p 1` non-handler sweep: db 73.9s, plugin 28.1s) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T325 push 31769880730 success) · gofmt -l 16 files = go1.26.5 alignment-only drift (benign, T293 class — baseline unchanged) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed pre-commit · no foreign workers (only my canopyd + pre-existing vite).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL). Event 219 appended (audit, both stores in lockstep: events.jsonl + board.db — MAX(id)=219). Header ticks_total 325 -> 326, last_commit a55311f, ticks_idle 0.
+
+**Scheduler:** daemon :9090 health 200. hermes-canopy cooldown_s=7200 file (fleet.toml pin), NO PUT.
+
+**DuckBrain:** /ticks/325 contiguous pre-write (prefix GET = 1 item); /ticks/326 (317f15d9) + /project/hermes-canopy/status (f8b7add8) written via HTTP :3000, before board commit (T183 ordering).
+
+**Next tick:** maintenance (window satisfied); next E2E-001 window 332-337 opens at Tick 332. Pending: 18 P3 backlog deferred.
