@@ -8924,3 +8924,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/320 contiguous pre-write (0543b635 on disk, HTTP :3000, namespace hermes-canopy); /ticks/321 (73a702f7-53aa-4b3f-9c93-8b948dd19771) + /project/hermes-canopy/status/2026-08-13 (aabf9f81-9425-43aa-84a4-ca61d98acd57) written, HTTP read-back verified (prefix GET = 1 item).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
+
+## Tick 323 (2026-08-14 ~00:10 UTC) — GAP-033 REOPEN closed (stale-binary false alarm)
+
+**Verdict: PRODUCTIVE** — GAP-033 (reopened by PM 18:28 local) closed as complete: PM's probe hit the STALE gitignored `./bin/canopyd` (built 12:44, predates fix 7b62d37 at 17:03 local) — the source fix was correct all along. Fresh rebuild verified: `canopyd serve --help` prints usage and exits 0, starts no server (also `serve -h`, `--help`). Rebuilt both gitignored binaries (`bin/canopyd`, `canopyd`) so the documented `make build` flow works. No dispatch needed (foreman-direct verification; code unchanged).
+
+**Gates:** guard PASS 4/4 full mode (secrets clean, go_build ok, go_lint ok, go_tests ok) · vitest 647/647 (33 files, 8.5s — run from frontend/) · gitreins 61 complete / 0 pending / 0 in_progress (GAP-033 is board-only, not a gitreins task) · CI last 6 green (T322 push 31748509061 success) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — matches T312-322 baseline) · gh issues 0 open · origin/master..HEAD = 1 before tick (a55a26c PM reopen commit, carried in this tick's push).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL). Events 217 (task_completed GAP-033) + 218 (audit) appended, JSONL + board.db in lockstep (max id 218 both). Header ticks_total 322 -> 323, last_commit a55a26c, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT.
+
+**Stack:** canopyd stopped (between-window state; :8091 closed, container Exited — intentional per T319-T321) + vite :5173 up + canopy-pg :5437 healthy (Up 2 days). Worker scan clean (no canopy or foreign hermes-chat workers; only schedulerd/vite/mcp watchdogs).
+
+**DuckBrain:** /ticks/323 (841426e8-bd9b-48ce-a771-1352c981da29) + /project/hermes-canopy/status/2026-08-13 (b386122e-26a5-4972-b72e-a590c842a3f6) written before board commit, HTTP read-back verified (prefix GET /ticks/323 = 1 item).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 326-331 opens at Tick 326.
