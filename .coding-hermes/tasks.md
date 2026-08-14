@@ -9003,3 +9003,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 332-337 opens at Tick 332.
 
+
+## Tick 328 (2026-08-14 ~12:08 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 326-331 satisfied at T326 on first tick, 49/49; next 332-337 opens at T332). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 3.95s — run from frontend/) · go non-handler sweep PASS (`go test -count=1 -p 1` excl. /handler: all pkgs ok with canopy-pg :5437; handler suite covered by T326 E2E window) · gitleaks clean (858 commits scanned, 0 leaks) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T327 push 31790804886 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · hilo 1927 edges / 309 files (informational, unchanged from T327) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — baseline unchanged).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL). No event appended (IDLE maintenance — T157/T159 + T324/325/327 precedent; events.jsonl MAX(id)=219 unchanged).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0.
+
+**Stack:** Bane live stack up and untouched — canopyd :8091 (host binary from T326 E2E window, DB_PORT=5437 env, started 01:32) + vite :5173 + canopy-pg :5437 healthy. Worker scan clean (only the live stack procs; no canopy/foreign hermes-chat workers). Storm-watch 0 duplicate running ticks (3 total running).
+
+**DuckBrain:** /ticks/327 contiguous pre-write (d687f64d via JSONL grep, ns hermes-canopy); /ticks/328 (58e2eb27-dd82-458b-ab2b-1634eb75bdc7) + /project/hermes-canopy/status (d8c580d8-72bb-4c60-a69f-6cfd2c802f4d) written pre-commit and verified via JSONL grep (T183 ordering).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 332-337 opens at Tick 332.
