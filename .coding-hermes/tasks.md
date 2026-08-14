@@ -8987,3 +8987,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/325 contiguous pre-write (prefix GET = 1 item); /ticks/326 (317f15d9) + /project/hermes-canopy/status (f8b7add8) written via HTTP :3000, before board commit (T183 ordering).
 
 **Next tick:** maintenance (window satisfied); next E2E-001 window 332-337 opens at Tick 332. Pending: 18 P3 backlog deferred.
+## Tick 327 (2026-08-14 ~10:05 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 326-331 satisfied at T326 on first tick, 49/49; next 332-337 opens at T332). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 4.16s — run from frontend/) · go non-handler sweep PASS (`go test -count=1 -p 1` excl. /handler: 1m48s, all pkgs ok with canopy-pg :5437; handler suite covered by T326 E2E window) · gitleaks clean (36.12MB scanned, 0 leaks) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T326 push 31776865310 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · hilo 1927 edges / 309 files (informational, grew from ops-ref baseline) · off-by-one :8766 health ok (no submit — routine maintenance, no new problem class).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL). No event appended (IDLE maintenance — T157/T159 + T324/325 precedent; events.jsonl MAX(id)=219 unchanged). Header board.jsonl ticks_total 326 -> 327, last_commit 8a93e62, ticks_idle 0.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1.
+
+**Stack:** Bane live stack up and untouched — canopyd :8091 (host binary from T326 E2E window, DB_PORT=5437 env) + vite :5173 + canopy-pg :5437 healthy. Worker scan clean (only the live stack procs; no canopy/foreign hermes-chat workers).
+
+**DuckBrain:** /ticks/326 contiguous pre-write (317f15d9 via HTTP :3000, namespace hermes-canopy); /ticks/327 (d687f64d-b4a3-4f80-ab2f-aab6fe56f69c) + /project/hermes-canopy/status (d31be666-a14e-403b-8ee5-9449c0815f7d) written pre-commit and verified present via recall (T183 ordering).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 332-337 opens at Tick 332.
+
