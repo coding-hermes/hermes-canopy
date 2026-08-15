@@ -9098,3 +9098,18 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/332 contiguous pre-write (536fc3df via direct recall, ns hermes-canopy); /ticks/333 (b44583d5-1662-49de-b255-89bb9aede91b) + /project/hermes-canopy/status (32474c88-c228-41b8-bc9f-622d22f25204) written pre-commit and verified via id-recall (T183 ordering).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 338-343 opens at Tick 338.
+## Tick 334 (2026-08-15 ~01:05 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 332-337 satisfied at T332 on first tick, 49/49; next 338-343 opens at T338). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 7.04s — run from frontend/) · go non-handler sweep PASS (`go test -count=1 -p 1` excl. /handler: exit 0, 18 pkgs ok incl. db + plugin 57.5s with canopy-pg :5437; handler suite covered by T332 E2E window) · gitleaks clean (36.18MB scanned, 0 leaks) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 6 green (T333 push 31848687141 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · hilo 1927 edges / 309 files (informational, unchanged) · gofmt -l 16 files = go1.26.5 alignment-only drift vs CI go1.25 (benign, T293 class — baseline unchanged) · off-by-one :8766 health ok (no submit — routine maintenance, no new problem class).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL; tasks.jsonl canonical count, unchanged from T333). No event appended (IDLE maintenance — T157/T159 + T324-333 precedent; events.jsonl MAX(id)=220 unchanged).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 file (fleet.toml pin) + API agree, NO PUT, consecutive_failures=0, decay_rate=1. Storm-watch: 3 foreign sibling ticks (h3/ai-plays-poke/terminal-jail) + self — no duplicate canopy fire (grep '^## Tick 334' exit 1 pre-commit).
+
+**Stack:** live stack up and untouched — canopyd :8091 (PID 463935) + vite :5173 (two vite wrappers, one node child listening) + canopy-pg :5437 healthy. Started ~19:36-19:42 local, cwd verified inside hermes-canopy (Bane/live session precedent T260/T266 — left running). opencode PID 2575710 has cwd /home/kara (foreign, not canopy). No canopy code workers.
+
+**DuckBrain:** /ticks/333 contiguous pre-write (b44583d5 via direct recall, ns hermes-canopy); /ticks/334 (ce01355d-3c8a-4e4c-9fc3-47bd90464523) + /project/hermes-canopy/status (0949df2a-c862-43dd-b063-77ebc246dcf4) written pre-commit and verified via id-recall (T183 ordering).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 338-343 opens at Tick 338.
