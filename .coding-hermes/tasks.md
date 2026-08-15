@@ -9143,3 +9143,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/335 contiguous pre-write (ns hermes-canopy, verified via full namespace listing scan); status key was lagging at tick 331 pre-write (known silent-drop pattern — refreshed unconditionally). /ticks/336 (96d7146d-3c86-4881-9448-b10cdccc4475) + /project/hermes-canopy/status (be5773a6-d6f9-47de-b3f7-2244c24e96bc, retry 63ecf446-9da0-47d8-8b41-fe9197fc3432) written pre-commit and verified via UUID lookup in the full listing (T183 ordering; retry-once per T177 — first write had landed, retry is a benign duplicate rolling-key record).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 338-343 opens at Tick 338.
+
+## Tick 337 (2026-08-15 ~22:25 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 332-337 satisfied at T332 on first tick; next 338-343 opens at T338). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 4.48s — run from frontend/) · go non-handler sweep PASS (`go test -count=1 -p 1` excl. /handler: exit 0, 18 pkgs ok incl. db 61.3s + plugin 27.8s with canopy-pg :5437; handler suite covered by T332 E2E window) · gitleaks clean (0 leaks, 867 commits) · gitreins 61 complete / 0 pending / 0 in_progress · CI last 3 green (T336 push success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · off-by-one :8766 health ok, live stats 1094 problems / 1267 answers / 1267 verified, queue 7, hit_rate 1 (no submit — routine maintenance, no new problem class) · Go TODOs 5 (stub_adapters.go only — cursor TODO tree_service.go resolved since the 6-item baseline).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL; tasks.jsonl canonical count, unchanged from T336). No event appended (IDLE maintenance — T157/T159 precedent; events.jsonl MAX(id)=220 unchanged, no tick-337 event).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT, consecutive_failures=0. Duplicate-fire check: SpawnedAt 2026-08-15T17:20:50-05:00 matches this fire, no `^## Tick 337` header pre-commit, storm-watch 0 duplicate running ticks (4 total running), origin/master..HEAD=0 — clean.
+
+**Stack:** canopy-pg :5437 healthy · two known orphaned vite dev servers under systemd --user: 2603144 LISTENING :5175, 987886 LISTENING :5173 (both unchanged from T336 — known watchdog class, left untouched per maintenance discipline) · canopyd :8091 NOT running (E2E stack only needed for windows; next at T338).
+
+**DuckBrain:** /ticks/336 contiguous pre-write (ns hermes-canopy, direct recall 96d7146d); status key lagging at tick 294 pre-write (known silent-drop pattern — refreshed unconditionally). /ticks/337 (777d7115-c970-46fe-b3e6-2088ef8140de) + /project/hermes-canopy/status (21bd0f49-084a-4186-8661-b9f59b8ca19c) written pre-commit, both verified via fs lookup in namespace partition JSONL (T183 ordering).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). E2E-001 window 338-343 opens at Tick 338.
