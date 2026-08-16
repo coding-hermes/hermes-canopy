@@ -1141,3 +1141,16 @@ tasks:
   status: complete
   created_at: '2026-08-12T13:55:59.862074+00:00'
   completed_at: '2026-08-12T13:57:41.812570+00:00'
+- id: GAP-034
+  title: 'Fix dead org refs: README clone URL + go.mod module path + imports -> coding-hermes'
+  criteria:
+  - "C1: grep -r totalwindupflightsystems across tracked CODE/DOCS/BUILD files returns\
+    \ zero (go.mod, README.md, *.go, *.md, *.yml, *.yaml, Makefile, Dockerfile \u2014\
+    \ excluding the generated .vfs/ hilo graph and task-record text). C2: go.mod module\
+    \ line = github.com/coding-hermes/hermes-canopy. C3: README Quick Start clone\
+    \ URL points to github.com/coding-hermes/hermes-canopy and curl -I on it returns\
+    \ 200. C4: go build ./... and go vet ./... pass. C5: go test -short -count=1 -p\
+    \ 1 ./... passes (PG up)."
+  status: complete
+  created_at: '2026-08-16T23:21:55.301308+00:00'
+  completed_at: '2026-08-16T23:39:18.027057+00:00'
