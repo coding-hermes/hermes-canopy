@@ -9193,3 +9193,21 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/338 contiguous pre-write (ns hermes-canopy, HTTP prefix read — ticks/330-339 all present); /ticks/339 (82e8d53c-9ddf-49d5-ba48-c06650a7a84d) written + verified via prefix read; /project/hermes-canopy/status written (0046e3df-cbcb-462d-97fa-6341c8b81d32 bare + dated-leaf a7f66f0f-b29d-43fd-bda1-a3206b35ee2e per T214 instance quirk; 201-confirmed — T177 rule: 201 + id = write confirmation).
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
+
+## Tick 340 (2026-08-16 ~17:15 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 338-343 satisfied at T338 on first tick; next 344-349 opens at T344). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 4.8s — run from frontend/; first attempt with --reporter=basic failed to LOAD the custom reporter module (ERR_LOAD_URL, CLI artifact not code), re-ran with default reporter clean) · go -short sweep PASS (`go test ./... -short -count=1 -timeout=300s`: exit 0, all 21 pkgs ok incl. handler 149.6s + db 98.5s + testutil 21.7s) · gitreins guard Tier 1 PASS (secrets/build/lint/tests; no staged files → no-op passes; task store 61/0/0 baseline) · gitleaks clean (0 leaks, 301 MB scanned in 15.9s) · CI last 6 green (T339 push 10:44Z success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · hilo 1927 edges / 309 files (informational, unchanged from T339) · off-by-one :8766 live stats 1113 problems / 1288 answers / 1288 verified, queue 6, hit_rate 1, coverage 1.157 (health probe: /api/v1/health is 404; /api/v1/stats is the liveness+stats endpoint — informational, no debug needed) · Go TODOs 5 (stub_adapters.go only, unchanged).
+
+**Baseline notes:** BUG-024 markers at post-de-stub baseline (code comments only: tree_handler.go, ShareDialog.tsx, share_presence_integration_test.go — no stubs). gofmt -l flags 10 files (all alignment-only struct-field diffs, last touched Aug 9-11, pre-existing; T339 reported 5 — count difference is scan scope, all non-blocking: guard go_lint OK + CI green). Docs 8/9 (GOVERNANCE.md never tracked — baseline). specs/AGENTS.md context injection = known DexDat false positive.
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL; tasks.jsonl canonical count, unchanged from T339). No event appended (IDLE maintenance — T157/T159 precedent; events.jsonl MAX(id)=221 unchanged, no tick-340 event).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT, model deepseek-v4-flash. Duplicate-fire check: latest_tick.id = this fire (SpawnedAt 2026-08-16T12:07:45-05:00), no `## Tick 340` header pre-commit, storm-watch clean — origin/master..HEAD=0.
+
+**Stack:** canopy-pg :5437 accepting · canopyd :8091 HTTP 200 (left up from T338 E2E window, untouched per maintenance discipline — T334 precedent) · vite :5173 HTTP 200. No orphaned vite drift.
+
+**DuckBrain:** /ticks/340 (ed2dc395-66ee-4954-bd3e-923f465f2cf4) + /project/hermes-canopy/status (f46c45f2-df60-4178-b065-cc3a9f67031d) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), 201-confirmed (T177 rule: 201 + id = write confirmation). T339 read-back verified via prefix GET earlier this tick.
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
