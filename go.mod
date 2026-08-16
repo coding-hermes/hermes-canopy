@@ -1,4 +1,4 @@
-module github.com/totalwindupflightsystems/hermes-canopy
+module github.com/coding-hermes/hermes-canopy
 
 go 1.25.0
 

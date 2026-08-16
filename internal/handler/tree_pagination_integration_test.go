@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // TestPAG002_TotalIsRealCount verifies that pagination.total reflects the

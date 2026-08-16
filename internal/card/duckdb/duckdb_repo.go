@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/card"
+	"github.com/coding-hermes/hermes-canopy/internal/card"
 )
 
 // CardRepo implements card.CardRepository backed by an in-process DuckDB database.

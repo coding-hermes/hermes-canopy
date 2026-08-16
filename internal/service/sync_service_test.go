@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // --- SnapshotRepo stubs for sync tests ---------------------------------------

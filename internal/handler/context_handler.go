@@ -13,8 +13,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/context"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/context"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 // ContextHandler serves the context compilation endpoint.

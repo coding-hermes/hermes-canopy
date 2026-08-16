@@ -14,7 +14,7 @@ PostgreSQL 16+
 Node.js 22+ (for frontend development)
 
 # Clone and build
-git clone https://github.com/totalwindupflightsystems/hermes-canopy.git
+git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 make build
 

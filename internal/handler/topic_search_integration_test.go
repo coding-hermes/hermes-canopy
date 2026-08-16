@@ -20,10 +20,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/search"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // --- Test server for search endpoints -------------------------------------

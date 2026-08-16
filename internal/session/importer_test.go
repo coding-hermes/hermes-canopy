@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver for the fixture DB
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 var defaultOwner = uuid.MustParse("00000000-0000-0000-0000-000000000001")

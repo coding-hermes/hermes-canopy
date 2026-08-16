@@ -17,8 +17,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/card"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/card"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // Compiler assembles budgeted context for a model call.

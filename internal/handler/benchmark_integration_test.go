@@ -15,9 +15,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------

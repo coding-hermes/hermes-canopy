@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // TreeDelta represents the difference between two tree snapshots.

@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // --- Error sentinels -------------------------------------------------------

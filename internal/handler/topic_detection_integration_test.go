@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // --- TM-02 test server helper ---

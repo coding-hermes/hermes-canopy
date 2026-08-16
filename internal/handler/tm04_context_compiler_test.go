@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // Scenario 16: Cache hit — GetReferencedContext twice; second read bumps hit_count.

@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // --- workspaceChannelRegistry: in-memory channel registry (SPEC-023 §5) -----

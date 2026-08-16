@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/transport"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/transport"
 )
 
 // ---------------------------------------------------------------------------

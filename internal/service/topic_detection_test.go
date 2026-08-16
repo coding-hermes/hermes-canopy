@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // makeNode is a test helper that creates a db.Node with the given content.

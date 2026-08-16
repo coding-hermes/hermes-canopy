@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // SSEAdapter implements TransportAdapter over HTTP/2 Server-Sent Events.

@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/reference"
 )
 
 // Ensure PGReferenceRepo satisfies the interface.

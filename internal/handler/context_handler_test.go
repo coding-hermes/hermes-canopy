@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	ctxpkg "github.com/totalwindupflightsystems/hermes-canopy/internal/context"
+	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 )
 
 // stubCompiler implements context.Compiler for handler tests.

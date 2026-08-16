@@ -11,11 +11,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/sync"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------

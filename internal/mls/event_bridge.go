@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // Compile-time assertion that MLSEventBridge satisfies MLSService.

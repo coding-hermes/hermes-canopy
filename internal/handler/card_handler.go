@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 // CardHandler wires the card CRUD HTTP routes to the CardService interface.

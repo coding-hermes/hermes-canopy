@@ -80,7 +80,7 @@ Download the binary for your platform from the releases page, make it executable
 
 ```bash
 # Example — adjust arch/os as needed
-curl -L -o canopyd https://github.com/totalwindupflightsystems/hermes-canopy/releases/latest/download/canopyd_linux_amd64
+curl -L -o canopyd https://github.com/coding-hermes/hermes-canopy/releases/latest/download/canopyd_linux_amd64
 chmod +x canopyd
 sudo mv canopyd /usr/local/bin/
 
@@ -93,7 +93,7 @@ canopyd -version
 The repository includes a `docker-compose.yml` that runs `canopyd` + PostgreSQL together:
 
 ```bash
-git clone https://github.com/totalwindupflightsystems/hermes-canopy.git
+git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 
 # Build and start (production-ready)
@@ -114,7 +114,7 @@ This starts:
 ### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/totalwindupflightsystems/hermes-canopy.git
+git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 
 # Build the binary

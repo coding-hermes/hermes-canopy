@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/google/uuid"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 )
 
 func TestComputeDelta_NilToSnapshot(t *testing.T) {

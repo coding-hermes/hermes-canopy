@@ -1,5 +1,5 @@
 // Pool + migration runner. The migrations directory ships as
-// github.com/totalwindupflightsystems/hermes-canopy/migrations, which
+// github.com/coding-hermes/hermes-canopy/migrations, which
 // embed.FS's the SQL files at compile time (see migrations/embed.go).
 // No sidecar migrations folder is required at runtime.
 
@@ -20,7 +20,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for migrate
 
 	// Imported for its side-effect of publishing an embed.FS via FS().
-	"github.com/totalwindupflightsystems/hermes-canopy/migrations"
+	"github.com/coding-hermes/hermes-canopy/migrations"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

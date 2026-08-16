@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/coding-hermes/hermes-canopy/internal/sync"
 )
 
 // SyncHandler wires the sync HTTP routes to the SyncEngine interface.

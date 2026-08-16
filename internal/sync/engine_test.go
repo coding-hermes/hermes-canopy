@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	enginesync "github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	enginesync "github.com/coding-hermes/hermes-canopy/internal/sync"
 )
 
 // fakeEventRepo records AppendEvent calls and returns incrementing sequence numbers.

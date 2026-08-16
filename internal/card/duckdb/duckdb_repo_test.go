@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/card"
+	"github.com/coding-hermes/hermes-canopy/internal/card"
 )
 
 // newTestStore opens an in-memory DuckDB database for testing.

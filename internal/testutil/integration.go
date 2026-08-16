@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 )
 
 // ensureCanopyRole creates the canopy_app role if it doesn't exist.

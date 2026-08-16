@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 // GraphHandler wires the graph-level query HTTP routes to the GraphService

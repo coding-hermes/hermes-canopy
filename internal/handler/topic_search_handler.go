@@ -19,8 +19,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/search"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // TopicSearchHandler wires the search/inject HTTP routes.

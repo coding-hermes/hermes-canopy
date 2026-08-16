@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/google/uuid"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
 )
 
 // Stubs for node/edge repos are defined in tree_service_test.go (shared).

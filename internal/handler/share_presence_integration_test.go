@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------

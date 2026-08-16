@@ -80,11 +80,11 @@ import (
     "github.com/jackc/pgx/v5/pgxpool"
     "github.com/go-chi/chi/v5"
     
-    "github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-    "github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-    "github.com/totalwindupflightsystems/hermes-canopy/internal/testutil"
-    "github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-    "github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+    "github.com/coding-hermes/hermes-canopy/internal/db"
+    "github.com/coding-hermes/hermes-canopy/internal/service"
+    "github.com/coding-hermes/hermes-canopy/internal/testutil"
+    "github.com/coding-hermes/hermes-canopy/internal/sse"
+    "github.com/coding-hermes/hermes-canopy/internal/sync"
 )
 
 // TestBE12_TreeCRUD tests full tree CRUD lifecycle via HTTP API.

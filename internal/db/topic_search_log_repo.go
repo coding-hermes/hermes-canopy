@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/search"
+	"github.com/coding-hermes/hermes-canopy/internal/search"
 )
 
 // Ensure PGTopicSearchLogRepo satisfies the interface.

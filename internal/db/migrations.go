@@ -5,7 +5,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"github.com/totalwindupflightsystems/hermes-canopy"
+	"github.com/coding-hermes/hermes-canopy"
 )
 
 // MigrateUp runs all pending migrations against the given database URL.

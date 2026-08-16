@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/reference"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sse"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/sync"
+	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
+	"github.com/coding-hermes/hermes-canopy/internal/sync"
 )
 
 // NodeHandler wires the node CRUD HTTP routes to the NodeService interface

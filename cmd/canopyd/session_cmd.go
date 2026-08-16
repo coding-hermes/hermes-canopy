@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/config"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/db"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/session"
+	"github.com/coding-hermes/hermes-canopy/internal/config"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/session"
 )
 
 // defaultOwnerID is the dev-user UUID used when CANOPY_OWNER_ID is unset.

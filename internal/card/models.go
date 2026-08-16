@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 // ── Enumerations ──────────────────────────────────────────────────────

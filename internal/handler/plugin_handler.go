@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/plugin"
-	"github.com/totalwindupflightsystems/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/plugin"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 // PluginHandler wires the plugin sandbox HTTP routes (GAP-002 §4.2) to the
