@@ -9176,3 +9176,20 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/337 contiguous pre-write (777d7115 via HTTP prefix recall, ns hermes-canopy); /ticks/338 (285c9f32-b9e9-496a-b464-c519c1fa31ae) + /project/hermes-canopy/status (4cd52cf2-70b3-41d7-ac73-ad563354c120) written pre-commit via HTTP API (MCP unavailable this session) and verified via JSONL grep (event/ + config/ partitions, T183 ordering).
 
 **Next tick:** maintenance (window satisfied); next E2E-001 window 344-349 opens at Tick 344.
+## Tick 339 (2026-08-16 ~10:45 UTC) — IDLE light-audit (maintenance)
+
+**Verdict: MAINTENANCE** — no E2E due (window 338-343 satisfied at T338 on first tick; next 344-349 opens at T344). No dispatch (18 pending = post-MVP P3 backlog deferred by design per AGENTS.md: FTR/PL/STACK/DPL). No status changes on the board.
+
+**Gates:** vitest 647/647 (33 files, 7.55s — run from frontend/) · go non-handler sweep PASS (`go test -count=1 -p 1` excl. /handler: exit 0, 18 pkgs ok incl. db 83.3s + plugin 35.3s on canopy-pg :5437) · gitreins guard Tier 1 PASS (secrets/build/lint/tests, test mode full) + 61 complete / 0 pending / 0 in_progress · gitleaks clean (0 leaks, 869 commits) · CI last 6 green (T338 push 31927078074 success) · gh issues 0 open · git fetch 0 new remote commits · origin/master..HEAD = 0 unpushed · hilo 1927 edges / 309 files (informational, unchanged) · off-by-one :8766 health ok (uptime 15h10m), live stats 1110 problems / 1285 answers / 1285 verified, queue 6, hit_rate 1 (no submit — routine maintenance) · Go TODOs 5 (stub_adapters.go only, unchanged).
+
+**Baseline notes:** BUG-024 FE stub markers 15 → 1 (yjsProvider de-stubbed by WIRE-001/WIRE-004 commits 9360fef/05df3de — only ShareDialog carries the informational WIRE-004/BUG-024 comment now). gofmt -l flags 5 files (alignment-only diffs, pre-existing since Aug 9-10 commits; guard go_lint OK + CI green — non-blocking, informational). Docs 8/9 (GOVERNANCE.md never tracked — baseline). specs/AGENTS.md context injection = known DexDat false positive (ls specs/ shows no AGENTS.md).
+
+**Board:** 151 complete / 18 pending (all P3 deferred FTR/PL/STACK/DPL; tasks.jsonl canonical count, unchanged from T338). No event appended (IDLE maintenance — T157/T159 precedent; events.jsonl MAX(id)=221 unchanged, no tick-339 event).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT, consecutive_failures=0, decay_rate=1. Duplicate-fire check: latest_tick.id = this fire (SpawnedAt 2026-08-16T05:38:30-05:00), no `## Tick 339` header pre-commit, storm-watch 0 duplicate running ticks (4 total running), origin/master..HEAD=0 — clean.
+
+**Stack:** canopy-pg :5437 healthy · canopyd :8091 RUNNING (PID 2354866) + vite :5173 (PID 2354916) — left up by the T338 E2E window, untouched per maintenance discipline (T334 precedent). No orphaned vite drift (:5175 instance gone — T338 worker killed stale servers).
+
+**DuckBrain:** /ticks/338 contiguous pre-write (ns hermes-canopy, HTTP prefix read — ticks/330-339 all present); /ticks/339 (82e8d53c-9ddf-49d5-ba48-c06650a7a84d) written + verified via prefix read; /project/hermes-canopy/status written (0046e3df-cbcb-462d-97fa-6341c8b81d32 bare + dated-leaf a7f66f0f-b29d-43fd-bda1-a3206b35ee2e per T214 instance quirk; 201-confirmed — T177 rule: 201 + id = write confirmation).
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
