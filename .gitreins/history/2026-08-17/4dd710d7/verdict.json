@@ -1,0 +1,57 @@
+{
+  "task_id": "GAP-035",
+  "task_title": "Sync .env.example with README Environment Variables table",
+  "task_criteria": [
+    "Every env var in README \u00a7Environment Variables appears in .env.example with matching default"
+  ],
+  "passed": true,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go",
+      "steps": [
+        {
+          "id": "guard",
+          "type": "script",
+          "passed": true,
+          "output": "Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go_tests\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ]
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Every env var in README \u00a7Environment Variables appears in .env.example with matching default: Verified all 18 env vars in README \u00a7Environment Variables (README.md lines 317-336) appear in .env.example with matching defaults. Commit 5a05fd2 added DB_SCHEMA=public, LOG_FORMAT=text, METRICS_ENABLED=false, CORS_ORIGIN=*, JWT_SECRET=dev-secret-change-me, CANOPY_DB_URL (commented/unset matching README '(unset)'), CONTEXT_MAX_ANCESTORS=50, CONTEXT_MAX_REFS=5, CONTEXT_DEFAULT_BUDGET=8000, PLUGIN_MAX_SIZE=1048576. Pre-existing vars (HTTP_ADDR=:8080, DB_HOST=localhost, DB_PORT=5432, DB_USER=canopy, DB_PASSWORD=canopy, DB_NAME=canopy, DB_SSLMODE=disable, LOG_LEVEL=info) all present with matching defaults. Working tree clean (git status empty for both files).\nAll 18 env vars from the README Environment Variables table are present in .env.example with matching defaults, verified via git show of both files.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Every env var in README \u00a7Environment Variables appears in .env.example with matching default: Verified all 18 env vars in README \u00a7Environment Variables (README.md lines 317-336) appear in .env.example with matching defaults. Commit 5a05fd2 added DB_SCHEMA=public, LOG_FORMAT=text, METRICS_ENABLED=false, CORS_ORIGIN=*, JWT_SECRET=dev-secret-change-me, CANOPY_DB_URL (commented/unset matching README '(unset)'), CONTEXT_MAX_ANCESTORS=50, CONTEXT_MAX_REFS=5, CONTEXT_DEFAULT_BUDGET=8000, P",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Every env var in README \u00a7Environment Variables appears in .env.example with matching default",
+                "status": "PASS",
+                "detail": "Verified all 18 env vars in README \u00a7Environment Variables (README.md lines 317-336) appear in .env.example with matching defaults. Commit 5a05fd2 added DB_SCHEMA=public, LOG_FORMAT=text, METRICS_ENABLED=false, CORS_ORIGIN=*, JWT_SECRET=dev-secret-change-me, CANOPY_DB_URL (commented/unset matching README '(unset)'), CONTEXT_MAX_ANCESTORS=50, CONTEXT_MAX_REFS=5, CONTEXT_DEFAULT_BUDGET=8000, PLUGIN_MAX_SIZE=1048576. Pre-existing vars (HTTP_ADDR=:8080, DB_HOST=localhost, DB_PORT=5432, DB_USER=canopy, DB_PASSWORD=canopy, DB_NAME=canopy, DB_SSLMODE=disable, LOG_LEVEL=info) all present with matching defaults. Working tree clean (git status empty for both files)."
+              }
+            ],
+            "summary": "All 18 env vars from the README Environment Variables table are present in .env.example with matching defaults, verified via git show of both files."
+          }
+        }
+      ]
+    }
+  },
+  "summary": "Judge Result: GAP-035\n\nStage tier1: PASS\n    \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Every env var in README \u00a7Environment Variables appears in .env.example with matching default: Verified all 18 env vars in README \u00a7Environment Variables (README.md lines 317-336) appear in .env.example with matching defaults. Commit 5a05fd2 added DB_SCHEMA=public, LOG_FORMAT=text, METRICS_ENABLED=false, CORS_ORIGIN=*, JWT_SECRET=dev-secret-change-me, CANOPY_DB_URL (commented/unset matching README '(unset)'), CONTEXT_MAX_ANCESTORS=50, CONTEXT_MAX_REFS=5, CONTEXT_DEFAULT_BUDGET=8000, PLUGIN_MAX_SIZE=1048576. Pre-existing vars (HTTP_ADDR=:8080, DB_HOST=localhost, DB_PORT=5432, DB_USER=canopy, DB_PASSWORD=canopy, DB_NAME=canopy, DB_SSLMODE=disable, LOG_LEVEL=info) all present with matching defaults. Working tree clean (git status empty for both files).\nAll 18 env vars from the README Environment Variables table are present in .env.example with matching defaults, verified via git show of both files.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-08-17T10:08:20.695726"
+}
