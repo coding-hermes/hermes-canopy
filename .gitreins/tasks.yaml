@@ -1168,5 +1168,6 @@ tasks:
   - tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl
     (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show
     complete; a pointer note names tasks.jsonl as canonical
-  status: in_progress
+  status: complete
   created_at: '2026-08-17T16:16:18.297149+00:00'
+  completed_at: '2026-08-17T16:17:38.040569+00:00'

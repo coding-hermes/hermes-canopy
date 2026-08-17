@@ -1,0 +1,57 @@
+{
+  "task_id": "GAP-036",
+  "task_title": "Board source-of-truth drift: reconcile tasks.md matrix with canonical tasks.jsonl",
+  "task_criteria": [
+    "tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show complete; a pointer note names tasks.jsonl as canonical"
+  ],
+  "passed": true,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go",
+      "steps": [
+        {
+          "id": "guard",
+          "type": "script",
+          "passed": true,
+          "output": "Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go_tests\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ]
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show complete; a pointer note names tasks.jsonl as canonical: Commit bd7c0c2 flipped VREG-003, INFRA-002, GAP-024 to \u2705 (complete) in .coding-hermes/tasks.md (lines 41-43), matching tasks.jsonl where all three have \"status\":\"complete\". Pointer note added at tasks.md line 37: 'Board source of truth: .coding-hermes/board/tasks.jsonl is canonical (AGENTS.md)... re-check tasks.jsonl for the authoritative open-task set.' Docs-only change; no test suite applicable (no test_command in .gitreins/config.yaml).\nThe tasks.md matrix was reconciled with the canonical tasks.jsonl: the three named stale rows (VREG-003, INFRA-002, GAP-024) now show complete in both files, and a pointer note establishes tasks.jsonl as the source of truth.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show complete; a pointer note names tasks.jsonl as canonical: Commit bd7c0c2 flipped VREG-003, INFRA-002, GAP-024 to \u2705 (complete) in .coding-hermes/tasks.md (lines 41-43), matching tasks.jsonl where all three have \"status\":\"complete\". Pointer note added at tasks.md line 37: 'Board source of truth: .coding-hermes/bo",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show complete; a pointer note names tasks.jsonl as canonical",
+                "status": "PASS",
+                "detail": "Commit bd7c0c2 flipped VREG-003, INFRA-002, GAP-024 to \u2705 (complete) in .coding-hermes/tasks.md (lines 41-43), matching tasks.jsonl where all three have \"status\":\"complete\". Pointer note added at tasks.md line 37: 'Board source of truth: .coding-hermes/board/tasks.jsonl is canonical (AGENTS.md)... re-check tasks.jsonl for the authoritative open-task set.' Docs-only change; no test suite applicable (no test_command in .gitreins/config.yaml)."
+              }
+            ],
+            "summary": "The tasks.md matrix was reconciled with the canonical tasks.jsonl: the three named stale rows (VREG-003, INFRA-002, GAP-024) now show complete in both files, and a pointer note establishes tasks.jsonl as the source of truth."
+          }
+        }
+      ]
+    }
+  },
+  "summary": "Judge Result: GAP-036\n\nStage tier1: PASS\n    \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show complete; a pointer note names tasks.jsonl as canonical: Commit bd7c0c2 flipped VREG-003, INFRA-002, GAP-024 to \u2705 (complete) in .coding-hermes/tasks.md (lines 41-43), matching tasks.jsonl where all three have \"status\":\"complete\". Pointer note added at tasks.md line 37: 'Board source of truth: .coding-hermes/board/tasks.jsonl is canonical (AGENTS.md)... re-check tasks.jsonl for the authoritative open-task set.' Docs-only change; no test suite applicable (no test_command in .gitreins/config.yaml).\nThe tasks.md matrix was reconciled with the canonical tasks.jsonl: the three named stale rows (VREG-003, INFRA-002, GAP-024) now show complete in both files, and a pointer note establishes tasks.jsonl as the source of truth.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-08-17T16:19:25.200987"
+}

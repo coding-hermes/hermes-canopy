@@ -9212,3 +9212,21 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/340 (ed2dc395-66ee-4954-bd3e-923f465f2cf4) + /project/hermes-canopy/status (f46c45f2-df60-4178-b065-cc3a9f67031d) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), 201-confirmed (T177 rule: 201 + id = write confirmation). T339 read-back verified via prefix GET earlier this tick.
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
+
+## Tick 343 (2026-08-17 ~16:20 UTC) — GAP-036 complete (board source-of-truth drift, foreman-direct)
+
+**Verdict: PRODUCTIVE** — GAP-036 (P2, cpx 2, docs-only) picked from 19 pending (18 P3 post-MVP deferred per AGENTS.md). No E2E due (window 338-343 satisfied at T338). Foreman-direct per tick rules (trivial one-file docs change).
+
+**Change (commit bd7c0c2):** reconciled .coding-hermes/tasks.md matrix with the canonical .coding-hermes/board/tasks.jsonl — flipped VREG-003 / INFRA-002 / GAP-024 from ⬜ to ✅ (all three complete in tasks.jsonl since T302-T304 era), and added a source-of-truth pointer under the Active Tasks header ("Board source of truth: tasks.jsonl is canonical (AGENTS.md); this matrix is a derived snapshot — reconciled at tick 343"). Scripted diff (63 matrix rows parsed) confirmed exactly 3 mismatches, all fixed; re-scan post-edit = 0 mismatches. GAP-036 row flipped to complete in tasks.jsonl (commit_hash bd7c0c2, guard PASS 4/4, judge PASS).
+
+**Gates:** gitreins guard Tier 1 PASS 4/4 (secrets/go_build/go_lint/go_tests — docs-only diff, "No supported source files found" informational note expected) · gitreins task complete GAP-036 judge PASS (tier1 PASS + tier2 PASS, verdict dir .gitreins/history/2026-08-17/9bb05f67, printed id 6e940586 ≠ dir hash — grep-located) · CI last 3 green (T342 board push 10:09Z success) · origin/master..HEAD = 0 verified post-push.
+
+**Board:** 153 complete / 18 pending (all P3 post-MVP deferred per AGENTS.md — GAP-036 closed this tick, 19→18). Events: 225 (task_completed GAP-036, direct append + board.db mirror per T323) + 226 (audit via append_board_event.py); both stores in lockstep max id 226. Parity baseline maintained (jsonl canonical; board.db benign cache).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT. Duplicate-fire check: no `## Tick 343` header pre-commit, no sibling workers (`ps` scan clean), HEAD was T342's commit pre-edit (T299 triple-check passed — patch-tool sibling warning was the known spurious class).
+
+**Stack:** canopy-pg :5437 accepting · canopyd :8091 HTTP 200 · vite :5173 HTTP 200 (all left up from T338 E2E window, untouched per maintenance discipline).
+
+**DuckBrain:** /ticks/343 (6d05c3d8-f35e-4431-b0fd-95c30ef04872) + /project/hermes-canopy/status (c4e536fa-c47a-430b-8870-cd4157c7549d) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), 201-confirmed.
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
