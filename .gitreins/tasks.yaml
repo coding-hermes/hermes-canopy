@@ -1162,3 +1162,11 @@ tasks:
   status: complete
   created_at: '2026-08-17T10:07:05.819087+00:00'
   completed_at: '2026-08-17T10:07:46.999688+00:00'
+- id: GAP-036
+  title: 'Board source-of-truth drift: reconcile tasks.md matrix with canonical tasks.jsonl'
+  criteria:
+  - tasks.md matrix status markers and open-task counts agree with .coding-hermes/board/tasks.jsonl
+    (the AGENTS.md-canonical store); stale rows (VREG-003, INFRA-002, GAP-024) show
+    complete; a pointer note names tasks.jsonl as canonical
+  status: in_progress
+  created_at: '2026-08-17T16:16:18.297149+00:00'
