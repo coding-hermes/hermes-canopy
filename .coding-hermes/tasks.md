@@ -9221,7 +9221,7 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 
 **Gates:** gitreins guard Tier 1 PASS 4/4 (secrets/go_build/go_lint/go_tests — docs-only diff, "No supported source files found" informational note expected) · gitreins task complete GAP-036 judge PASS (tier1 PASS + tier2 PASS, verdict dir .gitreins/history/2026-08-17/9bb05f67, printed id 6e940586 ≠ dir hash — grep-located) · CI last 3 green (T342 board push 10:09Z success) · origin/master..HEAD = 0 verified post-push.
 
-**Board:** 153 complete / 18 pending (all P3 post-MVP deferred per AGENTS.md — GAP-036 closed this tick, 19→18). Events: 225 (task_completed GAP-036, direct append + board.db mirror per T323) + 226 (audit via append_board_event.py); both stores in lockstep max id 226. Parity baseline maintained (jsonl canonical; board.db benign cache).
+**Board:** 154 complete / 18 pending (all P3 post-MVP deferred per AGENTS.md — GAP-036 closed this tick, 19→18). Events: 225 (task_completed GAP-036, direct append + board.db mirror per T323) + 226 (audit via append_board_event.py); both stores in lockstep max id 226. Parity baseline maintained (jsonl canonical; board.db benign cache).
 
 **Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT. Duplicate-fire check: no `## Tick 343` header pre-commit, no sibling workers (`ps` scan clean), HEAD was T342's commit pre-edit (T299 triple-check passed — patch-tool sibling warning was the known spurious class).
 
