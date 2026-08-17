@@ -9230,3 +9230,21 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/343 (6d05c3d8-f35e-4431-b0fd-95c30ef04872) + /project/hermes-canopy/status (c4e536fa-c47a-430b-8870-cd4157c7549d) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), 201-confirmed.
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 344-349 opens at Tick 344.
+
+## Tick 344 (2026-08-17 ~17:30 UTC) — E2E window 344-349 SATISFIED on first tick + idle maintenance
+
+**Verdict: E2E/IDLE** — no implementable board task (18 pending = all P3 post-MVP roadmap, FTR/PL/STACK/DPL, deferred per AGENTS.md). E2E-001 window 344-349 opens this tick → full battery run + light audit.
+
+**E2E battery (E2E-001): 49/49 PASS (52.71s, 9 files)** on the live persistent stack (canopyd :8091 pid 2354866 · vite :5173 pid 2354916 · canopy-pg :5437 healthy 3d, T338 convention — untouched, not rebuilt). Visual regression 4/4 (9.6s), zero golden drift. ⚠️ **Run-1 false-green caught:** first `npm run test:integration` "passed" 49/49 in 2.92s with every browser test skipped (`Dev server not running`) — root cause: scheduler session HOME=/tmp/dogfood-muster/home makes Playwright resolve its browser cache to a nonexistent path (`chromium_headless_shell-1234` missing → `isServerRunning()` false). Fix: `PLAYWRIGHT_BROWSERS_PATH=/home/kara/.cache/ms-playwright npm run test:integration` → real browser run. Detection rule: ~3s duration + skip warnings = NOT green. Post-debug submitted to Off-by-One (`playwright-browser-cache-scheduler-home-redirect`, sub_c202b8 queued) so future E2E ticks hit a cached answer. Report: e2e-output/tick344.md.
+
+**Gates:** gitreins guard Tier 1 PASS 4/4 (secrets/go_build/go_lint/go_tests) · vitest unit 647/647 (33 files, 4.1s) · gitreins task list 64 complete / 0 pending / 0 in_progress · CI last 6 completed/success · gh issues open 0 · gofmt -l 16 files (baseline, no drift) · origin/master..HEAD = 0 pre-tick · stack probe :8091/:5173/:5437 all LISTEN · worker scan clean (no sibling fire; scheduler latest_tick.id = this fire).
+
+**Board:** Event 227 appended (audit, id = MAX(jsonl)+1) + header bumped (ticks_total 344, last_commit 2a451fc pre-tick HEAD, cooldown_s 21600). No gitreins task created (idle — fleet rule). Housekeeping: dagger.db stray + frontend/playwright-report/ removed; `.gitreins/usage.jsonl` added to .gitignore (judge telemetry, was untracked noise). `.vfs/*` untouched (hilo — never commit).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=21600 file + API agree (08-15 operator pin), NO PUT. Duplicate-fire check: no `## Tick 344` header pre-commit, no sibling workers.
+
+**Stack:** canopy-pg :5437 accepting · canopyd :8091 HTTP 200 · vite :5173 HTTP 200 (left up per T338 between-window convention — do NOT pkill).
+
+**DuckBrain:** /ticks/344 (40552821-afa6-48f7-9b37-01fb2bae0ced) + /project/hermes-canopy/status (d2095c5a-8d11-47cf-a106-ac52ba0e89ca) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), id-confirmed.
+
+**Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 350-355 opens at Tick 350.

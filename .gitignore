@@ -44,3 +44,6 @@ Thumbs.db
 .coding-hermes/e2e-test.py
 .coding-hermes/e2e-deep.py
 .coding-hermes/e2e-screenshots/
+
+# GitReins judge token telemetry (per-run usage logs)
+.gitreins/usage.jsonl
