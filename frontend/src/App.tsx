@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, Routes, Route, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Trees,
@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Bot,
   GitPullRequest,
+  X,
 } from 'lucide-react'
 import TreeView from './components/TreeView'
 import ApprovalPanel from './components/ApprovalPanel'
@@ -75,7 +76,25 @@ function Dashboard() {
 
 function Layout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Mobile drawer: close on navigation so every route change lands on the
+  // page, never on an open overlay (Bane 08-18: sidebar close in all modes).
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
+
+  // Mobile drawer: ESC closes it (matches the help overlay convention).
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
 
   // Ctrl/Cmd+K toggles the topic search panel (TM-03). Kept keyboard-only
   // so the default layout stays pixel-identical for the UI-09 goldens.
@@ -110,13 +129,29 @@ function Layout() {
         Skip to main content
       </a>
 
-      {/* Sidebar — single rail: nav buttons, divider, topics section (ChatGPT-style) */}
+      {/* Mobile drawer backdrop — click to close (Bane 08-18) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+          data-testid="sidebar-backdrop"
+        />
+      )}
+
+      {/* Sidebar — single rail: nav buttons, divider, topics section (ChatGPT-style).
+          Desktop: static flex child. Mobile: slide-in drawer (hidden by default,
+          hamburger in AppHeader opens it, X / backdrop / ESC / route-change close it). */}
       <aside
-        className="w-72 shrink-0 bg-surface-panel border-r border-line-subtle flex flex-col"
+        className={`w-72 shrink-0 bg-surface-panel border-r border-line-subtle flex flex-col
+          fixed inset-y-0 left-0 z-50 transform transition-transform duration-200
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:static md:z-auto md:translate-x-0`}
         role="navigation"
         aria-label="Main navigation"
+        data-testid="sidebar"
       >
-        <div className="p-4 border-b border-line-subtle">
+        <div className="p-4 border-b border-line-subtle flex items-center justify-between">
           <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-content-primary">
             <span
               aria-hidden="true"
@@ -126,6 +161,16 @@ function Layout() {
             </span>
             Canopy
           </span>
+          {/* Mobile-only close button (Bane 08-18: close must exist in every UI mode) */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-1.5 rounded-md text-content-muted hover:bg-surface-hover hover:text-content-primary transition-colors"
+            aria-label="Close navigation"
+            data-testid="sidebar-close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
         <nav className="p-3 space-y-1" aria-label="Primary navigation">
           {NAV_ITEMS.map(({ to, label, ariaLabel, icon: Icon, end }) => (
@@ -160,7 +205,7 @@ function Layout() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header — context title, view selector, status (UI-03) */}
-        <AppHeader />
+        <AppHeader onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Content */}
         <main id="main-content" className="flex-1 overflow-auto" role="main">

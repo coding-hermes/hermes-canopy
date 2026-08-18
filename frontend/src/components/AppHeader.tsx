@@ -30,7 +30,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
-import { Network, List, GitMerge, type LucideIcon } from 'lucide-react';
+import { Menu, Network, List, GitMerge, type LucideIcon } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import type { TopicSummary } from '../types/topic';
 import { ACTIVE_TREE_STORAGE_KEY, readStoredTreeId } from '../lib/activeTree';
@@ -129,7 +129,7 @@ function ViewSelector({
 
 // ─── Header ────────────────────────────────────────────────────────────
 
-export default function AppHeader() {
+export default function AppHeader({ onMenuClick }: { onMenuClick?: () => void } = {}) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -248,6 +248,17 @@ export default function AppHeader() {
       className="flex h-16 shrink-0 items-center gap-4 border-b border-line-subtle bg-surface-panel/80 px-4 backdrop-blur-md sm:px-6"
       role="banner"
     >
+      {/* Mobile-only hamburger — opens the sidebar drawer (Bane 08-18) */}
+      <button
+        type="button"
+        onClick={onMenuClick}
+        className="md:hidden -ml-1 p-1.5 rounded-md text-content-muted hover:bg-surface-hover hover:text-content-primary transition-colors"
+        aria-label="Open navigation"
+        data-testid="sidebar-open"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       {/* Context — title + count badge, subtitle beneath */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
