@@ -52,6 +52,7 @@ export interface NodeTreeRowProps {
   topicTitles?: ReadonlyMap<string, string>;
   onEdit: () => void;
   onDelete: () => void;
+  onBranch: () => void;
   onOpenTopic?: (topicId: string | null, slug: string) => void;
 }
 
@@ -125,6 +126,7 @@ function NodeTreeRowComponent({
   topicTitles,
   onEdit,
   onDelete,
+  onBranch,
   onOpenTopic,
 }: NodeTreeRowProps) {
   const { node, depth } = row;
@@ -196,6 +198,7 @@ function NodeTreeRowComponent({
           treeId={node.treeId}
           onEdit={onEdit}
           onDelete={onDelete}
+          onBranch={onBranch}
           onOpenTopic={onOpenTopic}
         />
       </div>

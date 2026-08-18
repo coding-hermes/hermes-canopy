@@ -40,6 +40,7 @@ import {
   Trash2,
   MessageSquare,
   GitMerge,
+  GitBranch,
   FileText,
   Hash,
 } from 'lucide-react';
@@ -68,6 +69,8 @@ export interface NodeCardProps {
   treeId?: string;
   onEdit: () => void;
   onDelete: () => void;
+  /** Branch (fork) this node — GAP-043 affordance for the fork route. */
+  onBranch: () => void;
   /** Opens the node's topic. Omit to render the pill as static. */
   onOpenTopic?: (topicId: string | null, slug: string) => void;
 }
@@ -96,10 +99,12 @@ function OverflowMenu({
   label,
   onEdit,
   onDelete,
+  onBranch,
 }: {
   label: string;
   onEdit: () => void;
   onDelete: () => void;
+  onBranch: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -217,6 +222,16 @@ function OverflowMenu({
           <button
             type="button"
             role="menuitem"
+            onClick={() => run(onBranch)}
+            data-testid="node-card-menu-branch"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-content-secondary transition-colors hover:bg-surface-hover hover:text-content-primary"
+          >
+            <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+            Branch
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             onClick={() => run(onDelete)}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-status-danger transition-colors hover:bg-rose-500/10"
           >
@@ -280,6 +295,7 @@ function NodeCardComponent({
   treeId,
   onEdit,
   onDelete,
+  onBranch,
   onOpenTopic,
 }: NodeCardProps) {
   const isAgent = node.nodeType === 'synthesis' || node.nodeType === 'system';
@@ -350,6 +366,7 @@ function NodeCardComponent({
           label={`${meta.typeLabel} by ${avatar.name}`}
           onEdit={onEdit}
           onDelete={onDelete}
+          onBranch={onBranch}
         />
       </div>
 

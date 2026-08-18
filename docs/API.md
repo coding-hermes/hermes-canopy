@@ -288,6 +288,11 @@ POST /api/v1/nodes/nodes/{node_id}/fork
 **Response (201):** `{ "node": {...}, "edge": {...} }` — creates a new branch
 from the source node.
 
+**Leaf rule:** the source node must already have at least one child — forking a
+leaf returns `400 VALIDATION_ERROR` ("fork requires parent with at least one
+child"), since a leaf fork would be indistinguishable from a reply
+(SPEC-API-03 §7.3).
+
 ---
 
 ## Edges

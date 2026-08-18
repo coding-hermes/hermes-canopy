@@ -15,13 +15,14 @@ import {
   Hash,
   MessageSquare,
   GitMerge,
+  GitBranch,
   FileText,
   ChevronDown,
   Search,
   X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiGet, apiPatch, apiDelete } from '../lib/api';
+import { apiGet, apiPatch, apiPost, apiDelete } from '../lib/api';
 import { readStoredTreeId } from '../lib/activeTree';
 import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
 import { BulkActionBar } from '../components/BulkActionBar';
@@ -194,6 +195,152 @@ function EditNodeDialog({
   );
 }
 
+// ─── Branch Node Dialog (GAP-043) ──────────────────────────────────────
+
+/**
+ * Branch-from-message affordance for the MVP promise 'Branch from any
+ * message'. Posts to the tree-scoped fork route
+ * (POST /trees/{tree_id}/nodes/{node_id}/fork).
+ *
+ * Forking a LEAF is deliberately rejected by the service with a 400
+ * VALIDATION_ERROR ('fork requires parent with at least one child' —
+ * SPEC-API-03 §7.3: a leaf fork is indistinguishable from a reply). The
+ * guard is kept; this dialog surfaces the rule as guidance instead of
+ * hiding it behind the raw API text.
+ */
+function BranchNodeDialog({
+  node,
+  treeId,
+  onClose,
+  onBranched,
+}: {
+  node: NodeDetail;
+  treeId: string;
+  onClose: () => void;
+  onBranched: () => void;
+}) {
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Escape closes (the overflow menu's own Escape handling already
+  // restored focus before this dialog existed).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [onClose]);
+
+  const branchLabel = `${nodeTypeLabel(node.nodeType)} ${node.id.slice(0, 8)}`;
+
+  const handleBranch = async () => {
+    if (!content.trim()) {
+      setError('Content cannot be empty');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await apiPost(`/trees/${treeId}/nodes/${node.id}/fork`, {
+        content: content.trim(),
+        content_format: 'markdown',
+        node_type: 'message',
+      });
+      onBranched();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to branch node';
+      // The service rejects leaf forks on purpose (SPEC-API-03 §7.3) —
+      // translate that rule into actionable guidance.
+      setError(
+        msg.includes('at least one child')
+          ? 'Branching needs at least one reply on this message — add a reply first, then branch.'
+          : msg,
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Branch from ${branchLabel}`}
+    >
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative glass-raised rounded-xl w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle">
+          <h2 className="flex items-center gap-2 text-sm font-medium text-content-primary">
+            <GitBranch className="w-4 h-4" aria-hidden="true" />
+            Branch Node
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-hover"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {error && (
+            <div
+              role="alert"
+              data-testid="branch-error"
+              className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs"
+            >
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-xs text-content-muted">
+            {nodeTypeIcon(node.nodeType)}
+            <span>{nodeTypeLabel(node.nodeType)}</span>
+            <span>·</span>
+            <span className="font-mono">{node.id.slice(0, 8)}</span>
+            <span>·</span>
+            <span>Depth {node.depth}</span>
+          </div>
+          <label htmlFor="branch-content" className="block text-xs text-content-muted">
+            Branch from {branchLabel}
+          </label>
+          <textarea
+            id="branch-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={5}
+            autoFocus
+            className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
+            placeholder="New branch content..."
+          />
+        </div>
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleBranch}
+            disabled={loading}
+            data-testid="branch-submit"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Branching...' : 'Branch'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────
 
 export default function NodesPage() {
@@ -217,6 +364,8 @@ export default function NodesPage() {
   // Edit/delete state
   const [editNode, setEditNode] = useState<NodeDetail | null>(null);
   const [deleteNodeId, setDeleteNodeId] = useState<string | null>(null);
+  // Branch (fork) state — GAP-043
+  const [branchNode, setBranchNode] = useState<NodeDetail | null>(null);
 
   // Bulk selection (UI-08) — ids, so a re-render or refetch cannot strand
   // a stale node object in the selection. Pruned whenever the list moves.
@@ -324,6 +473,16 @@ export default function NodesPage() {
     setNodes((prev) => prev.map((n) => (n.id === updated.id ? { ...n, content: updated.content } : n)));
     setEditNode(null);
   };
+
+  /**
+   * Post-fork refresh (GAP-043). The fork route returns the new node +
+   * edge; the list endpoint is refetched so the new branch appears in the
+   * hierarchy — same refresh the page uses after any node mutation.
+   */
+  const handleBranched = useCallback(() => {
+    setBranchNode(null);
+    if (selectedTreeId) void fetchNodes(selectedTreeId);
+  }, [selectedTreeId, fetchNodes]);
 
   /*
    * Hierarchy (UI-08). `parentId` is on every row of the list payload, so
@@ -654,6 +813,7 @@ export default function NodesPage() {
                 topicTitles={topicTitles}
                 onEdit={() => setEditNode(row.node as NodeDetail)}
                 onDelete={() => setDeleteNodeId(row.id)}
+                onBranch={() => setBranchNode(row.node as NodeDetail)}
                 onOpenTopic={openTopic}
               />
             ))}
@@ -688,6 +848,16 @@ export default function NodesPage() {
           node={editNode}
           onClose={() => setEditNode(null)}
           onSaved={handleNodeSaved}
+        />
+      )}
+
+      {/* Branch dialog (GAP-043) */}
+      {branchNode && selectedTreeId && (
+        <BranchNodeDialog
+          node={branchNode}
+          treeId={selectedTreeId}
+          onClose={() => setBranchNode(null)}
+          onBranched={handleBranched}
         />
       )}
 

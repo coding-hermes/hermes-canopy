@@ -352,7 +352,11 @@ curl -s "$BASE/api/v1/graph/trees/$TREE_ID/subtree/$ROOT_ID" -H "$AUTH" | jq .
 ### Fork a Node
 
 Forking creates an alternative branch from a node that already has at least one
-child. In this walkthrough the root node (ROOT_ID) has the child node created
+child. Forking a leaf (a message with no replies yet) is rejected with a
+`400 VALIDATION_ERROR` — "fork requires parent with at least one child" —
+because a leaf fork would be indistinguishable from a reply (SPEC-API-03 §7.3);
+the UI surfaces this rule when you try to branch a message with no replies.
+In this walkthrough the root node (ROOT_ID) has the child node created
 above, so fork from the root:
 
 ```bash
