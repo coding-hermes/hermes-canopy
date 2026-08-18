@@ -1209,3 +1209,11 @@ tasks:
   status: complete
   created_at: '2026-08-18T10:10:39.014141+00:00'
   completed_at: '2026-08-18T10:36:05.832585+00:00'
+- id: GAP-043
+  title: 'UI fork/branch affordance: Branch action in node overflow menu wired to
+    tree-scoped fork route + leaf-fork rule documented/relaxed'
+  criteria:
+  - NodeCard overflow menu has a Branch action that creates a fork via POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork;
+    branch content composer works; leaf-fork rule documented (or relaxed); tests green
+  status: in_progress
+  created_at: '2026-08-18T12:08:04.465620+00:00'
