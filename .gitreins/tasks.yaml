@@ -1225,5 +1225,6 @@ tasks:
     with tree connectors; each row shows a content snippet (not just node type); row
     labels are unique (collision-free short IDs or full UUIDs); unit tests cover the
     formatting; go build + go test ./cmd/canopyd/... pass'
-  status: in_progress
+  status: complete
   created_at: '2026-08-18T13:43:08.537400+00:00'
+  completed_at: '2026-08-18T13:58:46.888250+00:00'
