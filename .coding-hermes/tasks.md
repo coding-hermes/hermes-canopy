@@ -9329,3 +9329,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/352 + /project/hermes-canopy/status written pre-commit via HTTP :3000.
 
 **Next tick:** GAP-038 (P2 — tasks.md matrix open-row markers + source-of-truth reconciliation) is the top open P2; then 18-row P3 backlog (FTR/PL/STACK/DPL-05) deferred.
+
+## Tick 353 (2026-08-18 ~12:5x UTC) — GAP-038 P2 closed (tasks.md matrix open-row markers, foreman-direct)
+
+**Task:** GAP-038 (P2) — tasks.md matrix regression (GAP-036 'all sources agree' criterion): 18 open rows (FTR-01..07, PL-01..06, STACK-01..04, DPL-05) rendered with NO status marker, so tasks.md open count (marker-parser saw 1 — a false-positive `| 🔴` row in the model-selection table) disagreed with canonical tasks.jsonl (19 pending incl. GAP-038).
+
+**Approach:** foreman-direct — doc-only single-file change (trivial one-file exception, no worker). Off-by-one discover queried (class `tasks-md-matrix-drift`) → no cached answer (consistency fix, not a debug problem; GAP-036 pattern documented in-repo).
+
+**Fix shape:** (1) Active Tasks matrix gained a "Post-MVP Backlog (deferred by design — AGENTS.md)" section — all 18 rows with ⬜ prefix markers (matrix convention, reconcile-script-parseable); (2) Phase 11 spec-audit tables: FTR/PL tables gained a Status column (🔴 not-started per the section legend); STACK/DPL already carried 🔴; (3) TM-02/03/04 flipped 🔴→✅ (complete in tasks.jsonl: bb834f0/451fa4d/2b9d9d5 — no longer inflate the open count); (4) matrix pointer line updated to "reconciled with tasks.jsonl at tick 353".
+
+**Verification (foreman-independent):** reconcile_tasks_md_matrix.py → 0 mismatch(es), exit 0. Marker census: `^| ⬜` rows = 18 == tasks.jsonl pending (18 post-completion) == Phase 11 🔴 rows (18). All artifacts (tasks.md matrix, tasks.jsonl, Phase 11 tables) report open count 18.
+
+**Judge:** gitreins task complete GAP-038 → **PASS** (tier1 + tier2); verdict .gitreins/history/2026-08-18/2e063b40 (verdict.json passed:true + summary.md; CLI printed 2ad3c1b6 — hash-mismatch pitfall), folded with board files in one commit.
+
+**Gates/CI:** guard PASS 4/4 full mode (doc-only — "No supported source files" informational) · gh run list last 3 green at tick start (T352 board + GAP-039 fix + T352 dispatch); doc commit 7847585 CI run verified post-push · gofmt baseline untouched (no Go changes) · stack :5173/:5437/:8091 up (T338 convention, untouched; no battery this tick — E2E-001 window 350-355, battery still owed per 350-351 PM-sweep gap) · worker scan clean (no worker this tick).
+
+**Board:** tasks.jsonl GAP-038 → complete (commit 7847585, guard pass, judge pass, foreman_note verdict dir); events.jsonl 256 (task_completed GAP-038) + 257 (audit via append_board_task_completed.py); header bumped ticks_total 353, last_commit 7847585 (pre-board HEAD).
+
+**DuckBrain:** /ticks/353 (1607707e-ba03-42fa-a4f9-7e5604006b61) + /project/hermes-canopy/status (def4e0ea-2bc2-4e45-bece-581c5f3f08b8) written pre-commit via HTTP :3000, id-confirmed.
+
+**Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — discovery sweep or E2E-001 window battery (350-355) candidate; matrix ⬜ count stays the drift check.

@@ -1248,3 +1248,12 @@ tasks:
   status: complete
   created_at: '2026-08-18T16:32:43.682568+00:00'
   completed_at: '2026-08-18T16:36:51.859063+00:00'
+- id: GAP-038
+  title: 'tasks.md matrix regression: mark 18 open rows with deferred/pending markers'
+  criteria:
+  - 'PASS: tasks.md status markers match tasks.jsonl statuses for all 18 open rows
+    (FTR-01..07, PL-01..06, STACK-01..04, DPL-05); all artifacts report the same open
+    count'
+  status: complete
+  created_at: '2026-08-18T17:56:39.867162+00:00'
+  completed_at: '2026-08-18T17:58:25.039875+00:00'
