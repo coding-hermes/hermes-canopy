@@ -156,9 +156,10 @@ func pgReachable() bool {
 // Under -short, additionally skip when PostgreSQL is not reachable: the guard
 // does a fast TCP probe (probeTimeout) of the admin DB host:port and skips if
 // the connection cannot be established. This lets `make test-short` complete
-// standalone without a running PostgreSQL (GAP-011), while still running the
-// PG-backed tests when PG IS available — so CI's `go test ./... -short` (with
-// a PG service container) keeps full coverage. Full mode (no -short) is
+// standalone without a running PostgreSQL (GAP-011). NOTE (GAP-039): the pool
+// helpers (NewIntegrationPool / NewSharedIntegrationPool) skip outright in
+// -short mode before reaching this guard, so the reachability branch below
+// only applies to direct SkipIfNoDB callers. Full mode (no -short) is
 // unchanged: it never skips on reachability and still requires a live PG.
 func SkipIfNoDB(t *testing.T) {
 	t.Helper()
@@ -340,6 +341,13 @@ func sweepStaleTestDBs(ctx context.Context, adminURL string) {
 // Callers MUST close the pool when done: pool.Close().
 func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	// GAP-039: -short must never run the heavy PG-backed suites, even when
+	// PostgreSQL IS reachable (SkipIfNoDB alone only skips on unreachability,
+	// so short mode used to run internal/db + internal/handler anyway, ~4min).
+	// Skip before SkipIfNoDB so short mode doesn't even spend the probe.
+	if testing.Short() {
+		t.Skip("short mode: PG integration")
+	}
 	SkipIfNoDB(t)
 	ctx := context.Background()
 
@@ -450,6 +458,11 @@ var (
 // Callers MUST NOT close the returned pool; it is owned by the package.
 func NewSharedIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	// GAP-039: -short must never run the heavy PG-backed suites, even when
+	// PostgreSQL IS reachable (see NewIntegrationPool).
+	if testing.Short() {
+		t.Skip("short mode: PG integration")
+	}
 	SkipIfNoDB(t)
 	ctx := context.Background()
 
