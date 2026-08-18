@@ -1171,3 +1171,15 @@ tasks:
   status: complete
   created_at: '2026-08-17T16:16:18.297149+00:00'
   completed_at: '2026-08-17T16:17:38.040569+00:00'
+- id: GAP-040
+  title: 'Fix Create-Tree dialog: send nodeType with rootMessage; make Root Message
+    required'
+  criteria:
+  - POST /api/v1/trees from the Create-Tree dialog includes rootMessage{content (non-empty),
+    contentFormat:'markdown', nodeType:'message'}; dialog labels Root Message as required
+    (no title-only submit without content); unit test asserts the payload; Playwright
+    integration test creates a tree via the dialog with title+root message and the
+    tree appears in the list and opens in Tree View
+  status: complete
+  created_at: '2026-08-18T04:30:42.477502+00:00'
+  completed_at: '2026-08-18T04:36:19.255026+00:00'
