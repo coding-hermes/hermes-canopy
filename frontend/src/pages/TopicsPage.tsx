@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
 import type { TopicSummary, TreeSummary } from '../types/topic';
+import type { TreeDetail } from '../types/tree';
 import { readStoredTreeId, storeTreeId, notifyTopicsChanged } from '../lib/activeTree';
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -55,6 +56,9 @@ const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-amber-400',
 };
 
+/** The nil-UUID sentinel a treeless root serializes to (GAP-044). */
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+
 // ─── Create Topic Dialog ───────────────────────────────────────────────
 
 function CreateTopicDialog({
@@ -71,8 +75,45 @@ function CreateTopicDialog({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [rootNodeId, setRootNodeId] = useState('');
+  const [resolvingRoot, setResolvingRoot] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // GAP-044: auto-resolve the tree's root node so creating a topic never
+  // requires hand-typing a UUID. The tree-detail endpoint serializes
+  // RootNodeID as `root_node_id` (snake_case — internal/service
+  // TreeSummary `json:"root_node_id"`), which is the key that actually
+  // arrives on the wire; the POST body below stays camelCase per the
+  // topics API contract (docs/API.md §Topics).
+  useEffect(() => {
+    let cancelled = false;
+    setResolvingRoot(true);
+    setError(null);
+    void (async () => {
+      try {
+        const detail = await apiGet<TreeDetail>(`/trees/${treeId}`);
+        if (cancelled) return;
+        const resolved = detail.root_node_id;
+        if (!resolved || resolved === ZERO_UUID) {
+          setRootNodeId('');
+          setError('Could not resolve a root node for this tree.');
+        } else {
+          setRootNodeId(resolved);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setRootNodeId('');
+        setError(
+          `Could not resolve the root node: ${err instanceof Error ? err.message : 'tree detail unavailable'}`,
+        );
+      } finally {
+        if (!cancelled) setResolvingRoot(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [treeId]);
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -113,7 +154,10 @@ function CreateTopicDialog({
         </div>
         <div className="px-5 py-4 space-y-3">
           {error && (
-            <div className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs">
+            <div
+              data-testid="create-topic-error"
+              className="flex items-center gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs"
+            >
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               {error}
             </div>
@@ -131,13 +175,23 @@ function CreateTopicDialog({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-content-muted mb-1">Root Node ID *</label>
-            <input
-              value={rootNodeId}
-              onChange={(e) => setRootNodeId(e.target.value)}
-              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint font-mono focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
-              placeholder="UUID of the root node"
-            />
+            <label className="block text-xs text-content-muted mb-1">Root Node</label>
+            {resolvingRoot ? (
+              <div className="w-full bg-surface-input/60 border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-faint flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Resolving root node...
+              </div>
+            ) : (
+              <div
+                data-testid="create-topic-root-node"
+                className="w-full bg-surface-input/60 border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-muted font-mono break-all"
+              >
+                {rootNodeId || 'Unavailable'}
+              </div>
+            )}
+            <p className="text-[11px] text-content-faint mt-1">
+              Auto-resolved from the tree's root node — no UUID needed.
+            </p>
           </div>
           <div>
             <label className="block text-xs text-content-muted mb-1">Title *</label>
@@ -169,8 +223,9 @@ function CreateTopicDialog({
             Cancel
           </button>
           <button
+            data-testid="create-topic-submit"
             onClick={handleCreate}
-            disabled={loading || !title.trim() || !rootNodeId.trim()}
+            disabled={loading || resolvingRoot || !title.trim() || !rootNodeId.trim()}
             className="px-4 py-1.5 text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating...' : 'Create'}

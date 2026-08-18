@@ -368,6 +368,64 @@ curl -s -X POST "$BASE/api/v1/trees/$TREE_ID/nodes/$NODE_ID/fork" \
   -d '{"content":"Forked branch content","node_type":"message"}' | jq .
 ```
 
+### Topics
+
+Topics are named, searchable subgraphs anchored to a node within a tree,
+mounted at `/api/v1/topics` (see docs/API.md §Topics for the full contract).
+The request body uses camelCase keys; responses use snake_case.
+
+Create a topic (here anchored to the tree's root node from earlier steps):
+
+```bash
+curl -s -X POST "$BASE/api/v1/topics" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{\"treeId\":\"$TREE_ID\",\"rootNodeId\":\"$ROOT_ID\",\"title\":\"My First Topic\",\"description\":\"Optional description\"}" | jq .
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": "b4c5d6e7-...",
+  "tree_id": "a1b2c3d4-...",
+  "root_node_id": "e5f6a7b8-...",
+  "title": "My First Topic",
+  "description": "Optional description",
+  "slug": "my-first-topic",
+  "status": "active",
+  "node_count": 1,
+  "created_at": "2026-08-04T12:02:00Z"
+}
+```
+
+List topics (`tree_id` is required; `status`, `limit`, and `offset` are
+optional):
+
+```bash
+curl -s "$BASE/api/v1/topics?tree_id=$TREE_ID&status=active&limit=50&offset=0" -H "$AUTH" | jq .
+```
+
+Response (200 OK):
+
+```json
+{
+  "topics": [
+    {
+      "id": "b4c5d6e7-...",
+      "tree_id": "a1b2c3d4-...",
+      "root_node_id": "e5f6a7b8-...",
+      "title": "My First Topic",
+      "description": "Optional description",
+      "slug": "my-first-topic",
+      "status": "active",
+      "node_count": 1,
+      "created_at": "2026-08-04T12:02:00Z"
+    }
+  ]
+}
+```
+
 ## 7. Frontend Dev Workflow
 
 1. Start PostgreSQL: `docker compose up -d postgres`
