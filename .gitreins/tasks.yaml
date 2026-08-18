@@ -1235,5 +1235,6 @@ tasks:
     a UUID); INTEGRATION.md gains a topics block documenting POST /api/v1/topics (camelCase
     treeId/rootNodeId/title); frontend unit tests cover the auto-resolve; tsc clean
     + vitest green; go build + go test pass
-  status: in_progress
+  status: complete
   created_at: '2026-08-18T15:07:48.007300+00:00'
+  completed_at: '2026-08-18T15:20:53.500374+00:00'
