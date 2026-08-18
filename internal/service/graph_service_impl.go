@@ -56,6 +56,7 @@ func (s *GraphServiceImpl) GetSubtree(ctx context.Context, rootID uuid.UUID, max
 			ParentID:  n.ParentID,
 			Type:      n.NodeType,
 			CreatedAt: n.CreatedAt,
+			Content:   n.Content,
 		})
 	}
 	if !rootFound {

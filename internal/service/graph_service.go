@@ -18,6 +18,9 @@ type GraphNodeSummary struct {
 	Type      string     `json:"type"`
 	Depth     int        `json:"depth"`
 	CreatedAt time.Time  `json:"created_at"`
+	// Content carries the node body so CLI/UI consumers can render
+	// previews without per-node fetches (GAP-045). Omitted when empty.
+	Content string `json:"content,omitempty"`
 }
 
 // GraphEdgeSummary represents a directed edge between two graph nodes.

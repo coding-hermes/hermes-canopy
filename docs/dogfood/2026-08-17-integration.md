@@ -91,7 +91,7 @@ curl -s -X POST $BASE/api/v1/mcp -H "$AUTH" -H 'Content-Type: application/json' 
 ```bash
 export CANOPY_SERVER_URL=http://localhost:8091 CANOPY_TOKEN=$TOKEN
 ./bin/canopyd tree list        # ✅ table: ID / NAME / CREATED
-./bin/canopyd tree navigate <id>  # ✅ flat list of 8-char short IDs (no hierarchy)
+./bin/canopyd tree navigate <id>  # ✅ indented tree, content snippets, unique row labels (GAP-045)
 ./bin/canopyd tree create "X"  # ❌ ALWAYS fails (no rootMessage sent) — GAP-042
 ./bin/canopyd tree delete <id> # ✅
 ./bin/canopyd topic detect|proposals|config   # exists, undocumented

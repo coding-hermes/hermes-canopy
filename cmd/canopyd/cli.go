@@ -77,6 +77,7 @@ type graphNodeSummary struct {
 	ParentID *string `json:"parent_id,omitempty"`
 	Type     string  `json:"type"`
 	Depth    int     `json:"depth"`
+	Content  string  `json:"content,omitempty"`
 }
 
 type graphEdgeSummary struct {
@@ -447,11 +448,28 @@ func treeNavigateE(args []string) int {
 
 	fmt.Printf("Tree: %s\n\n", detail.Title)
 
+	for _, line := range renderTree(result.Nodes) {
+		fmt.Println(line)
+	}
+	return 0
+}
+
+// snippetMaxLen is the maximum length of a content preview in tree rows.
+const snippetMaxLen = 60
+
+// renderTree renders nodes as an indented tree: children are nested under
+// their parent with tree connectors, each row shows a unique short-ID
+// label, the node type, and a content snippet (GAP-045).
+func renderTree(nodes []graphNodeSummary) []string {
+	if len(nodes) == 0 {
+		return nil
+	}
+
 	// Build a child map for tree printing.
 	children := make(map[string][]graphNodeSummary)
-	nodeMap := make(map[string]graphNodeSummary)
-	for _, n := range result.Nodes {
-		nodeMap[n.ID] = n
+	ids := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		ids = append(ids, n.ID)
 		pid := ""
 		if n.ParentID != nil {
 			pid = *n.ParentID
@@ -466,24 +484,29 @@ func treeNavigateE(args []string) int {
 		})
 	}
 
+	labels := uniqueLabels(ids)
+
 	// Find root nodes (those with no parent or whose parent is not in the set).
 	rootNodes := children[""]
 	if len(rootNodes) == 0 {
 		// Fallback: find a node that is referenced as a source but not as
 		// a target, or just use the first node.
-		rootNodes = result.Nodes[:1]
+		rootNodes = nodes[:1]
 	}
 
+	var lines []string
 	for _, root := range rootNodes {
-		printNode(root, children, "", true)
+		lines = append(lines, renderNodeLines(root, children, labels, "", true, true)...)
 	}
-	return 0
+	return lines
 }
 
-// printNode recursively prints a node and its children as an indented tree.
-func printNode(node graphNodeSummary, children map[string][]graphNodeSummary, prefix string, isLast bool) {
+// renderNodeLines recursively renders a node and its children as indented
+// tree rows with connectors (├── / └── / │). isRoot suppresses the
+// connector and indentation for the top-level node.
+func renderNodeLines(node graphNodeSummary, children map[string][]graphNodeSummary, labels map[string]string, prefix string, isLast, isRoot bool) []string {
 	var connector string
-	if prefix == "" {
+	if isRoot {
 		connector = ""
 	} else if isLast {
 		connector = "└── "
@@ -495,21 +518,100 @@ func printNode(node graphNodeSummary, children map[string][]graphNodeSummary, pr
 	if label == "" {
 		label = "node"
 	}
-	fmt.Printf("%s%s[%s] %s\n", prefix, connector, shortID(node.ID), label)
+	rowLabel := labels[node.ID]
+	if rowLabel == "" {
+		rowLabel = shortID(node.ID)
+	}
+	line := fmt.Sprintf("%s%s[%s] %s", prefix, connector, rowLabel, label)
+	if snip := snippet(node.Content, snippetMaxLen); snip != "" {
+		line += " — " + snip
+	}
 
+	lines := []string{line}
 	kids := children[node.ID]
 	for i, child := range kids {
 		last := i == len(kids)-1
-		var childPrefix string
-		if prefix == "" {
-			childPrefix = ""
-		} else if isLast {
-			childPrefix = prefix + "    "
-		} else {
-			childPrefix = prefix + "│   "
+		childPrefix := prefix
+		if !isRoot {
+			if isLast {
+				childPrefix += "    "
+			} else {
+				childPrefix += "│   "
+			}
 		}
-		printNode(child, children, childPrefix, last)
+		lines = append(lines, renderNodeLines(child, children, labels, childPrefix, last, false)...)
 	}
+	return lines
+}
+
+// uniqueLabels computes a display label for every ID such that no two
+// labels collide: start with the 8-char short form and extend one
+// non-hyphen character at a time until every label is unique (full UUID
+// as last resort).
+func uniqueLabels(ids []string) map[string]string {
+	labels := make(map[string]string, len(ids))
+	for _, id := range ids {
+		labels[id] = shortID(id)
+	}
+	for {
+		groups := make(map[string][]string)
+		for _, id := range ids {
+			groups[labels[id]] = append(groups[labels[id]], id)
+		}
+		extended := false
+		for _, group := range groups {
+			if len(group) < 2 {
+				continue
+			}
+			for _, id := range group {
+				next := extendLabel(id, labels[id])
+				if next != labels[id] {
+					labels[id] = next
+					extended = true
+				}
+			}
+		}
+		if !extended {
+			break
+		}
+	}
+	return labels
+}
+
+// extendLabel returns label extended by one non-hyphen character from id
+// (UUID separators are skipped so labels stay compact hex), or label
+// unchanged when it already covers every non-hyphen character of id.
+func extendLabel(id, label string) string {
+	if len(label) >= len(id) {
+		return label
+	}
+	// Rebuild the label from id's non-hyphen characters, taking one more
+	// than label currently has.
+	var sb strings.Builder
+	for _, c := range id {
+		if c == '-' {
+			continue
+		}
+		sb.WriteRune(c)
+		if sb.Len() > len(label) {
+			return sb.String()
+		}
+	}
+	// No more non-hyphen characters left: fall back to the full UUID.
+	return id
+}
+
+// snippet returns a single-line preview of content: runs of whitespace
+// (including newlines) collapse to single spaces, and the result is
+// truncated to maxLen characters with "…" appended when needed. Empty or
+// whitespace-only content yields "".
+func snippet(content string, maxLen int) string {
+	s := strings.Join(strings.Fields(content), " ")
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen-1]) + "…"
 }
 
 // --- Utility functions ---------------------------------------------------------

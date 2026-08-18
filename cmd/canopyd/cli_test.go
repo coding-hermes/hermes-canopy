@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -286,5 +287,189 @@ func TestTreeUnknownSubcommandStillErrors(t *testing.T) {
 	}
 	if !strings.Contains(out, "unknown tree subcommand: bogus") {
 		t.Errorf("runTreeCmdE(bogus) stderr missing unknown-subcommand error: %q", out)
+	}
+}
+
+// --- GAP-045: tree navigate hierarchy, snippets, unique labels --------------
+
+// testNode builds a graphNodeSummary with the given parent link ("" = root).
+func testNode(id, parent, content string) graphNodeSummary {
+	n := graphNodeSummary{
+		ID:      id,
+		Type:    "message",
+		Content: content,
+	}
+	if parent != "" {
+		p := parent
+		n.ParentID = &p
+	}
+	return n
+}
+
+// TestRenderTreeIndentationAndConnectors asserts a 3-level tree renders
+// with connectors and depth-visible indentation (GAP-045).
+func TestRenderTreeIndentationAndConnectors(t *testing.T) {
+	nodes := []graphNodeSummary{
+		testNode("10000000-0000-4000-8000-00000000000a", "", "root content"),
+		testNode("20000000-0000-4000-8000-00000000000b", "10000000-0000-4000-8000-00000000000a", "child A content"),
+		testNode("30000000-0000-4000-8000-00000000000c", "10000000-0000-4000-8000-00000000000a", "child B content"),
+		testNode("40000000-0000-4000-8000-00000000000d", "20000000-0000-4000-8000-00000000000b", "grandchild content"),
+	}
+	lines := renderTree(nodes)
+	want := []string{
+		"[10000000] message — root content",
+		"├── [20000000] message — child A content",
+		"│   └── [40000000] message — grandchild content",
+		"└── [30000000] message — child B content",
+	}
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("renderTree mismatch:\n got: %q\nwant: %q", lines, want)
+	}
+}
+
+// TestRenderTreeUniqueLabels asserts nodes sharing an 8-char prefix get
+// disambiguated labels while non-colliding nodes keep the short form.
+func TestRenderTreeUniqueLabels(t *testing.T) {
+	rootID := "abcd1234-1111-4000-8000-000000000001"
+	childID := "abcd1234-2222-4000-8000-000000000002"
+	otherID := "ffffffff-3333-4000-8000-000000000003"
+	nodes := []graphNodeSummary{
+		testNode(rootID, "", "root"),
+		testNode(childID, rootID, "child"),
+		testNode(otherID, rootID, "other"),
+	}
+	lines := renderTree(nodes)
+
+	// Extract row labels and check uniqueness across all rows.
+	var labels []string
+	labelRe := regexp.MustCompile(`\[([0-9a-f]+)\]`)
+	for _, line := range lines {
+		m := labelRe.FindStringSubmatch(line)
+		if m == nil {
+			t.Fatalf("line %q has no [label]", line)
+		}
+		labels = append(labels, m[1])
+	}
+	seen := map[string]bool{}
+	for _, l := range labels {
+		if seen[l] {
+			t.Errorf("duplicate row label %q in %v", l, labels)
+		}
+		seen[l] = true
+	}
+
+	// Root and child share the 8-char prefix "abcd1234" → extended to 9.
+	if !strings.Contains(lines[0], "[abcd12341]") {
+		t.Errorf("root label not disambiguated: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "[abcd12342]") {
+		t.Errorf("child label not disambiguated: %q", lines[1])
+	}
+	// Non-colliding node keeps the 8-char short form.
+	if !strings.Contains(lines[2], "[ffffffff]") {
+		t.Errorf("non-colliding node should keep 8-char label: %q", lines[2])
+	}
+}
+
+// TestRenderTreeSnippetTruncation asserts long content is truncated to
+// snippetMaxLen runes, newlines collapse to spaces, and empty content has
+// no snippet separator.
+func TestRenderTreeSnippetTruncation(t *testing.T) {
+	long := "🚀 This is a very long message body that keeps going and going well beyond the sixty character preview limit so it must be truncated"
+	nodes := []graphNodeSummary{
+		testNode("10000000-0000-4000-8000-00000000000a", "", long),
+		testNode("20000000-0000-4000-8000-00000000000b", "10000000-0000-4000-8000-00000000000a", "line one\nline two\n\nline four"),
+		testNode("30000000-0000-4000-8000-00000000000c", "10000000-0000-4000-8000-00000000000a", ""),
+	}
+	lines := renderTree(nodes)
+
+	prefix := "[10000000] message — "
+	if !strings.HasPrefix(lines[0], prefix) {
+		t.Fatalf("line 0 missing snippet prefix: %q", lines[0])
+	}
+	snip := strings.TrimPrefix(lines[0], prefix)
+	if !strings.HasSuffix(snip, "…") {
+		t.Errorf("long content not truncated: %q", snip)
+	}
+	if got := len([]rune(snip)); got != snippetMaxLen {
+		t.Errorf("snippet length = %d runes, want %d", got, snippetMaxLen)
+	}
+	if !strings.Contains(lines[1], "line one line two line four") {
+		t.Errorf("newlines not collapsed to spaces: %q", lines[1])
+	}
+	if strings.Contains(lines[2], " — ") {
+		t.Errorf("empty content should have no snippet separator: %q", lines[2])
+	}
+}
+
+// TestRenderTreeEmpty asserts an empty node set renders no rows.
+func TestRenderTreeEmpty(t *testing.T) {
+	if lines := renderTree(nil); lines != nil {
+		t.Errorf("renderTree(nil) = %v, want nil", lines)
+	}
+}
+
+// TestUniqueLabels asserts collision-free labels: colliding IDs extend
+// beyond 8 chars, distinct IDs keep the short form.
+func TestUniqueLabels(t *testing.T) {
+	a := "abcd1234-aaaa-4000-8000-000000000001"
+	b := "abcd1234-bbbb-4000-8000-000000000002"
+	c := "12345678-cccc-4000-8000-000000000003"
+	d := "abcd1234-cccc-4000-8000-000000000004" // collides with a and b too
+	labels := uniqueLabels([]string{a, b, c, d})
+
+	seen := map[string]string{}
+	for _, id := range []string{a, b, c, d} {
+		l := labels[id]
+		if l == "" {
+			t.Fatalf("no label for %s", id)
+		}
+		if prev, ok := seen[l]; ok {
+			t.Errorf("label %q shared by %s and %s", l, prev, id)
+		}
+		seen[l] = id
+	}
+	if labels[c] != "12345678" {
+		t.Errorf("non-colliding ID label = %q, want %q", labels[c], "12345678")
+	}
+	for _, id := range []string{a, b, d} {
+		if len(labels[id]) <= 8 {
+			t.Errorf("colliding ID %s label %q not extended beyond 8 chars", id, labels[id])
+		}
+	}
+}
+
+// TestUniqueLabelsIdenticalIDsTerminate asserts identical IDs fall back to
+// the full UUID without an infinite loop.
+func TestUniqueLabelsIdenticalIDsTerminate(t *testing.T) {
+	id := "abcd1234-aaaa-4000-8000-000000000001"
+	labels := uniqueLabels([]string{id, id})
+	if labels[id] != id {
+		t.Errorf("identical IDs should fall back to the full UUID, got %q", labels[id])
+	}
+}
+
+// TestSnippet asserts whitespace collapsing and rune-safe truncation.
+func TestSnippet(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		maxLen  int
+		want    string
+	}{
+		{"empty", "", 60, ""},
+		{"whitespace only", " \n	 ", 60, ""},
+		{"short unchanged", "hi there", 60, "hi there"},
+		{"whitespace collapsed", "a\n\n  b	c", 60, "a b c"},
+		{"exact fit", "12345", 5, "12345"},
+		{"truncated", "123456789", 5, "1234…"},
+		{"rune-safe truncation", "héllo wörld", 6, "héllo…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := snippet(tt.content, tt.maxLen); got != tt.want {
+				t.Errorf("snippet(%q, %d) = %q, want %q", tt.content, tt.maxLen, got, tt.want)
+			}
+		})
 	}
 }
