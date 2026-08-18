@@ -25,7 +25,18 @@ type apiErrorResponse struct {
 }
 
 type treeCreateRequest struct {
-	Title string `json:"title"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description,omitempty"`
+	RootMessage *treeCreateRootMessage `json:"rootMessage,omitempty"`
+}
+
+// treeCreateRootMessage is the camelCase rootMessage object the tree-create
+// API requires (see internal/handler/tree_handler.go). The handler decodes
+// camelCase JSON — never send snake_case keys in this request (GAP-042).
+type treeCreateRootMessage struct {
+	Content       string `json:"content"`
+	ContentFormat string `json:"contentFormat,omitempty"`
+	NodeType      string `json:"nodeType,omitempty"`
 }
 
 type treeCreateResponse struct {
@@ -89,7 +100,7 @@ func runCLI() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd <subcommand> [args...]\n")
 		fmt.Fprintf(os.Stderr, "Subcommands:\n")
-		fmt.Fprintf(os.Stderr, "  tree create <name>        Create a new tree\n")
+		fmt.Fprintf(os.Stderr, "  tree create <name> [--content <text>]  Create a new tree (root message required)\n")
 		fmt.Fprintf(os.Stderr, "  tree list                 List all trees\n")
 		fmt.Fprintf(os.Stderr, "  tree delete <id>          Delete a tree\n")
 		fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
@@ -116,9 +127,20 @@ func runCLI() {
 
 // runTreeCmd dispatches tree sub-subcommands.
 func runTreeCmd(args []string) {
+	os.Exit(runTreeCmdE(args))
+}
+
+// runTreeCmdE is runTreeCmd without the process exit so tests can assert
+// exit codes. `canopyd tree --help` prints usage and returns 0 (GAP-042);
+// `canopyd tree` with no arguments prints usage and returns 1.
+func runTreeCmdE(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: canopyd tree <create|list|delete|navigate> [args...]\n")
-		os.Exit(1)
+		printTreeUsage()
+		return 1
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		printTreeUsage()
+		return 0
 	}
 
 	sub := args[0]
@@ -126,18 +148,28 @@ func runTreeCmd(args []string) {
 
 	switch sub {
 	case "create":
-		treeCreate(rest)
+		return treeCreateE(rest)
 	case "list":
-		treeList()
+		return treeListE(rest)
 	case "delete":
-		treeDelete(rest)
+		return treeDeleteE(rest)
 	case "navigate":
-		treeNavigate(rest)
+		return treeNavigateE(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown tree subcommand: %s\n", sub)
 		fmt.Fprintf(os.Stderr, "Available: create, list, delete, navigate\n")
-		os.Exit(1)
+		return 1
 	}
+}
+
+// printTreeUsage documents the tree subcommands.
+func printTreeUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd tree <create|list|delete|navigate> [args...]\n\n")
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  create <name> [--content <text>]  Create a new tree (root message required)\n")
+	fmt.Fprintf(os.Stderr, "  list                              List all trees\n")
+	fmt.Fprintf(os.Stderr, "  delete <id>                       Delete a tree\n")
+	fmt.Fprintf(os.Stderr, "  navigate <id>                     Print tree structure as indented text\n")
 }
 
 // --- HTTP helpers --------------------------------------------------------------
@@ -215,17 +247,95 @@ func apiRequest(method, path string, body io.Reader) ([]byte, int) {
 
 // --- Tree subcommands ----------------------------------------------------------
 
-func treeCreate(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: canopyd tree create <name>\n")
-		os.Exit(1)
+// parseTreeCreateArgs scans args for the tree name positional and the
+// --content/--message flag. Flags may appear before or after the name. It
+// returns the parsed name and content, whether help was requested, and an
+// error for unknown flags or missing flag values. Extra positional arguments
+// beyond the name are ignored (matching prior behavior).
+func parseTreeCreateArgs(args []string) (name, content string, help bool, err error) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-h" || a == "--help":
+			help = true
+		case a == "--content" || a == "--message":
+			if i+1 >= len(args) {
+				return "", "", false, fmt.Errorf("flag %s requires a value", a)
+			}
+			i++
+			content = args[i]
+		case strings.HasPrefix(a, "--content="):
+			content = strings.TrimPrefix(a, "--content=")
+		case strings.HasPrefix(a, "--message="):
+			content = strings.TrimPrefix(a, "--message=")
+		case strings.HasPrefix(a, "-") && a != "-":
+			return "", "", false, fmt.Errorf("unknown flag: %s", a)
+		default:
+			if name == "" {
+				name = a
+			}
+		}
 	}
-	name := args[0]
+	return name, content, help, nil
+}
 
-	reqBody, err := json.Marshal(treeCreateRequest{Title: name})
+// printTreeCreateUsage documents the tree create command. Called for --help
+// (exit 0) and for usage errors (exit 1).
+func printTreeCreateUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd tree create <name> [--content <text>]\n\n")
+	fmt.Fprintf(os.Stderr, "Creates a new tree. The API requires a root message, so\n")
+	fmt.Fprintf(os.Stderr, "--content is mandatory (GAP-042).\n\n")
+	fmt.Fprintf(os.Stderr, "Flags:\n")
+	fmt.Fprintf(os.Stderr, "  --content <text>   Root message content (required)\n")
+	fmt.Fprintf(os.Stderr, "  --message <text>   Alias for --content\n")
+	fmt.Fprintf(os.Stderr, "  -h, --help         Print this help and exit\n")
+}
+
+// buildTreeCreateBody marshals the tree-create request body. The API handler
+// decodes camelCase JSON (see internal/handler/tree_handler.go) and requires
+// rootMessage.content, so rootMessage is included whenever content is set.
+func buildTreeCreateBody(name, content string) ([]byte, error) {
+	req := treeCreateRequest{
+		Title: name,
+	}
+	if content != "" {
+		req.RootMessage = &treeCreateRootMessage{
+			Content:       content,
+			ContentFormat: "markdown",
+			NodeType:      "message",
+		}
+	}
+	return json.Marshal(req)
+}
+
+// treeCreateE implements `canopyd tree create`. It returns an exit code
+// instead of calling os.Exit so tests can exercise the help and validation
+// paths without spawning processes or hitting the API.
+func treeCreateE(args []string) int {
+	name, content, help, err := parseTreeCreateArgs(args)
+	if help {
+		printTreeCreateUsage()
+		return 0
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		printTreeCreateUsage()
+		return 1
+	}
+	if name == "" {
+		printTreeCreateUsage()
+		return 1
+	}
+	if content == "" {
+		fmt.Fprintf(os.Stderr, "Error: tree create requires a root message — pass --content <text> (the API rejects trees without a root message).\n")
+		fmt.Fprintf(os.Stderr, "Usage: canopyd tree create <name> --content <text>\n")
+		return 1
+	}
+
+	reqBody, err := buildTreeCreateBody(name, content)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to marshal request: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	respBody, _ := apiRequest(http.MethodPost, "/api/v1/trees", bytes.NewReader(reqBody))
@@ -233,27 +343,32 @@ func treeCreate(args []string) {
 	var tree treeCreateResponse
 	if err := json.Unmarshal(respBody, &tree); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse response: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Printf("Tree created successfully.\n")
 	fmt.Printf("  ID:          %s\n", tree.ID)
 	fmt.Printf("  Title:       %s\n", tree.Title)
 	fmt.Printf("  Root Node:   %s\n", tree.RootNodeID)
+	return 0
 }
 
-func treeList() {
+func treeListE(args []string) int {
+	if wantsHelp(args) {
+		fmt.Fprintf(os.Stderr, "Usage: canopyd tree list\n")
+		return 0
+	}
 	respBody, _ := apiRequest(http.MethodGet, "/api/v1/trees", nil)
 
 	var list listTreesResponse
 	if err := json.Unmarshal(respBody, &list); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse response: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if len(list.Trees) == 0 {
 		fmt.Println("No trees found.")
-		return
+		return 0
 	}
 
 	// Print table header.
@@ -266,12 +381,17 @@ func treeList() {
 	}
 
 	fmt.Printf("\n%d tree(s) total\n", list.Pagination.Total)
+	return 0
 }
 
-func treeDelete(args []string) {
+func treeDeleteE(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd tree delete <id>\n")
-		os.Exit(1)
+		return 1
+	}
+	if wantsHelp(args) {
+		fmt.Fprintf(os.Stderr, "Usage: canopyd tree delete <id>\n")
+		return 0
 	}
 	id := args[0]
 
@@ -282,12 +402,17 @@ func treeDelete(args []string) {
 	} else {
 		fmt.Printf("Tree %s deleted.\n", id)
 	}
+	return 0
 }
 
-func treeNavigate(args []string) {
+func treeNavigateE(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd tree navigate <id>\n")
-		os.Exit(1)
+		return 1
+	}
+	if wantsHelp(args) {
+		fmt.Fprintf(os.Stderr, "Usage: canopyd tree navigate <id>\n")
+		return 0
 	}
 	treeID := args[0]
 
@@ -317,7 +442,7 @@ func treeNavigate(args []string) {
 
 	if len(result.Nodes) == 0 {
 		fmt.Println("(empty tree)")
-		return
+		return 0
 	}
 
 	fmt.Printf("Tree: %s\n\n", detail.Title)
@@ -352,6 +477,7 @@ func treeNavigate(args []string) {
 	for _, root := range rootNodes {
 		printNode(root, children, "", true)
 	}
+	return 0
 }
 
 // printNode recursively prints a node and its children as an indented tree.
@@ -460,16 +586,21 @@ func stripServerFlags(args []string) []string {
 	return args[i:]
 }
 
-// wantsServeHelp reports whether the arguments following the `serve`
-// subcommand request help (-h / --help). `canopyd serve --help` must print
-// usage and exit 0 WITHOUT starting the server (GAP-033).
-func wantsServeHelp(args []string) bool {
+// wantsHelp reports whether args contains a help flag (-h / --help).
+func wantsHelp(args []string) bool {
 	for _, a := range args {
 		if a == "-h" || a == "--help" {
 			return true
 		}
 	}
 	return false
+}
+
+// wantsServeHelp reports whether the arguments following the `serve`
+// subcommand request help (-h / --help). `canopyd serve --help` must print
+// usage and exit 0 WITHOUT starting the server (GAP-033).
+func wantsServeHelp(args []string) bool {
+	return wantsHelp(args)
 }
 
 // printServerUsage documents the env-only server configuration. It is the

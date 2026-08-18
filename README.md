@@ -460,7 +460,7 @@ cd frontend && npx vitest run --config vitest.integration.config.ts
 export CANOPY_SERVER_URL=http://localhost:8080
 export CANOPY_TOKEN=your-jwt-token
 
-./bin/canopyd tree create "My Tree"
+./bin/canopyd tree create "My Tree" --content 'Hello from the CLI'
 ./bin/canopyd tree list
 ./bin/canopyd tree navigate <tree-id>
 ./bin/canopyd tree delete <tree-id>

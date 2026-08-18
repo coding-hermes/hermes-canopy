@@ -137,7 +137,7 @@ export CANOPY_TOKEN=your-jwt-token
 
 ./bin/canopyd serve              # start the API server (default mode; env-only config)
 ./bin/canopyd serve --help       # print usage and exit — does NOT start the server
-./bin/canopyd tree create "My Tree"
+./bin/canopyd tree create "My Tree" --content 'Hello from the CLI'
 ./bin/canopyd tree list
 ./bin/canopyd tree navigate <tree-id>
 ./bin/canopyd tree delete <tree-id>

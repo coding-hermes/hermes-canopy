@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +72,219 @@ func TestWantsServeHelp(t *testing.T) {
 				t.Errorf("wantsServeHelp(%v) = %v, want %v", tt.args, got, tt.want)
 			}
 		})
+	}
+}
+
+// captureStderr runs f with os.Stderr redirected to a pipe and returns the
+// exit code f produced and everything f wrote to stderr.
+func captureStderr(t *testing.T, f func() int) (int, string) {
+	t.Helper()
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	code := f()
+	_ = w.Close()
+	data, _ := io.ReadAll(r)
+	return code, string(data)
+}
+
+func TestBuildTreeCreateBodyWithContent(t *testing.T) {
+	body, err := buildTreeCreateBody("GAP-042 smoke test", "hello")
+	if err != nil {
+		t.Fatalf("buildTreeCreateBody: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got["title"] != "GAP-042 smoke test" {
+		t.Errorf("title = %v, want %q", got["title"], "GAP-042 smoke test")
+	}
+
+	// The rootMessage object must be present with camelCase keys (the
+	// handler decodes camelCase JSON — see internal/handler/tree_handler.go).
+	root, ok := got["rootMessage"].(map[string]any)
+	if !ok {
+		t.Fatalf("rootMessage missing or wrong type: %#v", got["rootMessage"])
+	}
+	if root["content"] != "hello" {
+		t.Errorf("rootMessage.content = %v, want hello", root["content"])
+	}
+	if root["contentFormat"] != "markdown" {
+		t.Errorf("rootMessage.contentFormat = %v, want markdown", root["contentFormat"])
+	}
+	if root["nodeType"] != "message" {
+		t.Errorf("rootMessage.nodeType = %v, want message", root["nodeType"])
+	}
+
+	// No snake_case keys anywhere in the body.
+	if _, ok := got["root_message"]; ok {
+		t.Errorf("body contains snake_case root_message key")
+	}
+	if _, ok := root["content_format"]; ok {
+		t.Errorf("rootMessage contains snake_case content_format key")
+	}
+	if _, ok := root["node_type"]; ok {
+		t.Errorf("rootMessage contains snake_case node_type key")
+	}
+}
+
+func TestBuildTreeCreateBodyNoContent(t *testing.T) {
+	body, err := buildTreeCreateBody("No content", "")
+	if err != nil {
+		t.Fatalf("buildTreeCreateBody: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got["title"] != "No content" {
+		t.Errorf("title = %v, want %q", got["title"], "No content")
+	}
+	if _, ok := got["rootMessage"]; ok {
+		t.Errorf("rootMessage present when content is empty")
+	}
+}
+
+func TestParseTreeCreateArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantName    string
+		wantContent string
+		wantHelp    bool
+		wantErr     bool
+	}{
+		{"no args", nil, "", "", false, false},
+		{"name only", []string{"My Tree"}, "My Tree", "", false, false},
+		{"name then content", []string{"My Tree", "--content", "hello"}, "My Tree", "hello", false, false},
+		{"content then name", []string{"--content", "hello", "My Tree"}, "My Tree", "hello", false, false},
+		{"message alias", []string{"My Tree", "--message", "hi"}, "My Tree", "hi", false, false},
+		{"content equals form", []string{"My Tree", "--content=hello"}, "My Tree", "hello", false, false},
+		{"message equals form", []string{"--message=hi", "My Tree"}, "My Tree", "hi", false, false},
+		{"help flag", []string{"--help"}, "", "", true, false},
+		{"short help", []string{"-h"}, "", "", true, false},
+		{"help with name", []string{"My Tree", "--help"}, "My Tree", "", true, false},
+		{"help and content", []string{"--content", "x", "My Tree", "--help"}, "My Tree", "x", true, false},
+		{"missing value", []string{"My Tree", "--content"}, "", "", false, true},
+		{"unknown flag", []string{"My Tree", "--bogus"}, "", "", false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, content, help, err := parseTreeCreateArgs(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseTreeCreateArgs(%v) err = %v, wantErr %v", tt.args, err, tt.wantErr)
+			}
+			if name != tt.wantName {
+				t.Errorf("parseTreeCreateArgs(%v) name = %q, want %q", tt.args, name, tt.wantName)
+			}
+			if content != tt.wantContent {
+				t.Errorf("parseTreeCreateArgs(%v) content = %q, want %q", tt.args, content, tt.wantContent)
+			}
+			if help != tt.wantHelp {
+				t.Errorf("parseTreeCreateArgs(%v) help = %v, want %v", tt.args, help, tt.wantHelp)
+			}
+		})
+	}
+}
+
+// TestTreeCreateHelpExitZeroNoAPI asserts `tree create --help` / `-h` print
+// the create usage and return exit code 0. The help path returns before any
+// HTTP call, so no API request can be attempted (GAP-042).
+func TestTreeCreateHelpExitZeroNoAPI(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"-h"}} {
+		code, out := captureStderr(t, func() int { return runTreeCmdE(append([]string{"create"}, args...)) })
+		if code != 0 {
+			t.Errorf("runTreeCmdE(create %v) exit = %d, want 0", args, code)
+		}
+		if !strings.Contains(out, "Usage: canopyd tree create") {
+			t.Errorf("runTreeCmdE(create %v) stderr missing create usage: %q", args, out)
+		}
+		if strings.Contains(out, "Error:") {
+			t.Errorf("runTreeCmdE(create %v) stderr contains an error: %q", args, out)
+		}
+	}
+}
+
+// TestTreeCommandDispatchHelp asserts `canopyd tree --help` / `-h` print the
+// tree usage and exit 0 instead of "unknown tree subcommand: --help".
+func TestTreeCommandDispatchHelp(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"-h"}} {
+		code, out := captureStderr(t, func() int { return runTreeCmdE(args) })
+		if code != 0 {
+			t.Errorf("runTreeCmdE(%v) exit = %d, want 0", args, code)
+		}
+		if !strings.Contains(out, "Usage: canopyd tree <create|list|delete|navigate>") {
+			t.Errorf("runTreeCmdE(%v) stderr missing tree usage: %q", args, out)
+		}
+		if strings.Contains(out, "unknown tree subcommand") {
+			t.Errorf("runTreeCmdE(%v) stderr reports unknown subcommand: %q", args, out)
+		}
+	}
+}
+
+// TestTreeSiblingSubcommandHelp asserts list/delete/navigate also handle
+// --help by printing usage and exiting 0 (GAP-042).
+func TestTreeSiblingSubcommandHelp(t *testing.T) {
+	tests := []struct {
+		args    []string
+		wantUse string
+	}{
+		{[]string{"list", "--help"}, "Usage: canopyd tree list"},
+		{[]string{"delete", "--help"}, "Usage: canopyd tree delete"},
+		{[]string{"navigate", "--help"}, "Usage: canopyd tree navigate"},
+	}
+	for _, tt := range tests {
+		code, out := captureStderr(t, func() int { return runTreeCmdE(tt.args) })
+		if code != 0 {
+			t.Errorf("runTreeCmdE(%v) exit = %d, want 0", tt.args, code)
+		}
+		if !strings.Contains(out, tt.wantUse) {
+			t.Errorf("runTreeCmdE(%v) stderr missing %q: %q", tt.args, tt.wantUse, out)
+		}
+	}
+}
+
+// TestTreeCreateMissingContent asserts `tree create <name>` without
+// --content prints a clear usage error and exits 1 without hitting the API.
+func TestTreeCreateMissingContent(t *testing.T) {
+	code, out := captureStderr(t, func() int { return runTreeCmdE([]string{"create", "My Tree"}) })
+	if code != 1 {
+		t.Errorf("runTreeCmdE(create My Tree) exit = %d, want 1", code)
+	}
+	if !strings.Contains(out, "--content") {
+		t.Errorf("runTreeCmdE(create My Tree) stderr does not mention --content: %q", out)
+	}
+}
+
+// TestTreeCreateNoArgsPrintsUsage asserts `tree create` with no arguments
+// keeps printing usage and exits 1.
+func TestTreeCreateNoArgsPrintsUsage(t *testing.T) {
+	code, out := captureStderr(t, func() int { return runTreeCmdE([]string{"create"}) })
+	if code != 1 {
+		t.Errorf("runTreeCmdE(create) exit = %d, want 1", code)
+	}
+	if !strings.Contains(out, "Usage: canopyd tree create") {
+		t.Errorf("runTreeCmdE(create) stderr missing create usage: %q", out)
+	}
+}
+
+// TestTreeUnknownSubcommandStillErrors asserts the unknown-subcommand path
+// still exits 1 (behavior preserved).
+func TestTreeUnknownSubcommandStillErrors(t *testing.T) {
+	code, out := captureStderr(t, func() int { return runTreeCmdE([]string{"bogus"}) })
+	if code != 1 {
+		t.Errorf("runTreeCmdE(bogus) exit = %d, want 1", code)
+	}
+	if !strings.Contains(out, "unknown tree subcommand: bogus") {
+		t.Errorf("runTreeCmdE(bogus) stderr missing unknown-subcommand error: %q", out)
 	}
 }
