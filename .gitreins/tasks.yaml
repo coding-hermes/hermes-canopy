@@ -1228,3 +1228,12 @@ tasks:
   status: complete
   created_at: '2026-08-18T13:43:08.537400+00:00'
   completed_at: '2026-08-18T13:58:46.888250+00:00'
+- id: GAP-044
+  title: 'New Topic dialog: auto-resolve root node + INTEGRATION.md topics block'
+  criteria:
+  - Create Topic dialog auto-resolves the selected tree's root node (user never types
+    a UUID); INTEGRATION.md gains a topics block documenting POST /api/v1/topics (camelCase
+    treeId/rootNodeId/title); frontend unit tests cover the auto-resolve; tsc clean
+    + vitest green; go build + go test pass
+  status: in_progress
+  created_at: '2026-08-18T15:07:48.007300+00:00'
