@@ -88,6 +88,33 @@ export function appendTrees<T extends { id: string }>(existing: T[], incoming: T
   return merged;
 }
 
+/**
+ * Build the POST /trees body from dialog fields.
+ *
+ * The backend (GAP-008 contract) requires a root message with non-empty
+ * content AND a valid nodeType ('message' | 'announcement') — a title-only
+ * payload 400s with VALIDATION_ERROR 'root message content is required'.
+ * Returns `null` when the required fields are missing (callers show a
+ * validation error instead of hitting the API).
+ */
+export function buildCreateTreePayload(
+  title: string,
+  description: string,
+  rootContent: string,
+): Record<string, unknown> | null {
+  if (!title.trim() || !rootContent.trim()) return null;
+  const body: Record<string, unknown> = {
+    title: title.trim(),
+    rootMessage: {
+      content: rootContent.trim(),
+      contentFormat: 'markdown',
+      nodeType: 'message',
+    },
+  };
+  if (description.trim()) body.description = description.trim();
+  return body;
+}
+
 // ─── Create Tree Dialog ────────────────────────────────────────────────
 
 function CreateTreeDialog({
@@ -108,18 +135,17 @@ function CreateTreeDialog({
       setError('Title is required');
       return;
     }
+    if (!rootContent.trim()) {
+      setError('Root message is required');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = {
-        title: title.trim(),
-      };
-      if (description.trim()) body.description = description.trim();
-      if (rootContent.trim()) {
-        body.rootMessage = {
-          content: rootContent.trim(),
-          contentFormat: 'markdown',
-        };
+      const body = buildCreateTreePayload(title, description, rootContent);
+      if (!body) {
+        setError('Title and root message are required');
+        return;
       }
       const tree = await apiPost<TreeDetail>('/trees', body);
       onCreated(tree);
@@ -175,14 +201,17 @@ function CreateTreeDialog({
             />
           </div>
           <div>
-            <label htmlFor="create-tree-root-msg" className="block text-xs text-content-muted mb-1">Root Message</label>
+            <label htmlFor="create-tree-root-msg" className="block text-xs text-content-muted mb-1">Root Message *</label>
             <textarea
               id="create-tree-root-msg"
               value={rootContent}
               onChange={(e) => setRootContent(e.target.value)}
               rows={3}
               className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
-              placeholder="Initial message content (optional)..."
+              placeholder="Initial message content..."
+              aria-required="true"
+              aria-invalid={!!error && !rootContent.trim()}
+              aria-describedby={error ? "create-tree-error" : undefined}
             />
           </div>
         </div>

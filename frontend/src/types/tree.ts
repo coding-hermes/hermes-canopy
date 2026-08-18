@@ -116,6 +116,16 @@ export interface CreateTreePayload {
   description?: string;
   ownerId?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Root message for the new tree. The backend (GAP-008 contract) requires
+   * content AND a valid nodeType — a title-only payload 400s with
+   * VALIDATION_ERROR 'root message content is required'.
+   */
+  rootMessage?: {
+    content: string;
+    contentFormat?: string;
+    nodeType?: string;
+  };
 }
 
 // ─── Tree Detail / Related (WIRE-006) ─────────────────────────────────

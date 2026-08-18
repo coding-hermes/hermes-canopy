@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { appendTrees } from '../TreesPage';
+import { appendTrees, buildCreateTreePayload } from '../TreesPage';
 
 type TreeSummary = {
   id: string;
@@ -53,5 +53,45 @@ describe('appendTrees', () => {
   it('handles an empty existing list', () => {
     const incoming = [tree('x'), tree('y')];
     expect(appendTrees([], incoming).map((t) => t.id)).toEqual(['x', 'y']);
+  });
+});
+
+describe('buildCreateTreePayload', () => {
+  it('includes a rootMessage with nodeType message when content is provided', () => {
+    const body = buildCreateTreePayload('My Tree', '', 'Hello world');
+    expect(body).not.toBeNull();
+    expect(body!.title).toBe('My Tree');
+    expect(body!.rootMessage).toEqual({
+      content: 'Hello world',
+      contentFormat: 'markdown',
+      nodeType: 'message',
+    });
+  });
+
+  it('omits description when empty', () => {
+    const body = buildCreateTreePayload('My Tree', '', 'Hello world');
+    expect(body).not.toBeNull();
+    expect(body).not.toHaveProperty('description');
+  });
+
+  it('includes description when provided', () => {
+    const body = buildCreateTreePayload('My Tree', 'A description', 'Hello world');
+    expect(body).not.toBeNull();
+    expect(body!.description).toBe('A description');
+  });
+
+  it('returns null when title is missing', () => {
+    expect(buildCreateTreePayload('', 'desc', 'Hello world')).toBeNull();
+  });
+
+  it('returns null when root content is missing (title-only submit must not reach the API)', () => {
+    expect(buildCreateTreePayload('My Tree', '', '')).toBeNull();
+    expect(buildCreateTreePayload('My Tree', '', '   ')).toBeNull();
+  });
+
+  it('trims surrounding whitespace from title and content', () => {
+    const body = buildCreateTreePayload('  My Tree  ', '', '  Hello  ');
+    expect(body!.title).toBe('My Tree');
+    expect((body!.rootMessage as { content: string }).content).toBe('Hello');
   });
 });
