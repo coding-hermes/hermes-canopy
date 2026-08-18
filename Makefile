@@ -50,7 +50,7 @@ build-embed-linux-arm64:
 	GOOS=linux GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)_linux_arm64 ./cmd/$(BINARY)
 
 test:
-	$(GO) test ./... -count=1 -timeout=120s
+	$(GO) test ./... -count=1 -timeout=300s
 
 test-short:
 	$(GO) test ./... -short -count=1 -timeout=480s

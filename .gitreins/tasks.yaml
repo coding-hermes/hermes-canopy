@@ -1201,3 +1201,10 @@ tasks:
   status: complete
   created_at: '2026-08-18T08:23:10.041379+00:00'
   completed_at: '2026-08-18T08:31:34.960415+00:00'
+- id: GAP-037
+  title: "make test timeout too low (120s) \u2014 aborts on healthy code"
+  criteria:
+  - Makefile test target timeout raised to >=300s; make test completes with all packages
+    ok, no timeout error
+  status: in_progress
+  created_at: '2026-08-18T10:10:39.014141+00:00'
