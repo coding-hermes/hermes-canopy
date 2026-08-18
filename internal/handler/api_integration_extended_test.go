@@ -143,6 +143,72 @@ func TestAPI_NodeFork(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GAP-041: Fork — tree-scoped endpoint
+// ---------------------------------------------------------------------------
+
+func TestAPI_TreeScopedFork(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+
+	// Create a tree with a multi-level hierarchy.
+	tree := createTreeViaHTTP(t, srv, ownerID, "Tree Scoped Fork Test")
+	child := createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "Parent for tree-scoped fork test")
+	_ = createChildNodeViaHTTP(t, srv, tree.ID, child.Node.ID, ownerID, "Grandchild for tree-scoped fork test")
+
+	// POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork — fork from child
+	// (which has grandchild as a child). Fork requires the parent node to
+	// have at least one child (alternative branch point).
+	forkBody := map[string]any{
+		"content": "This is a tree-scoped fork from child",
+	}
+	req := apiRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/trees/"+tree.ID.String()+"/nodes/"+child.Node.ID.String()+"/fork", ownerID, forkBody)
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST tree-scoped fork: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST tree-scoped fork: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result service.CreateNodeResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode tree-scoped fork result: %v", err)
+	}
+	if result.Node == nil {
+		t.Fatal("tree-scoped fork result has nil Node")
+	}
+	if result.Node.Content != "This is a tree-scoped fork from child" {
+		t.Fatalf("fork content = %q, want %q", result.Node.Content, "This is a tree-scoped fork from child")
+	}
+	if result.Node.TreeID != tree.ID {
+		t.Fatalf("fork tree_id = %s, want %s", result.Node.TreeID, tree.ID)
+	}
+	t.Logf("tree-scoped fork created: node=%s, edge=%s", result.Node.ID, result.Edge.ID)
+
+	// Fork from non-existent node → 404.
+	req = apiRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/trees/"+tree.ID.String()+"/nodes/"+uuid.New().String()+"/fork", ownerID, forkBody)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST tree-scoped fork nonexistent: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("POST tree-scoped fork nonexistent: status=%d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TEST-02: Cards — List with filters (node_id, card_type)
 // ---------------------------------------------------------------------------
 

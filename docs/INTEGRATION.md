@@ -351,10 +351,14 @@ curl -s "$BASE/api/v1/graph/trees/$TREE_ID/subtree/$ROOT_ID" -H "$AUTH" | jq .
 
 ### Fork a Node
 
-```bash
-NODE_ID="c9d0e1f2-..."
+Forking creates an alternative branch from a node that already has at least one
+child. In this walkthrough the root node (ROOT_ID) has the child node created
+above, so fork from the root:
 
-curl -s -X POST "$BASE/api/v1/nodes/$NODE_ID/fork" \
+```bash
+NODE_ID="$ROOT_ID"
+
+curl -s -X POST "$BASE/api/v1/trees/$TREE_ID/nodes/$NODE_ID/fork" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
   -d '{"content":"Forked branch content","node_type":"message"}' | jq .

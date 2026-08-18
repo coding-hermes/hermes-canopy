@@ -49,6 +49,11 @@ func (h *NodeHandler) WithReferences(refSvc reference.ReferenceService, hub sse.
 //	DELETE /nodes/{node_id}                     — soft-delete node
 //	POST   /nodes/{node_id}/reply               — reply to node
 //	POST   /nodes/{node_id}/fork                — fork from node
+//
+// Deprecated: when mounted at /api/v1/nodes, the /nodes/... patterns render
+// as /api/v1/nodes/nodes/... (double segment). Prefer the tree-scoped routes
+// from TreeRoutes (mounted at /api/v1/trees/{tree_id}/nodes, membership-
+// protected). The flat mount is kept for backward compatibility.
 func (h *NodeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/{tree_id}/nodes", h.handleCreate)
@@ -64,14 +69,16 @@ func (h *NodeHandler) Routes() chi.Router {
 // The tree_id is provided by the mount point; routes use bare patterns without
 // duplicating the tree_id parameter.
 //
-//	GET    /          — list nodes in tree
-//	POST   /          — create node
-//	GET    /{node_id} — get node by ID
+//	GET    /              — list nodes in tree
+//	POST   /              — create node
+//	GET    /{node_id}     — get node by ID
+//	POST   /{node_id}/fork — fork from node
 func (h *NodeHandler) TreeRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.handleListByTree)
 	r.Post("/", h.handleCreate)
 	r.Get("/{node_id}", h.handleGetByID)
+	r.Post("/{node_id}/fork", h.handleFork)
 	return r
 }
 

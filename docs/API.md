@@ -262,6 +262,15 @@ POST /api/v1/nodes/nodes/{node_id}/reply
 
 ### Fork from Node
 
+Preferred (tree-scoped, membership-enforced):
+
+```
+POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork
+```
+
+Deprecated (flat mount, double `/nodes/` segment — still supported for
+backward compatibility):
+
 ```
 POST /api/v1/nodes/nodes/{node_id}/fork
 ```
