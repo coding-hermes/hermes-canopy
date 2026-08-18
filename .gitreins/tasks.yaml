@@ -1191,3 +1191,13 @@ tasks:
   status: complete
   created_at: '2026-08-18T05:53:46.534755+00:00'
   completed_at: '2026-08-18T06:11:42.047982+00:00'
+- id: GAP-041
+  title: Add tree-scoped fork route + fix INTEGRATION.md fork walkthrough
+  criteria:
+  - "Tree-scoped fork route POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork exists\
+    \ (membership-enforced) and INTEGRATION.md \xA76 fork step reproduces a working\
+    \ fork (201, forked node returned). Flat double-nodes path marked deprecated in\
+    \ API.md + doc comments."
+  status: complete
+  created_at: '2026-08-18T08:23:10.041379+00:00'
+  completed_at: '2026-08-18T08:31:34.960415+00:00'
