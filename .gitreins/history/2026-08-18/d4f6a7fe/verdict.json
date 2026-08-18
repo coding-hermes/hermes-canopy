@@ -1,0 +1,57 @@
+{
+  "task_id": "GAP-039",
+  "task_title": "go test -short ./... is not short: PG-backed suites (internal/db, internal/handler) don't skip in -short mode",
+  "task_criteria": [
+    "timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped; PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged (no compile breakage, go build ./... clean)"
+  ],
+  "passed": true,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go",
+      "steps": [
+        {
+          "id": "guard",
+          "type": "script",
+          "passed": true,
+          "output": "Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go_tests\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ]
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped; PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged (no compile breakage, go build ./... clean): Fix in internal/testutil/integration.go (commit b1b3074): NewIntegrationPool and NewSharedIntegrationPool both call t.Skip(\"short mode: PG integration\") when testing.Short(). Verified live: `timeout 90 go test -short -count=1 ./...` exits 0 in 5s (well under 90s), 19 packages ok, no failures (internal/db 0.021s, internal/handler 3.435s vs ~4min before). -v output confirms PG tests skip cleanly (db: 'short mode: PG integration' SKIP; handler: --- SKIP). go build ./... clean (exit 0), go vet ./... clean (exit 0), non-short test binaries compile (go test -run '^$' ok). The testing.Short() guard is additive, so full non-short behavior is unchanged.\n",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped; PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged (no compile breakage, go build ./... clean): Fix in internal/testutil/integration.go (commit b1b3074): NewIntegrationPool and NewSharedIntegrationPool both call t.Skip(\"short mode: PG integration\") when testing.Short(). Verified live: `timeout 90 go test -short -count=1 ./...` exits 0 in 5s (well under 90s), 19 pac",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped; PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged (no compile breakage, go build ./... clean)",
+                "status": "PASS",
+                "detail": "Fix in internal/testutil/integration.go (commit b1b3074): NewIntegrationPool and NewSharedIntegrationPool both call t.Skip(\"short mode: PG integration\") when testing.Short(). Verified live: `timeout 90 go test -short -count=1 ./...` exits 0 in 5s (well under 90s), 19 packages ok, no failures (internal/db 0.021s, internal/handler 3.435s vs ~4min before). -v output confirms PG tests skip cleanly (db: 'short mode: PG integration' SKIP; handler: --- SKIP). go build ./... clean (exit 0), go vet ./... clean (exit 0), non-short test binaries compile (go test -run '^$' ok). The testing.Short() guard is additive, so full non-short behavior is unchanged."
+              }
+            ],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "summary": "Judge Result: GAP-039\n\nStage tier1: PASS\n    \u2713 guard: Tier 1 Guards: PASS  (test mode: full)\n  \u2713 secrets \u2014 clean\n  \u2713 go_build \u2014 ok\n  \u2713 go_lint \u2014 ok\n  \u2713 go\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped; PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged (no compile breakage, go build ./... clean): Fix in internal/testutil/integration.go (commit b1b3074): NewIntegrationPool and NewSharedIntegrationPool both call t.Skip(\"short mode: PG integration\") when testing.Short(). Verified live: `timeout 90 go test -short -count=1 ./...` exits 0 in 5s (well under 90s), 19 packages ok, no failures (internal/db 0.021s, internal/handler 3.435s vs ~4min before). -v output confirms PG tests skip cleanly (db: 'short mode: PG integration' SKIP; handler: --- SKIP). go build ./... clean (exit 0), go vet ./... clean (exit 0), non-short test binaries compile (go test -run '^$' ok). The testing.Short() guard is additive, so full non-short behavior is unchanged.\n\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-08-18T16:38:26.731147"
+}

@@ -1238,3 +1238,13 @@ tasks:
   status: complete
   created_at: '2026-08-18T15:07:48.007300+00:00'
   completed_at: '2026-08-18T15:20:53.500374+00:00'
+- id: GAP-039
+  title: 'go test -short ./... is not short: PG-backed suites (internal/db, internal/handler)
+    don''t skip in -short mode'
+  criteria:
+  - timeout 90 go test -short -count=1 ./... terminates with all packages ok or skipped;
+    PG-backed suites skip cleanly in -short mode; full non-short suite behavior unchanged
+    (no compile breakage, go build ./... clean)
+  status: complete
+  created_at: '2026-08-18T16:32:43.682568+00:00'
+  completed_at: '2026-08-18T16:36:51.859063+00:00'

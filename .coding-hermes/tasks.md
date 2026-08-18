@@ -9290,3 +9290,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/346 (ad71be54-877c-4ab4-90cf-1b78a915b0ca) + /project/hermes-canopy/status (b66d57ef-3cb8-48cd-a07e-7dca04a1a1ab) written pre-commit via HTTP :3000, id-confirmed.
 
 **Next tick:** GAP-041 (P1 — INTEGRATION.md §6 fork path 404) is the top open P1; then GAP-043/044/045 (P2 UI/CLI polish). E2E-001 window 350-355 opens at Tick 350.
+
+## Tick 352 (2026-08-18 ~11:3x UTC) — GAP-039 P2 closed (go test -short guards, worker)
+
+**Task:** `go test -short ./...` was not short — PG-backed suites (internal/db ~80s, internal/handler ~140s) ran in -short mode because SkipIfNoDB only skips when PG is UNREACHABLE (PG reachable on this host). Dev sanity run ~4 min; 90s probe timed out.
+
+**Worker:** deepseek-v4-flash @ deepseek (pid 4142440) — committed b1b3074 (internal/testutil/integration.go only, +16/-3). Co-author trailer auto-appended ×1 (hook).
+
+**Fix shape:** `if testing.Short() { t.Skip("short mode: PG integration") }` added at the TOP of NewIntegrationPool() and NewSharedIntegrationPool() (internal/testutil/integration.go) — the chokepoint every PG-backed test in the repo enters through (559 helper call sites), before SkipIfNoDB so short mode doesn't even spend the probe. GAP-022 precedent shape (internal/plugin/repo_test.go:20). Non-short path untouched; SkipIfNoDB doc comment amended (reachability branch now only applies to direct callers).
+
+**Verification (foreman-independent):** `timeout 90 go test -short -count=1 ./...` → EXIT=0 ~5s, 19 packages ok (internal/db 0.020s, internal/handler 3.436s — previously 80s/140s). `go build ./...` + `go vet ./...` clean. PASS criterion met.
+
+**Judge:** gitreins task complete GAP-039 → **PASS** (tier1 + tier2); verdict .gitreins/history/2026-08-18/d4f6a7fe (verdict.json passed:true + summary.md; CLI printed 25f252d0 — hash-mismatch pitfall), folded with board files in one commit.
+
+**Gates/CI:** guard PASS 4/4 full mode · gh run list last 4 green · gofmt -l 16 files (baseline, no drift) · stack :5173/:5437 up, :8091 down (no battery this tick) · worker scan clean · dagger.db* litter removed pre-commit.
+
+**Board:** tasks.jsonl GAP-039 → complete (commit b1b3074, guard pass, judge pass, foreman_note verdict dir); events.jsonl 253 (dispatched) + 254/255 (completed via append_board_task_completed.py); header bumped ticks_total 352, last_commit b1b3074. NOTE: tasks.md tick-log entries 347-351 missing (board commits exist; PM-sweep/foreman ticks didn't append) — GAP-038 drift class, flagged not fixed.
+
+**DuckBrain:** /ticks/352 + /project/hermes-canopy/status written pre-commit via HTTP :3000.
+
+**Next tick:** GAP-038 (P2 — tasks.md matrix open-row markers + source-of-truth reconciliation) is the top open P2; then 18-row P3 backlog (FTR/PL/STACK/DPL-05) deferred.
