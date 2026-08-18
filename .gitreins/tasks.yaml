@@ -1215,5 +1215,15 @@ tasks:
   criteria:
   - NodeCard overflow menu has a Branch action that creates a fork via POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork;
     branch content composer works; leaf-fork rule documented (or relaxed); tests green
-  status: in_progress
+  status: complete
   created_at: '2026-08-18T12:08:04.465620+00:00'
+  completed_at: '2026-08-18T12:32:29.146830+00:00'
+- id: GAP-045
+  title: 'CLI tree navigate output: hierarchy, content snippet, unique IDs'
+  criteria:
+  - 'canopyd tree navigate <id> prints an indented tree: children indented under parents
+    with tree connectors; each row shows a content snippet (not just node type); row
+    labels are unique (collision-free short IDs or full UUIDs); unit tests cover the
+    formatting; go build + go test ./cmd/canopyd/... pass'
+  status: in_progress
+  created_at: '2026-08-18T13:43:08.537400+00:00'
