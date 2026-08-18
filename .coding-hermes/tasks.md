@@ -34,7 +34,7 @@
 
 | ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
 |----|------|-----|-----|------|------|-------|-----|----------|
-> **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 343. Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
+> **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 353 (18 post-MVP backlog rows carry ⬜ deferred markers). Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
 
 ## Dogfood Findings (2026-08-17)
 
@@ -143,6 +143,25 @@ Full report: `docs/dogfood/2026-08-17-integration.md` · diagnostics: `docs/dogf
 ||| ✅ GAP-003 | Import/export: ExportService + handler + tests + server wiring DONE (commits a722527, 701dfa8). 9 tests pass. CLI wiring deferred. | High | 3 | handler, cli | ++feature | DeepSeek V4 Pro | Medium | — |
 || ✅ GAP-004 | DuckDB card storage: 848 lines (duckdb_repo.go + store.go + 6 tests). 6/6 tests PASS (Tick 105, commit 685a850). Root cause: DuckDB does not release PK index slot within a tx — same-tx SELECT+DELETE+INSERT AND parameterized UPDATE both hit PK constraint on indexed multi-column tables. Fix: standalone DELETE then INSERT (no tx wrapper). Create/Get/List/Events/Patch all work. | Medium | 3 | card, db | ++architecture | | | |
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
+| **Post-MVP Backlog (deferred by design — AGENTS.md)** | | | | | | | | |
+| ⬜ FTR-01 | Multi-user collaboration: N-user approval model, CRDT conflict resolution, presence heartbeats, workspace roles. SPEC-FTR-01. | P3 | 8 | GAP-002 | ++feature, ++collaboration | — | — | — |
+| ⬜ FTR-02 | Multi-agent federation: cross-server agent discovery, federation tokens, FTL protocol. SPEC-FTR-02. | P3 | 8 | FTR-01 | ++feature, ++federation | — | — | — |
+| ⬜ FTR-03 | MLS encryption (full): RFC 9420 group state machine, key-package manager, per-workspace MLS groups. SPEC-FTR-03. | P3 | 7 | FTR-01 | ++encryption, ++mls | — | — | — |
+| ⬜ FTR-04 | Multi-transport (full): NATS, WebRTC, Redis Streams adapters. SPEC-FTR-04. | P3 | 6 | FTR-01 | ++transport, ++infra | — | — | — |
+| ⬜ FTR-05 | Self-hosted SaaS relay: multi-tenant relay server, tenant isolation, billing-agnostic auth. SPEC-FTR-05. | P3 | 8 | FTR-04 | ++deployment, ++saas | — | — | — |
+| ⬜ FTR-06 | WebUI native packaging: Wails v3 desktop app, WebView2/WKWebView, native installers. SPEC-FTR-06. | P3 | 5 | frontend | ++packaging, ++desktop | — | — | — |
+| ⬜ FTR-07 | Hermes agent gateway: HermesClient Go package, agent→Canopy event forwarding, SSE bridging. SPEC-FTR-07. | P3 | 5 | GAP-001 | ++integration, ++hermes | — | — | — |
+| ⬜ PL-01 | JS plugin system: plugin manifest, capability-scoped API, sandbox host. SPEC-PL-01. | P3 | 7 | GAP-002 | ++plugins, ++extensibility | — | — | — |
+| ⬜ PL-02 | Built-in file viewers: image/PDF/code/markdown viewer plugins. SPEC-PL-02. | P3 | 6 | PL-01 | ++plugins, ++viewers | — | — | — |
+| ⬜ PL-03 | App card system (full): database-per-card architecture, DuckDB-per-card-type, card actions, card SSE. SPEC-PL-03. | P3 | 6 | GAP-004 | ++cards, ++plugins | — | — | — |
+| ⬜ PL-04 | Dynamic thinking interface: iteration card engine, agent feedback bridge, multi-step reasoning cards. SPEC-PL-04. | P3 | 7 | GAP-001 | ++thinking, ++iteration | — | — | — |
+| ⬜ PL-05 | Calendar integration: calendar card store, provider manager (Google/Outlook), auto-responder. SPEC-PL-05. | P3 | 6 | PL-01 | ++calendar, ++integration | — | — | — |
+| ⬜ PL-06 | Multi-message reference model: cross-node references, contextual snippets, reference validation. SPEC-PL-06. | P3 | 5 | GAP-001 | ++references, ++linking | — | — | — |
+| ⬜ STACK-01 | NATS messaging: stub_adapters.go NATS stub; ARCHITECTURE.md §2.3. | P3 | 4 | FTR-04 | ++infra, ++messaging | — | — | — |
+| ⬜ STACK-02 | WebRTC (pion): stub_adapters.go WebRTC stub; ARCHITECTURE.md §2.1. | P3 | 5 | FTR-04 | ++infra, ++webrtc | — | — | — |
+| ⬜ STACK-03 | Canvas 2D fallback: custom Canvas 2D renderer for >2000 node trees; ARCHITECTURE.md §2.2. | P3 | 4 | frontend | ++frontend, ++performance | — | — | — |
+| ⬜ STACK-04 | Service Worker (Workbox): offline caching; ARCHITECTURE.md §2.2. | P3 | 3 | frontend | ++pwa, ++offline | — | — | — |
+| ⬜ DPL-05 | Hermes → Canopy migration: migrate existing Hermes sessions (chat logs, session DB) into Canopy trees. SPEC-DPL-05. | P3 | 4 | GAP-003 | ++migration, ++data | — | — | — |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
 | ✅ CI-002 | CI runs stopped triggering: T208/T209/T210 pushes (29f1905, d040cd0, 3db4b19 — 19:37Z/20:54Z/22:11Z) produced ZERO workflow runs (build.yml active, on:push master intact, repo Actions enabled). Suspected org-level Actions block (billing); ESCALATED to Bane Tick 210. **RESOLVED Tick 212 — close condition MET: T211's pushes 22e708d + e381fb2 DID trigger runs — 31130920099 (e381fb2, created 23:24:55Z) + 31131070383 (22e708d, created 23:27:14Z), both completed/success. Run creation lagged 4-7 min after push — T211's '4th consecutive zero-run' verdict was PREMATURE (checked ~1-4 min post-push). Block was real for T208-T210 (those pushes still have no runs 24h+ later), lifted between T210 22:11Z and T211 23:24Z. T212's push = confirmation probe (run expected).** | High | 1 | — | — | ADMIN — resolved (org-level, self-recovered) | — | — |
@@ -516,34 +535,34 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 
 ### Post-MVP Feature Specs (specs written, 0 implementation)
 
-| ID | Task | Pri | Cpx | Deps | Tags | Spec |
+| ID | Task | Pri | Cpx | Deps | Tags | Spec | Status |
 |----|------|-----|-----|------|------|------|
-| FTR-01 | **Multi-user collaboration:** N-user approval model, CRDT conflict resolution, presence heartbeats, workspace roles. SPEC-FTR-01 (32,850 words). | Low | 8 | GAP-002 | ++feature, ++collaboration | SPEC-FTR-01 |
-| FTR-02 | **Multi-agent federation:** Cross-server agent discovery, federation tokens, FTL protocol. SPEC-FTR-02 (23,759 words). | Low | 8 | FTR-01 | ++feature, ++federation | SPEC-FTR-02 |
-| FTR-03 | **MLS encryption (full):** RFC 9420 group state machine, key-package manager, per-workspace MLS groups. `internal/mls/` has AES-256-GCM roundtrip but no group state machine. SPEC-FTR-03 (42,431 words). | Low | 7 | FTR-01 | ++encryption, ++mls | SPEC-FTR-03 |
-| FTR-04 | **Multi-transport (full):** NATS, WebRTC, Redis Streams adapters. `stub_adapters.go` has 5 stubs. Internal/transport has bridge.go but only SSE+HTTP POST wired. SPEC-FTR-04 (45,956 words). | Low | 6 | FTR-01 | ++transport, ++infra | SPEC-FTR-04 |
-| FTR-05 | **Self-hosted SaaS relay:** Multi-tenant relay server, tenant isolation, billing-agnostic auth. SPEC-FTR-05 (59,762 words). | Low | 8 | FTR-04 | ++deployment, ++saas | SPEC-FTR-05 |
-| FTR-06 | **WebUI native packaging:** Wails v3 desktop app, WebView2/WKWebView, native installers. SPEC-FTR-06 (45,085 words). | Low | 5 | frontend | ++packaging, ++desktop | SPEC-FTR-06 |
-| FTR-07 | **Hermes agent gateway:** HermesClient Go package, agent→Canopy event forwarding, SSE bridging. SPEC-FTR-07 (49,066 words). | Low | 5 | GAP-001 | ++integration, ++hermes | SPEC-FTR-07 |
+| FTR-01 | **Multi-user collaboration:** N-user approval model, CRDT conflict resolution, presence heartbeats, workspace roles. SPEC-FTR-01 (32,850 words). | Low | 8 | GAP-002 | ++feature, ++collaboration | SPEC-FTR-01 | 🔴 |
+| FTR-02 | **Multi-agent federation:** Cross-server agent discovery, federation tokens, FTL protocol. SPEC-FTR-02 (23,759 words). | Low | 8 | FTR-01 | ++feature, ++federation | SPEC-FTR-02 | 🔴 |
+| FTR-03 | **MLS encryption (full):** RFC 9420 group state machine, key-package manager, per-workspace MLS groups. `internal/mls/` has AES-256-GCM roundtrip but no group state machine. SPEC-FTR-03 (42,431 words). | Low | 7 | FTR-01 | ++encryption, ++mls | SPEC-FTR-03 | 🔴 |
+| FTR-04 | **Multi-transport (full):** NATS, WebRTC, Redis Streams adapters. `stub_adapters.go` has 5 stubs. Internal/transport has bridge.go but only SSE+HTTP POST wired. SPEC-FTR-04 (45,956 words). | Low | 6 | FTR-01 | ++transport, ++infra | SPEC-FTR-04 | 🔴 |
+| FTR-05 | **Self-hosted SaaS relay:** Multi-tenant relay server, tenant isolation, billing-agnostic auth. SPEC-FTR-05 (59,762 words). | Low | 8 | FTR-04 | ++deployment, ++saas | SPEC-FTR-05 | 🔴 |
+| FTR-06 | **WebUI native packaging:** Wails v3 desktop app, WebView2/WKWebView, native installers. SPEC-FTR-06 (45,085 words). | Low | 5 | frontend | ++packaging, ++desktop | SPEC-FTR-06 | 🔴 |
+| FTR-07 | **Hermes agent gateway:** HermesClient Go package, agent→Canopy event forwarding, SSE bridging. SPEC-FTR-07 (49,066 words). | Low | 5 | GAP-001 | ++integration, ++hermes | SPEC-FTR-07 | 🔴 |
 
 ### Plugin/Extension Specs (specs written, 0 implementation)
 
-| ID | Task | Pri | Cpx | Deps | Tags | Spec |
+| ID | Task | Pri | Cpx | Deps | Tags | Spec | Status |
 |----|------|-----|-----|------|------|------|
-| PL-01 | **JS plugin system:** Plugin manifest, capability-scoped API, sandbox host. SPEC-PL-01 (93,192 words). | Low | 7 | GAP-002 | ++plugins, ++extensibility | SPEC-PL-01 |
-| PL-02 | **Built-in file viewers:** Image/PDF/Code/Markdown viewer plugins. SPEC-PL-02 (146,512 words). | Low | 6 | PL-01 | ++plugins, ++viewers | SPEC-PL-02 |
-| PL-03 | **App card system (full):** Database-per-card architecture, DuckDB-per-card-type, card actions, card SSE. Cards exist as JSONL-only; DuckDB-per-card and card actions not implemented. SPEC-PL-03 (65,311 words). | Low | 6 | GAP-004 | ++cards, ++plugins | SPEC-PL-03 |
-| PL-04 | **Dynamic thinking interface:** Iteration card engine, agent feedback bridge, multi-step reasoning cards. IterationCard.tsx exists but no backend engine. SPEC-PL-04 (85,670 words). | Low | 7 | GAP-001 | ++thinking, ++iteration | SPEC-PL-04 |
-| PL-05 | **Calendar integration:** Calendar card store, provider manager (Google/Outlook), auto-responder. SPEC-PL-05 (36,280 words). | Low | 6 | PL-01 | ++calendar, ++integration | SPEC-PL-05 |
-| PL-06 | **Multi-message reference model:** Cross-node references, contextual snippets, reference validation. SPEC-PL-06 (67,596 words). | Low | 5 | GAP-001 | ++references, ++linking | SPEC-PL-06 |
+| PL-01 | **JS plugin system:** Plugin manifest, capability-scoped API, sandbox host. SPEC-PL-01 (93,192 words). | Low | 7 | GAP-002 | ++plugins, ++extensibility | SPEC-PL-01 | 🔴 |
+| PL-02 | **Built-in file viewers:** Image/PDF/Code/Markdown viewer plugins. SPEC-PL-02 (146,512 words). | Low | 6 | PL-01 | ++plugins, ++viewers | SPEC-PL-02 | 🔴 |
+| PL-03 | **App card system (full):** Database-per-card architecture, DuckDB-per-card-type, card actions, card SSE. Cards exist as JSONL-only; DuckDB-per-card and card actions not implemented. SPEC-PL-03 (65,311 words). | Low | 6 | GAP-004 | ++cards, ++plugins | SPEC-PL-03 | 🔴 |
+| PL-04 | **Dynamic thinking interface:** Iteration card engine, agent feedback bridge, multi-step reasoning cards. IterationCard.tsx exists but no backend engine. SPEC-PL-04 (85,670 words). | Low | 7 | GAP-001 | ++thinking, ++iteration | SPEC-PL-04 | 🔴 |
+| PL-05 | **Calendar integration:** Calendar card store, provider manager (Google/Outlook), auto-responder. SPEC-PL-05 (36,280 words). | Low | 6 | PL-01 | ++calendar, ++integration | SPEC-PL-05 | 🔴 |
+| PL-06 | **Multi-message reference model:** Cross-node references, contextual snippets, reference validation. SPEC-PL-06 (67,596 words). | Low | 5 | GAP-001 | ++references, ++linking | SPEC-PL-06 | 🔴 |
 
 ### Topic System Gaps (specs written, partial implementation)
 
 | ID | Task | Pri | Cpx | Deps | Tags | Spec | Status |
 |----|------|-----|-----|------|------|------|--------|
-| TM-02 | **Auto-topic detection:** NLP-based topic extraction from node content, configurable sensitivity. SPEC-TM-02 (25,783 words). | Medium | 5 | GAP-001 | ++topics, ++nlp | SPEC-TM-02 | 🔴 |
-| TM-03 | **Topic search (FTS):** PostgreSQL tsvector full-text search, one-button context injection. SPEC-TM-03 (55,831 words). | Medium | 4 | — | ++topics, ++search | SPEC-TM-03 | 🔴 |
-| TM-04 | **#Reference resolution:** Parse #topic references in messages, resolve to topic nodes, build context DAG. SPEC-TM-04 (66,619 words). | Medium | 4 | GAP-001 | ++topics, ++references | SPEC-TM-04 | 🔴 |
+| TM-02 | **Auto-topic detection:** NLP-based topic extraction from node content, configurable sensitivity. SPEC-TM-02 (25,783 words). | Medium | 5 | GAP-001 | ++topics, ++nlp | SPEC-TM-02 | ✅ (bb834f0) |
+| TM-03 | **Topic search (FTS):** PostgreSQL tsvector full-text search, one-button context injection. SPEC-TM-03 (55,831 words). | Medium | 4 | — | ++topics, ++search | SPEC-TM-03 | ✅ (451fa4d) |
+| TM-04 | **#Reference resolution:** Parse #topic references in messages, resolve to topic nodes, build context DAG. SPEC-TM-04 (66,619 words). | Medium | 4 | GAP-001 | ++topics, ++references | SPEC-TM-04 | ✅ (2b9d9d5) |
 
 ### Stack Gaps (ARCHITECTURE.md lists tech not present in go.mod or code)
 
