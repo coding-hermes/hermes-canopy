@@ -35,6 +35,24 @@
 | ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
 |----|------|-----|-----|------|------|-------|-----|----------|
 > **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 343. Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
+
+## Dogfood Findings (2026-08-17)
+
+Deep real-use dogfood run (cron) against the live stack (:5173 PWA + :8091 canopyd + :5437 PG).
+Canonical rows: `.coding-hermes/board/tasks.jsonl` (GAP-040..045, pending). Summary:
+
+| ID | Finding | Pri | Evidence (real use) |
+|----|---------|-----|---------------------|
+| GAP-040 | **UI tree creation completely broken** — Create-Tree dialog always 400s (rootMessage missing nodeType; "(optional)" label wrong) | P0 | Browser: title-only → 400 "root message content is required"; +root msg → 400 "invalid node type". New users cannot create a tree in the UI. E2E only checks the button exists. |
+| GAP-041 | INTEGRATION.md §6 fork walkthrough 404s — real route is `/api/v1/nodes/nodes/{id}/fork` (API.md correct) | P1 | curl per §6 → "404 page not found"; real path works |
+| GAP-042 | CLI `canopyd tree create` always fails — sends no rootMessage; `--help` mishandled | P1 | `tree create "X"` → VALIDATION_ERROR "root message content is required" |
+| GAP-043 | "Branch from any message" has no UI affordance; leaf-fork VALIDATION_ERROR undocumented | P2 | No fork in tree view/nodes page; fork(leaf) → 400 |
+| GAP-044 | New Topic dialog demands raw Root Node ID UUID; topics POST schema missing from INTEGRATION.md | P2 | Dialog fields: Subject Tree + Root Node ID * + Title; API wants camelCase treeId/rootNodeId/title |
+| GAP-045 | CLI `tree navigate` flat ambiguous output (short-ID collisions, no hierarchy) | P2 | 4 rows show `[01a0130f]` in one tree |
+
+Verified first-hand (already on board): GAP-037 `make test` FAILS on healthy code (handler package "panic: test timed out after 2m0s", EXIT=2).
+Full report: `docs/dogfood/2026-08-17-integration.md` · diagnostics: `docs/dogfood/diagnostics.md` · usage skill: `skills/hermes-canopy-usage/SKILL.md`.
+
 | ✅ GAP-001 | Stand-In finding: NO integration guide exists (docs/ has no *integrat* file). A new user cannot learn how to run + use the canopy backend/frontend from docs. Write docs/INTEGRATION.md covering: prerequisites, docker-compose up, migrations, dev server, API base URL, first tree/node CRUD via curl, frontend dev. | High | 2 | — | ++docs, ++onboarding | DeepSeek V4 Flash | Medium | — |
 | ✅ GAP-002 | Stand-In finding: NO API documentation (docs/ has no *api* file). Backend has 9+ specs in specs/ but no user-facing API reference. Generate docs/API.md from the OpenAPI/spec files or write endpoint reference: auth, tree, node, edge, merge, approval, topics, SSE events. | High | 3 | GAP-001 | ++docs, ++api-use | DeepSeek V4 Pro | Medium | GLM-5.2 |
 | ✅ CI-001 | CI Test (short) race on fresh Postgres: ensureCanopyRole CREATE ROLE canopy_app races across parallel test packages (CI runs `go test ./... -short` without -p 1 → each package process calls NewSharedIntegrationPool concurrently; loser hits SQLSTATE 23505 duplicate key pg_authid_rolname_index). Surfaced by Tick 195 board push (run 30914799140 — db package 23505 failures, handler passed). FIXED Tick 196 (381144c) — ensureCanopyRole treats 23505 as success (role exists by then). Verified: local CI-style parallel run (no -p 1) PASS with canopy_app role dropped (15/15 pkgs, exit 0), guard PASS, judge pending→PASS. | High | 2 | testutil | ++testing, ++ci, ++infra | DeepSeek V4 Flash | Low | — |
