@@ -9266,3 +9266,27 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/344 (40552821-afa6-48f7-9b37-01fb2bae0ced) + /project/hermes-canopy/status (d2095c5a-8d11-47cf-a106-ac52ba0e89ca) written pre-commit via HTTP API :3000 (ns hermes-canopy, domain event/config), id-confirmed.
 
 **Next tick:** maintenance (all P1/P2 gaps closed; 18 P3 backlog deferred). Next E2E-001 window 350-355 opens at Tick 350.
+
+## Tick 346 (2026-08-18 ~01:10 UTC) — GAP-042 P1 closed (CLI tree create rootMessage + --help)
+
+**Task:** GAP-042 (P1, dogfood CLI track) — `canopyd tree create <name>` ALWAYS failed with `[VALIDATION_ERROR] tree service: root message content is required` (treeCreateRequest sent only {title}; API requires rootMessage.content since GAP-008). Also `tree create --help` tried to create a tree named '--help', and `canopyd tree --help` printed 'unknown tree subcommand'.
+
+**Worker:** deepseek-v4-flash @ opencode-go (board primary_model) — committed a41449a (4 files: cmd/canopyd/cli.go +189/-31, cmd/canopyd/cli_test.go +218, docs/INTEGRATION.md, README.md; 380+/31-). Guard Tier 1 PASS full mode, path-limited commit, co-author trailer auto-appended ×1 (hook).
+
+**Fix shape:** treeCreateRequest now carries camelCase rootMessage{content, contentFormat, nodeType} + description omitempty (verified vs internal/handler/tree_handler.go); treeCreate→treeCreateE with manual arg scan for --content/--message (before OR after positional, `=` forms); runTreeCmdE with dispatch-level --help/-h on tree + list/delete/navigate; missing content → client-side error + exit 1 (no doomed API round-trip); usage text `tree create <name> [--content <text>]`.
+
+**Tests:** 8 new in cli_test.go — exact camelCase marshal assertion (no snake_case keys), parseTreeCreateArgs table (13 cases), `--help` exits 0 before any HTTP, no-content exit 1.
+
+**Verification (foreman-independent):** fresh build OK; `tree create --help` + `tree --help` → usage exit 0; no-content/no-args → exit 1; `go test ./cmd/... -short` ok; live create with dev JWT (vite.config.ts DEV_JWT_DEFAULT) → tree + root node created — PASS criterion met.
+
+**Judge:** gitreins task complete GAP-042 → **PASS** (tier1 + tier2); verdict .gitreins/history/2026-08-18/9a02df82 (verdict.json passed:true + summary.md), folded with board files in one commit.
+
+**Gates/light audit:** gofmt -l 16 files (baseline, no drift) · gitreins task list 66 done/0 pending/0 in_progress · gh issues open 0 · CI: board commit adb6571 + fix a41449a both completed/success · stack :8091/:5173/:5437 up (canopy-pg healthy 3d — T338 convention, untouched) · worker scan: only the GAP-042 worker + mafia-ai-benchmark sibling (different repo, no conflict) · no E2E battery (window 350-355 opens at Tick 350) · .vfs/.dirty + dagger.db* untracked left alone.
+
+**Board:** tasks.jsonl GAP-042 → complete (commit a41449a, guard pass, ci success, foreman_note verdict dir); events.jsonl 231 (task_completed GAP-042, mirrored into board.db parameterized) + 232 (audit via append_board_event.py); header bumped ticks_total 346, last_commit a41449a (pre-board HEAD).
+
+**Scheduler:** cooldown_s 21600 (fleet.toml + API agree), no PUT. Single fire (tick-name check), no duplicate.
+
+**DuckBrain:** /ticks/346 (ad71be54-877c-4ab4-90cf-1b78a915b0ca) + /project/hermes-canopy/status (b66d57ef-3cb8-48cd-a07e-7dca04a1a1ab) written pre-commit via HTTP :3000, id-confirmed.
+
+**Next tick:** GAP-041 (P1 — INTEGRATION.md §6 fork path 404) is the top open P1; then GAP-043/044/045 (P2 UI/CLI polish). E2E-001 window 350-355 opens at Tick 350.
