@@ -9478,3 +9478,22 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355/T357/T358/T359 precedent).
 
 **Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — next E2E-001 window 362-367 opens at Tick 362 (battery owed, first tick of window per fixture rule); matrix ⬜ count stays the drift check.
+## Tick 361 (2026-08-18 ~23:0x local / 04:0x UTC) — MAINTENANCE light audit (no E2E due, no dispatch)
+
+**Verdict: MAINTENANCE (idle light audit)** — no implementable board task (18 pending = all P3 post-MVP roadmap FTR/PL/STACK/DPL-05, deferred by design per AGENTS.md). E2E-001 window 356-361 SATISFIED at Tick 356 (60/60) — next window 362-367 opens at Tick 362 (fixture-due-window rule). No fixture window open this tick.
+
+**Light audit:**
+- Vitest 657/657 (34 files, 6.56s, run from frontend/) · go build + go vet clean · non-handler `-short` go sweep EXIT 0 ~28s (post-GAP-039 fast class; db/plugin/testutil/transport all ok)
+- gitleaks 0 leaks (exit 0) · GitReins 0 pending / 0 in_progress · gh issues 0 open
+- CI green: last 5 master runs success (incl. tick-360 board commit) · git fetch 0 remote commits · origin/master..HEAD 0 unpushed pre-commit
+- Cooldown 3600 — fleet.toml + scheduler API agree (operator fast-tier pin 08-15, no PUT) · scheduler hermes-canopy enabled, priority 10, consecutive_failures 0 · off-by-one :8766 healthy (uptime 8h28m, idle tick, no submit/discover) · storm-watch 4 running ticks, 0 duplicates = normal fleet activity
+- Discovery: tasks.jsonl pending 18 == tasks.md matrix open 18 (drift check OK) · Hilo not re-run (maintenance tick, no task selection)
+- gofmt -l flags 10 files (alignment-only diffs under local go1.26.5 — same set as T360; CI golangci green on them) — local toolchain version artifact, NOT drift
+
+**Board:** NO event append, NO board.db/header writes (pure-maintenance precedent T157/T159/T355/T357/T358/T359/T360; header ticks_total stays 356). tasks.jsonl unchanged (18 P3 pending). tasks.md tick entry only.
+
+**DuckBrain:** /ticks/361 (8fd513eb-e485-4904-a862-7d67711c6a8a) + /project/hermes-canopy/status (6c30fd73-371d-43b1-a284-450c81bf5d34) written via HTTP :3000 pre-commit, both fs-grep-verified (event/ + config/ partitions). Pre-write contiguity: /ticks/360 present (03acbcb0 matches T360 entry).
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355/T357/T358/T359/T360 precedent).
+
+**Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — next E2E-001 window 362-367 opens at Tick 362 (battery owed, first tick of window per fixture rule); matrix ⬜ count stays the drift check.
