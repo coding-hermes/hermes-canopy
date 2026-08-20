@@ -1257,3 +1257,12 @@ tasks:
   status: complete
   created_at: '2026-08-18T17:56:39.867162+00:00'
   completed_at: '2026-08-18T17:58:25.039875+00:00'
+- id: GAP-046
+  title: Sweep remaining :8080 API/CLI references in README + INTEGRATION.md to :8091
+  criteria:
+  - grep 'http://localhost:8080' README.md docs/INTEGRATION.md returns 0; grep 'HTTP_ADDR=:8080'
+    README.md docs/INTEGRATION.md returns 0; curl http://localhost:8091/health returns
+    200; no code changes (docs only)
+  status: complete
+  created_at: '2026-08-20T11:16:28.093597+00:00'
+  completed_at: '2026-08-20T11:17:19.969391+00:00'
