@@ -9809,3 +9809,20 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355-T376 precedent).
 
 **Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — next E2E-001 window 380-385 opens at Tick 380 (battery owed, first tick of window per fixture rule); matrix ⬜ count stays the drift check.
+## Tick 378 (2026-08-20 ~06:1x UTC) — GAP-046 complete: docs :8080→:8091 sweep (foreman-direct, T217 precedent)
+
+**Verdict: PRODUCTIVE** — picked GAP-046 (P1, complexity 1, docs-only port-drift fix from stand-in PM 2026-08-20 sweep). 18 remaining pending rows are all P3 post-MVP roadmap (FTR/PL/STACK/DPL-05), deferred by design per AGENTS.md.
+
+**Task:** GAP-046 — README + docs/INTEGRATION.md still pointed API/CLI users at :8080 (KrakenD gateway → 404s) while the backend serves :8091 (GAP-021 fixed only the §4.6 curl BASE; Health Check L119-125, CLI sections, env tables, run examples left stale). Swept all 6 `http://localhost:8080` URL refs + 2 `HTTP_ADDR=:8080` run examples + architecture diagram to :8091; reworded the two "default :8080" notes to state the raw-binary default while presenting `:8091` (make run / compose) as the canonical dev port.
+
+**Verification (AC, all PASS):** `grep -c 'http://localhost:8080' README.md docs/INTEGRATION.md` = 0 · `grep -c 'HTTP_ADDR=:8080'` = 0 · `curl :8091/health` = 200 `{"status":"ok","service":"canopyd"}` · `curl :8091/version` = `{"version":"dev"}` · CLI probe with CANOPY_SERVER_URL=:8091 reaches the API (TOKEN_MISSING = expected without CANOPY_TOKEN). Remaining :8080 occurrences intentional: docker container-internal mappings (README:278, INTEGRATION:36) + raw-binary HTTP_ADDR config defaults (README:323, INTEGRATION:82/509).
+
+**Commit:** cd37d53 (docs, 2 files, +13/-12, trailer present) → judge PASS a8d6e1ab (tier1+tier2; docs-only verified). Board events 263 (task_completed) + 264 (audit), header ticks_total 374→378, last_commit cd37d53. Board commit d02ce95 pushed, 0 unpushed (origin/master == HEAD).
+
+**CI:** green — last completed runs success (a9ce4dc @ 11:15 local, tick-377 push @ 05:14); tick-378 push run queued at fire time.
+
+**Light audit:** cooldown 21600 fleet.toml pin + scheduler API agree (no PUT) · gitreins 0 pending / 0 in_progress post-complete · off-by-one :8766 healthy (discover probed for docs-port-drift class → not_found; no debug occurred, nothing to submit) · storm-watch not re-run (productive tick, no scheduler anomaly suspected) · DuckBrain contiguity: /ticks/377 present pre-write.
+
+**DuckBrain:** /ticks/378 (3811f304-9bfc-4747-b516-0f912b91b5c5) + /project/hermes-canopy/status/2026-08-20 (0789dbe9-5934-4837-9edd-10af55bf541b) written via HTTP :3000, both verified in /api/keys tree.
+
+**Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — next E2E-001 window 380-385 opens at Tick 380 (battery owed, first tick of window per fixture rule); matrix ⬜ count stays the drift check.
