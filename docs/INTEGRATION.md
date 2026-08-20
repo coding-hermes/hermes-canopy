@@ -116,13 +116,13 @@ HTTP_ADDR=:8091 ./bin/canopyd
 ### Health Check
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8091/health
 # → {"status":"ok","service":"canopyd"}
 
-curl http://localhost:8080/healthz
+curl http://localhost:8091/healthz
 # → {"status":"ok","service":"canopyd"}
 
-curl http://localhost:8080/version
+curl http://localhost:8091/version
 # → {"version":"dev"}
 ```
 
@@ -132,7 +132,7 @@ The binary supports CLI subcommands for tree management plus an explicit
 `serve` subcommand:
 
 ```bash
-export CANOPY_SERVER_URL=http://localhost:8080
+export CANOPY_SERVER_URL=http://localhost:8091
 export CANOPY_TOKEN=your-jwt-token
 
 ./bin/canopyd serve              # start the API server (default mode; env-only config)
@@ -193,7 +193,8 @@ npm run build
 ```
 
 **Serving the PWA:** `canopyd` is **API-only** in MVP — the binary serves the
-REST/SSE API on `HTTP_ADDR` (default `:8080`) and does **not** embed or serve
+REST/SSE API on `HTTP_ADDR` (raw binary default `:8080`; `make run` and
+compose use `:8091`) and does **not** embed or serve
 the frontend. The PWA must be served separately:
 
 ```bash
@@ -518,5 +519,5 @@ returns HTTP 201 (not 503).
 | `METRICS_ENABLED`     | `false`               | Enable Prometheus metrics on `/metrics`  |
 | `VITE_API_URL`        | `http://localhost:8091`| Frontend proxy target (frontend only)   |
 | `VITE_DEV_JWT`        | (hardcoded dev token) | Dev JWT for proxy auth (frontend only)   |
-| `CANOPY_SERVER_URL`   | `http://localhost:8080`| CLI server URL (CLI only)               |
+| `CANOPY_SERVER_URL`   | `http://localhost:8091`| CLI server URL (CLI only)               |
 | `CANOPY_TOKEN`        | —                     | CLI auth token (CLI only)                |

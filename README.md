@@ -100,7 +100,7 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   HTTP Server (:8080)                │
+│                   HTTP Server (:8091)                │
 │  ┌──────────────┐  ┌──────────┐  ┌───────────────┐  │
 │  │   Handlers   │  │   SSE    │  │   Telemetry   │  │
 │  │  (REST API)  │  │   Hub    │  │  (Prometheus) │  │
@@ -293,7 +293,7 @@ docker compose logs -f canopyd
 make build
 
 # Run with production configuration
-HTTP_ADDR=:8080 \
+HTTP_ADDR=:8091 \
 DB_HOST=your-pg-host DB_PORT=5432 \
 DB_USER=canopy DB_PASSWORD=$(cat /etc/secrets/db-password) \
 DB_NAME=canopy \
@@ -303,7 +303,8 @@ METRICS_ENABLED=true \
 ```
 
 > **Note:** `canopyd` is **API-only** in MVP — it does not serve the PWA.
-> The binary exposes the REST/SSE API on `HTTP_ADDR` (`:8080` by default);
+> The binary exposes the REST/SSE API on `HTTP_ADDR` (`:8091` via `make run`
+> and compose; the raw binary defaults to `:8080`);
 > the frontend must be served separately. Production setup:
 >
 > ```bash
@@ -368,8 +369,7 @@ cd frontend && npm run dev
 
 > `make run` uses `HTTP_ADDR=:8091` and `DB_PORT=5437` by default so it matches
 > the Vite dev proxy target (`frontend/vite.config.ts`) and the compose PG host
-> port. Override with `HTTP_ADDR=:8080 make run` or `export DB_PORT=5432` as
-> needed.
+> port. Override the defaults as needed (e.g. `export DB_PORT=5432`).
 
 ### Testing
 
@@ -458,7 +458,7 @@ cd frontend && npx vitest run --config vitest.integration.config.ts
 ```bash
 # Interactive CLI (hermes canopy subcommand)
 # Requires CANOPY_SERVER_URL and CANOPY_TOKEN env vars
-export CANOPY_SERVER_URL=http://localhost:8080
+export CANOPY_SERVER_URL=http://localhost:8091
 export CANOPY_TOKEN=your-jwt-token
 
 ./bin/canopyd tree create "My Tree" --content 'Hello from the CLI'
