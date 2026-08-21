@@ -161,8 +161,8 @@ Full report: `docs/dogfood/2026-08-17-integration.md` · diagnostics: `docs/dogf
 | ⬜ STACK-01 | NATS messaging: stub_adapters.go NATS stub; ARCHITECTURE.md §2.3. | P3 | 4 | FTR-04 | ++infra, ++messaging | — | — | — |
 | ⬜ STACK-02 | WebRTC (pion): stub_adapters.go WebRTC stub; ARCHITECTURE.md §2.1. | P3 | 5 | FTR-04 | ++infra, ++webrtc | — | — | — |
 | ⬜ STACK-03 | Canvas 2D fallback: custom Canvas 2D renderer for >2000 node trees; ARCHITECTURE.md §2.2. | P3 | 4 | frontend | ++frontend, ++performance | — | — | — |
-| ⬜ STACK-04 | Service Worker (Workbox): offline caching; ARCHITECTURE.md §2.2. | P3 | 3 | frontend | ++pwa, ++offline | — | — | — |
-| ⬜ DPL-05 | Hermes → Canopy migration: migrate existing Hermes sessions (chat logs, session DB) into Canopy trees. SPEC-DPL-05. | P3 | 4 | GAP-003 | ++migration, ++data | — | — | — |
+| ✅ STACK-04 | Service Worker (Workbox): offline caching; ARCHITECTURE.md §2.2. DELIVERED by FE-09 (hand-rolled SW, 8af8bc1) — Workbox itself not used, capability equivalent. | P3 | 3 | frontend | ++pwa, ++offline | — | — | — |
+| ✅ DPL-05 | Hermes → Canopy migration: migrate existing Hermes sessions (chat logs, session DB) into Canopy trees. DELIVERED by WIRE-003/006 (session import CLI) + BUG-035. | P3 | 4 | GAP-003 | ++migration, ++data | — | — | — |
 | **Continuous** | | | | | | | | |
 | INFRA-001 | Fix tick storm: cooldown < tick_timeout (mitigated, needs root fix) | Critical | 1 | — | — | ADMIN — scheduler-level guard | — | — |
 | ✅ CI-002 | CI runs stopped triggering: T208/T209/T210 pushes (29f1905, d040cd0, 3db4b19 — 19:37Z/20:54Z/22:11Z) produced ZERO workflow runs (build.yml active, on:push master intact, repo Actions enabled). Suspected org-level Actions block (billing); ESCALATED to Bane Tick 210. **RESOLVED Tick 212 — close condition MET: T211's pushes 22e708d + e381fb2 DID trigger runs — 31130920099 (e381fb2, created 23:24:55Z) + 31131070383 (22e708d, created 23:27:14Z), both completed/success. Run creation lagged 4-7 min after push — T211's '4th consecutive zero-run' verdict was PREMATURE (checked ~1-4 min post-push). Block was real for T208-T210 (those pushes still have no runs 24h+ later), lifted between T210 22:11Z and T211 23:24Z. T212's push = confirmation probe (run expected).** | High | 1 | — | — | ADMIN — resolved (org-level, self-recovered) | — | — |
@@ -572,13 +572,13 @@ All specs + backend implementation complete. 17 backend tasks (BE-01→BE-11d + 
 | STACK-01 | **NATS messaging:** `stub_adapters.go` has NATS stub only. ARCHITECTURE.md §2.3 lists NATS for reliable delivery/pub-sub. | Low | 4 | FTR-04 | ++infra, ++messaging | 🔴 |
 | STACK-02 | **WebRTC (pion):** `stub_adapters.go` has WebRTC stub only. ARCHITECTURE.md §2.1 lists pion/webrtc for peer connections. | Low | 5 | FTR-04 | ++infra, ++webrtc | 🔴 |
 | STACK-03 | **Canvas 2D fallback:** ARCHITECTURE.md §2.2 specifies custom Canvas 2D renderer for >2000 node trees. Not built. | Low | 4 | frontend | ++frontend, ++performance | 🔴 |
-| STACK-04 | **Service Worker (Workbox):** ARCHITECTURE.md §2.2 lists Workbox v7 for offline caching. Not found in frontend/. | Low | 3 | frontend | ++pwa, ++offline | 🔴 |
+| STACK-04 | **Service Worker (Workbox):** ARCHITECTURE.md §2.2 lists Workbox v7 for offline caching. Not found in frontend/. | Low | 3 | frontend | ++pwa, ++offline | ✅ (FE-09 hand-rolled SW, 8af8bc1) |
 
 ### Deployment Gaps
 
 | ID | Task | Pri | Cpx | Deps | Tags | Status |
 |----|------|-----|-----|------|------|--------|
-| DPL-05 | **Hermes → Canopy migration:** Migrate existing Hermes sessions (chat logs, session DB) into Canopy trees. SPEC-DPL-05 (8,390 words). | Low | 4 | GAP-003 | ++migration, ++data | 🔴 |
+| DPL-05 | **Hermes → Canopy migration:** Migrate existing Hermes sessions (chat logs, session DB) into Canopy trees. SPEC-DPL-05 (8,390 words). | Low | 4 | GAP-003 | ++migration, ++data | ✅ (WIRE-003/006 + BUG-035) |
 
 ---
 
