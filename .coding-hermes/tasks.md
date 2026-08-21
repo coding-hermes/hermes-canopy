@@ -9882,3 +9882,28 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
 
 **Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (19) stays the drift check.
+## Tick 383 (2026-08-21 ~22:3x UTC) — MAINTENANCE light audit (no E2E due, no dispatch, no board writes)
+
+**Verdict: pure-maintenance** — E2E-001 window 380-385 satisfied at T380 (60/60 PASS, e2e-output/tick380.md); next battery due T386 (window 386-391). No implementable code task (16 pending = all P3 post-MVP roadmap FTR/PL/STACK, deferred by design per AGENTS.md; tick-382 premise-verification already closed DPL-05/STACK-04, STACK-03 re-verified real gap). Board rows: tasks.jsonl unchanged (169 complete / 17 pending = 16 P3 + INFRA-003).
+
+**Light audit:**
+- CI green — via UNAUTHENTICATED api.github.com (public repo): last 5 runs success, incl. 32445649480 (tick-380 push 12e605b @ 04:04:56Z) + 32397596598 (T379) + 32363396849/32363217474 (T378). `gh run list` still DEAD (bogus token, INFRA-003). gh issues 0 open (unauthenticated API).
+- gitreins guard 4/4 PASS (secrets/go_build/go_lint/go_tests, full mode) · gitreins task list: 0 pending / 0 in_progress / 75 complete (+1 = tick-382 DPL-05/STACK-04 task completed 16:21:11Z)
+- go build + go vet clean · go test -short -p 1 ./... EXIT 0 (GAP-039 fast class, ~5s) · gofmt -l 16 tracked files = T313 baseline set, count unchanged
+- vitest unit 657/657 (34 files, 4.38s, run from frontend/)
+- off-by-one :8766 healthy (uptime 5h15m; live stats 1193 problems / 1368 answers / 1368 verified / queue 9 / hit_rate 1) — idle tick, no discover/submit
+- storm-watch: scheduler 0 duplicate running ticks, TOTAL RUNNING 1 = this fire (SpawnedAt 17:25:18-05:00 matches) · cooldown 21600 fleet.toml pin + scheduler API agree (no PUT) · consecutive_failures=0 · 0 board events appended (pure-maintenance precedent T355-T381; header ticks_total stays 380)
+
+**INFRA-003 re-verified (still BLOCKED, P0, operator-owned):** ~/.hermes/.env GITHUB_PAT/GITHUB_TOKEN + ~/.config/gh/hosts.yml still carry the bogus placeholder (ghp_BOGNwjfa...; `git push --dry-run` → 'Invalid username or token', curl /user 401). 3 unpushed commits now riding (ticks 381, 382, 383 board commits) — do NOT amend/rebase; flush on token restore. CI/issue reads unaffected via unauthenticated API.
+
+**Housekeeping:** folded tick-382's uncommitted .gitreins/tasks.yaml completion (DPL-05/STACK-04 task → complete, verdict dir .gitreins/history/2026-08-21/da8e7144) into this commit.
+
+**Board:** NO event append, NO board.db/header writes (pure-maintenance precedent). tasks.jsonl untouched. tasks.md tick entry only.
+
+**DuckBrain:** /ticks/382 BACKFILLED (170e4782 — tick 382 skipped its namespace writes; pre-write contiguity showed /ticks/380+381 present, 382 absent) + /ticks/383 (3fda8e88-2f6e-474f-9a11-dcd5c60b8c08) + /project/hermes-canopy/status (fda4e418-60fa-4cab-a414-15bf6101fab8) written via HTTP :3000, all fs-verified (uuid grep in ns partition current.jsonl, hits 1 each).
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355-T382 precedent).
+
+**Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
+
+**Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.

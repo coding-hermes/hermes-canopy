@@ -1271,5 +1271,6 @@ tasks:
   criteria:
   - DPL-05 and STACK-04 rows flip to complete with evidence notes (WIRE-003/FE-09);
     STACK-03 stays pending; tasks.jsonl valid JSONL; untouched rows byte-identical
-  status: in_progress
+  status: complete
   created_at: '2026-08-21T16:20:36.791534+00:00'
+  completed_at: '2026-08-21T16:21:11.156210+00:00'
