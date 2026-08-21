@@ -9845,3 +9845,15 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355-T378 precedent).
 
 **Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05), all deferred by design (AGENTS.md) — next E2E-001 window 380-385 opens at Tick 380 (battery owed, first tick of window per fixture rule); matrix ⬜ count stays the drift check.
+
+## Tick 380 (2026-08-20 ~23:0x local / 04:0x UTC) — E2E battery tick (window 380-385, first tick)
+
+**Verdict: E2E-001 SATISFIED at first tick of window** — 60/60 PASS (12 files, 97.77s, zero visual drift, goldens untouched). Full detail: e2e-output/tick380.md.
+
+**Flake:** two-context-sync (WIRE-001) failed 3 standalone attempts under host load avg 23/16 cores (other fleet ticks hammering box: security.test 487% CPU, opencode, dagger) — documented SSE/Yjs render-timing flake class (T338/T362/T368 precedent). NOT a regression: zero code diff since T374 PASS (734adf2..a245905 = board/docs only), backend 201 + SSE broadcast verified live (curl probe, node_added with content), independent Playwright repro passed A+B, retry x1 passed, full re-run 60/60 first-try. Post-debug submitted to off-by-one: sub_007ac4 (class canopy-two-context-sync-flake).
+
+**Stack:** stale 7d container stopped for run; fresh host binary /tmp/canopyd-t380 (HEAD a245905) on :8091 vs canopy-pg :5437; container restored as-found (health 200).
+
+**Light audit:** CI last 3 success · vitest unit 657/657 (8.5s) · go build/vet clean · go test -short EXIT 0 · gofmt 16 baseline unchanged · gitreins 74 all complete (0 pending/0 in_progress) · gh issues 0 · off-by-one 1179/1354/1354/queue 11/hit_rate 1 · cooldown 21600 fleet pin + scheduler agree · 0 unpushed pre-tick.
+
+**Board:** audit event id=265 appended (events.jsonl + board.db + board.jsonl header ticks_total 378→380, last_commit a245905). tasks.jsonl unchanged (165 complete / 18 P3 pending == matrix). No gitreins task (E2E verification tick, T354-T378 precedent).
