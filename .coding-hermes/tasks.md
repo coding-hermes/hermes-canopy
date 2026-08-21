@@ -34,7 +34,7 @@
 
 | ID | Task | Pri | Cpx | Deps | Tags | Model | Lvl | Fallback |
 |----|------|-----|-----|------|------|-------|-----|----------|
-> **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 353 (18 post-MVP backlog rows carry ⬜ deferred markers). Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
+> **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 381 (19 open rows: 18 post-MVP backlog rows carry ⬜ deferred markers + INFRA-003 ⬜ push-blocker). Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
 
 ## Dogfood Findings (2026-08-17)
 
@@ -144,6 +144,7 @@ Full report: `docs/dogfood/2026-08-17-integration.md` · diagnostics: `docs/dogf
 || ✅ GAP-004 | DuckDB card storage: 848 lines (duckdb_repo.go + store.go + 6 tests). 6/6 tests PASS (Tick 105, commit 685a850). Root cause: DuckDB does not release PK index slot within a tx — same-tx SELECT+DELETE+INSERT AND parameterized UPDATE both hit PK constraint on indexed multi-column tables. Fix: standalone DELETE then INSERT (no tx wrapper). Create/Get/List/Events/Patch all work. | Medium | 3 | card, db | ++architecture | | | |
 || ✅ GAP-005 | Vite proxy hardcoded: Verified — vite.config.ts already uses VITE_API_URL and VITE_DEV_JWT env vars with sensible defaults. Not a code gap — a documentation gap (no SELF_HOST.md covers env var configuration). Closed. | Low | 1 | frontend | ++configuration | | | |
 | **Post-MVP Backlog (deferred by design — AGENTS.md)** | | | | | | | | |
+| ⬜ INFRA-003 | GitHub credentials dead on host: `gh` 401 + `git push` fails 'Invalid username or token' (bogus ghp_BOG... placeholder in ~/.hermes/.env + ~/.config/gh/hosts.yml). Push BLOCKED since tick 381 — operator must restore a PAT (contents:write + actions:read) in both locations, then flush the tick-381 local commit. CI readable unauthenticated (public repo). | P0 | 1 | — | ++infra, ++github, ++credentials | — | — | — |
 | ⬜ FTR-01 | Multi-user collaboration: N-user approval model, CRDT conflict resolution, presence heartbeats, workspace roles. SPEC-FTR-01. | P3 | 8 | GAP-002 | ++feature, ++collaboration | — | — | — |
 | ⬜ FTR-02 | Multi-agent federation: cross-server agent discovery, federation tokens, FTL protocol. SPEC-FTR-02. | P3 | 8 | FTR-01 | ++feature, ++federation | — | — | — |
 | ⬜ FTR-03 | MLS encryption (full): RFC 9420 group state machine, key-package manager, per-workspace MLS groups. SPEC-FTR-03. | P3 | 7 | FTR-01 | ++encryption, ++mls | — | — | — |
@@ -9857,3 +9858,27 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Light audit:** CI last 3 success · vitest unit 657/657 (8.5s) · go build/vet clean · go test -short EXIT 0 · gofmt 16 baseline unchanged · gitreins 74 all complete (0 pending/0 in_progress) · gh issues 0 · off-by-one 1179/1354/1354/queue 11/hit_rate 1 · cooldown 21600 fleet pin + scheduler agree · 0 unpushed pre-tick.
 
 **Board:** audit event id=265 appended (events.jsonl + board.db + board.jsonl header ticks_total 378→380, last_commit a245905). tasks.jsonl unchanged (165 complete / 18 P3 pending == matrix). No gitreins task (E2E verification tick, T354-T378 precedent).
+
+## Tick 381 (2026-08-21 ~05:1x UTC) — MAINTENANCE light audit + INFRA-003 filed (GitHub push-blocker)
+
+**Verdict: pure-maintenance + blocker filed** — E2E-001 window 380-385 satisfied at T380 (60/60 PASS, e2e-output/tick380.md); next battery due T386 (window 386-391). No implementable code task (18 pending = all P3 post-MVP roadmap FTR/PL/STACK/DPL-05, deferred by design per AGENTS.md). Board rows: tasks.jsonl unchanged except INFRA-003 added.
+
+**Light audit:**
+- CI green — but via UNAUTHENTICATED api.github.com (public repo): last 5 runs success, incl. 32445649480 (tick-380 push 12e605b @ 04:04:56Z) + 32397596598 (T379) + 32363396849/32363217474 (T378). `gh run list` is DEAD (bogus token, see blocker). gh issues 0 open (unauthenticated API).
+- go build + go vet clean · go test -short ./... EXIT 0 (GAP-039 fast class) · gofmt -l 16 tracked files = T313 baseline set, count unchanged
+- vitest unit 657/657 (34 files, 3.85s, run from frontend/)
+- Stack: canopyd :8091 health 200 + vite :5173 200 + canopy-pg :5437 listening (no E2E due — no battery run)
+- off-by-one :8766 healthy (sub_007ac4 from T380 now COMPLETE — two-context-sync flake debug solved server-side; stats idle tick, no discover/submit)
+- storm-watch: scheduler /api/v1/status 44 active projects, 2 active ticks, no canopy dup · cooldown 21600 fleet.toml pin + scheduler API agree (no PUT) · gitreins 0 pending / 0 in_progress · 0 unpushed pre-tick (origin/master == HEAD 12e605b)
+
+**BLOCKER — GitHub credentials dead on host (INFRA-003 filed, P0):** GITHUB_PAT / GITHUB_TOKEN in ~/.hermes/.env AND ~/.config/gh/hosts.yml all carry a bogus placeholder (`ghp_BOGNwjfa...` — verified: curl /user 401, `git push --dry-run` → 'Invalid username or token'; T380 pushed fine 04:04Z so the token was rotated/redacted after that). Consequences: (1) `gh run list` / `gh issue list` 401; (2) git push to origin BLOCKED — this tick's board commit is local-only. Workarounds proven this tick: CI + issues readable unauthenticated via plain curl to api.github.com (public repo; the bogus Bearer header is what caused the 401s — omit it). Operator fix: regenerate fine-grained PAT (repo contents:write + actions:read), update ~/.hermes/.env (GITHUB_PAT, GITHUB_TOKEN) + ~/.config/gh/hosts.yml, then `git push origin master` to flush this tick's commit. Reference patched: canopy-foreman-ops CI section now documents the unauthenticated fallback.
+
+**Board:** event id=266 (task_created INFRA-003) appended (events.jsonl + board.db via create_board_tasks.py, JSONL-id authority); tasks.jsonl +1 row (INFRA-003 pending); tasks.md matrix updated (19 open rows, header note reconciled tick 381). No ticks_total bump (audit tick, header stays 380 per pure-maintenance precedent).
+
+**DuckBrain:** /ticks/381 (eb944ab0-55bd-4884-8f15-459d5a0a1a00) + /project/hermes-canopy/status (3f0a686c-fb68-4b94-902c-503226d0d94e) written via HTTP :3000 pre-commit, both 201-confirmed. Pre-write contiguity: /ticks/380 present, /ticks/381 absent.
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355-T380 precedent).
+
+**Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
+
+**Next tick:** open set = 18-row P3 backlog (FTR/PL/STACK/DPL-05) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (19) stays the drift check.
