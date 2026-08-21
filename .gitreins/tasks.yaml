@@ -1266,3 +1266,10 @@ tasks:
   status: complete
   created_at: '2026-08-20T11:16:28.093597+00:00'
   completed_at: '2026-08-20T11:17:19.969391+00:00'
+- id: HYG-382
+  title: 'Board hygiene: close stale DPL-05 + STACK-04, keep STACK-03'
+  criteria:
+  - DPL-05 and STACK-04 rows flip to complete with evidence notes (WIRE-003/FE-09);
+    STACK-03 stays pending; tasks.jsonl valid JSONL; untouched rows byte-identical
+  status: in_progress
+  created_at: '2026-08-21T16:20:36.791534+00:00'
