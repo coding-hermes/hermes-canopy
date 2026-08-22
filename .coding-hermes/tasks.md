@@ -10002,6 +10002,6 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 
 **Stray cleanup:** removed dagger.db{,-shm,-wal} (untracked), frontend/canopy-vision-walk.tmp.mjs (QA walk scratch); restored .vfs/graph/edges.jsonl cache drift.
 
-**DuckBrain:** /ticks/388 + /project/hermes-canopy/status written via HTTP :3000 pre-commit, ids confirmed in write responses.
+**DuckBrain:** /ticks/388 (ce689c3f-78a6-47c2-8ace-609b86ce999b) + /project/hermes-canopy/status (5206bda3-0b63-4f8a-9386-0e0d34bba1f6) written via HTTP :3000 /cli, ids confirmed in write responses (post-commit; board commit 6bc5b2d pushed first).
 
 **Next tick:** open set = 14-row backlog: IMP-008 (P1, schema-tolerant state.db reader — Bane 08-22) + UI-LIVE-001 (P2, source-classified session list) + 12 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (14) stays the drift check.
