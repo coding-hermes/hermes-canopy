@@ -169,7 +169,7 @@ func (r *Reader) introspect() map[string]map[string]bool {
 				}
 			}
 			_ = rows.Err()
-			rows.Close()
+			_ = rows.Close()
 		}
 		out[table] = cols
 	}
