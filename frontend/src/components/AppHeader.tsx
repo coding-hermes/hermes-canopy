@@ -33,7 +33,7 @@ import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { Menu, Network, List, GitMerge, type LucideIcon } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import type { TopicSummary } from '../types/topic';
-import { ACTIVE_TREE_STORAGE_KEY, readStoredTreeId } from '../lib/activeTree';
+import { ACTIVE_TREE_STORAGE_KEY, readStoredTreeId, resolveDemoAliasSync } from '../lib/activeTree';
 import {
   resolveActiveTreeId,
   resolveHeaderContext,
@@ -147,11 +147,11 @@ export default function AppHeader({ onMenuClick }: { onMenuClick?: () => void } 
   // one (StrictMode double-invokes effects in dev).
   const requestedTree = useRef<string>('');
 
-  const treeId = resolveActiveTreeId({
+  const treeId = resolveDemoAliasSync(resolveActiveTreeId({
     pathname,
     treeParam,
     storedTreeId: readStoredTreeId(),
-  });
+  }));
 
   const loadTrees = useCallback(async () => {
     try {

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiGet, apiPatch, apiPost, apiDelete } from '../lib/api';
-import { readStoredTreeId } from '../lib/activeTree';
+import { readStoredTreeId, resolveDemoAliasSync } from '../lib/activeTree';
 import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
 import { BulkActionBar } from '../components/BulkActionBar';
 import RelatedPanel from '../components/RelatedPanel';
@@ -352,7 +352,7 @@ export default function NodesPage() {
   // TopicsRail parity — PAG-001/002 pagination means the newest page may
   // not contain a stored tree; the select is still corrected below).
   const [selectedTreeId, setSelectedTreeId] = useState<string | null>(
-    () => treeParam || readStoredTreeId() || null,
+    () => resolveDemoAliasSync(treeParam || readStoredTreeId()) || null,
   );
   const [nodes, setNodes] = useState<NodeDetail[]>([]);
   const [topics, setTopics] = useState<TopicSummary[]>([]);

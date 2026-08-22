@@ -21,7 +21,7 @@ import {
 import { Loader2, Hash, MessageSquare } from 'lucide-react';
 import { autocompleteReferences } from '../../lib/referenceApi';
 import { getActiveReferencePrefix } from '../../lib/topic-reference';
-import { readStoredTreeId } from '../../lib/activeTree';
+import { readStoredTreeId, resolveDemoAliasSync } from '../../lib/activeTree';
 import { token, palette, alpha } from '../../theme';
 import type { ReferenceAutocompleteResult } from '../../types/reference';
 
@@ -53,8 +53,7 @@ export default function ReferenceAutocompletePopover({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerOffset, setTriggerOffset] = useState(-1);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const treeId = readStoredTreeId();
-
+  const treeId = resolveDemoAliasSync(readStoredTreeId());
   // Detect the active reference prefix at the cursor.
   const prefix = getActiveReferencePrefix(content, cursorOffset);
 

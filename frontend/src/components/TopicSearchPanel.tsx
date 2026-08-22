@@ -33,7 +33,7 @@ import {
   getTopicPreview,
   injectContext,
 } from '../lib/topicSearchApi';
-import { readStoredTreeId } from '../lib/activeTree';
+import { readStoredTreeId, resolveDemoAlias, resolveDemoAliasSync } from '../lib/activeTree';
 import type {
   TopicSearchResult,
   TopicPreview,
@@ -171,7 +171,21 @@ function PreviewPopover({ preview }: { preview: TopicPreview }) {
 // ── Main Search Panel ────────────────────────────────────────────────────
 
 export default function TopicSearchPanel() {
-  const treeId = readStoredTreeId();
+  // The stored id can be the literal 'demo' (BUG-038/039: sidebar Tree
+  // View nav persists it); the backend 400s on it. Resolve synchronously
+  // at init so the first effect run never fires tree_id=demo, then
+  // re-verify by label search once (harmless; resolves to the same UUID).
+  const storedTreeId = readStoredTreeId();
+  const [treeId, setTreeId] = useState<string>(resolveDemoAliasSync(storedTreeId));
+  useEffect(() => {
+    let cancelled = false;
+    resolveDemoAlias(storedTreeId).then((id) => {
+      if (!cancelled) setTreeId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storedTreeId]);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<TopicSearchResult[]>([]);

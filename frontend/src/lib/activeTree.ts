@@ -44,7 +44,48 @@ export function storeTreeId(treeId: string): void {
   } catch {
     // Ignore quota/permission failures — the event still fires below.
   }
-  window.dispatchEvent(new Event(ACTIVE_TREE_STORAGE_KEY));
+  window.dispatchEvent(
+    new CustomEvent(ACTIVE_TREE_STORAGE_KEY, { detail: { treeId } }),
+  );
+}
+
+/**
+ * The seeded demo tree. Stable UUID — the E2E golden tree, never delete.
+ * Used as the resolution target for the `/tree/demo` alias.
+ */
+export const DEMO_TREE_UUID = 'b1655761-2d7f-4b3c-85d5-21396da15691';
+
+/**
+ * Resolve the `/tree/demo` alias to the real seeded demo tree id.
+ *
+ * The sidebar Tree View nav item points at `/tree/demo`, but the backend
+ * has no 'demo' tree — raw ids 400 on every tree-scoped endpoint (Bane
+ * 08-22, BUG-038/BUG-039). Look the tree up by label, fall back to the
+ * stable UUID so the alias always resolves even when the search misses.
+ * Any non-'demo' id passes through untouched.
+ */
+/**
+ * Synchronous `/tree/demo` alias resolution. The seeded demo tree UUID is
+ * canonical — components that just need a valid tree id (header, pages,
+ * autocomplete) can use this without a round-trip. The async
+ * `resolveDemoAlias` additionally verifies by label search for flows that
+ * want to tolerate a reseeded demo tree.
+ */
+export function resolveDemoAliasSync(raw: string): string {
+  return raw === 'demo' ? DEMO_TREE_UUID : raw;
+}
+
+export async function resolveDemoAlias(raw: string): Promise<string> {
+  if (raw !== 'demo') return raw;
+  try {
+    const res = await fetch(`/api/v1/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`);
+    if (!res.ok) return DEMO_TREE_UUID;
+    const data = (await res.json()) as { trees?: { id: string }[] };
+    const hit = data.trees?.find((t) => t.id);
+    return hit?.id ?? DEMO_TREE_UUID;
+  } catch {
+    return DEMO_TREE_UUID;
+  }
 }
 
 /** Notify listeners that the topic set changed without changing the tree. */

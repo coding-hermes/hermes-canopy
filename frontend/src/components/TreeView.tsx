@@ -32,6 +32,7 @@ import {
   type TreeYDoc,
 } from '../stores/treeStore.ts';
 import { SSESyncProvider } from '../stores/yjsProvider.ts';
+import { resolveDemoAliasSync, storeTreeId } from '../lib/activeTree';
 import { useYjsTree } from '../stores/useYjsTree.ts';
 import { usePresence } from '../hooks/usePresence.ts';
 import type {
@@ -98,32 +99,15 @@ export default function TreeView() {
    * /tree/demo alias resolution (Bane 08-22): the sidebar "Tree View" nav
    * item points at /tree/demo, but the backend has no 'demo' tree — the
    * raw id 400s and the canvas stays an empty "Untitled Tree". Resolve the
-   * alias to the seeded demo tree by label, with the stable seeded UUID as
-   * fallback so the nav item always opens a real graph.
+   * alias to the seeded demo tree by label (stable UUID fallback), and
+   * persist the resolved UUID so no component ever sends tree_id=demo.
    */
   const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
   useEffect(() => {
     if (!treeId) return;
-    if (treeId !== 'demo') {
-      setResolvedTreeId(treeId);
-      return;
-    }
-    let cancelled = false;
-    apiGet<{ trees?: { id: string }[] }>('/trees?search=UI-02 Rail Demo&limit=1')
-      .then((res) => {
-        if (cancelled) return;
-        setResolvedTreeId(
-          res?.trees?.[0]?.id ?? 'b1655761-2d7f-4b3c-85d5-21396da15691',
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setResolvedTreeId('b1655761-2d7f-4b3c-85d5-21396da15691');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+    const id = resolveDemoAliasSync(treeId);
+    setResolvedTreeId(id);
+    if (treeId === 'demo') storeTreeId(id);
   }, [treeId]);
 
   // Initialize Yjs document + providers

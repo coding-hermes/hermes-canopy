@@ -38,6 +38,7 @@ import { topicIcon, orderTopics } from '../lib/topicIcons';
 import {
   ACTIVE_TREE_STORAGE_KEY,
   readStoredTreeId,
+  resolveDemoAlias,
   storeTreeId,
 } from '../lib/activeTree';
 import { DetectionSettings } from './DetectionSettings';
@@ -160,20 +161,6 @@ export default function TopicsRail() {
     // /tree/demo alias (Bane 08-22): the stored/URL tree id can be the
     // literal 'demo' (sidebar Tree View nav), which the backend rejects
     // (400) — resolve it to the seeded demo tree by label.
-    const DEMO_UUID = 'b1655761-2d7f-4b3c-85d5-21396da15691';
-    const resolveDemoAlias = async (raw: string): Promise<string> => {
-      if (raw !== 'demo') return raw;
-      try {
-        const found = await apiGet<ListTreesResponse>(
-          `/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`,
-        );
-        return found.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'))
-          ?.id ?? DEMO_UUID;
-      } catch {
-        return DEMO_UUID;
-      }
-    };
-
     if (treeParam) return { id: await resolveDemoAlias(treeParam), explicit: true };
 
     const stored = readStoredTreeId();

@@ -22,7 +22,7 @@ import {
 import { apiGet, apiPost, apiDelete } from '../lib/api';
 import type { TopicSummary, TreeSummary } from '../types/topic';
 import type { TreeDetail } from '../types/tree';
-import { readStoredTreeId, storeTreeId, notifyTopicsChanged } from '../lib/activeTree';
+import { readStoredTreeId, storeTreeId, notifyTopicsChanged, resolveDemoAliasSync } from '../lib/activeTree';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -321,7 +321,7 @@ export default function TopicsPage() {
 
   const [trees, setTrees] = useState<TreeSummary[]>([]);
   const [selectedTreeId, setSelectedTreeId] = useState<string>(
-    () => treeParam || readStoredTreeId(),
+    () => resolveDemoAliasSync(treeParam || readStoredTreeId()),
   );
   const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(false);

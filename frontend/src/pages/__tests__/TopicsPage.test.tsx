@@ -47,6 +47,7 @@ vi.mock('../../lib/activeTree', () => ({
   readStoredTreeId: () => '',
   storeTreeId: vi.fn(),
   notifyTopicsChanged: vi.fn(),
+  resolveDemoAliasSync: (id: string) => id,
 }));
 
 import { apiGet, apiPost } from '../../lib/api';
