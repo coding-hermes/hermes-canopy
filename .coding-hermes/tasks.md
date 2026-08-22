@@ -9929,3 +9929,25 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
 
 **Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.
+## Tick 385 (2026-08-22 ~10:4x UTC) — MAINTENANCE light audit (no E2E due, no dispatch, no board writes)
+
+**Verdict: pure-maintenance** — E2E-001 window 380-385 satisfied at T380 (60/60 PASS, e2e-output/tick380.md); next battery due T386 (window 386-391, first tick of window per fixture rule). No implementable code task: 17 pending rows = 16 P3 post-MVP roadmap FTR/PL/STACK (deferred by design per AGENTS.md) + INFRA-003 (P0 operator-owned). Board rows: tasks.jsonl 168 complete / 17 pending (185 total rows).
+
+**Light audit:**
+- CI green — via UNAUTHENTICATED api.github.com (public repo): last 5 runs success, incl. 32445649480 (tick-380 push 12e605b @ 04:04:56Z) + 32397596598 (T379) + 3x T378 runs. `gh run list` still DEAD (bogus token, INFRA-003).
+- gitreins task list: 0 pending / 0 in_progress / 75 complete (no active task to steward)
+- off-by-one :8766 healthy (uptime 11h15m; no debugging this tick — nothing to discover/submit)
+- storm-watch: scheduler /api/v1/status reachable, consecutive_failures=0, duckbrain base_url :3000 reachable (last_ok 05:37:17-05:00). active_ticks=4 is fleet-wide across 44 projects (other projects' legitimate ticks), no canopy multi-tick. 0 board events appended (pure-maintenance precedent T355-T384).
+- DuckBrain daemon :3000 reports degraded (embedding providers down: lmstudio no model, ollama missing, no API key) — write path unaffected (memories written + read fine this tick); noted for operator awareness, not a tick blocker.
+
+**INFRA-003 re-verified (still BLOCKED, P0, operator-owned):** ~/.hermes/.env GITHUB_PAT/GITHUB_TOKEN + ~/.config/gh/hosts.yml still carry the bogus placeholder; `git push origin master` -> 'Invalid username or token' (exit 128), remote master still 12e605b. 5 unpushed commits riding (ticks 381-385 board commits) — do NOT amend/rebase; flush on token restore. CI/issue reads unaffected via unauthenticated API.
+
+**Board:** NO event append, NO board.db/header writes (pure-maintenance precedent). tasks.jsonl untouched. tasks.md tick entry only.
+
+**DuckBrain:** /ticks/385 (770a4085-96cd-4e51-b02f-fe09fe72d54f) + /project/hermes-canopy/status (fe423346-cfee-4932-bff4-aada7a627a7b) written via HTTP :3000, ids confirmed in write responses.
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick; T326/T332/T355-T384 precedent).
+
+**Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
+
+**Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.
