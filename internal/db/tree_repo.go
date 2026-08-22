@@ -38,6 +38,10 @@ type TreeRepo interface {
 	// max page size (NOT limit+1; the caller passes its own window).
 	// PAG-002.
 	ListKeyset(ctx context.Context, cursorID *uuid.UUID, limit int) ([]Tree, error)
+	// CountNodesByTreeIDs returns live (non-soft-deleted) node counts per
+	// tree for the given ids. Missing ids are absent from the map.
+	// BUG-041: replaces the NodeCount=1 stub in ListTrees.
+	CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
 // PGTreeRepo is the pgx-backed TreeRepo implementation.
@@ -203,6 +207,36 @@ func (r *PGTreeRepo) Count(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("db: count trees: %w", err)
 	}
 	return n, nil
+}
+
+// CountNodesByTreeIDs returns the live (non-soft-deleted) node count per
+// tree for the given ids, using the idx_nodes_tree_id index. Tree ids
+// without any nodes are absent from the map (zero by convention). Used by
+// ListTrees to replace the old NodeCount=1 stub with real counts
+// (BUG-041 — every tree card showed "1 nodes").
+func (r *PGTreeRepo) CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	counts := make(map[uuid.UUID]int, len(treeIDs))
+	if len(treeIDs) == 0 {
+		return counts, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+        SELECT tree_id, count(*)::int
+        FROM nodes
+        WHERE tree_id = ANY($1) AND deleted_at IS NULL
+        GROUP BY tree_id`, treeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("db: count nodes by tree ids: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("db: scan node count: %w", err)
+		}
+		counts[id] = n
+	}
+	return counts, rows.Err()
 }
 
 // ListKeyset returns a page of active trees using keyset (cursor)

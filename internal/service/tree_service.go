@@ -595,6 +595,7 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 	for _, t := range rows {
 		summaries = append(summaries, treeToSummary(t))
 	}
+	s.fillNodeCounts(ctx, summaries)
 
 	var next *uuid.UUID
 	if hasMore && len(summaries) > 0 {
@@ -641,6 +642,7 @@ func (s *TreeServiceImpl) listTreesKeyset(ctx context.Context, p ListTreesParams
 	for _, t := range rows {
 		summaries = append(summaries, treeToSummary(t))
 	}
+	s.fillNodeCounts(ctx, summaries)
 
 	var next *uuid.UUID
 	if hasMore && len(summaries) > 0 {
@@ -655,6 +657,28 @@ func (s *TreeServiceImpl) listTreesKeyset(ctx context.Context, p ListTreesParams
 		Total:      total,
 		Limit:      limit,
 	}, nil
+}
+
+// fillNodeCounts replaces the old NodeCount=1 stub with real live counts
+// for a page of summaries (BUG-041 — every tree card showed "1 nodes").
+// Counts are cosmetic in the list: a failure never fails the list.
+func (s *TreeServiceImpl) fillNodeCounts(ctx context.Context, summaries []TreeSummary) {
+	if len(summaries) == 0 {
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(summaries))
+	for _, t := range summaries {
+		ids = append(ids, t.ID)
+	}
+	counts, err := s.treeRepo.CountNodesByTreeIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for i := range summaries {
+		if n, ok := counts[summaries[i].ID]; ok {
+			summaries[i].NodeCount = n
+		}
+	}
 }
 
 // --- GetTree ----------------------------------------------------------------

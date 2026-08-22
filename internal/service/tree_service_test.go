@@ -16,6 +16,16 @@ type treeRepoStub struct {
 	trees []db.Tree
 }
 
+// CountNodesByTreeIDs returns a deterministic fake: every stub tree gets
+// len(trees) nodes so list tests can assert the count plumbing runs.
+func (r *treeRepoStub) CountNodesByTreeIDs(_ context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	counts := make(map[uuid.UUID]int, len(treeIDs))
+	for _, id := range treeIDs {
+		counts[id] = len(r.trees)
+	}
+	return counts, nil
+}
+
 func (r *treeRepoStub) Create(_ context.Context, tree *db.Tree) (*db.Tree, error) {
 	tree.ID = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 	tree.CreatedAt = mustParseTime("2026-07-23T10:00:00Z")

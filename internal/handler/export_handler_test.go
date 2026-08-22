@@ -26,6 +26,12 @@ func newStubExportTreeRepo() *stubExportTreeRepo {
 	return &stubExportTreeRepo{trees: make(map[uuid.UUID]*db.Tree)}
 }
 
+// CountNodesByTreeIDs satisfies the TreeRepo interface; the export path
+// never reads node counts, so an empty map is correct.
+func (s *stubExportTreeRepo) CountNodesByTreeIDs(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]int, error) {
+	return map[uuid.UUID]int{}, nil
+}
+
 func (s *stubExportTreeRepo) GetByID(_ context.Context, id uuid.UUID) (*db.Tree, error) {
 	t, ok := s.trees[id]
 	if !ok {
