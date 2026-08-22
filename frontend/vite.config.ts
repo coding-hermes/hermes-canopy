@@ -29,7 +29,9 @@ const API_URL = process.env.VITE_API_URL || 'http://localhost:8091'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    allowedHosts: true, // TEMP (Bane test session 2026-08-08): allow trycloudflare tunnel host. Revert after testing.
+    // LAN/Tailscale access (Bane 08-22): bind all interfaces, no tunnel host
+    // allowance needed anymore (cloudflare quick tunnel retired).
+    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: API_URL,
