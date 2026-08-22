@@ -9985,3 +9985,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
 
 **Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.
+
+## Tick 388 (2026-08-22 ~14:4x UTC) — CODE LANDED VERIFICATION + BACKLOG PUSH (INFRA-003 RESOLVED)
+
+**Verdict: productive verification tick** — BUG-038 + BUG-039 fixes (committed 0df3c47/008ab28 by operator session) verified live over plain HTTP and CLOSED with full GitReins lifecycle; INFRA-003 (P0 push-blocker) RESOLVED — gh auth live, 12-commit backlog (ticks 381-387 + fixes) flushed to origin. No worker dispatch needed (code already landed; verification is the work).
+
+**Verified live (browser over http://100.97.236.14:5173/tree/demo — the exact BUG-039 plain-HTTP Tailscale scenario):** /tree/demo resolves to UI-02 Rail Demo (b1655761-2d7f-4b3c-85d5-21396da15691), 82 nodes · 77 edges render, SSE connected, composer active, ZERO js_errors / console errors. Matches BUG-038 commit claim (82/77). BUG-039's makeId fallback + TopicsRail demo-alias resolution confirmed in code (treeStore.ts:41-53, TopicsRail.tsx:163-200) and by the live render.
+
+**Gates:** vitest 657/657 (34 files, 5.86s) · tsc --noEmit clean (exit 0) · gitreins Tier 2 judge PASS (verdict cb5884b0 — task BUG-039 created/started/completed this tick) · git push dry-run OK pre-flush · CI last 5 success on remote (tick-380 push 12e605b last run) · off-by-one :8766 not consulted (no debugging needed — fixes pre-verified).
+
+**GitReins lifecycle:** BUG-039 task created + started + completed (Tier 1 PASS: secrets/build/lint/tests; Tier 2 PASS cb5884b0). Kept for audit (fleet default).
+
+**INFRA-003 CLOSED:** ~/.config/gh/hosts.yml now carries a live token (gh auth status OK), push dry-run 12e605b..008ab28 succeeds. Backlog of 12 unpushed commits (ticks 381-387 board commits + c639314 chore + 0afe310 board inject + BUG-038/039 fixes) pushed to origin this tick.
+
+**Board:** BUG-039 → complete (008ab28), BUG-038 → complete (0df3c47), INFRA-003 → complete (token restored). Events 272/273/274 appended (task_completed ×3). tasks.jsonl now 171 complete / 14 pending. Header ticks_total 388, last_commit 008ab28.
+
+**Stray cleanup:** removed dagger.db{,-shm,-wal} (untracked), frontend/canopy-vision-walk.tmp.mjs (QA walk scratch); restored .vfs/graph/edges.jsonl cache drift.
+
+**DuckBrain:** /ticks/388 + /project/hermes-canopy/status written via HTTP :3000 pre-commit, ids confirmed in write responses.
+
+**Next tick:** open set = 14-row backlog: IMP-008 (P1, schema-tolerant state.db reader — Bane 08-22) + UI-LIVE-001 (P2, source-classified session list) + 12 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (14) stays the drift check.

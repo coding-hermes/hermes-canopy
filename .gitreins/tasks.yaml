@@ -1274,3 +1274,14 @@ tasks:
   status: complete
   created_at: '2026-08-21T16:20:36.791534+00:00'
   completed_at: '2026-08-21T16:21:11.156210+00:00'
+- id: BUG-039
+  title: 'App broken over plain HTTP (Tailscale): crypto.randomUUID crash + TopicsRail
+    demo alias 400'
+  criteria:
+  - 'Frontend works over plain HTTP: makeId falls back to Math.random v4 UUID in non-secure
+    contexts; TopicsRail resolves demo alias via /trees?search=UI-02 Rail Demo + b1655761
+    fallback; /tree/demo renders full UI-02 Rail Demo graph (82 nodes/77 edges) with
+    zero console errors; vitest 657/657; tsc clean'
+  status: complete
+  created_at: '2026-08-22T19:32:22.601359+00:00'
+  completed_at: '2026-08-22T19:32:27.467918+00:00'
