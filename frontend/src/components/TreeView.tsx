@@ -94,26 +94,58 @@ export default function TreeView() {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [members, setMembers] = useState<Member[]>(buildInitialMembers);
 
+  /**
+   * /tree/demo alias resolution (Bane 08-22): the sidebar "Tree View" nav
+   * item points at /tree/demo, but the backend has no 'demo' tree — the
+   * raw id 400s and the canvas stays an empty "Untitled Tree". Resolve the
+   * alias to the seeded demo tree by label, with the stable seeded UUID as
+   * fallback so the nav item always opens a real graph.
+   */
+  const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!treeId) return;
+    if (treeId !== 'demo') {
+      setResolvedTreeId(treeId);
+      return;
+    }
+    let cancelled = false;
+    apiGet<{ trees?: { id: string }[] }>('/trees?search=UI-02 Rail Demo&limit=1')
+      .then((res) => {
+        if (cancelled) return;
+        setResolvedTreeId(
+          res?.trees?.[0]?.id ?? 'b1655761-2d7f-4b3c-85d5-21396da15691',
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedTreeId('b1655761-2d7f-4b3c-85d5-21396da15691');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [treeId]);
+
   // Initialize Yjs document + providers
   useEffect(() => {
-    if (!treeId) {
+    if (!resolvedTreeId) {
       setError('No tree ID provided');
       return;
     }
 
     try {
       // Create Y.Doc
-      const treeDoc = createTreeDoc(treeId);
+      const treeDoc = createTreeDoc(resolvedTreeId);
       docRef.current = treeDoc;
 
       // Bind IndexedDB persistence
-      bindIndexedDB(treeId, treeDoc.ydoc);
+      bindIndexedDB(resolvedTreeId, treeDoc.ydoc);
 
       // Connect SSE sync provider
       const provider = new SSESyncProvider(treeDoc, {
-        treeId,
+        treeId: resolvedTreeId,
         onConnected: () => {
-          console.log(`[TreeView] SSE connected for tree ${treeId}`);
+          console.log(`[TreeView] SSE connected for tree ${resolvedTreeId}`);
         },
         onDisconnected: (reason) => {
           console.warn(`[TreeView] SSE disconnected: ${reason}`);
@@ -139,10 +171,10 @@ export default function TreeView() {
         try {
           const [treeRes, nodesRes] = await Promise.all([
             apiGet<{ title?: string; description?: string }>(
-              `/trees/${treeId}`,
+              `/trees/${resolvedTreeId}`,
             ),
             apiGet<{ nodes: BackendNodePayload[] }>(
-              `/trees/${treeId}/nodes`,
+              `/trees/${resolvedTreeId}/nodes`,
             ),
           ]);
           treeDoc.ydoc.transact(() => {
@@ -155,7 +187,9 @@ export default function TreeView() {
           });
           const added = mergeBackendNodes(treeDoc, nodesRes?.nodes ?? []);
           if (added > 0) {
-            console.log(`[TreeView] hydrated ${added} nodes for tree ${treeId}`);
+            console.log(
+              `[TreeView] hydrated ${added} nodes for tree ${resolvedTreeId}`,
+            );
           }
         } catch (err) {
           console.warn('[TreeView] hydration failed', err);
@@ -181,7 +215,7 @@ export default function TreeView() {
       docRef.current = null;
       providerRef.current = null;
     };
-  }, [treeId]);
+  }, [resolvedTreeId]);
 
   const tree = useYjsTree(doc);
 
