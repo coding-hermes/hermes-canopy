@@ -157,10 +157,27 @@ export default function TopicsRail() {
     id: string;
     explicit: boolean;
   }> => {
-    if (treeParam) return { id: treeParam, explicit: true };
+    // /tree/demo alias (Bane 08-22): the stored/URL tree id can be the
+    // literal 'demo' (sidebar Tree View nav), which the backend rejects
+    // (400) — resolve it to the seeded demo tree by label.
+    const DEMO_UUID = 'b1655761-2d7f-4b3c-85d5-21396da15691';
+    const resolveDemoAlias = async (raw: string): Promise<string> => {
+      if (raw !== 'demo') return raw;
+      try {
+        const found = await apiGet<ListTreesResponse>(
+          `/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`,
+        );
+        return found.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'))
+          ?.id ?? DEMO_UUID;
+      } catch {
+        return DEMO_UUID;
+      }
+    };
+
+    if (treeParam) return { id: await resolveDemoAlias(treeParam), explicit: true };
 
     const stored = readStoredTreeId();
-    if (stored) return { id: stored, explicit: true };
+    if (stored) return { id: await resolveDemoAlias(stored), explicit: true };
 
     // Fallback: the API returns trees newest-first, so a naive trees[0]
     // picks whatever tree was created LAST — E2E test trees (T265/T267/

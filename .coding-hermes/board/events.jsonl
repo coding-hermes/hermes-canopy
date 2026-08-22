@@ -266,3 +266,4 @@
 {"id": 268, "timestamp": "2026-08-22T19:03:43.761738Z", "event_type": "task_created", "task_id": "IMP-008", "actor": "bane", "detail": "{\"source\": \"Bane 08-22 reference: nesquena/hermes-webui\"}", "tick_number": null}
 {"id": 269, "timestamp": "2026-08-22T19:03:43.761738Z", "event_type": "task_created", "task_id": "UI-LIVE-001", "actor": "bane", "detail": "{\"source\": \"Bane 08-22 reference: nesquena/hermes-webui\"}", "tick_number": null}
 {"id": 270, "timestamp": "2026-08-22T19:13:47.899449Z", "event_type": "task_created", "task_id": "BUG-038", "actor": "bane", "detail": "{\"source\": \"vision QA walk 2026-08-22\", \"reason\": \"demo tree nav empty canvas\"}", "tick_number": null}
+{"id": 271, "timestamp": "2026-08-22T19:26:31.237255Z", "event_type": "task_created", "task_id": "BUG-039", "actor": "bane", "detail": "{\"source\": \"vision QA walk 2026-08-22\", \"reason\": \"plain-http secure-context crash\"}", "tick_number": null}
