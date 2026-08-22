@@ -10025,3 +10025,27 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/389 (b8cdf80f-f83b-4244-9167-4b45341131c2) + /project/hermes-canopy/status (7b40443a-8dae-43f9-8b46-f3379d755c45) written via HTTP :3000, ids confirmed in write responses.
 
 **Next tick:** open set = 13-row backlog: BUG-040 (P2, same-user two-tab realtime — QA battery 08-22, real wiring gap, worker candidate), IMP-008 (P1, schema-tolerant state.db reader — Bane 08-22), UI-LIVE-001 (P2, source-classified session list — Bane 08-22), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (13) stays the drift check.
+
+## Tick 390 (2026-08-22 ~21:5x UTC) — WORK TICK: IMP-008 (P1, schema-tolerant state.db reader)
+
+**Verdict: productive work tick** — between E2E windows (386-391 satisfied at T386; next battery due T392). Picked the P1 backlog item (Bane 08-22): IMP-008. Worker dispatched via `hermes chat -q` (ox-alpha-free @ opencode-go, flat-rate per Bane doctrine), full GitReins lifecycle, judge PASS, pushed.
+
+**Worker result (b3be005, 742 insertions / 34 deletions across reader.go + new reader_test.go):**
+- reader.go introspects sessions/messages/async_delegations via PRAGMA table_info at open; every SELECT built from the observed column set with NULL-equivalent fallbacks (missing source → warn + ""; missing title/model/display_name/parent_session_id/ended_at/archived → zero values; missing tool_name/token_count/content → NULL equivalents). No sessions table → empty result + warn.
+- Dual-parse timestamps: SQLite REAL unix floats AND ISO-8601 text (RFC3339/Nano + `YYYY-MM-DD HH:MM:SS[.fff]` ± zone; numeric TEXT tried as unix first). unixToTime/timeToUnix exact round-trip pinned by test (idempotence at float64 level — protects importer's watermark `sessionAfter` equality).
+- Extra finding beyond the board: mixed REAL/TEXT timestamp representations do NOT sort chronologically under SQL byte-wise ORDER BY → both list methods re-apply the parsed (timestamp, id) total order in Go. Would have silently skipped sessions on the watermark walk.
+- Degradation decisions: board's "denormalized counts" fallback not implementable (ListMessages returns []Message — a pre-aggregated count can't materialize content; documented in commit body); missing idx_messages_session → fallback path (self-heal would write CREATE INDEX, forbidden by mode=ro).
+- Read-only proof: TestReaderNeverWritesFixture asserts SHA-256-byte-identical fixture after all three list methods.
+- New tests: reader_test.go (423 lines) — old schema w/o source col, minimal DB sessions-only (importer end-to-end as title-rooted tree), ISO-8601 TEXT timestamps, mixed-forms chronological reorder, round-trip quantization, read-only sha proof.
+
+**Gates (foreman re-verified):** go build ./... clean · go vet ./internal/session/... clean · go test ./internal/session/... ok (1.578s). Worker's own full-suite run: one environmental blip (internal/plugin PG container mid-recovery) re-ran ok.
+
+**GitReins lifecycle:** IMP-008 task created + started + completed — Tier 1 PASS (full mode: secrets/build/lint/tests), Tier 2 verdict 307be6f6 PASS. Kept for audit (fleet default).
+
+**CI:** last 5 runs success (unauthenticated api.github.com) — includes this tick's push (b3be005). Push verified: `git rev-list --count origin/master..HEAD` = 0.
+
+**Board:** IMP-008 → complete (b3be005, guard PASS). Event 278 appended (task_completed). Header ticks_total 390, last_commit 6d3c626 (pre-tick HEAD). tasks.jsonl now 173 complete / 12 pending.
+
+**Stray cleanup:** restored .vfs/graph/edges.jsonl cache drift; removed dagger.db{,-shm,-wal} (untracked).
+
+**Next tick:** open set = 12-row backlog: BUG-040 (P2, same-user two-tab realtime — worker candidate), UI-LIVE-001 (P2, source-classified session list — depends on IMP-008 data path, natural next after this reader), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (12) stays the drift check.

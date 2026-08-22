@@ -1294,3 +1294,14 @@ tasks:
   status: complete
   created_at: '2026-08-22T20:42:47.480221+00:00'
   completed_at: '2026-08-22T20:42:55.453066+00:00'
+- id: IMP-008
+  title: Schema-tolerant state.db reader (hermes-webui pattern)
+  criteria:
+  - internal/session/reader.go introspects PRAGMA table_info for sessions/messages/async_delegations,
+    builds optional-column SELECTs, degrades gracefully (missing source -> warn+empty,
+    no messages table -> empty list no crash, ISO-8601 text timestamps parsed alongside
+    REAL floats); fixture DBs with old/minimal schemas import without crash; go build
+    ./... && go test ./internal/session/... pass
+  status: complete
+  created_at: '2026-08-22T21:58:48.294853+00:00'
+  completed_at: '2026-08-22T22:41:27.592521+00:00'
