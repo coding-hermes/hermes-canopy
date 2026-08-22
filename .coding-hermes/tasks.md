@@ -9969,3 +9969,19 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Commit:** local-only board commit (push BLOCKED — INFRA-003 bogus PAT; do not amend/rebase, flush on token restore).
 
 **Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 satisfied at T386 (next battery due T392); matrix ⬜ count (17) stays the drift check.
+
+## Tick 387 (2026-08-22 ~12:0x UTC) — MAINTENANCE light audit
+
+**Verdict: pure-maintenance** — between E2E windows (386-391 satisfied at T386, 60/60 first run; next battery due T392). No E2E battery, no worker dispatch, no board event append (tasks.jsonl / events.jsonl / board header untouched — T355-T385 precedent).
+
+**Light audit:** CI last 5 success (unauthenticated api.github.com — gh dead, INFRA-003 bogus PAT; not treated as CI failure) · gitreins 38 complete, 0 pending / 0 in_progress · off-by-one :8766 healthy (17h41m uptime; no debugging → nothing to discover/submit) · storm-watch scheduler OK (hermes-canopy failure_rate 0.01/100, auto_disable not armed, active_ticks 3 fleet-wide, no canopy dup) · cooldown 3600 operator pin (no PUT) · push STILL BLOCKED — INFRA-003 (Invalid username or token); 7 unpushed commits recorded (ticks 381-386 board commits), no amend/rebase · canopy-server container Up (restored as-found from T386 battery), PG healthy · git status clean pre-tick.
+
+**Board:** tasks.jsonl unchanged (168 complete / 17 pending — 16 P3 backlog FTR/PL/STACK + INFRA-003 == tasks.md matrix ⬜ 17). No gitreins task (idle maintenance tick, no task picked — T326/T332/T355-T385 precedent).
+
+**DuckBrain:** /ticks/387 (62a49772-fc05-403f-b617-07c313fabd38) + /project/hermes-canopy/status (015fc81f-9ea3-4be0-aa1c-948d55492175) written via HTTP :3000, ids confirmed in write responses.
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (idle maintenance tick).
+
+**Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
+
+**Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.
