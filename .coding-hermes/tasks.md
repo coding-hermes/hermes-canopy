@@ -10005,3 +10005,23 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/388 (ce689c3f-78a6-47c2-8ace-609b86ce999b) + /project/hermes-canopy/status (5206bda3-0b63-4f8a-9386-0e0d34bba1f6) written via HTTP :3000 /cli, ids confirmed in write responses (post-commit; board commit 6bc5b2d pushed first).
 
 **Next tick:** open set = 14-row backlog: IMP-008 (P1, schema-tolerant state.db reader — Bane 08-22) + UI-LIVE-001 (P2, source-classified session list) + 12 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (14) stays the drift check.
+## Tick 389 (2026-08-22 ~20:4x UTC) — MAINTENANCE + BUG-041 VERIFICATION (P0, operator-implemented)
+
+**Verdict: productive verification tick** — between E2E windows (386-391 satisfied at T386, 60/60 first run; next battery due T392). No E2E battery, no worker dispatch. BUG-041 (P0: node_count stub → real counts) was operator-implemented at HEAD (5ee8357 + 27119b8); this tick verified it live and closed it with full GitReins lifecycle. 2 unpushed operator commits flushed to origin at tick start (push healthy — INFRA-003 stays RESOLVED).
+
+**Light audit:** CI last 5 runs success (unauthenticated api.github.com — runs include tick-388 board pushes 19:34/19:36Z) · gitreins 76 tasks, 0 pending / 0 in_progress (only BUG-041 created/started/completed this tick) · off-by-one :8766 healthy (21h17m uptime; no debugging needed — fix pre-verified → nothing to discover/submit) · canopy-server container Up 45min (BUG-041 deploy window), PG healthy (380370eda742_canopy-pg :5437), vite :5173 live.
+
+**BUG-041 verified live (the P0 — every tree card showed "1 nodes"):**
+- API ground truth: scripted compare of GET /api/v1/trees node_count vs `SELECT count(*) FROM nodes WHERE deleted_at IS NULL GROUP BY tree_id` — **50/50 trees, 0 mismatches**.
+- Non-trivial counts flow: UI-02 Rail Demo → node_count=82 (stub would say 1), T265 Sync trees → 2, QA battery trees → 1 (all match PG).
+- UI proof (Playwright DOM probe on /trees): cards render varied real counts ("1 nodes", "2 nodes", "3 nodes"...) with ZERO js/console errors — the stub rendered "1" for every tree.
+- Go test coverage for the interface change: commit 27119b8 "test(handler): satisfy TreeRepo interface in export stub".
+- Judge: gitreins Tier 2 verdict 21e40676 (task BUG-041 created/started/completed this tick).
+
+**Board:** BUG-041 → complete (27119b8). Event 277 appended (task_completed). tasks.jsonl now 172 complete / 13 pending. Header ticks_total 389, last_commit 27119b8.
+
+**GitReins lifecycle:** BUG-041 task created + started + completed (Tier 1 PASS; Tier 2 21e40676). Kept for audit (fleet default).
+
+**DuckBrain:** /ticks/389 (b8cdf80f-f83b-4244-9167-4b45341131c2) + /project/hermes-canopy/status (7b40443a-8dae-43f9-8b46-f3379d755c45) written via HTTP :3000, ids confirmed in write responses.
+
+**Next tick:** open set = 13-row backlog: BUG-040 (P2, same-user two-tab realtime — QA battery 08-22, real wiring gap, worker candidate), IMP-008 (P1, schema-tolerant state.db reader — Bane 08-22), UI-LIVE-001 (P2, source-classified session list — Bane 08-22), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (13) stays the drift check.
