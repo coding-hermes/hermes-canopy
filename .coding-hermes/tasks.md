@@ -9951,3 +9951,21 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Commit:** local-only board commit (push BLOCKED — INFRA-003; do not amend/rebase, flush on token restore).
 
 **Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 opens at Tick 386 (battery owed, first tick of window per fixture rule); matrix ⬜ count (17) stays the drift check.
+
+## Tick 386 (2026-08-22 ~10:5x UTC) — E2E battery tick (window 386-391, first tick)
+
+**Verdict: E2E-001 SATISFIED at first tick of window** — 60/60 PASS (12 files, 80.45s) on the FIRST run, zero retry markers, zero visual drift, goldens untouched. Full detail: e2e-output/tick386.md.
+
+**Stack:** stale container image (up 36h) stopped for run; fresh host binary /tmp/canopyd-t386 (HEAD cb7943e) served :8091 vs canopy-pg :5437; container restored as-found post-run (health 200). Pre-run: load 1.69 (no flake pressure), /tmp/mockups restored (docs/mockups, ENOENT-class), proxied auth 200, write-path probe 400 VALIDATION_ERROR (healthy), dev JWT user seeded, prewarm /tree/b1655761 = 136 react-flow hits (canvas mounted).
+
+**Light audit:** CI last 5 success (unauthenticated api.github.com, incl. 32445649480 tick-380 push) · vitest unit 657/657 · go build/vet clean · go test -short EXIT 0 · gofmt 16 baseline · gitreins 75 complete (0 pending/0 in_progress) · off-by-one :8766 healthy · storm-watch consecutive_failures=0, no canopy dup · cooldown 3600 operator pin file+API agree (no PUT).
+
+**Board:** audit event appended (events.jsonl + board.db + board.jsonl header ticks_total 386, last_commit cb7943e pre-tick HEAD). tasks.jsonl unchanged (168 complete / 17 pending). No gitreins task (E2E verification tick, T354-T384 precedent).
+
+**DuckBrain:** /ticks/386 + /project/hermes-canopy/status written via HTTP :3000 pre-commit, ids confirmed in write responses.
+
+**GitReins lifecycle:** skipped by design — no code commit, no task picked (E2E verification tick, T354-T384 precedent).
+
+**Commit:** local-only board commit (push BLOCKED — INFRA-003 bogus PAT; do not amend/rebase, flush on token restore).
+
+**Next tick:** open set = 16-row P3 backlog (FTR/PL/STACK) + INFRA-003 (P0 push-blocker, operator-fix — verify push works before any other work); next E2E-001 window 386-391 satisfied at T386 (next battery due T392); matrix ⬜ count (17) stays the drift check.
