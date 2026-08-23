@@ -92,7 +92,7 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
       type: flowType,
       position: { x: pos.x, y: pos.y },
       data: {
-        label: nodeData.content.slice(0, 80) || 'Untitled',
+        label: (nodeData.content ?? '').slice(0, 80) || 'Untitled',
         nodeType: nodeType as TreeNodeCardData['nodeType'],
         content: nodeData.content,
         authorId: nodeData.authorId,

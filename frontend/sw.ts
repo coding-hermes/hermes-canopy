@@ -10,7 +10,7 @@
 
 /// <reference lib="webworker" />
 
-const SW_VERSION = '1.0.0';
+const SW_VERSION = '1.0.1';
 const CACHE_NAME = `canopy-static-v${SW_VERSION}`;
 const API_CACHE_NAME = `canopy-api-v${SW_VERSION}`;
 const STATIC_URLS = [
@@ -64,15 +64,31 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   event.respondWith(cacheFirst(event.request));
 });
 
+// SSE / event-stream responses never end — caching one wedges the cache
+// storage (cache.put awaits the full body forever) and stalls every later
+// cache operation, freezing page loads (proven T392: Dashboard navigation
+// timed out after repeated /tree/demo visits registered pending SSE puts).
+function isStreamingResponse(response: Response): boolean {
+  const ct = response.headers.get('content-type') ?? '';
+  return ct.includes('text/event-stream');
+}
+
 // ─── Cache strategies ─────────────────────────────────────────────────
 
 async function cacheFirst(request: Request): Promise<Response> {
-  const cached = await caches.match(request);
+  // Race the cache lookup with a timeout so a wedged cache can never block
+  // navigation or module loads (defense in depth behind isStreamingResponse).
+  const cached = await Promise.race([
+    caches.match(request),
+    new Promise<Response | undefined>((resolve) =>
+      setTimeout(() => resolve(undefined), 1500),
+    ),
+  ]);
   if (cached) return cached;
 
   try {
     const response = await fetch(request);
-    if (response.ok && response.type === 'basic') {
+    if (response.ok && response.type === 'basic' && !isStreamingResponse(response)) {
       const cache = await caches.open(CACHE_NAME);
       void cache.put(request, response.clone());
     }
@@ -86,14 +102,14 @@ async function cacheFirst(request: Request): Promise<Response> {
 }
 
 async function networkFirstWithQueue(request: Request): Promise<Response> {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(API_CACHE_NAME);
-      void cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
+	try {
+		const response = await fetch(request);
+		if (response.ok && !isStreamingResponse(response)) {
+			const cache = await caches.open(API_CACHE_NAME);
+			void cache.put(request, response.clone());
+		}
+		return response;
+	} catch {
     // Network failed — try cache
     const cached = await caches.match(request);
     if (cached) return cached;

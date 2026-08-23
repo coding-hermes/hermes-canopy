@@ -356,8 +356,18 @@ export class SSESyncProvider {
     const node = data as Record<string, unknown> | null;
     if (!node?.id) return;
 
+    // Thin SSE echoes (node_added/node_updated from the hub) carry only
+    // id/tree_id/actor_id — no content. Creating a node from one leaves a
+    // content-less stub that crashes buildSnapshot (content.slice) and,
+    // because mergeBackendNodes skips existing ids, is never hydrated by the
+    // POST response. Only create nodes from full payloads; thin events just
+    // merge into nodes that already exist (full data arrives via the POST
+    // response locally and the yjs_update broadcast remotely).
+    const hasContent = typeof node.content === 'string' && node.content.length > 0;
+    const existing = this.doc.nodes.get(node.id as string);
+    if (!existing && !hasContent) return;
+
     this.doc.ydoc.transact(() => {
-      const existing = this.doc.nodes.get(node.id as string);
       const target = existing ?? new Y.Map<unknown>();
 
       for (const [key, value] of Object.entries(node)) {
