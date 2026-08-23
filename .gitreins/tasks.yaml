@@ -1362,3 +1362,16 @@ tasks:
   status: complete
   created_at: '2026-08-23T08:28:51.038782+00:00'
   completed_at: '2026-08-23T08:52:44.894670+00:00'
+- id: STACK-03
+  title: Canvas 2D fallback renderer for >2000 node trees
+  criteria:
+  - 'A custom Canvas 2D renderer exists in frontend/ that renders the d3-hierarchy
+    tree layout for very large trees (>2000 nodes): (1) canvas element paints simplified
+    nodes (position from layout) and edges (lines/bezier) with pan/zoom (wheel + drag);
+    (2) TreeCanvas swaps to the canvas renderer when totalCount exceeds the threshold
+    (or an explicit toggle); (3) React Flow rendering for normal-sized trees is unchanged
+    (existing tests pass); (4) unit tests cover the canvas renderer geometry/draw
+    helpers and the threshold-switch logic; (5) tsc --noEmit clean, vitest suite green.'
+  status: complete
+  created_at: '2026-08-23T10:04:06.752807+00:00'
+  completed_at: '2026-08-23T11:45:58.134035+00:00'

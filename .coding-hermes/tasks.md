@@ -10127,3 +10127,11 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Off-by-one:** submitted post-debug class `canopy-e2e-test-data-pollution` (sub id in lab) — full diagnosis + fix recipe cached for future ticks.
 
 **Next tick:** open set = 16-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..03 — all P3 post-MVP by design); next E2E-001 battery due T398 (window 398-403, first tick of window). Watch: battery runs now self-clean (BUG-044); runbook sweep script available (`scripts/sweep-e2e-test-trees.py --apply`) for stragglers from failed runs; container image still predates BUG-043 until next rebuild (expected — swapped only for battery runs).
+
+---
+
+**Tick 395/396 (2026-08-23 06:47Z / 09:54 local):** STACK-03 Canvas 2D fallback renderer COMPLETE — tick 395 recovered orphaned worker WIP (dead worker left uncommitted canvasRenderer.ts + CanvasTreeView.tsx + 2 test files and gitreins task in_progress), fixed 3 test/impl mismatches (fit-transform padding semantics, dash-arg shape, label-color clobber), reconstructed TreeCanvasSwitch mount tests; commit 7b2391c (+1301/-0), tier1 PASS, judge PASS c1dd3fc6 (5/5). Tick 395 died before board commit/push; tick 396 flushed: unit 710/710 re-verified, tsc clean, board bookkeeping committed, 7b2391c + board commit pushed to origin.
+
+**Maintenance checklist (all green):** gitreins 0 pending/in_progress (STACK-03 complete, verdict c1dd3fc6) · off-by-one :8766 healthy (39h uptime) · CI green (last 5 runs success incl. tick-394 push) · unit 710/710 · tsc 0.
+
+**Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design); next E2E-001 battery due T398 (window 398-403, first tick of window). Watch: battery runs now self-clean (BUG-044); runbook sweep script available (`scripts/sweep-e2e-test-trees.py --apply`) for stragglers from failed runs; container image still predates BUG-043 until next rebuild (expected — swapped only for battery runs).
