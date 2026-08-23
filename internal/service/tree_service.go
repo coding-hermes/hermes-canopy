@@ -265,6 +265,16 @@ type TreeSummary struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	Role             MemberRole `json:"role"`
+
+	// Session-import fields (UI-LIVE-001). Additive and optional:
+	// empty/omitted for trees that were not imported from Hermes
+	// sessions. session_id comes from trees.metadata; source is taken
+	// from metadata when present, else parsed from the import
+	// description ("… · source=<raw> · …"); parent_session_id marks a
+	// continuation segment of the parent session's conversation.
+	SessionID       string `json:"session_id,omitempty"`
+	ParentSessionID string `json:"parent_session_id,omitempty"`
+	Source          string `json:"source,omitempty"` // raw Hermes source (e.g. "cli", "telegram")
 }
 
 // TreeDetail is the full representation with optional stats and
@@ -1179,7 +1189,56 @@ func treeToSummary(t db.Tree) TreeSummary {
 	if t.RootNodeID != nil {
 		sum.RootNodeID = *t.RootNodeID
 	}
+	fillSessionFields(&sum, t.Metadata, t.Description)
 	return sum
+}
+
+// fillSessionFields populates the additive session-import fields
+// (UI-LIVE-001) from a tree's metadata jsonb. session_id /
+// parent_session_id come straight from metadata; source prefers a
+// metadata "source" key and falls back to parsing the import
+// description ("Imported Hermes session <id> · model=<m> ·
+// source=<raw> · started=<ts>", mapper.go sessionDescription). Trees
+// without session metadata are left untouched — all three fields stay
+// empty and omitted in JSON. Best-effort: malformed metadata never
+// fails the listing.
+func fillSessionFields(sum *TreeSummary, metadata []byte, description string) {
+	var meta struct {
+		SessionID       string `json:"session_id"`
+		ParentSessionID string `json:"parent_session_id"`
+		Source          string `json:"source"`
+	}
+	if len(metadata) > 0 {
+		if err := json.Unmarshal(metadata, &meta); err != nil {
+			return // malformed metadata → not an imported tree
+		}
+	}
+	if meta.SessionID == "" {
+		return // not an imported session tree (matches extractRelated)
+	}
+	sum.SessionID = meta.SessionID
+	sum.ParentSessionID = meta.ParentSessionID
+	sum.Source = meta.Source
+	if sum.Source == "" {
+		sum.Source = sourceFromDescription(description)
+	}
+}
+
+// sourceFromDescription extracts the raw source token from an import
+// description string ("… · source=<value> · …"). Returns "" when no
+// such segment is present. The value runs until the next " ·"
+// separator, so sources containing spaces survive intact.
+func sourceFromDescription(description string) string {
+	const key = "source="
+	idx := strings.Index(description, key)
+	if idx < 0 {
+		return ""
+	}
+	rest := description[idx+len(key):]
+	if end := strings.Index(rest, " ·"); end >= 0 {
+		rest = rest[:end]
+	}
+	return strings.TrimSpace(rest)
 }
 
 func coalesceTime(a *time.Time, b time.Time) time.Time {

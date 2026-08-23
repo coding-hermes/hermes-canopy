@@ -5,7 +5,7 @@
  * creation, deletion, and navigation to tree detail.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -16,16 +16,27 @@ import {
   User,
   AlertCircle,
   Inbox,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import {
+  buildTreeSections,
+  countGroupedTrees,
+  SOURCE_CHIP_CLASSES,
+  SOURCE_LABELS,
+  normalizeSource,
+  type SessionFields,
+  type SessionTreeNode,
+  type SourceGroup,
+} from '../lib/sessionTreeGroups';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
-interface TreeSummary {
-  id: string;
-  title: string;
-  description: string;
+interface TreeSummary extends SessionFields {
   owner_id: string;
   owner_display_name: string;
   node_count: number;
@@ -284,31 +295,51 @@ function DeleteConfirmDialog({
   );
 }
 
+// ─── Source chip ───────────────────────────────────────────────────────
+
+/** Colored source tag shown on session tree cards. */
+function SourceChip({ source }: { source: SourceGroup }) {
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium tracking-wide ${SOURCE_CHIP_CLASSES[source]}`}
+    >
+      {SOURCE_LABELS[source]}
+    </span>
+  );
+}
+
 // ─── Tree Card ─────────────────────────────────────────────────────────
 
 function TreeCard({
-  tree,
+  node,
   onSelect,
   onDelete,
 }: {
-  tree: TreeSummary;
+  node: SessionTreeNode<TreeSummary>;
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const { tree, continuations } = node;
+  // Workspace trees have no raw source; session trees always carry one.
+  const sourceGroup = tree.source ? normalizeSource(tree.source) : null;
+
   return (
     <div
+      data-testid="tree-card"
       className="rounded-lg border border-line-subtle bg-surface-panel p-4 hover:border-accent-2/40 cursor-pointer group transition-colors"
       onClick={onSelect}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-content-primary truncate">
-            {tree.title}
+          <h3 className="text-sm font-medium text-content-primary truncate flex items-center gap-2">
+            <span className="truncate">{tree.title}</span>
+            {sourceGroup && <SourceChip source={sourceGroup} />}
+            {continuations.length > 0 && (
+              <ContinuationsBadge count={continuations.length} items={continuations} />
+            )}
           </h3>
           {tree.description && (
-            <p className="text-xs text-content-muted mt-1 line-clamp-2">
-              {tree.description}
-            </p>
+            <p className="text-xs text-content-muted mt-1 line-clamp-2">{tree.description}</p>
           )}
           <div className="flex items-center gap-3 mt-2 text-[11px] text-content-faint">
             <span className="flex items-center gap-1">
@@ -354,6 +385,52 @@ function TreeCard({
   );
 }
 
+/** "N continuations" badge with an inline expandable segment list. */
+function ContinuationsBadge({
+  count,
+  items,
+}: {
+  count: number;
+  items: TreeSummary[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="inline-flex relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        title={`${count} continuation segment${count === 1 ? '' : 's'} of this session`}
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-accent/10 text-accent-300 border border-accent/30 text-[10px] font-medium hover:bg-accent/20 transition-colors"
+      >
+        <GitBranch className="w-3 h-3" />
+        {count} cont.
+      </button>
+      {open && (
+        <ul className="absolute left-0 top-full mt-1 z-10 min-w-[220px] max-w-xs rounded-lg border border-line-subtle bg-surface-raised p-1 shadow-lg">
+          {items.map((c) => (
+            <li key={c.id}>
+              <span
+                role="link"
+                tabIndex={0}
+                onClick={() => setOpen(false)}
+                onKeyDown={(e) => e.key === 'Enter' && setOpen(false)}
+                className="block px-2 py-1 rounded text-[11px] text-content-secondary hover:bg-surface-hover truncate"
+                title={c.title}
+              >
+                {formatTimeAgo(c.created_at)} · {c.title}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </span>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────
 
 export default function TreesPage() {
@@ -366,6 +443,24 @@ export default function TreesPage() {
   const [errorMore, setErrorMore] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TreeSummary | null>(null);
+  const [search, setSearch] = useState('');
+  // Collapsed source groups (default EXPANDED: the list is small enough
+  // that hiding content hurts more than it helps; collapse is opt-in).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<SourceGroup>>(new Set());
+
+  const sections = useMemo(() => buildTreeSections(trees, search), [trees, search]);
+  const visibleCount = countGroupedTrees(sections);
+  const toggleGroup = useCallback((source: SourceGroup) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(source)) {
+        next.delete(source);
+      } else {
+        next.add(source);
+      }
+      return next;
+    });
+  }, []);
 
   const fetchTrees = useCallback(async () => {
     setLoading(true);
@@ -462,6 +557,21 @@ export default function TreesPage() {
         </div>
       )}
 
+      {/* Search (filters title/description; groups stay intact) */}
+      {!loading && !error && trees.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-faint pointer-events-none" />
+          <input
+            id="trees-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter trees by title or description…"
+            className="w-full bg-surface-input border border-line-subtle rounded-lg pl-9 pr-3 py-2 text-sm text-content-primary placeholder-content-faint focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
+          />
+        </div>
+      )}
+
       {/* Loading state */}
       {loading && (
         <div className="space-y-3">
@@ -493,17 +603,75 @@ export default function TreesPage() {
         </div>
       )}
 
-      {/* Tree cards */}
+      {/* Grouped tree cards (session trees by source; workspace ungrouped) */}
       {!loading && !error && trees.length > 0 && (
-        <div className="space-y-3">
-          {trees.map((tree) => (
-            <TreeCard
-              key={tree.id}
-              tree={tree}
-              onSelect={() => navigate(`/tree/${tree.id}`)}
-              onDelete={() => setDeleteTarget(tree)}
-            />
-          ))}
+        <div className="space-y-5">
+          {visibleCount === 0 && (
+            <div
+              className="rounded-lg border border-line-subtle bg-surface-panel p-8 text-center text-sm text-content-muted"
+              data-testid="trees-search-empty"
+            >
+              No trees match &quot;{search.trim()}&quot;.
+            </div>
+          )}
+          {sections.groups.map((group) => {
+            const collapsed = collapsedGroups.has(group.source);
+            return (
+              <section key={group.source} aria-label={`${group.label} sessions`}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.source)}
+                  aria-expanded={!collapsed}
+                  className="flex items-center gap-2 w-full mb-2 px-1 py-1 text-left rounded hover:bg-surface-hover/60 transition-colors"
+                >
+                  {collapsed ? (
+                    <ChevronRight className="w-3.5 h-3.5 text-content-faint" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-content-faint" />
+                  )}
+                  <span className="text-xs font-semibold uppercase tracking-wider text-content-secondary">
+                    {group.label}
+                  </span>
+                  <SourceChip source={group.source} />
+                  <span className="text-[11px] text-content-faint">{group.trees.length}</span>
+                  <span className="flex-1 border-t border-line-subtle ml-2" aria-hidden="true" />
+                </button>
+                {!collapsed && (
+                  <div className="space-y-3">
+                    {group.trees.map((node) => (
+                      <TreeCard
+                        key={node.tree.id}
+                        node={node}
+                        onSelect={() => navigate(`/tree/${node.tree.id}`)}
+                        onDelete={() => setDeleteTarget(node.tree)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          {sections.ungrouped.length > 0 && (
+            <section aria-label="Workspace trees">
+              <div className="flex items-center gap-2 w-full mb-2 px-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-content-secondary">
+                  Workspace
+                </span>
+                <span className="text-[11px] text-content-faint">{sections.ungrouped.length}</span>
+                <span className="flex-1 border-t border-line-subtle" aria-hidden="true" />
+              </div>
+              <div className="space-y-3">
+                {sections.ungrouped.map((tree) => (
+                  <TreeCard
+                    key={tree.id}
+                    node={{ tree, continuations: [] }}
+                    onSelect={() => navigate(`/tree/${tree.id}`)}
+                    onDelete={() => setDeleteTarget(tree)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
