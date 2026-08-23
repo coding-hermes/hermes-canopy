@@ -11,6 +11,8 @@
  *   - Dashed ghost slots at the frontier for "add a reply here"
  *   - Neon glow on the selected node
  *   - Large tree fallback (>500 nodes) with simplified rendering
+ *   - Canvas 2D fallback above CANVAS_THRESHOLD (>2000 nodes, STACK-03):
+ *     the wrapped export swaps in CanvasTreeView wholesale
  *   - Keyboard shortcuts (Ctrl+0 fit, Ctrl+= zoom in, Ctrl+- zoom out,
  *     Tab/Shift-Tab cycle, Enter collapse, Home root, Escape deselect)
  *   - MiniMap with dark theme styling
@@ -40,6 +42,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { GhostNodeData, TreeNodeCardData } from '../types/tree.ts';
 import type { UseYjsTreeResult } from '../stores/useYjsTree.ts';
 import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
+import { shouldUseCanvas } from '../lib/canvasRenderer.ts';
+import CanvasTreeView from './CanvasTreeView.tsx';
 import { palette, nodeTypeColor } from '../theme.ts';
 import {
   buildChildMap,
@@ -710,8 +714,17 @@ function TreeCanvasInner({
 /**
  * TreeCanvas requires a ReactFlowProvider ancestor.
  * This wrapper provides it so consumers don't need to.
+ *
+ * STACK-03: trees beyond CANVAS_THRESHOLD nodes bypass React Flow
+ * entirely — CanvasTreeView paints them on a Canvas 2D surface (see
+ * lib/canvasRenderer.ts). Below the threshold this wrapper is the exact
+ * React Flow path it has always been; the threshold check runs before
+ * the provider mounts, so nothing about that path changes.
  */
 export default function TreeCanvas(props: TreeCanvasProps) {
+  if (shouldUseCanvas(props.tree.nodes.length)) {
+    return <CanvasTreeView {...props} />;
+  }
   return (
     <ReactFlowProvider>
       <TreeCanvasInner {...props} />
