@@ -10070,3 +10070,17 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Stray cleanup:** dropped dagger.db{,-shm,-wal} (untracked); .vfs/graph/edges.jsonl cache drift restored.
 
 **Next tick:** open set = 11-row backlog: BUG-040 (P2, same-user two-tab realtime — QA battery 08-22, real wiring gap, worker candidate), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule — stack bring-up + mockups restore + prewarm per runbook); matrix ⬜ count (11) stays the drift check.
+
+
+## Tick 392 (2026-08-22 22:15 UTC-5) — E2E window 392-397 OPENING tick: 61/61 FIRST RUN after fixing 2 real regressions
+
+**Verdict: PASS — window satisfied at T392.** Battery: 60/60 first run (62.31s, zero retry markers) → 61/61 after BUG-040 regression test. CI green (T390 errcheck failures remediated by 18e6e89; b3b389b run success).
+
+**Failures found (both REAL, root-caused, fixed, pushed):**
+- **BUG-042 (P0, commit b3b389b, foreman-direct, judge 23c2a485):** (1) SW `networkFirstWithQueue` cached SSE `/events` streams — `cache.put` on a never-ending body wedged CacheStorage and froze page loads after ~6 tree visits (Dashboard nav 30s timeout; repro: 6× /tree/demo → goto '/' hangs; `/@vite/client` + `/@react-refresh` never resolve, readyState stuck `interactive`, no #root). Fix: never cache `text/event-stream` + 1.5s `Promise.race` on `caches.match` (SW_VERSION 1.0.1). (2) **WIRE-001 'flake' TRUE ROOT CAUSE**: thin SSE `node_added` echoes (id-only) created content-less Yjs nodes → `buildSnapshot` crash (`content.slice` of undefined) → canvas death; `mergeBackendNodes` skips existing ids so never hydrated. Fix: `applyNodeUpdate` creates only from content-bearing payloads; label crash-guard. This was the real mechanism behind T338/T380 :117/:126 failures — the SW timing shift exposed it deterministically. Off-by-one submitted: `canopy-wire001-thin-node-race` (sub_ed3953).
+- **BUG-040 (P2, commit d73edff, worker ox-alpha-free@opencode-go, judge e47f8415):** same-user two-tab staleness = duplicate of BUG-042 root cause. Post-fix: two tabs in one browser context sync both directions ~1s (y-indexeddb BroadcastChannel + SSE fan-out; negative control: SSE abort still delivers via BroadcastChannel). Regression pin: `frontend/tests/two-tab-sync.test.ts` (141 lines, one context/two pages). No server-side same-user filter exists (sse_hub Broadcast fans out to all).
+- **visual-regression mockup 1:** intended BUG-038 change (/tree/demo → real 82-node demo tree); golden refreshed (mockups 2-4 restored from git — noise only).
+
+**Gates:** go build/vet ✓ · tsc 0 ✓ · unit 673/673 ✓ · integration 61/61 first run ✓ · live SSE probe ✓ (201 POST → node_added broadcast) · judges PASS ×2 · pushes verified (UNPUSHED=0).
+
+**Bookkeeping:** audit event id=282, task_completed 280 (BUG-040) + 281 (BUG-042), ticks_total=392, last_commit=5d85d35; e2e-output/tick392.md; DuckBrain /ticks/392 + status; container canopy-server restored as-found (health 200); vite :5173 restarted to serve fixed SW.
