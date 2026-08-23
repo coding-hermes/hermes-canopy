@@ -18,11 +18,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { BASE_URL, isServerRunning } from './setup';
+import { TreeCleanup } from './e2e-cleanup';
 
 describe('Create Tree Dialog (GAP-040)', () => {
   let browser: Browser;
   let page: Page;
   let serverAvailable = false;
+  // BUG-044 teardown: scratch trees this suite creates must not accumulate
+  // in the live compose database.
+  const cleanup = new TreeCleanup();
 
   beforeAll(async () => {
     serverAvailable = await isServerRunning();
@@ -35,6 +39,9 @@ describe('Create Tree Dialog (GAP-040)', () => {
 
   afterAll(async () => {
     if (!serverAvailable) return;
+    // BUG-044: remove the scratch trees this suite created before exiting
+    // (afterAll runs even if a case failed mid-way).
+    await cleanup.sweep();
     await page?.context()?.close();
     await browser?.close();
   });
@@ -50,6 +57,23 @@ describe('Create Tree Dialog (GAP-040)', () => {
       const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const treeTitle = `GAP040 E2E ${suffix}`;
       const rootContent = `GAP040 root ${suffix}`;
+
+      // BUG-044 teardown: capture the tree id from the dialog's create call
+      // so afterAll can delete it. The guard (dev-user owned, no session
+      // metadata, non-protected title) runs before anything is tracked.
+      page.on('response', async (resp) => {
+        try {
+          if (
+            resp.request().method() === 'POST' &&
+            resp.url().endsWith('/api/v1/trees') &&
+            resp.ok()
+          ) {
+            cleanup.trackFromCreateBody(await resp.json());
+          }
+        } catch {
+          /* tracking is best-effort */
+        }
+      });
 
       // ── 1. Open the Trees page and open the Create-Tree dialog. ──────
       await page.goto(`${BASE_URL}/trees`, { waitUntil: 'domcontentloaded', timeout: 15_000 });

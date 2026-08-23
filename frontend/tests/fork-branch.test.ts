@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { BASE_URL, isServerRunning } from './setup';
+import { TreeCleanup } from './e2e-cleanup';
 
 /** The dialog's inline guidance for the deliberate leaf-fork guard. */
 const LEAF_GUIDANCE = 'Branching needs at least one reply on this message';
@@ -36,6 +37,9 @@ describe('Fork/Branch UI (GAP-043)', () => {
   let replyId = '';
   let rootContent = '';
   let replyContent = '';
+  // BUG-044 teardown: scratch trees this suite creates must not accumulate
+  // in the live compose database.
+  const cleanup = new TreeCleanup();
 
   async function openBranchDialog(cardText: string) {
     const card = page.locator('[data-testid="node-card"]', { hasText: cardText });
@@ -77,6 +81,7 @@ describe('Fork/Branch UI (GAP-043)', () => {
     const tree = (await createResp.json()) as { id: string; root_node_id?: string };
     treeId = tree.id;
     expect(treeId).toMatch(/^[0-9a-fA-F-]{36}$/);
+    cleanup.trackFromCreateBody(await createResp.json());
 
     // The reply is created through the tree-scoped node route so the
     // fixture never depends on the deprecated flat reply mount.
@@ -109,6 +114,9 @@ describe('Fork/Branch UI (GAP-043)', () => {
 
   afterAll(async () => {
     if (!serverAvailable) return;
+    // BUG-044: remove the scratch trees this suite created before exiting
+    // (afterAll runs even if a case failed mid-way).
+    await cleanup.sweep();
     await page?.context()?.close();
     await browser?.close();
   });

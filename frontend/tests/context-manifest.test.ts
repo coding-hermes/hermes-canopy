@@ -22,6 +22,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { BASE_URL, isServerRunning } from './setup';
+import { TreeCleanup } from './e2e-cleanup';
 
 // How long to wait for the async context manifest fetch + render.
 const MANIFEST_TIMEOUT = 20_000;
@@ -30,6 +31,9 @@ describe('Context Manifest UI (WIRE-002)', () => {
   let browser: Browser;
   let page: Page;
   let serverAvailable = false;
+  // BUG-044 teardown: scratch trees this suite creates must not accumulate
+  // in the live compose database.
+  const cleanup = new TreeCleanup();
 
   beforeAll(async () => {
     serverAvailable = await isServerRunning();
@@ -42,6 +46,9 @@ describe('Context Manifest UI (WIRE-002)', () => {
 
   afterAll(async () => {
     if (!serverAvailable) return;
+    // BUG-044: remove the scratch trees this suite created before exiting
+    // (afterAll runs even if a case failed mid-way).
+    await cleanup.sweep();
     await page?.context()?.close();
     await browser?.close();
   });
@@ -73,6 +80,7 @@ describe('Context Manifest UI (WIRE-002)', () => {
       }
       const tree = (await createResp.json()) as { id: string; title: string };
       expect(tree.id).toMatch(/^[0-9a-fA-F-]{36}$/);
+      cleanup.trackFromCreateBody(await createResp.json());
 
       // ── 2. Open the tree page. ─────────────────────────────────────────
       const url = `${BASE_URL}/tree/${tree.id}`;
