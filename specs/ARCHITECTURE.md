@@ -44,9 +44,9 @@ Canopy replaces the linear chat log with a navigable conversation tree. Users dr
 | Layout engine | d3-hierarchy | 3.x | Tree/cluster/treemap algorithms, 25KB | T1.3 |
 | CRDT | yjs | 13.6.x | 18KB gzipped, pure JS, Y.Map for nodes/edges | T1.2 |
 | Offline persistence | y-indexeddb | ^9.0 | Yjs-native IndexedDB provider, 3KB | T1.4 |
-| Service Worker | Workbox | v7 | Cache strategies, Background Sync, 8KB | T1.4 |
+| Service Worker | Hand-rolled (frontend/sw.ts) | N/A | Cache-first static, network-first API + IndexedDB offline queue; SSE never cached (BUG-042); no Workbox dep | FE-09 |
 | Canvas fallback | Custom Canvas 2D | N/A | For >2000 node trees, manual renderer | T1.3 |
-| PWA | vite-plugin-pwa | latest | Manifest, SW, install prompt | AGENTS.md |
+| PWA | Manual SW registration (frontend/src/serviceWorkerRegistration.ts) | N/A | Manifest, SW registration, install prompt — no vite-plugin-pwa | FE-09 |
 
 ### 2.3 Infrastructure
 
@@ -68,8 +68,8 @@ Canopy replaces the linear chat log with a navigable conversation tree. Users dr
 | d3-hierarchy | ~25KB | Tree/cluster algorithms |
 | Yjs 13.6.x | ~18KB | Core CRDT |
 | y-indexeddb | ~3KB | Offline persistence |
-| Workbox v7 | ~8KB | Service Worker |
-| **Total framework** | **~111KB** | **Well under 500KB target** |
+| Hand-rolled SW (sw.ts) | ~1.5KB | Service Worker (own bundle via vite.sw.config.ts) |
+| **Total framework** | **~104KB** | **Well under 500KB target** |
 
 ---
 
@@ -352,11 +352,11 @@ React 19 + TypeScript 5.7
 ### 7.4 Offline Support
 
 ```
-Service Worker (Workbox v7)
-├── CacheFirst: static assets (JS, CSS, fonts)
-├── NetworkFirst: tree data (fresh when online, cached when offline)
-├── StaleWhileRevalidate: app shell (fast load, background update)
-└── Background Sync: queued mutations replayed on reconnect
+Service Worker (hand-rolled, frontend/sw.ts — no Workbox dep)
+├── cacheFirst: static assets (JS, CSS, fonts) — canopy-static-v* cache
+├── networkFirstWithQueue: tree data/API (fresh when online, cached+queued when offline) — canopy-api-v*
+├── IndexedDB queue (canopy-offline-queue): mutating requests (POST/PUT/PATCH/DELETE) replayed on reconnect
+└── SSE responses are NEVER cached (text/event-stream bypass — BUG-042 fix)
 
 y-indexeddb: CRDT persistence (automatic — Yjs-native provider)
 Custom SSE Provider: maps Canopy SSE events to Yjs updates

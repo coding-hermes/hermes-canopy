@@ -16,6 +16,20 @@
 - Docs/devx sweep (GAP-006..020): compose env var, `make run`, curl walkthrough, Vite proxy port, frontend bootstrap, `make test-short` without PG, README graph API routes, DB_PORT sync, Go 1.25+/PG 17 version drift, license alignment (MIT)
 - Current test state (2026-08-09): vitest 583/583, Playwright 48/48, Go integration 46/46 (PG), judge-verified per task
 
+### Phase 12 — Real-Data Hardening, Topics Engine & UI Polish (2026-08-09 → 2026-08-23)
+- Topics engine (TM-02/03/04): NLP auto-topic detection with configurable sensitivity, PostgreSQL tsvector full-text search with one-button context injection, `#reference` resolution building context DAGs (context compiler)
+- Real-data import hardening: BUG-034 `set_content_hash` bytea/backslash crash → migration 000025 `convert_to(content,'UTF8')` + regression test; BUG-035 per-session watermark idempotency (legacy 48-tree partial state deduped); BUG-037 NUL-byte/invalid-UTF-8 sanitization — full session import runs to completion (3,665 trees)
+- Association layer (WIRE-006) + Related panel (UI-REL-001): session lineage (parent/child/delegation goals) as tree edges + task/commit/project metadata; per-tree drill-down UI
+- Cursor pagination (PAG-001/002): keyset `(created_at, id)` + real COUNT total (3,611), Trees page load-more; page-2 correctness proven live
+- Hermes-webui pattern adoption: schema-tolerant state.db reader (IMP-008 — PRAGMA introspection, optional-column SQL, graceful degradation) + source-classified session list (UI-LIVE-001 — CLI/Cron/Telegram/API/Tool/Webhook/Kanban groups, continuation merging, search)
+- Mobile sidebar drawer (UI-MOB-001): slide-in drawer, hamburger (md:hidden), X/backdrop/ESC/route-change close; desktop pixel-identical
+- Real-world wiring fixes: BUG-038 `/tree/demo` alias resolution, BUG-039 plain-HTTP `crypto.randomUUID` fallback + demo alias, BUG-040 same-user two-tab realtime sync (regression pin), BUG-041 real `node_count` (GROUP BY counts), BUG-042 SW SSE cache-poison + thin-node race (SW_VERSION 1.0.1, SSE never cached), BUG-043 deleted-tree node routes → 410 TREE_DELETED, BUG-044 E2E battery DB pollution (TreeCleanup teardown ×6 files + `scripts/sweep-e2e-test-trees.py`)
+- Canvas 2D fallback renderer (STACK-03): custom manual renderer for >2000-node trees + TreeCanvasSwitch; STACK-04 verified (offline PWA already delivered by FE-09 — manual SW, not Workbox)
+- Deploy/infra: INFRA-002 canopyd image rebuilt from HEAD (embeds migrations ≤031, restart-loop fixed); INFRA-003 GitHub credentials restored, 12-commit backlog pushed
+- Docs/devx sweep (GAP-021..046): INTEGRATION API walkthrough port, `make test-short`/`make test` timeouts (300s/600s) + `-short` PG skips, LOG_FORMAT/CORS_ORIGIN/DB_SCHEMA env vars wired, dev-mode auth story documented, PWA-embed claims corrected, README API tables regenerated from server routes (49/49 live), CLI `--help` + `tree create --content` + `navigate` hierarchy output, dead-org rename (totalwindupflightsystems → coding-hermes), .env.example sync, board source-of-truth reconciliation, E2E evidence trail (docs/E2E-EVIDENCE.md), tree-scoped fork route + UI Branch action (GAP-041/043), topic dialog root-node auto-resolve (GAP-044)
+- E2E windows (392–397): integration battery 61/61 incl. two-tab sync pin; visual-regression stability (VREG-001 demo-tree selection by name, VREG-003 resolved via backend route-shadowing fix E2E-ROUTE-001)
+- Current test state (2026-08-23): vitest unit 710/710 (37 files), integration 61/61 (13 files, Playwright + visual goldens), Go build/vet/`make test` PASS (PG-backed), judge-verified per task
+
 ### Phase 10 — Hardening (2026-07-28)
 - Fixed MLS key reuse (BUG-013): domain-separated encryption/signing keys
 - Fixed unsigned JWT acceptance (BUG-014): explicit alg:none rejection
