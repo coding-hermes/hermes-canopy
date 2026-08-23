@@ -757,7 +757,9 @@ func TestINT02_PermissionsEnforcement(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // stubMemberChecker implements TreeMemberChecker. It returns true when the
-// user is the configured member; false otherwise.
+// user is the configured member; false otherwise. Trees are never reported
+// as deleted — deleted-tree gating is covered by middleware_test.go and
+// tree_deleted_gate_integration_test.go.
 type stubMemberChecker struct {
 	treeID uuid.UUID
 	member uuid.UUID
@@ -768,6 +770,10 @@ func (s *stubMemberChecker) IsMember(_ context.Context, treeID, userID uuid.UUID
 		return false, nil
 	}
 	return userID == s.member, nil
+}
+
+func (s *stubMemberChecker) IsTreeDeleted(_ context.Context, _ uuid.UUID) (bool, error) {
+	return false, nil
 }
 
 // newTestServerWithMembership builds a test server with auth middleware AND

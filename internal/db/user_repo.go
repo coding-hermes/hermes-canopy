@@ -340,6 +340,12 @@ type TreeMemberRepo interface {
 
 	// IsMember returns true when the given user is a member of the tree.
 	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
+
+	// IsTreeDeleted returns true when the tree exists but is soft-deleted
+	// (deleted_at IS NOT NULL). Backs TreeMembershipMiddleware's deleted-tree
+	// gate (BUG-043). A tree that never existed returns false — callers that
+	// need the not-found distinction use the tree repo directly.
+	IsTreeDeleted(ctx context.Context, treeID uuid.UUID) (bool, error)
 }
 
 // PGTreeMemberRepo is the pgx-backed TreeMemberRepo implementation.
@@ -492,6 +498,21 @@ func (r *PGTreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUI
 		treeID, userID).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("db: check tree member: %w", err)
+	}
+	return exists, nil
+}
+
+// IsTreeDeleted returns true when the tree exists but is soft-deleted
+// (deleted_at IS NOT NULL). Backs TreeMembershipMiddleware's deleted-tree
+// gate (BUG-043): a member of a soft-deleted tree must get 410 TREE_DELETED,
+// matching the tree handler's GetTree behaviour.
+func (r *PGTreeMemberRepo) IsTreeDeleted(ctx context.Context, treeID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM trees WHERE id = $1 AND deleted_at IS NOT NULL)`,
+		treeID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("db: check tree deleted: %w", err)
 	}
 	return exists, nil
 }

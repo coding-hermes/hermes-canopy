@@ -142,12 +142,18 @@ func TestRateLimitConcurrentSafe(t *testing.T) {
 // --- TreeMembershipMiddleware tests ----------------------------------------
 
 type memberCheckerStub struct {
-	isMember bool
-	err      error
+	isMember   bool
+	err        error
+	deleted    bool
+	deletedErr error
 }
 
 func (s *memberCheckerStub) IsMember(_ context.Context, _, _ uuid.UUID) (bool, error) {
 	return s.isMember, s.err
+}
+
+func (s *memberCheckerStub) IsTreeDeleted(_ context.Context, _ uuid.UUID) (bool, error) {
+	return s.deleted, s.deletedErr
 }
 
 func TestTreeMembershipAllowMember(t *testing.T) {
@@ -311,6 +317,131 @@ func TestTreeMembershipCheckerError(t *testing.T) {
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("handler called when checker errored")
+	})
+	h := TreeMembershipMiddleware(checker)(next)
+
+	saved := chiURLParam
+	chiURLParam = func(r *http.Request, key string) string {
+		if key == "tree_id" {
+			return treeID.String()
+		}
+		return ""
+	}
+	defer func() { chiURLParam = saved }()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trees/"+treeID.String()+"/nodes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey{}, userID))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	}
+	assertErrorResponse(t, rr, "INTERNAL_ERROR")
+}
+
+// --- Deleted-tree gate (BUG-043) ---------------------------------------------
+
+func TestTreeMembershipRejectsDeletedTree(t *testing.T) {
+	treeID := uuid.New()
+	userID := uuid.New()
+	checker := &memberCheckerStub{isMember: true, deleted: true}
+
+	blocked := make(chan struct{})
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(blocked)
+		t.Fatal("handler called for soft-deleted tree")
+	})
+	h := TreeMembershipMiddleware(checker)(next)
+
+	saved := chiURLParam
+	chiURLParam = func(r *http.Request, key string) string {
+		if key == "tree_id" {
+			return treeID.String()
+		}
+		return ""
+	}
+	defer func() { chiURLParam = saved }()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trees/"+treeID.String()+"/nodes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey{}, userID))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusGone {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusGone, rr.Body.String())
+	}
+	assertErrorResponse(t, rr, "TREE_DELETED")
+}
+
+func TestTreeMembershipAllowsLiveTreeAfterDeletedCheck(t *testing.T) {
+	treeID := uuid.New()
+	userID := uuid.New()
+	checker := &memberCheckerStub{isMember: true, deleted: false}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h := TreeMembershipMiddleware(checker)(next)
+
+	saved := chiURLParam
+	chiURLParam = func(r *http.Request, key string) string {
+		if key == "tree_id" {
+			return treeID.String()
+		}
+		return ""
+	}
+	defer func() { chiURLParam = saved }()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trees/"+treeID.String()+"/nodes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey{}, userID))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusNoContent, rr.Body.String())
+	}
+}
+
+// Non-members must keep getting 403 even on a deleted tree — the membership
+// check precedes the deleted check, preserving pre-BUG-043 behaviour.
+func TestTreeMembershipNonMemberOnDeletedTreeGets403(t *testing.T) {
+	treeID := uuid.New()
+	userID := uuid.New()
+	checker := &memberCheckerStub{isMember: false, deleted: true}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler called for non-member")
+	})
+	h := TreeMembershipMiddleware(checker)(next)
+
+	saved := chiURLParam
+	chiURLParam = func(r *http.Request, key string) string {
+		if key == "tree_id" {
+			return treeID.String()
+		}
+		return ""
+	}
+	defer func() { chiURLParam = saved }()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trees/"+treeID.String()+"/nodes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey{}, userID))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusForbidden, rr.Body.String())
+	}
+	assertErrorResponse(t, rr, "NOT_TREE_MEMBER")
+}
+
+func TestTreeMembershipDeletedCheckError(t *testing.T) {
+	treeID := uuid.New()
+	userID := uuid.New()
+	checker := &memberCheckerStub{isMember: true, deletedErr: io.ErrUnexpectedEOF}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler called when deleted-state checker errored")
 	})
 	h := TreeMembershipMiddleware(checker)(next)
 

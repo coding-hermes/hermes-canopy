@@ -122,10 +122,15 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 // --- Tree membership middleware ---------------------------------------------
 
 // TreeMemberChecker is the interface TreeMembershipMiddleware needs to verify
-// that a user belongs to a tree.
+// that a user belongs to a tree and that the tree has not been soft-deleted.
 type TreeMemberChecker interface {
 	// IsMember returns true when the given user is a member of the tree.
 	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
+
+	// IsTreeDeleted returns true when the tree is soft-deleted
+	// (deleted_at IS NOT NULL). Used by TreeMembershipMiddleware to gate
+	// tree-scoped routes on deleted trees (BUG-043).
+	IsTreeDeleted(ctx context.Context, treeID uuid.UUID) (bool, error)
 }
 
 // treeIDFromPath extracts the tree ID from the URL path. In chi, middleware
@@ -154,8 +159,14 @@ func treeIDFromPath(path string) string {
 }
 
 // TreeMembershipMiddleware returns middleware that verifies the authenticated
-// user is a member of the tree referenced by the tree_id URL segment.
-// Routes without a tree_id segment pass through unchecked.
+// user is a member of the tree referenced by the tree_id URL segment and that
+// the tree has not been soft-deleted (BUG-043). Routes without a tree_id
+// segment pass through unchecked.
+//
+// Order of checks: auth → membership → deleted. Non-members get 403
+// NOT_TREE_MEMBER regardless of tree state (unchanged behaviour); members of
+// a soft-deleted tree get 410 TREE_DELETED with the same code/message as the
+// tree handler's GetTree.
 func TreeMembershipMiddleware(checker TreeMemberChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +193,17 @@ func TreeMembershipMiddleware(checker TreeMemberChecker) func(http.Handler) http
 			}
 			if !member {
 				writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER", "you are not a member of this tree")
+				return
+			}
+			deleted, err := checker.IsTreeDeleted(r.Context(), treeID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not verify tree state")
+				return
+			}
+			if deleted {
+				// Same status/code/message as the tree handler's GetTree for
+				// soft-deleted trees (BUG-043).
+				writeError(w, http.StatusGone, "TREE_DELETED", "tree has been deleted")
 				return
 			}
 			next.ServeHTTP(w, r)
