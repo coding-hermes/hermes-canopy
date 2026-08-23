@@ -10049,3 +10049,24 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Stray cleanup:** restored .vfs/graph/edges.jsonl cache drift; removed dagger.db{,-shm,-wal} (untracked).
 
 **Next tick:** open set = 12-row backlog: BUG-040 (P2, same-user two-tab realtime — worker candidate), UI-LIVE-001 (P2, source-classified session list — depends on IMP-008 data path, natural next after this reader), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule); matrix ⬜ count (12) stays the drift check.
+
+## Tick 391 (2026-08-22 ~19:2x UTC) — WORK TICK: UI-LIVE-001 (P2, source-classified session list)
+
+**Verdict: productive work tick** — between E2E windows (386-391 satisfied at T386; next battery due T392). Picked the Bane-requested P2 backlog item whose dependency (IMP-008 data path) landed at tick 390. Worker dispatched via `hermes chat -q` (ox-alpha-free @ opencode-go, flat-rate per Bane doctrine), full GitReins lifecycle, judge PASS, pushed.
+
+**Worker result (5547e53, 850 insertions / 22 deletions across 5 files):**
+- Backend: TreeSummary extended with additive omitempty `session_id` / `parent_session_id` / `source` (tree_service.go fillSessionFields). Metadata-first (trees.metadata jsonb), `source=` description-parse fallback (mapper.go sessionDescription), malformed metadata never fails the listing; both ListTrees paths + GetTree flow through treeToSummary. 7 test functions / 11 cases in tree_session_source_test.go incl. JSON-wire omission for plain trees.
+- Frontend: frontend/src/lib/sessionTreeGroups.ts — pure helpers: `normalizeSource` mirroring hermes-webui's normalize_agent_session_source taxonomy (cli/cron/messaging/api/tool/webhook/kanban/webui/unknown), `groupSessionTrees` (continuation merge via parent_session_id, orphan continuations stay visible when parent outside pagination window, self-reference-safe), `matchesSearch`, `buildTreeSections`. TreesPage: collapsible source-group sections (default expanded — tens of items, not hundreds), group headers with label+count+chips, search with no-match state, "N cont." badges with expandable segment lists, Workspace section for non-session trees. E2E contract preserved (h1/Refresh/New Tree/load-more ids unchanged).
+- Deviation from brief (1): added `parent_session_id` field — required for client-side continuation merge; additive/omitempty, same tests.
+
+**Gates (foreman re-verified):** go build ./... clean · go vet ./... clean · go test ./internal/session/... ./internal/service/ ok · tsc --noEmit clean · vitest unit 673/673 (35 files). Integration suite NOT run (stack down between E2E windows by design).
+
+**GitReins lifecycle:** UI-LIVE-001 created + started + completed — Tier 1 PASS (full mode: secrets/build/lint/tests), Tier 2 verdict 2b737ab5 PASS. Kept for audit (fleet default).
+
+**CI:** historical failures on tick-390 commits (errcheck golangci-lint) already remediated by 18e6e89 (success at HEAD); post-push check: last 5 runs success. Push verified: `git rev-list --count origin/master..HEAD` = 0.
+
+**Board:** UI-LIVE-001 → complete (5547e53, guard PASS). Event 279 appended (task_completed). Header ticks_total 391, last_commit 18e6e89 (pre-tick HEAD). tasks.jsonl now 174 complete / 11 pending.
+
+**Stray cleanup:** dropped dagger.db{,-shm,-wal} (untracked); .vfs/graph/edges.jsonl cache drift restored.
+
+**Next tick:** open set = 11-row backlog: BUG-040 (P2, same-user two-tab realtime — QA battery 08-22, real wiring gap, worker candidate), + 10 P3 FTR/PL/STACK deferred by design; next E2E-001 battery due T392 (window 392-397, first tick of window per fixture rule — stack bring-up + mockups restore + prewarm per runbook); matrix ⬜ count (11) stays the drift check.

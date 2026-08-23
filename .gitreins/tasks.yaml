@@ -1305,3 +1305,13 @@ tasks:
   status: complete
   created_at: '2026-08-22T21:58:48.294853+00:00'
   completed_at: '2026-08-22T22:41:27.592521+00:00'
+- id: UI-LIVE-001
+  title: Source-classified session list on Trees page
+  criteria:
+  - Trees page groups imported session trees by normalized source (cli/cron/messaging/webhook/kanban/unknown
+    per hermes-webui taxonomy) with collapsible groups and search; continuation segments
+    (parent_session_id) merged under parent session tree; source+session_id exposed
+    via trees list API; unit tests, vitest, tsc, go build/vet/test all pass; CI green
+  status: complete
+  created_at: '2026-08-22T23:51:23.016556+00:00'
+  completed_at: '2026-08-23T00:30:50.553656+00:00'
