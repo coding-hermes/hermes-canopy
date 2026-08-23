@@ -10084,3 +10084,22 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Gates:** go build/vet ✓ · tsc 0 ✓ · unit 673/673 ✓ · integration 61/61 first run ✓ · live SSE probe ✓ (201 POST → node_added broadcast) · judges PASS ×2 · pushes verified (UNPUSHED=0).
 
 **Bookkeeping:** audit event id=282, task_completed 280 (BUG-040) + 281 (BUG-042), ticks_total=392, last_commit=5d85d35; e2e-output/tick392.md; DuckBrain /ticks/392 + status; container canopy-server restored as-found (health 200); vite :5173 restarted to serve fixed SW.
+
+
+## Tick 393 (2026-08-23 01:20 UTC-5) — between-window WORK tick: BUG-043 deleted-tree node leak fixed
+
+**Verdict: PASS — full productive tick (never-done find → file → dispatch → fix → judge → close).** CI green (3/3 recent runs success). E2E window 392-397 already satisfied at T392; no battery this tick.
+
+**BUG-043 (P2, new, commit 7270dca, worker ox-alpha-free@opencode-go, judge 9783ba11):** never-done audit found a data-consistency hole: soft-deleted trees still served their nodes through every tree-scoped node endpoint — GET /trees/{deleted_id}/nodes -> 200 (8 nodes) and tree-scoped node GET -> 200 while GET /trees/{deleted_id} -> 410 TREE_DELETED. PG: 14 soft-deleted trees hold live nodes (largest be31b8c3, 8). Root cause: TreeMembershipMiddleware (internal/handler/middleware.go:159) checked membership only, never tree deleted_at. Fix: TreeMemberChecker extended with IsTreeDeleted (PGTreeMemberRepo, single EXISTS on trees.deleted_at; nonexistent tree = false); middleware returns 410 TREE_DELETED (byte-identical to tree handler) after membership, 403 NOT_TREE_MEMBER precedence preserved; flat /nodes mount untouched. +504 test lines across 3 files (middleware unit ×4, repo contract, integration gate wiring real PGTreeMemberRepo through the production two-level mount). Full suites: handler 200.7s ok, db 69.4s ok, service ok. Live probe :8092: deleted-tree list/get/create all 410; live CRUD byte-identical; foreman independently re-verified build/vet + new tests.
+
+**Gates:** go build ./... ✓ · go vet ./... ✓ · go test -run 'Deleted|IsTreeDeleted' ./internal/handler/... ./internal/db/... ok ✓ (foreman re-run) · worker full suites green · live probe table in worker report.
+
+**GitReins lifecycle:** BUG-043 created + started + completed — Tier 1 PASS (full mode), Tier 2 verdict 9783ba11 PASS. Kept for audit (fleet default).
+
+**CI:** last 3 runs success (incl. tick-392 board push). Post-push check pending this tick's push.
+
+**Board:** BUG-043 filed (task row) + closed (7270dca, guard PASS, judge PASS). Event 283 appended (task_completed). Header ticks_total 393, last_commit 4317499 (pre-tick HEAD). tasks.jsonl now 175 complete / 16 pending.
+
+**Maintenance checklist (all green):** gitreins 0 pending/in_progress · off-by-one :8766 healthy (30h uptime) · scheduler active_ticks=4 (fleet-wide normal) · push works (INFRA-003 token restored) · live stack healthy (canopy-server :8091, canopy-pg :5437, vite :5173 proxying API) · no debugging → no off-by-one submit.
+
+**Next tick:** open set = 16-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..03 — all P3 post-MVP by design); next E2E-001 battery due T398 (window 398-403, first tick of window). Watch: deleted-tree API consistency now gated; container image still predates BUG-043 until next rebuild (expected — container swapped only for battery runs).

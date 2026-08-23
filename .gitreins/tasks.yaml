@@ -1335,3 +1335,13 @@ tasks:
   status: complete
   created_at: '2026-08-23T04:09:56.849458+00:00'
   completed_at: '2026-08-23T04:10:00.926039+00:00'
+- id: BUG-043
+  title: Deleted-tree nodes remain accessible via tree-scoped node endpoints (410
+    missing)
+  criteria:
+  - Tree-scoped node routes (list/get/create) return 410 TREE_DELETED for soft-deleted
+    trees; live-tree node CRUD unaffected; regression tests added; go build/vet +
+    relevant test suites green
+  status: complete
+  created_at: '2026-08-23T05:26:44.679757+00:00'
+  completed_at: '2026-08-23T06:09:35.286422+00:00'
