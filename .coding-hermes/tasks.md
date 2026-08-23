@@ -10103,3 +10103,27 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **Maintenance checklist (all green):** gitreins 0 pending/in_progress · off-by-one :8766 healthy (30h uptime) · scheduler active_ticks=4 (fleet-wide normal) · push works (INFRA-003 token restored) · live stack healthy (canopy-server :8091, canopy-pg :5437, vite :5173 proxying API) · no debugging → no off-by-one submit.
 
 **Next tick:** open set = 16-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..03 — all P3 post-MVP by design); next E2E-001 battery due T398 (window 398-403, first tick of window). Watch: deleted-tree API consistency now gated; container image still predates BUG-043 until next rebuild (expected — container swapped only for battery runs).
+## Tick 394 (2026-08-23) — between-window WORK tick: BUG-044 E2E battery data pollution fixed
+
+**Verdict: PASS — productive tick (never-done find → file → dispatch → fix → sweep → judge → close).** CI green (3/3 recent runs success incl. tick-393 push). E2E window 392-397 already satisfied at T392; no battery this tick.
+
+**BUG-044 (P2, new, commit 2c3b477, worker ox-alpha-free@opencode-go):** live-QA sweep found the Playwright-vitest battery pollutes the REAL database: 162 throwaway test trees accumulated in the compose PG (107 `T265 Sync <ms>_<rand>`, 25 `GAP040 E2E`, 22 `GAP043 E2E`, 7 `BUG-040`, plus `T268 WIRE-002` / `T267 BUG-032` families — all dev-JWT-owned, no session metadata) = ~53% of the 306-tree Workspace group in Bane's app; total tree count inflated to 3849. Every battery run (incl. vitest retry x1 and isolation re-runs) added trees with zero cleanup since the real-wiring tests landed 08-08.
+
+**Fix (test-only, no app code):**
+- `frontend/tests/e2e-cleanup.ts` (NEW, +115): shared `TreeCleanup` tracker + `isSweepable` guard (dev-owner, no session_id, protected title `UI-02 Rail Demo`); own APIRequestContext so cleanup works after browsers close; never throws; tolerates 404.
+- 6 test files wired (track at creation — API-created suites via `trackFromCreateBody`, tree-create via `page.on('response')` POST-capture since the UI dialog creates it; `cleanup.sweep()` FIRST in afterAll, guarded by `serverAvailable`).
+- `scripts/sweep-e2e-test-trees.py` (NEW, +152): stdlib-only, cursor-paginated, same safety contract, dry-run default, `--apply` deletes.
+
+**Verification (foreman-re-run + worker):** PG junk-title count 162 → 162 unchanged after 6-file battery (10/10 tests, 11.5s — teardown deletes what tests create) → 0 after sweep. Demo tree intact (1), session-imported trees untouched (3543 with session metadata), live total 3687 = 3849−162. Unit 673/673. Foreman verified: commit pushed (0227b98..2c3b477, UNPUSHED=0), PG count 0, demo 1, diff stat 8 files +331.
+
+**GitReins lifecycle:** BUG-044 created + started + completed — Tier 1 PASS (full mode), Tier 2 verdict e10980e6 (see .gitreins/history). Kept for audit (fleet default).
+
+**CI:** last 3 runs success; post-push check pending this tick's push.
+
+**Board:** BUG-044 filed + closed (2c3b477, guard PASS, judge e10980e6). Event 284 appended (task_completed). Header ticks_total 394, last_commit 0227b98 (pre-tick HEAD). tasks.jsonl now 176 complete / 16 pending.
+
+**Maintenance checklist (all green):** gitreins 0 pending/in_progress · off-by-one :8766 healthy (33h uptime) · scheduler active_ticks=1 · push works (dry-run OK, INFRA-003 resolved) · live stack healthy (canopy-server :8091 200, canopy-pg :5437, vite :5173 proxying API) · zero JS errors on /trees probe.
+
+**Off-by-one:** submitted post-debug class `canopy-e2e-test-data-pollution` (sub id in lab) — full diagnosis + fix recipe cached for future ticks.
+
+**Next tick:** open set = 16-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..03 — all P3 post-MVP by design); next E2E-001 battery due T398 (window 398-403, first tick of window). Watch: battery runs now self-clean (BUG-044); runbook sweep script available (`scripts/sweep-e2e-test-trees.py --apply`) for stragglers from failed runs; container image still predates BUG-043 until next rebuild (expected — swapped only for battery runs).

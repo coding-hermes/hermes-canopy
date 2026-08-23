@@ -1345,3 +1345,20 @@ tasks:
   status: complete
   created_at: '2026-08-23T05:26:44.679757+00:00'
   completed_at: '2026-08-23T06:09:35.286422+00:00'
+- id: BUG-044
+  title: "E2E battery pollutes live DB: 162 throwaway test trees (107 T265 Sync, 25\
+    \ GAP040 E2E, 22 GAP043 E2E, 7 BUG-040, +composer/context-manifest) accumulate\
+    \ in the live compose PG \u2014 ~53% of the Workspace group in Bane's app is junk;\
+    \ tree total inflated to 3849"
+  criteria:
+  - "1) The 6 tree-creating integration test files (two-context-sync, two-tab-sync,\
+    \ tree-create, fork-branch, context-manifest, composer-to-canvas) delete the tree\
+    \ they created in teardown (afterAll, runs even on failure) \u2014 PG count of\
+    \ E2E-pattern trees is identical before and after a run of those 6 files 2) scripts/sweep-e2e-test-trees.py\
+    \ exists (API-based via vite proxy, cursor-paginated, title-regex + session_id-null\
+    \ filter, dry-run + --apply) and --apply removes all 162 existing junk trees (PG\
+    \ count 0) 3) npx vitest run (unit) stays green and the 6-file integration run\
+    \ stays green 4) No app code changed (test files + script only)"
+  status: complete
+  created_at: '2026-08-23T08:28:51.038782+00:00'
+  completed_at: '2026-08-23T08:52:44.894670+00:00'
