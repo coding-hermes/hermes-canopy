@@ -2,7 +2,7 @@
 
 A practical guide to deploying and operating Canopy OS on your own infrastructure.
 
-Canopy is a graph-native collaboration surface for human-agent work. It ships as a single Go binary (`canopyd`) that bundles the HTTP API server, SSE event hub, Prometheus metrics, database migrations, and the production frontend (PWA) — all in one process backed by PostgreSQL.
+Canopy is a graph-native collaboration surface for human-agent work. It ships as a single Go binary (`canopyd`) that bundles the HTTP API server, SSE event hub, Prometheus metrics, and database migrations — all in one process backed by PostgreSQL. The React PWA frontend is **served separately** (see [Quick Start](#quick-start)).
 
 ---
 
@@ -35,19 +35,32 @@ docker run -d --name canopy-pg \
 # 2. Wait for PG to be ready
 until docker exec canopy-pg pg_isready -U canopy; do sleep 1; done
 
-# 3. Run canopyd
+# 3. Run canopyd (API on :8091 — matches the rest of the docs ecosystem)
 DB_HOST=localhost DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
   JWT_SECRET=$(openssl rand -base64 32) \
+  HTTP_ADDR=:8091 \
   ./canopyd
 
 # 4. Verify
-curl http://localhost:8080/health
+curl http://localhost:8091/health
 # → {"status":"ok"}
 ```
 
 The server auto-runs database migrations on startup, so the schema is created automatically the first time it connects.
 
-Open `http://localhost:8080` in a browser to reach the bundled frontend PWA.
+**Serving the frontend:** `canopyd` is **API-only** in MVP — it does not embed or serve the PWA. The React frontend must be served separately:
+
+```bash
+# Development: Vite dev server (proxies /api to :8091 by default)
+cd frontend && npm install && npm run dev
+# → http://localhost:5173
+
+# Production: build static files, then serve frontend/dist/ with any static server
+cd frontend && npm ci && npm run build   # produces frontend/dist/
+npx serve -l 3000 frontend/dist           # → http://localhost:3000
+```
+
+Point the deployed PWA at the API base URL (`VITE_API_URL` at build time, or the Vite proxy target in dev). See docs/INTEGRATION.md §5 for details.
 
 ---
 
@@ -64,7 +77,7 @@ Open `http://localhost:8080` in a browser to reach the bundled frontend PWA.
 
 | Component    | Minimum        | Notes                                        |
 |-------------|----------------|----------------------------------------------|
-| Go          | **1.23**+      | go.mod currently targets 1.25               |
+| Go          | **1.25**+      | go.mod requires go 1.25.0               |
 | Node.js     | **22**+        | Frontend build (Vite + React + TypeScript)  |
 | Make        | any            | Wraps `go build`, `go test`, etc.           |
 
@@ -178,7 +191,7 @@ The `canopyd` binary doubles as a CLI client for remote servers. These are only 
 
 | Variable            | Default                      | Description                            |
 |---------------------|------------------------------|----------------------------------------|
-| `CANOPY_SERVER_URL` | `http://localhost:8080`      | Base URL of the Canopy API server.     |
+| `CANOPY_SERVER_URL` | `http://localhost:8080`      | Base URL of the Canopy API server. The quick-start / compose flows in this guide serve the API on host port `8091` — set `CANOPY_SERVER_URL=http://localhost:8091` for CLI commands against them. |
 | `CANOPY_TOKEN`      | *(none)*                     | Bearer token for authenticated requests. Without it, the CLI sends requests without auth (dev mode). |
 
 ### Example: Full Production Config
@@ -191,7 +204,7 @@ export DB_PASSWORD=$(cat /etc/secrets/canopy-db-password)
 export DB_NAME=canopy
 export DB_SSLMODE=require
 export JWT_SECRET=$(cat /etc/secrets/canopy-jwt-secret)
-export HTTP_ADDR=127.0.0.1:8080
+export HTTP_ADDR=127.0.0.1:8091
 export LOG_LEVEL=warn
 export METRICS_ENABLED=true
 
@@ -220,10 +233,10 @@ If using a managed PostgreSQL service (RDS, Cloud SQL, etc.), create the databas
 Migrations are **embedded in the binary** and run automatically when `canopyd` starts:
 
 ```
-2026-07-27T10:00:00Z INF canopyd starting version=v0.1.0 http_addr=:8080 db_host=localhost
+2026-07-27T10:00:00Z INF canopyd starting version=v0.1.0 http_addr=:8091 db_host=localhost
 2026-07-27T10:00:00Z INF running database migrations...
 2026-07-27T10:00:01Z INF migrations complete (20 applied)
-2026-07-27T10:00:01Z INF HTTP server listening addr=:8080
+2026-07-27T10:00:01Z INF HTTP server listening addr=:8091
 ```
 
 There is nothing you need to do — no migration CLI, no manual step. If the schema is already current, the migration step is a no-op with no downtime.
@@ -261,7 +274,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/canopy.example.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8091;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -288,7 +301,7 @@ Caddy auto-provisions Let's Encrypt certificates with zero configuration:
 
 ```
 canopy.example.com {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8091
 }
 ```
 
@@ -400,7 +413,7 @@ scrape_configs:
   - job_name: 'canopy'
     scrape_interval: 30s
     static_configs:
-      - targets: ['localhost:8080']
+      - targets: ['localhost:8091']
 ```
 
 ### Grafana Dashboard
@@ -493,15 +506,15 @@ cp /usr/local/bin/canopyd.previous /usr/local/bin/canopyd
 
 ### Port Already in Use
 
-**Symptom:** `bind: address already in use` or `listen tcp :8080: bind: address already in use`
+**Symptom:** `bind: address already in use` or `listen tcp :8091: bind: address already in use`
 
 **Fix:**
 ```bash
 # Find what's on the port
-sudo ss -tlnp | grep 8080
+sudo ss -tlnp | grep 8091
 
 # Kill it, or change the Canopy port
-HTTP_ADDR=:8081 ./canopyd
+HTTP_ADDR=:8092 ./canopyd
 ```
 
 ### PostgreSQL Connection Refused
@@ -640,7 +653,7 @@ DB_PASSWORD=<redacted>
 DB_NAME=canopy
 DB_SSLMODE=disable
 JWT_SECRET=<redacted>
-HTTP_ADDR=127.0.0.1:8080
+HTTP_ADDR=127.0.0.1:8091
 LOG_LEVEL=warn
 METRICS_ENABLED=true
 ```
@@ -661,7 +674,7 @@ For context while operating the server:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   HTTP Server (:8080)                │
+│                   HTTP Server (:8091)                │
 │  ┌──────────────┐  ┌──────────┐  ┌───────────────┐  │
 │  │   Handlers   │  │   SSE    │  │  Prometheus   │  │
 │  │  (REST API)  │  │   Hub    │  │  (/metrics)   │  │
@@ -684,5 +697,5 @@ For context while operating the server:
 - **Database:** PostgreSQL is the authoritative store for all graph data (trees, nodes, edges, topics, profiles, approvals, events, snapshots). Migrations run automatically.
 - **SSE Hub:** In-memory ring buffer per tree, 10K connection cap, 1-hour event retention.
 - **Cards:** DuckDB-in-process + JSONL files under `~/.hermes/canopy/cards/` (git-friendly).
-- **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. Served from the embedded filesystem when built via Docker or `make build-embed`.
+- **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. Built to `frontend/dist/` as a release artifact and served separately — `canopyd` is API-only in MVP and does not embed it (see [Quick Start](#quick-start)).
 - **Graceful shutdown:** 30 seconds — drains SSE connections, then shuts down HTTP.
