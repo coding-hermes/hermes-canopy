@@ -1375,3 +1375,22 @@ tasks:
   status: complete
   created_at: '2026-08-23T10:04:06.752807+00:00'
   completed_at: '2026-08-23T11:45:58.134035+00:00'
+- id: GAP-047
+  title: 'Docs drift reconciliation: CHANGELOG Phase 12+ + ARCHITECTURE Workbox spec-drift'
+  criteria:
+  - CHANGELOG.md has entries dated after 2026-08-09 covering WIRE-004..006/TM-02..04/PAG-001..002/UI-REL-001/UI-MOB-001/UI-LIVE-001/IMP-008/BUG-034..044/GAP-020..046/STACK-03..04
+    with test counts matching a live battery run; specs/ARCHITECTURE.md Service Worker
+    rows (L47/71/355) reconciled with the hand-rolled SW implementation (FE-09) or
+    annotated; .gitignore covers dagger.db*; all artifacts committed and pushed
+  status: complete
+  created_at: '2026-08-23T15:59:22.009220+00:00'
+  completed_at: '2026-08-23T16:01:43.623862+00:00'
+- id: E2E-001-B398
+  title: E2E battery window 398-403 (first tick of window)
+  criteria:
+  - Integration battery passes 100% (all tests green, zero visual drift, goldens untouched);
+    report written to /tmp/canopy-e2e-tick398.md + raw /tmp/canopy-e2e-results.txt;
+    stack restored as-found (canopy-server container back on :8091)
+  status: complete
+  created_at: '2026-08-23T21:06:00.823540+00:00'
+  completed_at: '2026-08-23T21:15:36.520899+00:00'
