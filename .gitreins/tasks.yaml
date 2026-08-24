@@ -1433,3 +1433,29 @@ tasks:
   status: complete
   created_at: '2026-08-24T07:29:13.900517+00:00'
   completed_at: '2026-08-24T07:31:09.434051+00:00'
+- id: FTR-07-P1
+  title: "FTR-07 Phase P1: core HermesClient (SPEC-FTR-07 \xA73.1/\xA73.6)"
+  criteria:
+  - "internal/hermes package defines Config/DefaultConfig, ConversationMessage, ToolCall,\
+    \ ContextManifest, HermesResponse, SSEDelta, HealthStatus, ModelInfo, SkillInfo,\
+    \ HermesError, and the HermesClient interface (SendMessage, StreamMessages, CreateConversation,\
+    \ Health, ListModels, ListSkills) per SPEC-FTR-07 \xA73.1"
+  - 'httpHermesClient implements: Bearer auth header injection from ProfileToken (never
+    serialized/logged), exponential-backoff retries for transient failures (5xx/429/network)
+    honoring Retry-After, no retry on 4xx except 429'
+  - Health() probes GET /v1/health with retry backoff (1s/5s/15s) and parses status/version/uptime_seconds;
+    non-200 maps to ErrHermesUnavailable
+  - StreamMessages() POSTs /v1/responses stream:true, parses SSE (event:/data:/id:,
+    multi-line data joined, comments ignored), emits SSEDelta channel (delta/tool_call/done/error),
+    closes channel on stream end, returns io.ReadCloser
+  - "Error mapping: 401/403\u2192ErrAuthFailed, 429\u2192ErrRateLimited with RetryAfter,\
+    \ 5xx\u2192ErrHermesUnavailable, timeout\u2192ErrHermesTimeout; all as *HermesError\
+    \ wrapping sentinels (errors.Is works); IsHermesError helper"
+  - "ValidateVersion enforces HermesGatewayVersion >=0.18.0 (empty/mismatch \u2192\
+    \ ErrVersionMismatch); ListSkills 404 \u2192 empty slice nil error"
+  - go build ./... and go vet ./... pass; gofmt clean; go test ./internal/hermes/...
+    passes with 20+ mock-server (httptest) test cases covering success, streaming,
+    timeouts, rate limits, auth failures, version mismatch
+  status: complete
+  created_at: '2026-08-24T07:57:23.532585+00:00'
+  completed_at: '2026-08-24T07:59:16.357611+00:00'
