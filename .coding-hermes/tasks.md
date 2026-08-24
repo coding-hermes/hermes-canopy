@@ -10228,3 +10228,30 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/bankai-1 + /project/hermes-canopy/status refresh written and id-confirmed.
 
 **CI:** post-push check follows this wave's push.
+
+## Tick BANKAI-2 (2026-08-24) — FTR-07 Phase P1: core HermesClient
+
+**Verdict: WORK (BANKAI wave 2).** Bane's 卍解 override continued — drove the next-highest pending P3 row (FTR-07) to a verified slice. Delivered FTR-07 Phase P1 (Core): the HermesClient Go package per SPEC-FTR-07 §3.1/§3.6 — HTTP client with exponential-backoff retries, Bearer auth injection, SSE stream parsing, health probe, typed error mapping, version validation. Backend-only; event translator / session manager / HTTP wiring / frontend (Phases 2-4) remain for later waves.
+
+**What landed (commit 7a3df59):**
+- internal/hermes/client.go (878 lines): Config/DefaultConfig, all §3.1 types (ConversationMessage, ToolCall, ContextManifest, HermesResponse, SSEDelta, HealthStatus, ModelInfo, SkillInfo), HermesClient interface (SendMessage, StreamMessages, CreateConversation, Health, ListModels, ListSkills), httpHermesClient impl, HermesError with Unwrap() sentinel wrapping (errors.Is works), IsHermesError, ValidateVersion (>=0.18.0), HermesGatewayVersion const.
+- internal/hermes/sse.go (235 lines): parseSSE (event:/data:/id:, multi-line data joined, comments ignored), streamLoop with clean-done vs unexpected-drop vs caller-close semantics.
+- internal/hermes/client_test.go (786 lines): 58 test cases via httptest mock server — health success/retry/all-fail, auth header injection, 401/429/500/timeout mapping, streaming multi-event/multiline/unknown-event/mid-stream-drop, conversations, models, skills 404 fallback, version validation, IsHermesError.
+
+**Design notes (documented in code):** Health() = single probe (periodic semantic); HealthWithRetry() = startup 1s/5s/15s schedule. StreamMessages does not retry the initial POST (long-lived connection; documented). ListSkills 404 → empty slice nil error (older gateways). Retry-After honors integer seconds + HTTP-date.
+
+**Verification:**
+- gofmt -l internal/hermes/ — clean
+- go build ./... — PASS (exit 0)
+- go vet ./... — PASS (exit 0)
+- go test ./internal/hermes/... — PASS, 58 test cases (1.29s)
+- Baseline: go test -count=1 -p 1 $(go list ./... | grep -v /handler) — all packages PASS (db 63.1s, plugin 29.3s) — zero regressions
+- GitReins Tier 1 guard (full): PASS — secrets clean, go_build ok, go_lint ok, go_tests ok
+- GitReins Tier 2 judge: PASS 7/7 criteria — verdict caf19bbf
+- CI: pre-push 5/5 success baseline; post-push check follows this wave's push.
+
+**Board:** FTR-07 row closed (status complete, commit 7a3df59, guard PASS, judge PASS caf19bbf). Pending 14 → 13. Next wave: FTR-07 Phase P2 (event translator) or PL-01 per priority order.
+
+**DuckBrain:** /ticks/bankai-2 + /project/hermes-canopy/status refresh written and id-confirmed.
+
+**CI:** post-push check follows this wave's push.
