@@ -357,3 +357,224 @@ func TestPGRepoInstanceStatusAndInvokeCount(t *testing.T) {
 		t.Fatalf("IncrementInvokeCount unknown = %v, want ErrInstanceNotFound", err)
 	}
 }
+
+// 7: UpdateVersionChain archives the old row and links both directions
+// (superseded_by_id on old → new, previous_version_id on new → old).
+func TestPGRepoUpdateVersionChain(t *testing.T) {
+	repo, _, profileID := newTestRepo(t)
+	ctx := context.Background()
+
+	v1 := repoTestPlugin("chain-plugin", "1.0.0")
+	v1.AuthorProfileID = profileID
+	oldP, err := repo.Register(ctx, v1)
+	if err != nil {
+		t.Fatalf("Register v1: %v", err)
+	}
+	// Only one active row per name — archive v1 before inserting v2
+	// (mirrors the service Update path).
+	if err := repo.Archive(ctx, oldP.ID); err != nil {
+		t.Fatalf("Archive v1: %v", err)
+	}
+	v2 := repoTestPlugin("chain-plugin", "1.1.0")
+	v2.AuthorProfileID = profileID
+	newP, err := repo.Register(ctx, v2)
+	if err != nil {
+		t.Fatalf("Register v2: %v", err)
+	}
+
+	if err := repo.UpdateVersionChain(ctx, oldP.ID, newP.ID); err != nil {
+		t.Fatalf("UpdateVersionChain: %v", err)
+	}
+
+	storedOld, err := repo.GetByID(ctx, oldP.ID)
+	if err != nil {
+		t.Fatalf("GetByID old: %v", err)
+	}
+	if storedOld.Status != PluginStatusArchived || storedOld.ArchivedAt == nil {
+		t.Errorf("old status/archived_at = %s/%v, want archived/set", storedOld.Status, storedOld.ArchivedAt)
+	}
+	if storedOld.SupersededByID == nil || *storedOld.SupersededByID != newP.ID {
+		t.Errorf("old superseded_by_id = %v, want %s", storedOld.SupersededByID, newP.ID)
+	}
+
+	storedNew, err := repo.GetByID(ctx, newP.ID)
+	if err != nil {
+		t.Fatalf("GetByID new: %v", err)
+	}
+	if storedNew.PreviousVersionID == nil || *storedNew.PreviousVersionID != oldP.ID {
+		t.Errorf("new previous_version_id = %v, want %s", storedNew.PreviousVersionID, oldP.ID)
+	}
+
+	// Unknown ids → ErrPluginNotFound.
+	if err := repo.UpdateVersionChain(ctx, uuid.New(), newP.ID); !errors.Is(err, ErrPluginNotFound) {
+		t.Fatalf("UpdateVersionChain unknown old = %v, want ErrPluginNotFound", err)
+	}
+	// Unknown new id → the FK constraint rejects the dangling
+	// superseded_by_id (23503), not a clean not-found.
+	if err := repo.UpdateVersionChain(ctx, oldP.ID, uuid.New()); err == nil {
+		t.Fatal("UpdateVersionChain unknown new = nil, want error (FK violation)")
+	}
+}
+
+// 8: ActivateVersion re-activates a historical row (status active,
+// archived_at cleared) and records the row it replaced.
+func TestPGRepoActivateVersion(t *testing.T) {
+	repo, _, profileID := newTestRepo(t)
+	ctx := context.Background()
+
+	v1 := repoTestPlugin("activate-plugin", "1.0.0")
+	v1.AuthorProfileID = profileID
+	oldP, err := repo.Register(ctx, v1)
+	if err != nil {
+		t.Fatalf("Register v1: %v", err)
+	}
+	// Only one active version per name — archive v1 before v2 (service
+	// Update path mirrors this).
+	if err := repo.Archive(ctx, oldP.ID); err != nil {
+		t.Fatalf("Archive v1: %v", err)
+	}
+	v2 := repoTestPlugin("activate-plugin", "1.1.0")
+	v2.AuthorProfileID = profileID
+	newP, err := repo.Register(ctx, v2)
+	if err != nil {
+		t.Fatalf("Register v2: %v", err)
+	}
+	// Simulate the rollback path: the ACTIVE row (v2) is archived and chained
+	// to the target (v1) — this clears the partial unique index slot.
+	if err := repo.UpdateVersionChain(ctx, newP.ID, oldP.ID); err != nil {
+		t.Fatalf("UpdateVersionChain v2→v1: %v", err)
+	}
+	if err := repo.Archive(ctx, oldP.ID); err != nil {
+		t.Fatalf("Archive v1: %v", err)
+	}
+
+	// Rollback direction: re-activate v1, record v2 as the row it replaced.
+	if err := repo.ActivateVersion(ctx, oldP.ID, newP.ID); err != nil {
+		t.Fatalf("ActivateVersion: %v", err)
+	}
+
+	storedOld, err := repo.GetByID(ctx, oldP.ID)
+	if err != nil {
+		t.Fatalf("GetByID old: %v", err)
+	}
+	if storedOld.Status != PluginStatusActive || storedOld.ArchivedAt != nil {
+		t.Errorf("old status/archived_at = %s/%v, want active/nil", storedOld.Status, storedOld.ArchivedAt)
+	}
+	if storedOld.SupersededByID == nil || *storedOld.SupersededByID != newP.ID {
+		t.Errorf("old superseded_by_id = %v, want %s", storedOld.SupersededByID, newP.ID)
+	}
+
+	// The re-activated row is now the active version for the name.
+	active, err := repo.GetActiveByName(ctx, "activate-plugin")
+	if err != nil {
+		t.Fatalf("GetActiveByName: %v", err)
+	}
+	if active.ID != oldP.ID {
+		t.Errorf("active = %s, want %s", active.ID, oldP.ID)
+	}
+
+	// Unknown id → ErrPluginNotFound.
+	if err := repo.ActivateVersion(ctx, uuid.New(), newP.ID); !errors.Is(err, ErrPluginNotFound) {
+		t.Fatalf("ActivateVersion unknown = %v, want ErrPluginNotFound", err)
+	}
+}
+
+// 9: ListVersionsByName returns all rows for a name, newest first.
+func TestPGRepoListVersionsByName(t *testing.T) {
+	repo, _, profileID := newTestRepo(t)
+	ctx := context.Background()
+
+	var last *Plugin
+	for _, ver := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+		p := repoTestPlugin("history-plugin", ver)
+		p.AuthorProfileID = profileID
+		if last != nil {
+			// One active version per name: archive the previous before the
+			// next register (as the service Update path does).
+			if err := repo.Archive(ctx, last.ID); err != nil {
+				t.Fatalf("Archive %s: %v", last.Version, err)
+			}
+		}
+		created, err := repo.Register(ctx, p)
+		if err != nil {
+			t.Fatalf("Register %s: %v", ver, err)
+		}
+		last = created
+	}
+	// A different name must not leak in.
+	other := repoTestPlugin("other-plugin", "1.0.0")
+	other.AuthorProfileID = profileID
+	if _, err := repo.Register(ctx, other); err != nil {
+		t.Fatalf("Register other: %v", err)
+	}
+
+	rows, err := repo.ListVersionsByName(ctx, "history-plugin")
+	if err != nil {
+		t.Fatalf("ListVersionsByName: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("len = %d, want 3", len(rows))
+	}
+	if rows[0].Version != "1.2.0" || rows[1].Version != "1.1.0" || rows[2].Version != "1.0.0" {
+		t.Errorf("order = [%s, %s, %s], want [1.2.0, 1.1.0, 1.0.0]",
+			rows[0].Version, rows[1].Version, rows[2].Version)
+	}
+	for i := 1; i < len(rows); i++ {
+		if rows[i-1].CreatedAt.Before(rows[i].CreatedAt) {
+			t.Errorf("created_at not descending at %d", i)
+		}
+	}
+
+	// Unknown name → empty result (nil slice at repo level; the service
+	// layer always returns a non-nil slice).
+	empty, err := repo.ListVersionsByName(ctx, "nope")
+	if err != nil {
+		t.Fatalf("ListVersionsByName unknown: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("unknown name len = %d, want 0", len(empty))
+	}
+}
+
+// 10: GetVersionByName found (any status) + not-found.
+func TestPGRepoGetVersionByName(t *testing.T) {
+	repo, _, profileID := newTestRepo(t)
+	ctx := context.Background()
+
+	p := repoTestPlugin("getver-plugin", "1.0.0")
+	p.AuthorProfileID = profileID
+	created, err := repo.Register(ctx, p)
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	got, err := repo.GetVersionByName(ctx, "getver-plugin", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetVersionByName: %v", err)
+	}
+	if got.ID != created.ID || got.Version != "1.0.0" || got.Status != PluginStatusActive {
+		t.Errorf("got = %+v, want active 1.0.0 row %s", got, created.ID)
+	}
+
+	// Archived rows are still findable (rollback history).
+	if err := repo.Archive(ctx, created.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	archived, err := repo.GetVersionByName(ctx, "getver-plugin", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetVersionByName archived: %v", err)
+	}
+	if archived.Status != PluginStatusArchived {
+		t.Errorf("status = %s, want archived", archived.Status)
+	}
+
+	// Unknown (name, version) → ErrPluginVersionNotFound.
+	_, err = repo.GetVersionByName(ctx, "getver-plugin", "9.9.9")
+	if !errors.Is(err, ErrPluginVersionNotFound) {
+		t.Fatalf("unknown version err = %v, want ErrPluginVersionNotFound", err)
+	}
+	_, err = repo.GetVersionByName(ctx, "nope", "1.0.0")
+	if !errors.Is(err, ErrPluginVersionNotFound) {
+		t.Fatalf("unknown name err = %v, want ErrPluginVersionNotFound", err)
+	}
+}

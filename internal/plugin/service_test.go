@@ -186,6 +186,72 @@ func (s *stubRepo) Archive(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// GetVersionByName returns any stored row for (name, version), any status.
+func (s *stubRepo) GetVersionByName(_ context.Context, name, version string) (*Plugin, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byNameVer[nameVersionKey(name, version)]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s@%s", ErrPluginVersionNotFound, name, version)
+	}
+	clone := *p
+	return &clone, nil
+}
+
+// ListVersionsByName returns all rows for a name, newest first (the stub
+// assigns CreatedAt in Register order, so reverse registration order = DESC).
+func (s *stubRepo) ListVersionsByName(_ context.Context, name string) ([]Plugin, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Plugin
+	for i := len(s.order) - 1; i >= 0; i-- {
+		p := s.byID[s.order[i]]
+		if p.Name == name {
+			out = append(out, *p)
+		}
+	}
+	return out, nil
+}
+
+// UpdateVersionChain archives oldID, links old→new and new→old.
+func (s *stubRepo) UpdateVersionChain(_ context.Context, oldID, newID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	oldP, ok := s.byID[oldID]
+	if !ok {
+		return ErrPluginNotFound
+	}
+	newP, ok := s.byID[newID]
+	if !ok {
+		return ErrPluginNotFound
+	}
+	oldP.Status = PluginStatusArchived
+	ts := now()
+	oldP.ArchivedAt = &ts
+	oldP.SupersededByID = &newID
+	newP.PreviousVersionID = &oldID
+	if s.byName[oldP.Name] == oldP {
+		delete(s.byName, oldP.Name)
+	}
+	return nil
+}
+
+// ActivateVersion flips a stored row back to active, clears archived_at and
+// records the row it replaced (superseded_by_id).
+func (s *stubRepo) ActivateVersion(_ context.Context, targetID, supersedingID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byID[targetID]
+	if !ok {
+		return ErrPluginNotFound
+	}
+	p.Status = PluginStatusActive
+	p.ArchivedAt = nil
+	p.SupersededByID = &supersedingID
+	s.byName[p.Name] = p
+	return nil
+}
+
 func (s *stubRepo) Audit(_ context.Context, entry *PluginAuditEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -800,6 +866,296 @@ func TestServiceGetSource(t *testing.T) {
 	sum := sha256.Sum256([]byte(source))
 	if want := hex.EncodeToString(sum[:]); gotSHA != want {
 		t.Errorf("sha = %s, want %s", gotSHA, want)
+	}
+}
+
+// --- Version lifecycle tests (SPEC-PL-01 §4.4 / §12.1 scenarios 8/9/17/18/24) ---
+
+// Update happy path: old active archived + chain-linked, new row active,
+// 'updated' audit entry.
+func TestServiceUpdateHappyPath(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	v1 := testManifest()
+	oldP := mustRegister(t, svc, v1)
+
+	v2 := testManifest()
+	v2.Version = "1.1.0"
+	source2 := buildSource(t, v2, 1024)
+	updated, err := svc.Update(context.Background(), "csv-viewer", source2, testAuthorID)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.Version != "1.1.0" || updated.Status != PluginStatusActive {
+		t.Errorf("updated = %s@%s, want 1.1.0 active", updated.Name, updated.Version)
+	}
+	if updated.IsRootVersion {
+		t.Error("is_root_version = true on Update, want false")
+	}
+	if updated.PreviousVersionID == nil || *updated.PreviousVersionID != oldP.ID {
+		t.Errorf("previous_version_id = %v, want %s", updated.PreviousVersionID, oldP.ID)
+	}
+
+	// Old row: archived, archived_at set, superseded_by_id → new.
+	storedOld, err := repo.GetByID(context.Background(), oldP.ID)
+	if err != nil {
+		t.Fatalf("get old: %v", err)
+	}
+	if storedOld.Status != PluginStatusArchived || storedOld.ArchivedAt == nil {
+		t.Errorf("old status/archived_at = %s/%v, want archived/set", storedOld.Status, storedOld.ArchivedAt)
+	}
+	if storedOld.SupersededByID == nil || *storedOld.SupersededByID != updated.ID {
+		t.Errorf("old superseded_by_id = %v, want %s", storedOld.SupersededByID, updated.ID)
+	}
+
+	// Active pointer moved.
+	active, err := repo.GetActiveByName(context.Background(), "csv-viewer")
+	if err != nil {
+		t.Fatalf("get active: %v", err)
+	}
+	if active.ID != updated.ID {
+		t.Errorf("active = %s, want %s", active.ID, updated.ID)
+	}
+
+	// 'updated' audit entry with previous_version metadata.
+	found := false
+	for _, a := range repo.audits {
+		if a.EventType == AuditEventUpdated && a.PluginID == updated.ID {
+			found = true
+			if a.Metadata["previous_version"] != "1.0.0" {
+				t.Errorf("metadata = %v, want previous_version=1.0.0", a.Metadata)
+			}
+		}
+	}
+	if !found {
+		t.Error("no 'updated' audit entry for the new version")
+	}
+}
+
+// Update same (name, version) → ErrVersionConflict (scenario 9).
+func TestServiceUpdateSameVersionConflict(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+
+	source := buildSource(t, testManifest(), 1024)
+	_, err := svc.Update(context.Background(), "csv-viewer", source, testAuthorID)
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("err = %v, want ErrVersionConflict", err)
+	}
+	if len(repo.order) != 1 {
+		t.Errorf("rows = %d, want 1 (no new row on conflict)", len(repo.order))
+	}
+}
+
+// Update unknown name → ErrPluginNotFound.
+func TestServiceUpdateUnknownName(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	m := testManifest()
+	m.Name = "nope"
+	source := buildSource(t, m, 1024)
+
+	_, err := svc.Update(context.Background(), "nope", source, testAuthorID)
+	if !errors.Is(err, ErrPluginNotFound) {
+		t.Fatalf("err = %v, want ErrPluginNotFound", err)
+	}
+}
+
+// Update with a manifest whose name mismatches the target → validation failure.
+func TestServiceUpdateManifestNameMismatch(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+
+	m := testManifest()
+	m.Name = "other-plugin"
+	m.Version = "1.1.0"
+	source := buildSource(t, m, 1024)
+	_, err := svc.Update(context.Background(), "csv-viewer", source, testAuthorID)
+	if !errors.Is(err, ErrManifestValidationFailed) {
+		t.Fatalf("err = %v, want ErrManifestValidationFailed", err)
+	}
+	if len(repo.order) != 1 {
+		t.Errorf("rows = %d, want 1 (no row on validation failure)", len(repo.order))
+	}
+}
+
+// Update oversized source → ErrPluginTooLarge.
+func TestServiceUpdateTooLarge(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1024)
+	m := testManifest()
+	m.Name = "csv-viewer"
+	m.Version = "1.1.0"
+	source := buildSource(t, m, 2048)
+
+	// No active row yet — the size gate must fire before any lookup.
+	_, err := svc.Update(context.Background(), "csv-viewer", source, testAuthorID)
+	if !errors.Is(err, ErrPluginTooLarge) {
+		t.Fatalf("err = %v, want ErrPluginTooLarge", err)
+	}
+	if len(repo.order) != 0 {
+		t.Errorf("rows = %d, want 0", len(repo.order))
+	}
+}
+
+// Rollback happy path: target active, old active archived, links both
+// directions, 'rolled_back' audit (scenario 17).
+func TestServiceRollbackHappyPath(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	v1 := testManifest()
+	v1P, err := svc.Register(context.Background(), v1, buildSource(t, v1, 1024), testAuthorID)
+	if err != nil {
+		t.Fatalf("register v1: %v", err)
+	}
+	v2 := testManifest()
+	v2.Version = "1.1.0"
+	v2P, err := svc.Register(context.Background(), v2, buildSource(t, v2, 1024), testAuthorID)
+	if err != nil {
+		t.Fatalf("register v2: %v", err)
+	}
+
+	rolled, err := svc.Rollback(context.Background(), "csv-viewer", "1.0.0", testAuthorID)
+	if err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	if rolled.ID != v1P.ID || rolled.Status != PluginStatusActive {
+		t.Errorf("rolled = %s@%s (%s), want %s active", rolled.Name, rolled.Version, rolled.Status, v1P.ID)
+	}
+	if rolled.ArchivedAt != nil {
+		t.Error("rolled archived_at = set, want nil")
+	}
+	// Target's superseded_by_id records the row it replaced (v2).
+	if rolled.SupersededByID == nil || *rolled.SupersededByID != v2P.ID {
+		t.Errorf("rolled superseded_by_id = %v, want %s", rolled.SupersededByID, v2P.ID)
+	}
+	// The previously active v2 is archived and points at v1.
+	storedV2, err := repo.GetByID(context.Background(), v2P.ID)
+	if err != nil {
+		t.Fatalf("get v2: %v", err)
+	}
+	if storedV2.Status != PluginStatusArchived || storedV2.ArchivedAt == nil {
+		t.Errorf("v2 status/archived_at = %s/%v, want archived/set", storedV2.Status, storedV2.ArchivedAt)
+	}
+	if storedV2.SupersededByID == nil || *storedV2.SupersededByID != v1P.ID {
+		t.Errorf("v2 superseded_by_id = %v, want %s", storedV2.SupersededByID, v1P.ID)
+	}
+	// v1's previous_version_id links back to the row it replaced.
+	storedV1, err := repo.GetByID(context.Background(), v1P.ID)
+	if err != nil {
+		t.Fatalf("get v1: %v", err)
+	}
+	if storedV1.PreviousVersionID == nil || *storedV1.PreviousVersionID != v2P.ID {
+		t.Errorf("v1 previous_version_id = %v, want %s", storedV1.PreviousVersionID, v2P.ID)
+	}
+
+	// Active pointer moved back.
+	active, err := repo.GetActiveByName(context.Background(), "csv-viewer")
+	if err != nil {
+		t.Fatalf("get active: %v", err)
+	}
+	if active.ID != v1P.ID {
+		t.Errorf("active = %s, want %s", active.ID, v1P.ID)
+	}
+
+	// 'rolled_back' audit entry.
+	found := false
+	for _, e := range repo.audits {
+		if e.EventType == AuditEventRolledBack && e.PluginID == v1P.ID {
+			found = true
+			if e.Metadata["previous_version"] != "1.1.0" {
+				t.Errorf("metadata = %v, want previous_version=1.1.0", e.Metadata)
+			}
+		}
+	}
+	if !found {
+		t.Error("no 'rolled_back' audit entry")
+	}
+}
+
+// Rollback to a version that does not exist → ErrRollbackFailed (scenario 18),
+// which unwraps to ErrPluginVersionNotFound.
+func TestServiceRollbackUnknownVersion(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+
+	_, err := svc.Rollback(context.Background(), "csv-viewer", "9.9.9", testAuthorID)
+	if !errors.Is(err, ErrRollbackFailed) {
+		t.Fatalf("err = %v, want ErrRollbackFailed", err)
+	}
+	if !errors.Is(err, ErrPluginVersionNotFound) {
+		t.Errorf("err = %v, want unwrap to ErrPluginVersionNotFound", err)
+	}
+}
+
+// Rollback to the already-active version → ErrRollbackFailed.
+func TestServiceRollbackAlreadyActive(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+
+	_, err := svc.Rollback(context.Background(), "csv-viewer", "1.0.0", testAuthorID)
+	if !errors.Is(err, ErrRollbackFailed) {
+		t.Fatalf("err = %v, want ErrRollbackFailed", err)
+	}
+}
+
+// Rollback unknown plugin name → ErrPluginNotFound.
+func TestServiceRollbackUnknownName(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+
+	_, err := svc.Rollback(context.Background(), "nope", "1.0.0", testAuthorID)
+	if !errors.Is(err, ErrPluginNotFound) {
+		t.Fatalf("err = %v, want ErrPluginNotFound", err)
+	}
+}
+
+// ListVersions returns newest-first history (scenario 24).
+func TestServiceListVersionsOrdering(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+	v2 := testManifest()
+	v2.Version = "1.1.0"
+	mustRegister(t, svc, v2)
+
+	versions, err := svc.ListVersions(context.Background(), "csv-viewer")
+	if err != nil {
+		t.Fatalf("ListVersions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("len = %d, want 2", len(versions))
+	}
+	if versions[0].Version != "1.1.0" || versions[1].Version != "1.0.0" {
+		t.Errorf("order = [%s, %s], want [1.1.0, 1.0.0]", versions[0].Version, versions[1].Version)
+	}
+	// Slim view: no source leakage.
+	if versions[0].Permissions == nil || len(versions[0].Permissions) != 1 {
+		t.Errorf("slim permissions = %v, want [data_read]", versions[0].Permissions)
+	}
+}
+
+// GetVersion found + not-found.
+func TestServiceGetVersion(t *testing.T) {
+	repo := newStubRepo()
+	svc := NewService(repo, 1048576)
+	mustRegister(t, svc, testManifest())
+
+	v, err := svc.GetVersion(context.Background(), "csv-viewer", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetVersion: %v", err)
+	}
+	if v.Version != "1.0.0" || v.Status != PluginStatusActive || v.ID == uuid.Nil {
+		t.Errorf("version = %+v, want active 1.0.0", v)
+	}
+
+	_, err = svc.GetVersion(context.Background(), "csv-viewer", "9.9.9")
+	if !errors.Is(err, ErrPluginVersionNotFound) {
+		t.Fatalf("err = %v, want ErrPluginVersionNotFound", err)
 	}
 }
 

@@ -36,6 +36,9 @@ func NewPluginHandler(svc plugin.Service) *PluginHandler {
 //	GET  /{plugin_id}                 — plugin metadata (no source)
 //	GET  /{plugin_id}/source          — raw source + X-Source-SHA256
 //	POST /{plugin_id}/install         — install to tree/profile
+//	POST /{plugin_id}/update          — publish a new version (SPEC-PL-01 §4.4)
+//	POST /{plugin_id}/rollback        — re-activate a historical version
+//	GET  /{plugin_id}/versions        — version history (newest first)
 //
 // Static /instances routes are registered before /{plugin_id} so chi never
 // treats "instances" as a plugin id.
@@ -49,6 +52,9 @@ func (h *PluginHandler) Routes() chi.Router {
 	r.Get("/{plugin_id}", h.Get)
 	r.Get("/{plugin_id}/source", h.GetSource)
 	r.Post("/{plugin_id}/install", h.Install)
+	r.Post("/{plugin_id}/update", h.Update)
+	r.Post("/{plugin_id}/rollback", h.Rollback)
+	r.Get("/{plugin_id}/versions", h.Versions)
 	return r
 }
 
@@ -203,6 +209,110 @@ func (h *PluginHandler) Install(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]*plugin.PluginInstance{"instance": inst})
 }
 
+// --- POST /plugins/{plugin_id}/update --------------------------------------
+
+// updateRequest is the POST /plugins/{plugin_id}/update body.
+type updateRequest struct {
+	Source string `json:"source"`
+}
+
+// Update publishes a new version of a plugin (SPEC-PL-01 §4.4 / §12.1
+// scenarios 8-9): the manifest embedded in the new source names the plugin,
+// the service archives the current active version and links the chain.
+func (h *PluginHandler) Update(w http.ResponseWriter, r *http.Request) {
+	var req updateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+
+	// Parse the manifest here so the plugin_id path is resolved against the
+	// name the manifest declares (the service re-validates both).
+	manifest, err := plugin.ParseManifest(req.Source)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+
+	updated, err := h.svc.Update(r.Context(), manifest.Name, req.Source, userID)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]*plugin.Plugin{"plugin": updated})
+}
+
+// --- POST /plugins/{plugin_id}/rollback ------------------------------------
+
+// rollbackRequest is the POST /plugins/{plugin_id}/rollback body.
+type rollbackRequest struct {
+	Version string `json:"version"`
+}
+
+// Rollback re-activates a historical version of a plugin (SPEC-PL-01 §4.4 /
+// §12.1 scenarios 17-18).
+func (h *PluginHandler) Rollback(w http.ResponseWriter, r *http.Request) {
+	var req rollbackRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+
+	// Resolve the plugin id → name via the metadata read, then roll back.
+	id, ok := parsePluginID(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	updated, err := h.svc.Rollback(r.Context(), p.Name, req.Version, userID)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]*plugin.Plugin{"plugin": updated})
+}
+
+// --- GET /plugins/{plugin_id}/versions --------------------------------------
+
+// Versions returns the full version history of a plugin (slim view, newest
+// first) — SPEC-PL-01 §12.1 scenario 24.
+func (h *PluginHandler) Versions(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePluginID(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	versions, err := h.svc.ListVersions(r.Context(), p.Name)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"versions": versions,
+		"total":    len(versions),
+	})
+}
+
 // --- GET /plugins/instances ------------------------------------------------
 
 // ListInstances returns the caller's instances, optionally scoped to a tree.
@@ -275,6 +385,14 @@ func (h *PluginHandler) writeServiceError(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusRequestEntityTooLarge, "PLUGIN_TOO_LARGE", err.Error())
 	case errors.Is(err, plugin.ErrPluginNotFound):
 		writeError(w, http.StatusNotFound, "PLUGIN_NOT_FOUND", "plugin not found")
+	case errors.Is(err, plugin.ErrRollbackFailed):
+		// Checked BEFORE ErrPluginVersionNotFound: ErrRollbackFailed wraps the
+		// 404 sentinel, and scenario 18 demands 400 ROLLBACK_FAILED.
+		writeError(w, http.StatusBadRequest, "ROLLBACK_FAILED", err.Error())
+	case errors.Is(err, plugin.ErrPluginVersionNotFound):
+		writeError(w, http.StatusNotFound, "PLUGIN_VERSION_NOT_FOUND", "plugin version not found")
+	case errors.Is(err, plugin.ErrVersionConflict):
+		writeError(w, http.StatusConflict, "VERSION_CONFLICT", err.Error())
 	case errors.Is(err, plugin.ErrPluginDisabled):
 		writeError(w, http.StatusGone, "PLUGIN_DISABLED", err.Error())
 	case errors.Is(err, plugin.ErrPluginArchived):

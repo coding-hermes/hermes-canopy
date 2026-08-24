@@ -161,7 +161,46 @@ const (
 	AuditEventPaused      = "paused"
 	AuditEventResumed     = "resumed"
 	AuditEventUninstalled = "uninstalled"
+	AuditEventRolledBack  = "rolled_back"
 )
+
+// PluginVersion is a slim view of a Plugin (no source) used in version
+// list/lookup endpoints (SPEC-PL-01 §4.2).
+type PluginVersion struct {
+	ID                uuid.UUID    `json:"id"`
+	Name              string       `json:"name"`
+	Slug              string       `json:"slug"`
+	Version           string       `json:"version"`
+	Description       string       `json:"description"`
+	Permissions       []Permission `json:"permissions"`
+	IconURL           string       `json:"iconUrl"`
+	Status            PluginStatus `json:"status"`
+	InstallCount      int          `json:"installCount"`
+	IsRootVersion     bool         `json:"isRootVersion"`
+	SupersededByID    *uuid.UUID   `json:"supersededById"`
+	PreviousVersionID *uuid.UUID   `json:"previousVersionId"`
+	CreatedAt         time.Time    `json:"createdAt"`
+}
+
+// ToVersion projects a Plugin row onto its slim, source-free PluginVersion
+// view (SPEC-PL-01 §4.2).
+func (p *Plugin) ToVersion() PluginVersion {
+	return PluginVersion{
+		ID:                p.ID,
+		Name:              p.Name,
+		Slug:              p.Slug,
+		Version:           p.Version,
+		Description:       p.Description,
+		Permissions:       p.Permissions,
+		IconURL:           p.IconURL,
+		Status:            p.Status,
+		InstallCount:      p.InstallCount,
+		IsRootVersion:     p.IsRootVersion,
+		SupersededByID:    p.SupersededByID,
+		PreviousVersionID: p.PreviousVersionID,
+		CreatedAt:         p.CreatedAt,
+	}
+}
 
 // --- Error sentinels (SPEC-IMPL-GAP-002 §6) --------------------------------
 
@@ -192,6 +231,17 @@ var (
 	ErrAPINotFound = errors.New("plugin: unknown API method")
 	// ErrPermissionDenied: method requires a permission the instance lacks.
 	ErrPermissionDenied = errors.New("plugin: permission denied")
+	// ErrPluginVersionNotFound: (name, version) tuple does not exist
+	// (404 PLUGIN_VERSION_NOT_FOUND, SPEC-PL-01 §12.2).
+	ErrPluginVersionNotFound = errors.New("plugin: version not found")
+	// ErrVersionConflict: re-uploading the same (name, version) via the
+	// Update path (409 VERSION_CONFLICT, SPEC-PL-01 §12.1 scenario 9).
+	ErrVersionConflict = errors.New("plugin: version conflict")
+	// ErrRollbackFailed: rollback target missing from the plugin's history
+	// or already the active version (400 ROLLBACK_FAILED, SPEC-PL-01 §12.1
+	// scenario 18). Unwraps to ErrPluginVersionNotFound for callers that
+	// only care about "not in history".
+	ErrRollbackFailed = fmt.Errorf("%w: rollback target not in plugin history", ErrPluginVersionNotFound)
 )
 
 // PermissionDeniedError is the typed PERMISSION_DENIED error returned by

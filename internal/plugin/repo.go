@@ -30,6 +30,19 @@ type Repo interface {
 	UpdateInstanceStatus(ctx context.Context, id uuid.UUID, status string) error
 	IncrementInvokeCount(ctx context.Context, id uuid.UUID) error
 	Archive(ctx context.Context, id uuid.UUID) error
+	// GetVersionByName returns the stored row for (name, version), any
+	// status. ErrPluginNotFound when the tuple does not exist.
+	GetVersionByName(ctx context.Context, name, version string) (*Plugin, error)
+	// ListVersionsByName returns every row for name, newest first
+	// (ORDER BY created_at DESC, SPEC-PL-01 §12.1 scenario 24).
+	ListVersionsByName(ctx context.Context, name string) ([]Plugin, error)
+	// UpdateVersionChain archives oldID and links the version chain in one
+	// transaction: old row → status 'archived' + archived_at + superseded_by_id
+	// = newID; new row → previous_version_id = oldID.
+	UpdateVersionChain(ctx context.Context, oldID, newID uuid.UUID) error
+	// ActivateVersion flips targetID back to 'active' (clearing archived_at)
+	// and records supersedingID as the row it replaced (rollback direction).
+	ActivateVersion(ctx context.Context, targetID, supersedingID uuid.UUID) error
 	Audit(ctx context.Context, entry *PluginAuditEntry) error
 }
 
@@ -330,6 +343,88 @@ func (r *PGPluginRepo) Archive(ctx context.Context, id uuid.UUID) error {
         WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("db: archive plugin: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrPluginNotFound
+	}
+	return nil
+}
+
+// GetVersionByName returns the stored row for (name, version), any status
+// (SPEC-PL-01 §4.4 GetVersion backing).
+func (r *PGPluginRepo) GetVersionByName(ctx context.Context, name, version string) (*Plugin, error) {
+	p, err := r.getByNameVersion(ctx, name, version)
+	if errors.Is(err, ErrPluginNotFound) {
+		return nil, fmt.Errorf("%w: %s@%s", ErrPluginVersionNotFound, name, version)
+	}
+	return p, err
+}
+
+// ListVersionsByName returns every row for a name, newest first
+// (SPEC-PL-01 §12.1 scenario 24). An unknown name yields an empty slice
+// (callers resolve existence via GetActiveByName).
+func (r *PGPluginRepo) ListVersionsByName(ctx context.Context, name string) ([]Plugin, error) {
+	rows, err := r.pool.Query(ctx, `
+        SELECT `+pluginColumns+`
+        FROM plugin_registry
+        WHERE name = $1
+        ORDER BY created_at DESC`, name)
+	if err != nil {
+		return nil, fmt.Errorf("db: list plugin versions: %w", err)
+	}
+	return scanPluginRows(rows)
+}
+
+// UpdateVersionChain archives oldID and links the version chain in a single
+// transaction (SPEC-PL-01 §4.4): oldID → status 'archived', archived_at set,
+// superseded_by_id = newID; newID → previous_version_id = oldID.
+func (r *PGPluginRepo) UpdateVersionChain(ctx context.Context, oldID, newID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("db: begin version chain tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	oldTag, err := tx.Exec(ctx, `
+        UPDATE plugin_registry
+        SET status = 'archived', archived_at = clock_timestamp(),
+            superseded_by_id = $2, updated_at = clock_timestamp()
+        WHERE id = $1`, oldID, newID)
+	if err != nil {
+		return fmt.Errorf("db: archive old version: %w", err)
+	}
+	if oldTag.RowsAffected() == 0 {
+		return ErrPluginNotFound
+	}
+
+	newTag, err := tx.Exec(ctx, `
+        UPDATE plugin_registry
+        SET previous_version_id = $2, updated_at = clock_timestamp()
+        WHERE id = $1`, newID, oldID)
+	if err != nil {
+		return fmt.Errorf("db: link previous version: %w", err)
+	}
+	if newTag.RowsAffected() == 0 {
+		return ErrPluginNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("db: commit version chain tx: %w", err)
+	}
+	return nil
+}
+
+// ActivateVersion re-activates a historical version after a rollback
+// (SPEC-PL-01 §4.4): status 'active', archived_at cleared, superseded_by_id
+// set to the row it replaced (the previously active version).
+func (r *PGPluginRepo) ActivateVersion(ctx context.Context, targetID, supersedingID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+        UPDATE plugin_registry
+        SET status = 'active', archived_at = NULL,
+            superseded_by_id = $2, updated_at = clock_timestamp()
+        WHERE id = $1`, targetID, supersedingID)
+	if err != nil {
+		return fmt.Errorf("db: activate version: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrPluginNotFound
