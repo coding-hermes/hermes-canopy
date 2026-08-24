@@ -10184,3 +10184,16 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **CI:** 5/5 success pre-push; post-push check follows this tick's push.
 
 **Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: none — no new findings this tick; container image still predates UI-LIVE-001/BUG-043 (expected, swapped only for battery runs).
+## Tick 402 (2026-08-24 00:50 UTC) — between-window MAINTENANCE tick
+
+**Verdict: MAINTENANCE.** No E2E window due (398-403 satisfied at T398, 61/61 first run; next battery T404, window 404-409). Board: 15 pending (all P3 FTR/PL/STACK post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates:** CI green — gh run list shows 3/3 recent runs success (incl. tick 401 board push 03:44Z). GitReins 0 pending / 0 in_progress. Scheduler: hermes-canopy failure_rate 0.05 (5/100), auto_disable not armed, duckbrain reachable. Off-by-one :8766 healthy (uptime 2h1m). Push dry-run OK — 0 unpushed commits, tree clean at tick start. No open GitHub issues.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 400; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/396-401 contiguity verified pre-write (fs-grep). /ticks/402 (id 5c233cc2) + /project/hermes-canopy/status refresh (id fd80f94a) written and id-confirmed.
+
+**CI:** 3/3 success pre-push; post-push check follows this tick's push.
+
+**Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: none — no new findings this tick.
