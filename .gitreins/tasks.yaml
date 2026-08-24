@@ -1459,3 +1459,15 @@ tasks:
   status: complete
   created_at: '2026-08-24T07:57:23.532585+00:00'
   completed_at: '2026-08-24T07:59:16.357611+00:00'
+- id: PL-01-V1
+  title: "Plugin version lifecycle (SPEC-PL-01 \xA74.4)"
+  criteria:
+  - Service exposes Update/Rollback/ListVersions/GetVersion with chain-linked version
+    history; POST /plugins/{plugin_id}/update and /rollback + GET /plugins/{plugin_id}/versions
+    are routed in PluginHandler; same (name,version) update returns ErrVersionConflict;
+    rollback re-activates a historical version; go build ./... passes; go test ./internal/plugin/...
+    -count=1 passes; golangci-lint run ./internal/plugin/... ./internal/handler/...
+    reports 0 issues.
+  status: complete
+  created_at: '2026-08-24T21:11:56.818699+00:00'
+  completed_at: '2026-08-24T21:12:00.194607+00:00'

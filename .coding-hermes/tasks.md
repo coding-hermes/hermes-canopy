@@ -10255,3 +10255,15 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **DuckBrain:** /ticks/bankai-2 + /project/hermes-canopy/status refresh written and id-confirmed.
 
 **CI:** post-push check follows this wave's push.
+## Tick #403 (2026-08-24 16:09) — Dead-tick fold: BANKAI wave-3 PL-01 version lifecycle
+
+**Verdict: WORK** — no pending board task existed; discovered 7 files / +1237 lines of uncommitted plugin code (internal/plugin + internal/handler), mtimes 04:40-04:45 after tick-402 commits. DuckBrain event `wave3-orphaned-pl01-wip` confirms: BANKAI wave 3 (PL-01) died mid-test-run, gateway :8642 refused, no wave 4.
+
+- **Board:** new row **PL-01-V1** closed (status complete, commit 5d162cf, guard PASS, judge PASS)
+- **Scope folded:** plugin version lifecycle per SPEC-PL-01 §4.4 — Service.Update/Rollback/ListVersions/GetVersion, chain-linked version history (active row archived + linked both directions), routes POST /plugins/{plugin_id}/update + /rollback, GET /plugins/{plugin_id}/versions, ErrVersionConflict on same (name,version). 7 files, +1237 lines, +773 test lines (service 356, repo 221, handler 196).
+- **Foreman verification (re-ran, not trusted):** go build ./... PASS · go vet PASS · go test ./internal/plugin/... -count=1 PASS (14.6s) · golangci-lint run ./internal/plugin/... ./internal/handler/... = 0 issues
+- **GitReins:** PL-01-V1 create → start → complete (judge fires tier1 full + tier2 LLM)
+- **CI:** HEAD run green (cd72d15 "restore golangci-lint green"). Two older failures (tick-402 board + gitreins fold chore, 08:01-08:02Z) = the FTR-07 lint regression cd72d15 fixed — resolved, not rotting, no new CI task.
+- **Push:** 5d162cf + board commit pushed; verified 0 unpushed.
+
+Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred backlog). Next E2E window: T404 (404-409).
