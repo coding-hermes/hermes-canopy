@@ -1,4 +1,4 @@
-// client.go implements the Hermes Agent Gateway HTTP client for canopyd
+// Package hermes provides the Hermes Agent Gateway client for canopyd
 // (SPEC-FTR-07 §3.1). canopyd is a thin proxy + translator, NOT an agent
 // runtime: every communication with the Hermes Agent Gateway API
 // (http://127.0.0.1:8642) goes through this client.
@@ -548,7 +548,7 @@ func (c *httpHermesClient) Health(ctx context.Context) (*HealthStatus, error) {
 	if err != nil {
 		return nil, mapNetworkError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, mapHTTPError(resp.StatusCode, resp.Header, raw)
@@ -620,7 +620,7 @@ func (c *httpHermesClient) SendMessage(ctx context.Context, req *SendMessageRequ
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, mapHTTPError(resp.StatusCode, resp.Header, raw)
@@ -638,7 +638,7 @@ func (c *httpHermesClient) sendMessageStream(ctx context.Context, req *SendMessa
 	if err != nil {
 		return nil, err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	out := &HermesResponse{}
 	for delta := range ch {
@@ -727,7 +727,7 @@ func (c *httpHermesClient) StreamMessages(ctx context.Context, req *SendMessageR
 // (body Close or context cancellation).
 func (c *httpHermesClient) streamLoop(ctx context.Context, body *closeAwareBody, ch chan<- SSEDelta) {
 	defer close(ch)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	// If the caller's context is canceled, close the body to unblock the SSE
 	// read and end the stream (prevents goroutine leaks).
@@ -791,7 +791,7 @@ func (c *httpHermesClient) CreateConversation(ctx context.Context, profileToken 
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return "", mapHTTPError(resp.StatusCode, resp.Header, raw)
@@ -836,7 +836,7 @@ func (c *httpHermesClient) ListSkills(ctx context.Context) ([]SkillInfo, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return []SkillInfo{}, nil
 	}
@@ -868,7 +868,7 @@ func (c *httpHermesClient) getWithRetry(ctx context.Context, path string) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, mapHTTPError(resp.StatusCode, resp.Header, raw)

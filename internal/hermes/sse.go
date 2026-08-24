@@ -1,6 +1,7 @@
+package hermes
+
 // sse.go implements the incremental SSE (Server-Sent Events) parser used by
 // StreamMessages (SPEC-FTR-07 §8 Phase 1 item 4).
-package hermes
 
 import (
 	"bufio"
