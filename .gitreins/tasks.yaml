@@ -1413,3 +1413,23 @@ tasks:
   status: complete
   created_at: '2026-08-24T01:31:28.139494+00:00'
   completed_at: '2026-08-24T01:35:57.852426+00:00'
+- id: FTR-01-P1
+  title: "FTR-01 Phase P1: workspace CRUD + membership + invitations (SPEC-FTR-01\
+    \ \xA73.1/\xA75.1/\xA75.2/\xA76.1)"
+  criteria:
+  - "Migration 000032 adds owner_id/tree_id/approval_ttl to workspaces and creates\
+    \ workspace_members + invitations tables per SPEC-FTR-01 \xA76.1 (identity=users,\
+    \ documented deviation)"
+  - "internal/collaboration package defines Role (viewer/editor/admin), Workspace,\
+    \ Member, error catalogue, and CollaborationService interface per SPEC-FTR-01\
+    \ \xA73.1/\xA73.5"
+  - 'Service impl enforces: creator becomes admin; admin-only role changes/removal/invite/update/delete;
+    owner cannot be demoted/removed/leave; invitation tokens single-use, hashed, 7-day
+    expiry'
+  - "HTTP surface mounted at /api/v1/collab with workspace CRUD, members list/role/remove,\
+    \ invite/join/leave per SPEC-FTR-01 \xA75.1/\xA75.2; error mapping 404/403/400/409"
+  - go build ./... and go vet ./... pass; unit tests pass; integration tests TestCollab*
+    (5 tests) pass against real PG
+  status: complete
+  created_at: '2026-08-24T07:29:13.900517+00:00'
+  completed_at: '2026-08-24T07:31:09.434051+00:00'

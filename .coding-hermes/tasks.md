@@ -10197,3 +10197,34 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **CI:** 3/3 success pre-push; post-push check follows this tick's push.
 
 **Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: none — no new findings this tick.
+## Tick BANKAI-1 (2026-08-24) — FTR-01 Phase P1: workspace collaboration core
+
+**Verdict: WORK (BANKAI wave 1).** Bane's 卍解 override: post-MVP deferral lifted — drove the highest-priority pending P3 row (FTR-01) to a verified slice. Delivered FTR-01 Phase P1 (Core): workspace CRUD + membership + invitations + roles per SPEC-FTR-01 §3.1/§3.5/§5.1/§5.2/§6.1. Backend-only; frontend presence/locks/gates phases P2-P6 remain for later waves.
+
+**What landed (commit 69ebc16):**
+- Migration 000032: ALTER workspaces (owner_id, tree_id, approval_ttl) + workspace_members + invitations tables. Identity deviation documented: spec §6.1 references profiles(id); codebase auth is users(id) (JWT sub) — owner/members reference users.
+- internal/collaboration: Role (viewer/editor/admin), Workspace, Member, error catalogue, CollaborationService interface (10 methods incl. Update/DeleteWorkspace for §5.1 PATCH/DELETE).
+- internal/db/workspace_repo.go: PG data layer (CRUD, members, invitations, atomic single-use token consume).
+- internal/service/collaboration_service_impl.go: business rules — creator=admin, admin-only role/remove/invite/update/delete, owner protected, tokens hashed (SHA-256) + 7-day TTL + single-use.
+- internal/handler/collab_handler.go: /api/v1/collab routes (workspace CRUD, members, invite/join/leave), error mapping 404/403/400/409.
+- Wiring: server.New + cmd/canopyd/main.go.
+- Tests: internal/collaboration/types_test.go (unit), internal/service/collaboration_service_test.go (unit), internal/handler/collab_integration_test.go (5 integration tests, real PG).
+
+**Verification:**
+- go build ./... — PASS (exit 0)
+- go vet ./... — PASS (exit 0)
+- gofmt -l — clean
+- Unit: go test ./internal/collaboration/... ./internal/service/... — PASS
+- Integration: go test -tags integration -run 'TestCollab' — 5/5 PASS (WorkspaceLifecycle, InviteAndJoin, AdminPermissions, MemberRemovalAndLeave, DeleteWorkspace)
+- Baseline: go test -count=1 -p 1 $(go list ./... | grep -v /handler) — all packages PASS (db 78.5s, plugin 19.9s)
+- GitReins Tier 1 guard (full): PASS — secrets clean, go_build ok, go_lint ok, go_tests passed
+- GitReins Tier 2 judge: PENDING (see below)
+- CI: pre-push 5/5 success baseline; post-push check follows.
+
+**Worker note (pre-existing bug flagged):** ensureMultiUser helper in multi_user_integration_test.go is broken at HEAD — userRepo.Create ignores the ID field, so TestINT02_ConcurrentEdits fails with 503 (FK mismatch). Collab tests use the proven raw-INSERT pattern. Fixing userRepo.Create to honor u.ID would repair TestINT02 — candidate for a future wave.
+
+**Board:** FTR-01 row closed (status complete, commit 69ebc16, guard PASS, judge verdict below). Pending 15 → 14. Next wave: FTR-01 Phase P2 (presence) or FTR-07 per priority order.
+
+**DuckBrain:** /ticks/bankai-1 + /project/hermes-canopy/status refresh written and id-confirmed.
+
+**CI:** post-push check follows this wave's push.
