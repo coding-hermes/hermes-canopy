@@ -1403,3 +1403,13 @@ tasks:
   status: complete
   created_at: '2026-08-23T23:22:51.031489+00:00'
   completed_at: '2026-08-23T23:24:29.832195+00:00'
+- id: GAP-049
+  title: INTEGRATION.md DEV_JWT expiry/regeneration note
+  criteria:
+  - "docs/INTEGRATION.md \xA76 contains a token-renewal/regeneration note (or scripted\
+    \ token creation at run time) with expiry/regeneration guidance pointing to the\
+    \ README authentication mint-one-liner; the curl walkthrough still works against\
+    \ a live server"
+  status: complete
+  created_at: '2026-08-24T01:31:28.139494+00:00'
+  completed_at: '2026-08-24T01:35:57.852426+00:00'

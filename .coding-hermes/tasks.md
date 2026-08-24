@@ -10152,3 +10152,22 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **CI:** 5/5 recent runs success before this push (incl. tick-397 board commit + GAP-047 docs commit). Post-push check pending this tick's push.
 
 **Next tick:** open set = 17-row backlog: GAP-048 (P1 docs, SELF_HOST.md stale claims) + GAP-049 (P2 docs, INTEGRATION.md §6 hardcoded DEV_JWT expiry) + 15 P3 FTR/PL/STACK deferred by design. Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: container image now restored as-found (still predates UI-LIVE-001/BUG-043 — expected, swapped only for battery runs; host binary fresh).
+## Tick 400 (2026-08-23 ~20:45 UTC-5) — between-window WORK tick: GAP-049 closed (INTEGRATION.md DEV_JWT expiry)
+
+**Verdict: WORK — GAP-049 (P2 docs) completed.** Board: 1 task completed, 15 pending (all P3 FTR/PL/STACK deferred by design). No E2E window due (398-403 satisfied at T398; next battery T404). CI green 5/5 pre-push. Scheduler: enabled, cooldown_s=7200 (operator pin), consecutive_failures=0.
+
+**Task:** GAP-049 — docs/INTEGRATION.md §6 hardcoded a static DEV_JWT (exp epoch 1816495988 ≈ 2027-07-25) as auth for the entire curl walkthrough, with no expiry/regeneration note; after expiry every documented curl would 401 with no pointer to the README mint-one-liner.
+
+**Worker (ox-alpha-free @ opencode-go, hermes chat -q background, ~5 min):** commit 49529ca (+24/−2, only docs/INTEGRATION.md). §6 now mints DEV_JWT at run time via the README's node -e HS256 signer (secret dev-secret-change-me, sub 0000...0001, 86400s) inside the walkthrough shell block, keeps AUTH/BASE vars so every curl below stays valid, and adds an expiry note (24h vs frontend 365-day fallback; 401 → re-run mint; never embed static tokens). Worker verified live: minted token 188 chars/3 segments, correct header/payload, GET /api/v1/trees → HTTP 200 against :8091.
+
+**Foreman re-verification:** commit exists (49529ca), co-author trailer present, only docs/INTEGRATION.md changed (git show --stat), working tree clean apart from board files. Live re-check by judge tier2: minted token → 201 create, expired token → 401 (matches the new expiry note).
+
+**GitReins lifecycle:** GAP-049 created + started pre-dispatch (per tick mandate), task complete post-commit — Tier 1 PASS (full mode: secrets clean, go_build ok, go_lint ok), Tier 2 verdict c34a993f PASS. Kept for audit (fleet default).
+
+**Bookkeeping:** tasks.jsonl GAP-049 closed (status complete, commit 49529ca, guard PASS, judge c34a993f). Events 289 (task_completed) + 290 (audit) appended. Header ticks_total 400, last_commit e82bef1 (pre-tick HEAD). .gitreins/tasks.yaml folded into board commit.
+
+**DuckBrain:** /ticks/399 contiguity verified pre-write (keys through 399 present). /ticks/400 + status refresh written and id-verified.
+
+**CI:** 5/5 recent runs success pre-push; post-push check follows this tick's push.
+
+**Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: INTEGRATION.md walkthrough now self-regenerates tokens; nothing else changed.
