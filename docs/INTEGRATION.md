@@ -212,13 +212,35 @@ builder stage for exactly this purpose (deploy/Dockerfile).
 ## 6. API Walkthrough (curl)
 
 All API endpoints are under `/api/v1` and require a JWT Bearer token. In
-development, use the dev JWT from `vite.config.ts`:
+development, mint a fresh dev JWT at run time with the one-liner from
+[README.md](../README.md) §"Authentication (dev mode)" → "Direct API access
+(curl, scripts, etc.)":
 
 ```bash
-DEV_JWT="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MTY0OTU5ODgsImlhdCI6MTc4NDk1OTk4OCwic3ViIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIn0.AeEXxMtrSsIeoqnuCf-8w8XMaVbB4qIP3oX3vgxXeMI"
+# Mint a fresh 24h dev JWT (HS256, secret = default JWT_SECRET
+# "dev-secret-change-me", sub = 00000000-0000-0000-0000-000000000001).
+# See also: README.md §"Authentication (dev mode)".
+DEV_JWT=$(node -e "
+const crypto = require('crypto');
+const header = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+const payload = Buffer.from(JSON.stringify({
+  sub:'00000000-0000-0000-0000-000000000001',
+  iat:Math.floor(Date.now()/1000),
+  exp:Math.floor(Date.now()/1000)+86400
+})).toString('base64url');
+const sig = crypto.createHmac('sha256','dev-secret-change-me').update(header+'.'+payload).digest('base64url');
+console.log(header+'.'+payload+'.'+sig);
+")
 AUTH="Authorization: Bearer $DEV_JWT"
 BASE="http://localhost:8091"
 ```
+
+**Expiry note:** dev JWTs are HS256-signed with the default secret
+`dev-secret-change-me`, subject `00000000-0000-0000-0000-000000000001`, and
+they expire (24h here; the frontend's fallback token uses a 365-day window).
+If any curl below returns `401 Unauthorized`, your token has expired — just
+re-run the `node -e` mint command above to get a fresh one. Never embed a
+long-lived static token in documentation.
 
 ### Create a Tree
 
