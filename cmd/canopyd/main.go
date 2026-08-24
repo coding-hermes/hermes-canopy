@@ -208,6 +208,10 @@ func main() {
 	cardDBMgr := card.NewCardDBManager(card.DataDir())
 	cardSvc := card.NewCardServiceImpl(cardDBMgr)
 
+	// Collaboration service — SPEC-FTR-01 Phase P1 (workspace CRUD,
+	// membership, invitations). Identity = users (see internal/collaboration).
+	collabSvc := service.NewCollaborationService(db.NewPGWorkspaceRepo(database.Pool))
+
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(
 		database.Pool,
@@ -241,7 +245,7 @@ func main() {
 
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, metrics,
+		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
 		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, cfg)
 
 	// Start server in background

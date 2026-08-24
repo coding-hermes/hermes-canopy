@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
 
+	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
@@ -60,6 +61,7 @@ func New(
 	topicSvc service.TopicService,
 	cardSvc service.CardService,
 	graphSvc service.GraphService,
+	collabSvc collaboration.CollaborationService,
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
 	pluginSvc plugin.Service,
@@ -172,6 +174,10 @@ func New(
 
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
+
+		// Collaboration endpoints (SPEC-FTR-01 §5.1/§5.2) — workspace CRUD,
+		// membership, and invitations.
+		r.Mount("/collab", handler.NewCollabHandler(collabSvc).Routes())
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
 		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
