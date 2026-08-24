@@ -10171,3 +10171,16 @@ Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>
 **CI:** 5/5 recent runs success pre-push; post-push check follows this tick's push.
 
 **Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: INTEGRATION.md walkthrough now self-regenerates tokens; nothing else changed.
+## Tick 401 (2026-08-23 ~22:50 UTC-5) — between-window MAINTENANCE tick
+
+**Verdict: MAINTENANCE.** No E2E window due (398-403 satisfied at T398, 61/61 first run; next battery T404, window 404-409). Board: 15 pending (all P3 FTR/PL/STACK post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates:** CI green — gh run list shows 5/5 recent runs success (incl. tick-400 board push 01:37Z). GitReins 0 pending / 0 in_progress. Scheduler: enabled=true, cooldown_s=7200 (operator pin), consecutive_failures=0, duckbrain reachable. Off-by-one :8766 healthy (uptime 52h20m). Push dry-run OK — 0 unpushed commits, tree clean at tick start.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 400; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/400 + /ticks/399 contiguity verified pre-write (fs-grep). /ticks/401 (id e56df437) + /project/hermes-canopy/status refresh (id c1857ebe) written and fs-verified (event + config current.jsonl).
+
+**CI:** 5/5 success pre-push; post-push check follows this tick's push.
+
+**Next tick:** open set = 15-row deferred backlog (FTR-01..07, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T404 (window 404-409, first tick of window). Watch: none — no new findings this tick; container image still predates UI-LIVE-001/BUG-043 (expected, swapped only for battery runs).
