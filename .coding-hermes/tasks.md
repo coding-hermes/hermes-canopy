@@ -10283,3 +10283,15 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 - **CI:** green (last 2 runs success; tick-402-era failures fixed by cd72d15 — resolved, no task). Post-push run for this tick's board commit pending (allow 4-7 min lag).
 
 **Next tick:** open set = 14 rows: INFRA-004 (P2, container image rebuild — first real code/ops task) + 13 P3 FTR/PL/STACK deferred by design. Next E2E-001 battery due T410 (window 410-415, first tick of window). Watch: canopy-server container stopped pending INFRA-004 rebuild (expected — do not `docker start` it against DB at migration 32); host binary fresh from HEAD; battery self-clean holds (BUG-044).
+## Tick #405 (2026-08-24 ~23:5x UTC) — INFRA-004 complete: canopy-server image rebuilt + redeployed
+
+**Verdict: WORK** — picked INFRA-004 (P2, only actionable row; 13 P3 FTR/PL/STACK deferred by design; E2E-001 window 404-409 already satisfied at T404, next battery T410).
+
+- **Fix (foreman-direct ops, zero source files):** canopy-server was crash-looping ("Restarting (1)", image built 08-22 predates migration 000032; DB at schema_migrations=32, downgrade forbidden). `docker compose -f docker-compose.yml build canopyd` from HEAD (9d9b058) -> `up -d` -> container **Up (restarts=0, verified >60s)**, `curl :8091/health` = **200**, startup log clean (no "no migration found"), psql on canopy-pg confirmed version=32 dirty=f.
+- **GitReins:** INFRA-004 create -> start -> complete. Tier1 full PASS (secrets/build/lint/tests) + tier2 LLM judge **PASS — verdict 1f5f561d** (all 4 ACs verified live by judge: build EXIT=0, container running restarts=0 >30s, health 200, migration 32 applied). Task record kept in tasks.yaml for audit.
+- **Board repair (non-trivial debug):** `append_board_task_completed.py` crashed on `JSONDecodeError: Extra data` — tasks.jsonl line 198 held TWO merged objects (PL-01-V1 row + INFRA-004 row appended on one line by tick-404's task creator, missing newline). Events 297/298 (task_completed + audit) had already appended before the crash; repaired by splitting the torn line via `JSONDecoder.raw_decode` (199 rows now, all parse clean), then updating the INFRA-004 row (status/worker_status complete, commit_hash 9d9b058, guard/ci PASS) + header (ticks_total=405, ticks_idle=0, last_commit 9d9b058) via script. Submitted to off-by-one as `jsonl-torn-line-recovery` (post-debug).
+- **DuckBrain:** /ticks/405 (7726dc60) + /project/hermes-canopy/status/2026-08-24 (23d7ae7b) — both 201 + fs-grep verified. Pre-write contiguity: /ticks/400-404 present, no backfill.
+- **CI:** green at tick start (3/3 last runs success — 32790400203, 32788775631, 32778366183); post-push run pending (allow 4-7 min lag).
+- **Push:** board commit pushed, verified 0 unpushed.
+
+**Next tick:** open set = 13 P3 FTR/PL/STACK deferred by design (no actionable code task). Next E2E-001 battery due T410 (window 410-415). Watch: canopy-server now healthy on HEAD image (INFRA-004 closed); stack watchdog restart-only policy safe to leave as-is.
