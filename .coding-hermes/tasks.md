@@ -10308,3 +10308,26 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **CI:** 5/5 success pre-push; post-push check follows this tick's push.
 
 **Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T410 (window 410-415, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004.
+
+## Tick 407 — 2026-08-25 01:05Z (between-window MAINTENANCE)
+
+**Verdict: MAINTENANCE.** No E2E window due (404-409 satisfied at T404, 61/61 first run; next battery T410, window 410-415). Board: 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler 14/14 packages PASS (db 63.4s, plugin 34.8s, testutil 3.5s — all ok, exit 0), frontend unit `npx vitest run` 710/710 (37 files, 4.3s). gofmt -l: 5 pre-existing drift files (internal/handler/{topic_detection_handler,topic_search_handler,tree_handler}.go, wire006_integration_test.go, internal/search/service.go — from GAP-034 module-path refactor 2383439 / b454f00; NOT CI-gated: build.yml runs go vet + golangci-lint only; CI 3/3 green proves no gate impact). Not filed — cosmetic, pre-existing, zero functional delta.
+
+**CI:** 3/3 success pre-push (tick 404 @ 23:40Z, 405 @ 01:51Z, 406 @ 03:59Z — all `board:` chore commits). No failures → no INT-CI task needed.
+
+**Scheduler:** latest_tick id = hermes-canopy-2026-08-25-00-59-47 (matches THIS fire — canonical, no duplicate). cooldown_s=7200, fleet.toml pin 7200 (file+API agree, no PUT). failure_rate 6/100=0.06, auto_disable_armed=false. active_ticks 4 fleet-wide. DuckBrain sync: reachable, consecutive_failures=0, spooled_pending=0.
+
+**GitReins:** 0 pending / 0 in_progress (no task picked — lifecycle skipped by design).
+
+**Off-by-one:** :8766 health ok (uptime 5h20m). Live stats: 1286 problems / 1462 answers / 1462 verified, hit_rate 1, queue_depth 0. Nothing debugged → no submit/discover.
+
+**Push health:** 0 unpushed at tick start; `git push --dry-run` = up-to-date.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 406; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/406 + status key present pre-write (HTTP tree). /ticks/407 (id 5d491f89-58c7-4f4d-b475-e9f279f01ac9, domain event) + /project/hermes-canopy/status refresh (id 2998a3fc-2d73-4602-8ef2-5223f397e796, domain config) written via HTTP :3000 (X-API-Key token, ns hermes-canopy) — full records returned by API + fs-verified in namespaces/hermes-canopy/{event,config}/2026-08/current.jsonl.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T410 (window 410-415, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004; gofmt drift noted (cosmetic, pre-existing).
+
