@@ -10295,3 +10295,16 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 - **Push:** board commit pushed, verified 0 unpushed.
 
 **Next tick:** open set = 13 P3 FTR/PL/STACK deferred by design (no actionable code task). Next E2E-001 battery due T410 (window 410-415). Watch: canopy-server now healthy on HEAD image (INFRA-004 closed); stack watchdog restart-only policy safe to leave as-is.
+## Tick 406 (2026-08-25 03:58 UTC) — between-window MAINTENANCE tick
+
+**Verdict: MAINTENANCE.** No E2E window due (404-409 satisfied at T404, 61/61 first run; next battery T410, window 410-415). Board: 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates:** CI green — gh run list shows 5/5 recent runs success (incl. tick-405 board push 32799155057 @01:51Z). GitReins 0 pending / 0 in_progress. Scheduler: hermes-canopy enabled=true cooldown_s=7200 (operator pin, file+API agree), consecutive_failures=0. Off-by-one :8766 healthy (uptime 3h17m). Push dry-run OK — 0 unpushed commits, tree clean at tick start. Stack healthy: canopy-server docker Up 2h on INFRA-004 HEAD image (:8091/health 200), vite :5173 proxy 200, canopy-pg healthy. No open GitHub issues.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 405; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/400-405 contiguity verified pre-write (HTTP prefix recall). /ticks/406 (id 8cd20957) + /project/hermes-canopy/status refresh (id 25b501da) written via HTTP :3000 (X-API-Key token-1787620243982, ns hermes-canopy) — full records returned by API = write confirmation.
+
+**CI:** 5/5 success pre-push; post-push check follows this tick's push.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T410 (window 410-415, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004.
