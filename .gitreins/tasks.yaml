@@ -1493,3 +1493,13 @@ tasks:
   status: complete
   created_at: '2026-08-25T01:46:27.406389+00:00'
   completed_at: '2026-08-25T01:48:36.047205+00:00'
+- id: E2E-001-B410
+  title: E2E window 410-415 battery
+  criteria:
+  - 'frontend integration battery passes: cd frontend && npx vitest run --config vitest.integration.config.ts
+    completes with 61/61 tests passing across 13 files (baseline T404), including
+    visual-regression 4/4 with zero drift; report /tmp/canopy-e2e-tick410.md written
+    with exact counts'
+  status: complete
+  created_at: '2026-08-25T14:56:28.813860+00:00'
+  completed_at: '2026-08-25T14:59:55.179441+00:00'
