@@ -10453,3 +10453,24 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/412 present pre-write (ns tree walk). /ticks/413 (id a57c3a6b-5c21-4a6b-af8b-35c5e153e64d, domain event) + /project/hermes-canopy/status refresh (id cb911a98-b368-4ff9-89c6-e585963af997, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
 
 **Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T416 (window 416-421, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004; CI green streak continues.
+## Tick 414 — 2026-08-26 ~18:10Z (between-window MAINTENANCE)
+
+**Verdict: MAINTENANCE.** No E2E window due (410-415 satisfied at T410, 61/61 first run; next battery T416, window 416-421). Board: 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler all packages PASS (db 66.1s, plugin 31.2s, rest <4s; exit 0, canopy-pg :5437 healthy), frontend `npx vitest run` 710/710 (37 files, 4.80s), gitleaks 0 leaks, hilo 2343 edges / 337 files (unchanged — no code delta since T413).
+
+**CI:** 6/6 success pre-tick (tick 413 push @ 21:42Z 32902407302, tick 412 @ 19:30Z 32890000146, tick 411 @ 17:14Z 32876726614, fold @ 15:04Z 32863550235, tick 409 @ 12:49Z 32849768592, tick 408 @ 10:43Z 32838619296 — all `board:`/`chore:` commits). No failures → no INT-CI task needed. Post-push run follows this tick's push (allow 4-7 min lag).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 (fleet.toml pin 7200, file+API agree, no PUT), consecutive_failures=0. Latest tick = this fire (hermes-canopy-2026-08-26-13-02-33).
+
+**GitReins:** 0 pending / 0 in_progress (no task picked — lifecycle skipped by design).
+
+**Off-by-one:** :8766 health ok (uptime 41h23m). Nothing debugged → no submit/discover.
+
+**Push health:** 0 unpushed at tick start (origin/master = 81d6bdc); tree clean.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 410; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/413 present pre-write (ns tree walk: 45 tick keys, contiguous through 413; sync record corroborates). /ticks/414 (id 3b412996-bf46-4ccb-98b2-330f6b0a843a, domain event) + /project/hermes-canopy/status/2026-08-26 (id a9676626-cc85-43cc-b407-6d5ada552e7c, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T416 (window 416-421, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004; CI green streak continues.
