@@ -10474,3 +10474,28 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/413 present pre-write (ns tree walk: 45 tick keys, contiguous through 413; sync record corroborates). /ticks/414 (id 3b412996-bf46-4ccb-98b2-330f6b0a843a, domain event) + /project/hermes-canopy/status/2026-08-26 (id a9676626-cc85-43cc-b407-6d5ada552e7c, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
 
 **Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T416 (window 416-421, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image post INFRA-004; CI green streak continues.
+
+## Tick 415 — 2026-08-26 ~20:15Z (between-window MAINTENANCE)
+
+**Verdict: MAINTENANCE.** No E2E window due (410-415 satisfied at T410, 61/61 first run; next battery T416, window 416-421). Board: 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler all packages PASS (db 78.9s, plugin 76.8s, rest <4s; exit 0, canopy-pg :5437 healthy), frontend `npx vitest run` 710/710 (37 files, 4.30s), gitleaks 0 leaks (331.8MB scanned, 12.5s), hilo 2343 edges / 337 files (unchanged — no code delta since T414).
+
+**Gate note (debugged this tick):** first battery run FAILED internal/plugin TestPGRepoList (total=6, want=3) — the gate script set CANOPY_TEST_DB_URL (copied from CI), and NewIntegrationPool/NewSharedIntegrationPool (internal/testutil/integration.go:383,494) use it as a HARD override for fresh-DB isolation, routing all PG tests to the live canopy DB where rows accumulated across tests in the package (3 leftover + 3 new = 6). Re-run WITHOUT the env var: plugin PASS (13.9s isolated, 76.8s in full battery). No code delta, no regression, no pre-existing flake — self-inflicted gate contamination. Live DB verified clean post-run (key tables 0 rows, no residue). Submitted to off-by-one (sub_ecd186, class go-pg-integration-env-override-contamination, cadence post-debug) so future ticks hit a cached answer.
+
+**CI:** 6/6 success pre-tick (tick 414 push @ 18:08Z 32998038632, tick 413 @ 21:42Z 32902407302, tick 412 @ 19:30Z 32890000146, tick 411 @ 17:14Z 32876726614, fold @ 15:04Z 32863550235, tick 409 @ 12:49Z 32849768592 — all `board:`/`chore:` commits). No failures → no INT-CI task needed. Post-push run follows this tick's push (allow 4-7 min lag).
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 (fleet.toml pin 7200, board meta agrees; no PUT).
+
+**GitReins:** 0 pending / 0 in_progress (no task picked — lifecycle skipped by design).
+
+**Off-by-one:** :8766 health ok (uptime 43h30m). One post-debug submission (sub_ecd186) for the CANOPY_TEST_DB_URL trap. Discover for the failure class → not_found (no cached answer, as expected).
+
+**Push health:** 0 unpushed at tick start (origin/master = 5515910); tree clean.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 410; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/414 present pre-write (ns tree walk: tick keys contiguous through 414). /ticks/415 (id 2f588a05-fb0e-4a02-9f90-086efa7efe0a, domain event) + /project/hermes-canopy/status/2026-08-26 (id e88f4a3e-5e0e-40ed-aa26-b9c0a4d1ac91, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T416 (window 416-421, first tick of window). Watch: none — no new findings this tick; stack healthy on HEAD image; CI green streak continues.
+
