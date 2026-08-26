@@ -1503,3 +1503,13 @@ tasks:
   status: complete
   created_at: '2026-08-25T14:56:28.813860+00:00'
   completed_at: '2026-08-25T14:59:55.179441+00:00'
+- id: E2E-001-B416
+  title: "E2E-001 battery \u2014 window 416-421 first tick"
+  criteria:
+  - Run the full integration battery (cd frontend && npm run test:integration; 13
+    files, 61 tests) against the live stack on :8091/:5173; all tests pass (benign
+    retry-x1 markers on real-wiring tests acceptable); exact pass counts reported;
+    zero code changes; stack left running.
+  status: complete
+  created_at: '2026-08-26T22:27:04.891135+00:00'
+  completed_at: '2026-08-26T22:32:41.550252+00:00'
