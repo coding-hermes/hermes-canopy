@@ -1079,3 +1079,24 @@ actual code:
 
 13. **Health probes:** `/health/transports/{type}` (public) — not documented in
     the README.
+
+14. **Live Hermes gateway (GAP-050):** Mounted at `/api/v1/gateway` — canopyd
+    is a CLIENT of the Hermes gateway api_server (`hermes gateway run`,
+    default `http://127.0.0.1:8642`, configurable via
+    `HERMES_WEBUI_GATEWAY_BASE_URL`; auth via `HERMES_WEBUI_GATEWAY_API_KEY`
+    or the `API_SERVER_KEY` fallback). Endpoints:
+
+    - `GET  /api/v1/gateway/status` — gateway connectivity + run counts
+    - `GET  /api/v1/gateway/runs` — run registry (newest first, live status
+      refresh for non-terminal runs)
+    - `POST /api/v1/gateway/runs` — `{message, session_id?}` → starts a REAL
+      Hermes agent run (`POST /v1/runs` on the gateway; 202 + run_id)
+    - `GET  /api/v1/gateway/runs/{run_id}` — run record with event history
+    - `GET  /api/v1/gateway/runs/{run_id}/events` — SSE stream (history
+      replay + live fan-out of gateway lifecycle events)
+    - `POST /api/v1/gateway/runs/{run_id}/stop` — interrupt the run
+    - `POST /api/v1/gateway/runs/{run_id}/approval` —
+      `{choice: once|session|always|deny, approval_id?}` — resolve a pending
+      approval
+
+    The gateway API key is held server-side; the browser never sees it.
