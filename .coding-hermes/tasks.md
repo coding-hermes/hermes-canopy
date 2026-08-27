@@ -10617,3 +10617,32 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/420 + /project/hermes-canopy/status written post-commit, verified by id-recall.
 
 **Next tick:** GAP-051 (P1, depends on GAP-050) — replace seeded/mock demo data with real Hermes data; demo tree confined to E2E. Watch: (1) CI for the 3 GAP-050 commits; (2) E2E-001 window 422-427 first tick at T422.
+
+## Tick 421 (2026-08-27) — GAP-051 COMPLETE: seeded/mock demo data replaced with real Hermes data
+
+**Task:** GAP-051 (P1, depends GAP-050) — replace seeded/mock demo data with REAL data from the live Hermes system; UI must never show fake content. PASS: fresh app shows real Hermes sessions/runs; no seeded tree in normal use.
+
+**Audit (deliverable a):** the ONLY visible product data was the seeded 'UI-02 Rail Demo' tree (36 other trees soft-deleted E2E residue; API returns exactly 1 tree). Seed/mock surfaces found:
+- Product leaks: sidebar nav item `/tree/demo` (App.tsx), TopicsRail fallback preferring the demo label, activeTree DEMO_TREE_UUID + /tree/demo alias, TreeView `__canopySeedDemoTree` hook, treeStore seedDemoTree, TopicSearchPanel 'demo' handling.
+- Fixtures: scripts/seed-demo-data.sql (E2E reseed, tick 416), visual goldens (docs/screenshots/visual-regression), E2E tests (tree-rendering/visual-regression/e2e-cleanup), .coding-hermes/e2e-screenshots (informational).
+- Backend seed refs: internal/handler tests only (fixtures, never product UI).
+
+**Changes (commit f26e991, co-author trailer verified):**
+- App.tsx: '/tree/demo' Tree View nav item REMOVED (Trees page = real-tree entry).
+- TopicsRail.tsx: fallback no longer prefers 'UI-02 Rail Demo' — newest real tree or honest empty rail.
+- activeTree.ts / TreeView.tsx / treeStore.ts / TopicSearchPanel.tsx: all seed/alias paths re-marked E2E-ONLY fixtures.
+- scripts/seed-demo-data.sql: header marked E2E-ONLY fixture; NEW scripts/remove-demo-data.sql (hard delete of all demo-tree rows across 15 FK tables; dev user kept).
+- visual-regression.test.ts + mobile-drawer.test.ts: fixture markings + nav comment.
+- Visual goldens re-baselined (4 goldens + 4 pairs): intentional nav change 10→9 items, 3.1–3.8% drift, vision-verified (T278 precedent).
+
+**E2E battery:** run 1 = 57/61 (only 4 visual-regression drifted as predicted) → UPDATE_VISUAL_GOLDENS=1 re-baseline = 61/61 → clean verify run = **61/61 (13 files, zero drift, zero retries)**.
+
+**Live verification (PASS):** demo tree DELETED from live DB post-battery (0 live trees). Fresh browser context: Dashboard shows REAL gateway runs (4: ui-composer-ok/completed, essay/cancelled, count/completed, canopy-live-ok/completed) + SSE event stream + chat composer; Trees page shows 'Live Hermes: 0 active · 4 total runs' strip + honest 'No trees yet' state; sidebar = 9 items, no Tree View; topics rail empty; zero console errors. Gateway surface verified: /api/v1/gateway/status connected:true, run_count:4.
+
+**Gates:** go build/vet PASS · go test (non-handler) PASS · vitest 723/723 · tsc -b PASS · gitleaks no leaks.
+
+**Bookkeeping:** tasks.jsonl GAP-051 → status=complete (commit_hash f26e991, guard_result PASS, foreman_note); events id=302 (task_completed) + id=303 (audit, tick 421); board.jsonl header ticks_total=421/last_commit=f26e991; board.db synced (201/201).
+
+**DuckBrain:** /ticks/421 + status written post-commit.
+
+**Next tick / watch:** E2E-001 window 422-427 (first tick T422) — NEW FIXTURE LIFECYCLE: apply scripts/seed-demo-data.sql BEFORE battery, run battery, apply scripts/remove-demo-data.sql AFTER (demo tree must not persist in product). CI watch: push of f26e991 + board commit.
