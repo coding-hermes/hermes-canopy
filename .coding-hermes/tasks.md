@@ -10646,3 +10646,27 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/421 + status written post-commit.
 
 **Next tick / watch:** E2E-001 window 422-427 (first tick T422) — NEW FIXTURE LIFECYCLE: apply scripts/seed-demo-data.sql BEFORE battery, run battery, apply scripts/remove-demo-data.sql AFTER (demo tree must not persist in product). CI watch: push of f26e991 + board commit.
+
+## Tick 422 (2026-08-27 ~04:05-04:15 local) — E2E-001 window 422-427 SATISFIED: 61/61 FIRST RUN
+
+**Verdict:** E2E window 422-427 satisfied at T422 (first tick of window). **61/61 FIRST RUN** (13 files, 60.87s, zero retry markers, zero backend 4xx/5xx). Board: 188 complete / 13 pending — ALL P3 post-MVP deferred (FTR-02..06, PL-01..06, STACK-01..02), no dispatch, no gitreins lifecycle, no task picked, tasks.jsonl untouched.
+
+**E2E battery:** fresh canopyd from HEAD (/tmp/canopyd-t422) swapped over the stale canopy-server container on :8091 (T374/T380 convention; INFRA-002 container image predates GAP-050 — not `docker compose up -d`), container restored as-found post-run (health 200). Vite :5173 = Aug-22 systemd-era orphan REUSED after verifying it serves the canopy app with a working proxy → :8091 (demo tree 200 via proxy; no setup.ts/vite.config.ts patches). Load 2.69/16. Mockups present. Write-path probe: 201 with `{title, rootMessage:{content, contentFormat:"plain", nodeType:"message"}}` (schema requires all three fields; bare {title} → 400 VALIDATION_ERROR = healthy per failure mode #28); probe tree deleted. Fixture lifecycle per GAP-051: seed-demo-data.sql BEFORE (UI-02 Rail Demo b1655761, 10 nodes/9 edges/3 topics), remove-demo-data.sql AFTER (DELETE 10+1; visible trees = 0 — expected, real Hermes data = gateway runs). Pre-battery finding: 54 leaked SOFT-DELETED E2E junk trees from T421's battery (T267/T265/BUG-040/T268/GAP040/GAP043 families, 07:19Z) — invisible to API (total 0), sweeper matched 0 visible, left as invisible residue (T420 precedent).
+
+**Gates:** go build/vet PASS · go test non-handler 22 pkgs PASS (2m1.5s) · vitest unit 723/723 (39 files) · tsc -b PASS · gitleaks 0 leaks.
+
+**CI:** last 4 runs success. Two 07:00Z failures (GAP-050 batch: golangci-lint resp.Body.Close + board commit) EXPLAINED — fixed by 07:01Z fix commit, all subsequent green. No INT-CI task.
+
+**Scheduler:** enabled=true, cooldown 7200 (fleet.toml pin, no PUT). Storm-watch: hermes-canopy failure_rate 0.06 (6/100), auto_disable_armed false.
+
+**GitReins:** 95 complete / 0 pending / 0 in_progress — no lifecycle (E2E window tick, no task picked).
+
+**Off-by-one:** :8766 health ok. Discover run for real: `canopy-e2e-window` + `canopy-maintenance-tick` → not_found both. Nothing to submit (battery passed first run, no debug session).
+
+**Push health:** 0 unpushed at tick start; post-commit push verified.
+
+**Bookkeeping:** events id=304 (audit, tick 422) appended via append_board_event.py; board.jsonl header ticks_total=422/last_commit=0ea79d3; e2e-output/tick422.md report written; tasks.md entry at bottom. tasks.jsonl NOT modified (no task rows changed).
+
+**DuckBrain:** /ticks/422 + /project/hermes-canopy/status written post-commit, verified by id + fs-grep.
+
+**Next tick:** T423 = between-window maintenance (no battery; next E2E window 428-433, first tick T428). Watch: (1) CI for this tick's board commit; (2) visible live trees stay 0 (real-data-only; soft-deleted residue invisible); (3) INFRA-002 canopy-server container still stale — battery swap procedure only.
