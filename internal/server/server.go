@@ -11,11 +11,13 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/plugin"
@@ -212,6 +214,19 @@ func New(
 
 		// Plugin sandbox (GAP-002) — register/list/source/install + instances.
 		r.Mount("/plugins", handler.NewPluginHandler(pluginSvc).Routes())
+
+		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
+		// gateway api_server (hermes-webui pattern). The service is constructed
+		// here from config so no main.go signature churn is needed; a bad
+		// base_url falls back to the default so the UI can still show the
+		// gateway as offline instead of crashing the server.
+		gwClient, gwErr := gateway.NewClient(cfg.GatewayBaseURL, cfg.GatewayAPIKey)
+		if gwErr != nil {
+			log.Warn().Err(gwErr).Msg("gateway: invalid HERMES_WEBUI_GATEWAY_BASE_URL; using default")
+			gwClient, _ = gateway.NewClient(gateway.DefaultBaseURL, cfg.GatewayAPIKey)
+		}
+		gatewaySvc := gateway.NewService(gwClient)
+		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc).Routes())
 	})
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).

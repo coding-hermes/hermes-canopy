@@ -107,3 +107,35 @@ func TestFromEnvCORSOrigin(t *testing.T) {
 		t.Fatalf("FromEnv().CORSOrigin = %q, want %q", got, "http://example.com")
 	}
 }
+
+func TestDefaultGatewayConfig(t *testing.T) {
+	c := Default()
+	if c.GatewayBaseURL != "http://127.0.0.1:8642" {
+		t.Fatalf("Default().GatewayBaseURL = %q, want http://127.0.0.1:8642", c.GatewayBaseURL)
+	}
+	if c.GatewayAPIKey != "" {
+		t.Fatalf("Default().GatewayAPIKey = %q, want empty", c.GatewayAPIKey)
+	}
+}
+
+func TestFromEnvGatewayConfig(t *testing.T) {
+	t.Setenv("HERMES_WEBUI_GATEWAY_BASE_URL", "http://example.com:9999")
+	t.Setenv("HERMES_WEBUI_GATEWAY_API_KEY", "webui-key")
+	c := FromEnv()
+	if c.GatewayBaseURL != "http://example.com:9999" {
+		t.Fatalf("GatewayBaseURL = %q, want env override", c.GatewayBaseURL)
+	}
+	if c.GatewayAPIKey != "webui-key" {
+		t.Fatalf("GatewayAPIKey = %q, want webui-key", c.GatewayAPIKey)
+	}
+}
+
+func TestFromEnvGatewayAPIKeyFallsBackToAPIServerKey(t *testing.T) {
+	t.Setenv("HERMES_WEBUI_GATEWAY_BASE_URL", "")
+	t.Setenv("HERMES_WEBUI_GATEWAY_API_KEY", "")
+	t.Setenv("API_SERVER_KEY", "api-server-key")
+	c := FromEnv()
+	if c.GatewayAPIKey != "api-server-key" {
+		t.Fatalf("GatewayAPIKey = %q, want API_SERVER_KEY fallback", c.GatewayAPIKey)
+	}
+}

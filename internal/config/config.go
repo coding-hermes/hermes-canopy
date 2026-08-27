@@ -42,6 +42,10 @@ type Config struct {
 
 	// Plugin sandbox (GAP-002 §4.1)
 	PluginMaxSize int // PLUGIN_MAX_SIZE, default 1048576 (1MB)
+
+	// Hermes gateway (GAP-050 — live gateway client)
+	GatewayBaseURL string // HERMES_WEBUI_GATEWAY_BASE_URL, default http://127.0.0.1:8642
+	GatewayAPIKey  string // HERMES_WEBUI_GATEWAY_API_KEY, fallback API_SERVER_KEY
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -80,6 +84,7 @@ func Default() *Config {
 		ContextMaxRefs:       5,
 		ContextDefaultBudget: 8000,
 		PluginMaxSize:        1048576,
+		GatewayBaseURL:       "http://127.0.0.1:8642",
 	}
 }
 
@@ -151,6 +156,20 @@ func FromEnv() *Config {
 				c.PluginMaxSize = n
 			}
 		}
+	}
+
+	// Hermes gateway (GAP-050). base_url defaults to the hermes-webui
+	// convention (http://127.0.0.1:8642); the API key comes from
+	// HERMES_WEBUI_GATEWAY_API_KEY with API_SERVER_KEY as fallback so a
+	// canopyd running next to a `hermes gateway run` picks up the key with
+	// no extra configuration.
+	if v := os.Getenv("HERMES_WEBUI_GATEWAY_BASE_URL"); v != "" {
+		c.GatewayBaseURL = v
+	}
+	if v := os.Getenv("HERMES_WEBUI_GATEWAY_API_KEY"); v != "" {
+		c.GatewayAPIKey = v
+	} else if v := os.Getenv("API_SERVER_KEY"); v != "" {
+		c.GatewayAPIKey = v
 	}
 
 	// CANOPY_DB_URL overrides all individual DB_* fields when set.
