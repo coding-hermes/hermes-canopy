@@ -116,8 +116,8 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		EdgeType      string          `json:"edge_type,omitempty"`
 		Metadata      json.RawMessage `json:"metadata,omitempty"`
 	}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, 400, "INVALID_BODY", "request body must be valid JSON")
+	if err := decodeNodeJSON(r, &req); err != nil {
+		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
 		return
 	}
 
@@ -234,8 +234,8 @@ func (h *NodeHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		ContentFormat *string          `json:"content_format,omitempty"`
 		Metadata      *json.RawMessage `json:"metadata,omitempty"`
 	}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, 400, "INVALID_BODY", "request body must be valid JSON")
+	if err := decodeNodeJSON(r, &req); err != nil {
+		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
 		return
 	}
 
@@ -302,8 +302,8 @@ func (h *NodeHandler) handleReply(w http.ResponseWriter, r *http.Request) {
 		NodeType      string          `json:"node_type,omitempty"`
 		Metadata      json.RawMessage `json:"metadata,omitempty"`
 	}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, 400, "INVALID_BODY", "request body must be valid JSON")
+	if err := decodeNodeJSON(r, &req); err != nil {
+		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
 		return
 	}
 
@@ -358,8 +358,8 @@ func (h *NodeHandler) handleFork(w http.ResponseWriter, r *http.Request) {
 		NodeType      string          `json:"node_type,omitempty"`
 		Metadata      json.RawMessage `json:"metadata,omitempty"`
 	}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, 400, "INVALID_BODY", "request body must be valid JSON")
+	if err := decodeNodeJSON(r, &req); err != nil {
+		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
 		return
 	}
 

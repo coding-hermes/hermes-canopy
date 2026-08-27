@@ -154,6 +154,17 @@ Two mount points exist:
 2. **Flat:** `/api/v1/nodes` — access-gated via `NodeAccessMiddleware` (resolves
    the node's tree and checks membership)
 
+**Field naming (GAP-053):** tree-create and topic endpoints use camelCase
+(`rootMessage.contentFormat`, `rootMessage.nodeType`). The node
+create/reply/fork/update endpoints accept **both** camelCase and snake_case
+field names — `contentFormat`/`content_format`, `nodeType`/`node_type`,
+`parentId`/`parent_id`, `edgeType`/`edge_type` are equivalent on those four
+endpoints (if both casings are sent, snake_case wins). Requests remain
+otherwise strict: any other unknown field returns `400 INVALID_BODY` with the
+offending field named in the error message (e.g.
+`request body contains an unknown field "contentFormat"`), not the generic
+"request body must be valid JSON".
+
 ### List Nodes (Tree-scoped)
 
 ```

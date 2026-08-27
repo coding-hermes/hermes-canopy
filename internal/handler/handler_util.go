@@ -2,10 +2,15 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"net/http"
 )
 
 // --- Error response types ---------------------------------------------------
@@ -28,6 +33,68 @@ func decodeJSON(r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	return d.Decode(v)
+}
+
+// nodeFieldCasing maps camelCase aliases to the snake_case keys used by the
+// node request structs (create/reply/fork/update). Tree-create and topics
+// accept camelCase (contentFormat/nodeType), while node endpoints historically
+// took snake_case only — a client following the tree-create example then hit
+// "INVALID_BODY: request body must be valid JSON" on reply even though the
+// body was valid JSON with unknown fields (GAP-053).
+var nodeFieldCasing = map[string]string{
+	"contentFormat": "content_format",
+	"nodeType":      "node_type",
+	"parentId":      "parent_id",
+	"edgeType":      "edge_type",
+}
+
+// decodeNodeJSON decodes a node endpoint request body leniently: camelCase
+// aliases (contentFormat, nodeType, parentId, edgeType) are accepted wherever
+// the snake_case key is absent, then the normalized body is strict-decoded so
+// genuinely unknown fields still fail — with the offending field named in the
+// error (decodeJSON's DisallowUnknownFields error includes the field name).
+func decodeNodeJSON(r *http.Request, v any) error {
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for alias, snake := range nodeFieldCasing {
+		camel, ok := fields[alias]
+		if !ok {
+			continue
+		}
+		if _, exists := fields[snake]; !exists {
+			fields[snake] = camel
+		}
+		delete(fields, alias)
+	}
+	normalized, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	d := json.NewDecoder(bytes.NewReader(normalized))
+	d.DisallowUnknownFields()
+	return d.Decode(v)
+}
+
+// invalidNodeBodyMessage converts a decodeNodeJSON error into a client-facing
+// INVALID_BODY message. Unknown-field errors name the offending field (the
+// AC: "clear 'unknown field contentFormat' error, not 'must be valid JSON'");
+// malformed JSON keeps the generic validity message.
+func invalidNodeBodyMessage(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "unknown field") {
+		return "request body contains an " + strings.TrimPrefix(msg, "json: ")
+	}
+	var ute *json.UnmarshalTypeError
+	if errors.As(err, &ute) {
+		return "request body has an invalid value for field " + ute.Field
+	}
+	return "request body must be valid JSON"
 }
 
 // writeJSON serialises v as JSON and writes it with the given status code.

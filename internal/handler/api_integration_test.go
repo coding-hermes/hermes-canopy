@@ -1332,3 +1332,98 @@ func TestAPI_SSECORSHeaders(t *testing.T) {
 		t.Log("Connection header not set (may be optional)")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GAP-053: node endpoints accept camelCase + snake_case field names
+// ---------------------------------------------------------------------------
+
+// TestAPI_NodeReplyCamelCase proves a client can follow the tree-create docs
+// example (camelCase contentFormat/nodeType) and hit node endpoints without a
+// confusing "must be valid JSON" rejection (GAP-053).
+func TestAPI_NodeReplyCamelCase(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+
+	srv := newTestServerWithFullAPI(t, pool)
+	defer srv.Cleanup()
+
+	ownerID := ensureTestUser(t, pool)
+	tree := createTreeViaHTTP(t, srv, ownerID, "GAP-053 Reply CamelCase")
+	child := createChildNodeViaHTTP(t, srv, tree.ID, tree.RootNodeID, ownerID, "GAP-053 reply parent")
+
+	// Reply body in camelCase — exactly the field naming the tree-create
+	// example uses. Must return 201, not 400 INVALID_BODY.
+	req := apiRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/nodes/nodes/"+child.Node.ID.String()+"/reply", ownerID,
+		map[string]any{
+			"content":       "camelCase reply",
+			"contentFormat": "plain",
+			"nodeType":      "message",
+		})
+	resp, err := srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST camelCase reply: %v", err)
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("camelCase reply: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result service.CreateNodeResult
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		t.Fatalf("decode reply result: %v", err)
+	}
+	if result.Node == nil || result.Node.ContentFormat != "plain" {
+		t.Fatalf("camelCase contentFormat not honored: %+v", result.Node)
+	}
+
+	// Same endpoint still accepts snake_case (no regression).
+	req = apiRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/nodes/nodes/"+child.Node.ID.String()+"/reply", ownerID,
+		map[string]any{
+			"content":        "snake_case reply",
+			"content_format": "plain",
+			"node_type":      "message",
+		})
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST snake_case reply: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ = io.ReadAll(resp.Body)
+		t.Fatalf("snake_case reply: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Genuinely unknown field → 400 with the field named (not generic
+	// "must be valid JSON").
+	req = apiRequest(t, srv.Server.URL, http.MethodPost,
+		"/api/v1/nodes/nodes/"+child.Node.ID.String()+"/reply", ownerID,
+		map[string]any{
+			"content":       "unknown field reply",
+			"contentFormat": "plain",
+			"notAField":     true,
+		})
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST unknown-field reply: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown-field reply: status=%d, want 400", resp.StatusCode)
+	}
+	var errBody apiErrorBody
+	if err := json.NewDecoder(resp.Body).Decode(&errBody); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if errBody.Error.Code != "INVALID_BODY" {
+		t.Fatalf("unknown-field error code = %q, want INVALID_BODY", errBody.Error.Code)
+	}
+	if !strings.Contains(errBody.Error.Message, "notAField") {
+		t.Fatalf("unknown-field message %q does not name the field", errBody.Error.Message)
+	}
+	if strings.Contains(errBody.Error.Message, "must be valid JSON") {
+		t.Fatalf("unknown-field message %q still generic", errBody.Error.Message)
+	}
+}
