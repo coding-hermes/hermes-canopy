@@ -36,6 +36,24 @@
 |----|------|-----|-----|------|------|-------|-----|----------|
 > **Board source of truth:** `.coding-hermes/board/tasks.jsonl` is canonical (AGENTS.md). This matrix is a derived snapshot — reconciled with tasks.jsonl at tick 381 (19 open rows: 18 post-MVP backlog rows carry ⬜ deferred markers + INFRA-003 ⬜ push-blocker). Foreman ticks read tasks.jsonl; humans may trust this matrix but should re-check tasks.jsonl for the authoritative open-task set.
 
+## Dogfood Findings (2026-08-27)
+
+Deep real-use dogfood run (cron) against the live stack (:5173 PWA + :8091 canopyd + :5437 PG + live Hermes gateway :8642). Focus: the NEW promise (GAP-050/051) — Canopy as the live interface of Hermes.
+Canonical rows: `.coding-hermes/board/tasks.jsonl` (GAP-052..055, pending). Summary:
+
+| ID | Finding | Pri | Evidence (real use) |
+|----|---------|-----|---------------------|
+| GAP-052 | **Deployed binary stale vs HEAD, no deploy step in the loop** — systemd user unit runs `/home/kara/bin/canopyd` (built 01:52) while GAP-050 gateway commits landed 01:57–02:01 → live stack 404'd the ENTIRE `/api/v1/gateway` surface ~7h (04:05→11:05 restart) while board said complete + E2E 61/61 passed (zero gateway coverage) | P1 | 04:05 binary: `GET /gateway/status` → 404; 11:05 binary (fresh copy): 200 connected. E2E battery has no gateway tests |
+| GAP-053 | **API field-naming split + misleading INVALID_BODY** — tree-create/topics camelCase, node create/reply/fork/update snake_case with `DisallowUnknownFields()` → camelCase on node endpoints returns 400 "request body must be valid JSON" (body IS valid; fields unknown) | P1 | `POST /nodes/nodes/{id}/reply` camelCase → INVALID_BODY; same body snake_case → 201 |
+| GAP-054 | **Gateway run registry in-memory only** — canopyd restart wipes run history (5 runs → 0 after 11:05 restart) though the gateway retains runs; stop on completed run → 404 run_not_found (misleading, run IS in registry) | P2 | 5 probe runs visible pre-restart, 0 after; `POST /runs/{completed}/stop` → 404 |
+| GAP-055 | **API.md contentFormat "string (optional)" no enum** — guessing `text` → 400 "invalid content format"; only `markdown` accepted (and it's the default) | P2 | `contentFormat:"text"` → VALIDATION_ERROR; `"markdown"` → 201 |
+
+**Verified FIXED since 2026-08-17 run (all re-tested live):** GAP-040 (UI Create-Tree dialog works — created "UI-created tree" via browser), GAP-041 (INTEGRATION.md §6 fork path now tree-scoped, works), GAP-042 (CLI `tree create` + `--help` work), GAP-043 (fork rule documented + enforced), GAP-045 (CLI navigate shows hierarchy).
+
+**New promise VERIFIED WORKING (real use):** Dashboard shows live gateway data (real runs, SSE event stream, chat composer starts real runs — "ui-probe-ok" run completed end-to-end via browser, zero console errors); gateway status/runs/start/SSE/stop all work via API and vite proxy; context manifest (28/8,000 tokens), tree/node/reply/fork/graph all work.
+
+Full report: `docs/dogfood/2026-08-27-integration.md` · diagnostics: `docs/dogfood/diagnostics.md` (updated) · usage skill: `skills/hermes-canopy-usage/SKILL.md` (updated).
+
 ## Dogfood Findings (2026-08-17)
 
 Deep real-use dogfood run (cron) against the live stack (:5173 PWA + :8091 canopyd + :5437 PG).

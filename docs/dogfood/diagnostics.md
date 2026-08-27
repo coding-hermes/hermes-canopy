@@ -83,3 +83,54 @@ API-contract drift between layers (GAP-008 payload, BUG-023 double mount, GAP-04
 docs drift), test-suite speed vs CI timeouts (GAP-003, GAP-037, GAP-039), and
 "all tests green but the real flow is broken" (this run's GAP-040 — the exact
 premature-completion pattern this dogfood loop exists to catch).
+
+## 5. 2026-08-27 update — the gateway era (GAP-050/051)
+
+The project's center of gravity moved: Canopy is now a **client of the live Hermes
+gateway** (`hermes gateway run`, :8642). New architecture facts learned by poking it:
+
+- **Deployment is a systemd user unit, not the repo binary.** `canopy-canopyd.service`
+  runs `/home/kara/bin/canopyd` (manually copied), `canopy-vite.service` runs the
+  Vite dev server. `EnvironmentFile=/home/kara/.hermes/.env`; gateway config via
+  `HERMES_WEBUI_GATEWAY_BASE_URL` + `HERMES_WEBUI_GATEWAY_API_KEY` (API_SERVER_KEY
+  fallback). **There is no deploy script** — after pulling backend code you must
+  `make build && cp bin/canopyd /home/kara/bin/ && systemctl --user restart
+  canopy-canopyd` or the live stack silently runs a stale binary. This bit us:
+  the 04:05 binary predated the GAP-050 commits by ~10 min → the whole gateway
+  surface 404'd for ~7h while the board said complete (GAP-052).
+- **Gateway surface** (`/api/v1/gateway`): status, runs (registry), POST runs
+  (starts REAL gateway runs, 202 + run_id), GET run, SSE events (bounded history
+  replay + live fan-out, subscribe-before-replay so no event is missed), stop,
+  approval. The API key never reaches the browser. Verified live end-to-end.
+- **The run registry is in-memory** (`internal/gateway/service.go` — `runs
+  map[string]*RunRecord`): a canopyd restart wipes all run history even though the
+  gateway retains runs (GAP-054). Stop on a terminal run → 404 run_not_found
+  (misleading; the run IS in the registry).
+- **Field-casing split (the #1 API trap):** tree-create and topics take camelCase
+  (`contentFormat`, `nodeType`, `treeId`); ALL node endpoints take snake_case
+  (`content_format`, `node_type`, `parent_id`) with `DisallowUnknownFields()` —
+  camelCase on a node endpoint returns 400 "request body must be valid JSON" even
+  though the body is valid (GAP-053). The frontend (`lib/composer.ts`) correctly
+  uses snake_case; the docs' tree-create example uses camelCase — a user following
+  the example then hitting reply gets the misleading error.
+- **contentFormat accepts only `markdown`** (default). `"text"` → 400 "invalid
+  content format" (GAP-055). API.md says "string (optional)" with no enum.
+- **E2E battery (61/61) has ZERO gateway coverage** — it passed while the gateway
+  surface 404'd. The visual-regression goldens were re-baselined for the
+  demo-tree removal (GAP-051); the demo tree is now E2E-only and was deleted from
+  the live DB (0 trees → honest empty state).
+
+## 6. The right way (2026-08-27 additions)
+
+- **Probing the gateway:** `GET /api/v1/gateway/status` first — if 404, the
+  deployed binary is stale (GAP-052); check `stat /home/kara/bin/canopyd` vs
+  `git log -1 --format=%ci` of the gateway commits.
+- **Starting runs:** POST `/gateway/runs` `{"message": ...}` — real tokens, keep
+  prompts tiny; stop long runs with POST `/gateway/runs/{id}/stop` (works while
+  running; 404 on completed runs is the misleading GAP-054 behavior).
+- **Node bodies:** always snake_case (`content_format`, `node_type`, `parent_id`).
+  Tree-create and topics: camelCase. When in doubt, read the struct tags in
+  `internal/handler/node_handler.go` — they're the ground truth.
+- **Data hygiene:** my scratch trees (dogfood-2026-08-27, UI-created tree,
+  CLI-created tree) were deleted via API after the run; the canonical DB on :5437
+  is the E2E/seed DB — don't leave scratch data in it.

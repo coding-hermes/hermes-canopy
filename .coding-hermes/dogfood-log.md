@@ -1,5 +1,39 @@
 # Dogfood Log — Hermes Canopy
 
+## 2026-08-27 — Deep real-use run (cron dogfood) — gateway era
+
+- **Verdict:** 🟡 PROMISING-BUT-ROUGH
+- **Promise:** "Canopy is the live interface of Hermes — the Dashboard shows real
+  gateway runs, the chat composer starts REAL agent runs, SSE streams events, and
+  approvals resolve; plus the original DAG/context-manifest surface."
+- **Time-to-first-success:** API ~15 s (JWT → gateway status → start real run);
+  browser ~3 s (load → Dashboard with live gateway data).
+- **Friction count:** 4 (stale-binary 404, camelCase/snake_case trap, misleading
+  stop-404, undocumented contentFormat enum).
+- **Top 3 findings:**
+  1. **GAP-052 (P1)** — deployed `/home/kara/bin/canopyd` (built 01:52) predated
+     GAP-050 gateway commits (01:57–02:01) → whole `/api/v1/gateway` surface 404'd
+     ~7h while board said complete + E2E 61/61 passed (zero gateway coverage).
+     No deploy script, no post-deploy smoke test.
+  2. **GAP-053 (P1)** — API field-casing split: tree-create/topics camelCase, node
+     endpoints snake_case with DisallowUnknownFields → camelCase on node endpoints
+     returns misleading 400 "request body must be valid JSON".
+  3. **GAP-054 (P2)** — gateway run registry in-memory: restart wipes history;
+     stop on completed run → misleading 404 run_not_found.
+- **Also filed:** GAP-055 (API.md contentFormat "string (optional)" no enum; only
+  `markdown` accepted).
+- **Verified FIXED since 08-17:** GAP-040 (UI Create-Tree works — created tree via
+  browser), GAP-041 (INTEGRATION.md §6 fork path works), GAP-042 (CLI create +
+  --help work), GAP-043 (fork rule enforced), GAP-045 (CLI navigate hierarchy).
+- **What works (real evidence):** gateway status/runs/start/SSE/stop end-to-end
+  (real Hermes runs, "ui-probe-ok" via browser composer, zero console errors);
+  context manifest (28/8,000 tokens); tree/node/reply/fork/graph; CLI; UI create.
+- **Left behind:** docs/dogfood/2026-08-27-integration.md · docs/dogfood/diagnostics.md
+  (updated §5-6) · skills/hermes-canopy-usage/SKILL.md (v2.0) · board rows
+  GAP-052..055 (tasks.jsonl + tasks.md section).
+- **Foreman:** not woken (cooldown 7200s < 14400s; 4 new pending tasks on board —
+  it will pick them up on its normal cycle).
+
 ## 2026-08-17 — Deep real-use run (cron dogfood)
 
 - **Verdict:** 🟡 PROMISING-BUT-ROUGH
