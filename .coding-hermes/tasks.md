@@ -10670,3 +10670,25 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/422 + /project/hermes-canopy/status written post-commit, verified by id + fs-grep.
 
 **Next tick:** T423 = between-window maintenance (no battery; next E2E window 428-433, first tick T428). Watch: (1) CI for this tick's board commit; (2) visible live trees stay 0 (real-data-only; soft-deleted residue invisible); (3) INFRA-002 canopy-server container still stale — battery swap procedure only.
+
+## Tick 423 — 2026-08-27 ~11:15 local (between-window MAINTENANCE)
+
+**Verdict: MAINTENANCE.** No E2E window due (422-427 satisfied at T422, 61/61 first run; next battery T428, window 428-433). Board: 188 complete / 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler all packages PASS (db 286.7s, plugin 45.0s, rest <4s; total 5m52s, exit 0, CANOPY_TEST_DB_URL absent from env — no T415-style contamination; db pkg slower than usual under host load), frontend `npx vitest run` 723/723 (39 files, 5.2s), gitleaks 0 leaks (345.10MB scanned, 15.7s), hilo 2509 edges / 350 files (grew from 2343/337 — expected post GAP-050/051 code delta).
+
+**CI:** last 6 = 5 success, 1 failure. The single failure (07:00:30Z "chore: re-compact tasks.jsonl separators") is the T422-triaged GAP-050 batch issue (golangci-lint + board commit), fixed by the 07:01Z fix commit — all 5 subsequent runs green including tick 422's board push @ 09:10Z. No fresh failures → no INT-CI task. Post-push run follows this tick's push (allow 4-7 min lag).
+
+**Scheduler:** hermes-canopy enabled=true (this tick fired), cooldown_s=7200 (fleet.toml pin 7200, no PUT), model deepseek-v4-flash @ deepseek-foreman. Latest tick = this fire (hermes-canopy-2026-08-27-11-14-15).
+
+**GitReins:** 95 complete / 0 pending / 0 in_progress (no task picked — lifecycle skipped by design).
+
+**Off-by-one:** :8766 health ok (uptime 10h54m45s at check). Discover `canopy-maintenance-tick` → not_found (real probe fired this tick; no cached answer, not an API failure). Nothing debugged → no submit.
+
+**Push health:** 0 unpushed at tick start (origin/master = a46ec70); tree clean.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 422; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** pre-write ns tree walk: tick keys contiguous through 422 (46 keys under /ticks/). /ticks/423 (id 7175abd9-749a-4355-a180-680eadda730b, domain event) + /project/hermes-canopy/status/2026-08-27 (id 4169d278-6df2-4023-b67d-2243e4427878, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via fs-grep in current.jsonl post-write.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T428 (window 428-433, first tick of window). **Watch:** (1) CI for this tick's board commit; (2) visible live trees stay 0 (real-data-only, GAP-051); (3) INFRA-002 canopy-server container still stale — battery swap procedure only.
