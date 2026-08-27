@@ -390,11 +390,24 @@ cd frontend && npx playwright test
 cd frontend && npx vitest run --config vitest.integration.config.ts
 ```
 
+### Deploying
+
+The live service is the systemd user unit `canopy-canopyd.service`, which
+executes `/home/kara/bin/canopyd` — a plain `make build` alone never updates
+what systemd runs:
+
+```bash
+# Build from HEAD → atomic install → systemctl --user restart → /health poll
+# → gateway surface smoke test (scripts/smoke-gateway.sh)
+make deploy
+```
+
 ### Makefile Targets
 
 | Target | Description |
 |--------|-------------|
 | `build` | Build the canopyd binary |
+| `deploy` | Build, install to `/home/kara/bin/canopyd`, restart `canopy-canopyd`, run the gateway smoke test |
 | `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |
