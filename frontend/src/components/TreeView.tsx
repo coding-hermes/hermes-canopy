@@ -96,11 +96,13 @@ export default function TreeView() {
   const [members, setMembers] = useState<Member[]>(buildInitialMembers);
 
   /**
-   * /tree/demo alias resolution (Bane 08-22): the sidebar "Tree View" nav
-   * item points at /tree/demo, but the backend has no 'demo' tree — the
-   * raw id 400s and the canvas stays an empty "Untitled Tree". Resolve the
-   * alias to the seeded demo tree by label (stable UUID fallback), and
-   * persist the resolved UUID so no component ever sends tree_id=demo.
+   * /tree/demo alias resolution — E2E-ONLY TEST FIXTURE path (GAP-051).
+   * The E2E battery navigates to /tree/demo directly; the backend has no
+   * 'demo' tree, so the raw id 400s and the canvas stays an empty
+   * "Untitled Tree". Resolve the alias to the seeded demo tree by label
+   * (stable UUID fallback), and persist the resolved UUID so no component
+   * ever sends tree_id=demo. Product nav no longer points here (the Tree
+   * View sidebar item was removed) — normal users reach trees via /trees.
    */
   const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
   useEffect(() => {
@@ -180,7 +182,10 @@ export default function TreeView() {
         }
       })();
 
-      // Expose Y.Doc and seed function for E2E tests
+      // Expose Y.Doc and seed function for E2E tests ONLY (GAP-051).
+      // __canopySeedDemoTree is the deterministic local-doc fixture the
+      // E2E battery uses (tree-rendering/visual-regression); it is never
+      // called by product code and does not render anything on its own.
       if (typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).__canopyTreeDoc = treeDoc;

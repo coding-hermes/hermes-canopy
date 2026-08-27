@@ -158,34 +158,22 @@ export default function TopicsRail() {
     id: string;
     explicit: boolean;
   }> => {
-    // /tree/demo alias (Bane 08-22): the stored/URL tree id can be the
-    // literal 'demo' (sidebar Tree View nav), which the backend rejects
-    // (400) — resolve it to the seeded demo tree by label.
+    // /tree/demo alias (E2E-only fixture): the stored/URL tree id can be
+    // the literal 'demo' (legacy sidebar nav / E2E battery routes), which
+    // the backend rejects (400) — resolve it to the seeded demo tree by
+    // label. GAP-051: this is a TEST fixture path, never a product default.
     if (treeParam) return { id: await resolveDemoAlias(treeParam), explicit: true };
 
     const stored = readStoredTreeId();
     if (stored) return { id: await resolveDemoAlias(stored), explicit: true };
 
-    // Fallback: the API returns trees newest-first, so a naive trees[0]
-    // picks whatever tree was created LAST — E2E test trees (T265/T267/
-    // T268) top the list and carry no topics, rendering the rail empty.
-    // Prefer the seeded demo tree by label (VREG-001 parity with the
-    // nodes/topics page selectors); fall back to trees[0] when absent.
+    // Fallback: the API returns trees newest-first — pick the newest REAL
+    // tree. GAP-051: the seeded 'UI-02 Rail Demo' tree is an E2E-only
+    // fixture and must never become the default rail content; the demo
+    // label preference (VREG-001 parity) was removed for that reason.
+    // Real trees (imported Hermes sessions, user-created) are the only
+    // valid default. Empty list -> empty rail (honest state).
     const data = await apiGet<ListTreesResponse>('/trees?limit=50');
-    const demo = data.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'));
-    if (demo) return { id: demo.id, explicit: false };
-
-    // Pagination (PAG-001/002): with 3,600+ trees the demo tree predates
-    // the first page — find it through the API title search instead.
-    try {
-      const found = await apiGet<ListTreesResponse>(
-        `/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`,
-      );
-      const hit = found.trees.find((t) => t.title.startsWith('UI-02 Rail Demo'));
-      if (hit) return { id: hit.id, explicit: false };
-    } catch {
-      // Fall through to trees[0] — search is best-effort here.
-    }
     return { id: data.trees[0]?.id ?? '', explicit: false };
   }, [treeParam]);
 

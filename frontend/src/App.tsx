@@ -7,7 +7,6 @@ import {
   Hash,
   LayoutGrid,
   ShieldCheck,
-  GitBranch,
   MessageSquare,
   Bot,
   GitPullRequest,
@@ -44,7 +43,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', ariaLabel: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/trees', label: 'Trees', ariaLabel: 'Trees', icon: Trees },
-  { to: '/tree/demo', label: 'Tree View', ariaLabel: 'Tree View — demo tree', icon: GitBranch },
+  // GAP-051: the '/tree/demo' Tree View nav item was REMOVED — it routed
+  // product users to the seeded E2E demo tree (fake content). The Trees
+  // page is the real-tree entry point; the demo tree is an E2E-only
+  // fixture reachable only by direct URL (/tree/demo) during battery runs.
   { to: '/nodes', label: 'Nodes', ariaLabel: 'Nodes', icon: Network },
   { to: '/topics', label: 'Topics', ariaLabel: 'Topics', icon: Hash },
   { to: '/cards', label: 'Cards', ariaLabel: 'Cards', icon: LayoutGrid },

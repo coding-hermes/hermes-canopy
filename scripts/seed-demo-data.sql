@@ -1,3 +1,11 @@
+-- ⚠️ E2E-ONLY TEST FIXTURE (GAP-051, 2026-08-27).
+-- This seed exists SOLELY for the E2E battery. Never run it in product
+-- use, and remove the fixture after the battery completes:
+--   psql ... -f scripts/remove-demo-data.sql
+-- Product surfaces show REAL Hermes data (gateway runs, imported
+-- sessions, user-created trees); the demo tree must never appear in
+-- normal use. The sidebar 'Tree View' nav no longer points at it.
+--
 -- Deterministic demo-data seed for the Hermes Canopy E2E battery.
 -- Created 2026-08-26 (tick 416) after the live canopy DB was found wiped
 -- (all tables 0 rows between ticks 410 and 416; the original UI-02 Rail Demo

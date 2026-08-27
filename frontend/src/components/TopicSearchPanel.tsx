@@ -171,10 +171,12 @@ function PreviewPopover({ preview }: { preview: TopicPreview }) {
 // ── Main Search Panel ────────────────────────────────────────────────────
 
 export default function TopicSearchPanel() {
-  // The stored id can be the literal 'demo' (BUG-038/039: sidebar Tree
-  // View nav persists it); the backend 400s on it. Resolve synchronously
-  // at init so the first effect run never fires tree_id=demo, then
-  // re-verify by label search once (harmless; resolves to the same UUID).
+  // The stored id can be the literal 'demo' (legacy BUG-038/039 sidebar
+  // nav persistence, or E2E battery localStorage); the backend 400s on it.
+  // Resolve synchronously at init so the first effect run never fires
+  // tree_id=demo, then re-verify by label search once (harmless; resolves
+  // to the same UUID). GAP-051: defensive only — product nav no longer
+  // stores 'demo'; the alias is an E2E fixture path.
   const storedTreeId = readStoredTreeId();
   const [treeId, setTreeId] = useState<string>(resolveDemoAliasSync(storedTreeId));
   useEffect(() => {

@@ -5,7 +5,7 @@
  * hidden by default, opened via the hamburger, closed via the X button,
  * the backdrop, or navigation — and the close affordance must exist in
  * EVERY UI mode (the drawer lives in the app Layout, so this covers
- * Dashboard / Trees / Tree View / Nodes / Topics / Cards / Workspace /
+ * Dashboard / Trees / Nodes / Topics / Cards / Workspace /
  * Agents / Reviews / Approvals at once).
  *
  * Desktop must stay pixel-identical: static sidebar, no hamburger.

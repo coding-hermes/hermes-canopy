@@ -324,13 +324,15 @@ async function seedDemoTree(page: TestContext['page']): Promise<void> {
   await page.waitForTimeout(1_000);
 }
 
-// Seeded demo tree the UI-09 goldens were captured against. The API returns
-// trees newest-first, so a naive option[0] selection picks whatever tree was
-// created LAST — any verification/onboarding tree created after the goldens
-// (proven Tick 218: 'My First Tree'/'Gap Test Tree' from the GAP-008 curl
-// walkthrough) silently swaps mockups 2+4 into their empty state and drifts
-// ~32% of pixels. Prefer the demo tree by label; fall back to option[0] when
-// it is absent (VREG-001).
+// Seeded demo tree the UI-09 goldens were captured against — E2E-ONLY
+// TEST FIXTURE (GAP-051). The API returns trees newest-first, so a naive
+// option[0] selection picks whatever tree was created LAST — any
+// verification/onboarding tree created after the goldens (proven Tick 218:
+// 'My First Tree'/'Gap Test Tree' from the GAP-008 curl walkthrough)
+// silently swaps mockups 2+4 into their empty state and drifts ~32% of
+// pixels. Prefer the demo tree by label; fall back to option[0] when it
+// is absent (VREG-001). The demo tree exists ONLY during E2E windows
+// (seed before battery, remove after — scripts/remove-demo-data.sql).
 const DEMO_TREE_LABEL = 'UI-02 Rail Demo';
 
 async function selectFirstTree(

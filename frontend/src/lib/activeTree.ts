@@ -50,19 +50,23 @@ export function storeTreeId(treeId: string): void {
 }
 
 /**
- * The seeded demo tree. Stable UUID — the E2E golden tree, never delete.
- * Used as the resolution target for the `/tree/demo` alias.
+ * The seeded demo tree — E2E-ONLY TEST FIXTURE (GAP-051).
+ * Stable UUID — the E2E golden tree, never delete from the seed script.
+ * Product code must NOT route normal users here: the sidebar Tree View nav
+ * item was removed (GAP-051) and the demo tree is removed from the live DB
+ * outside E2E windows (scripts/remove-demo-data.sql). This alias exists so
+ * the E2E battery can reach /tree/demo deterministically.
  */
 export const DEMO_TREE_UUID = 'b1655761-2d7f-4b3c-85d5-21396da15691';
 
 /**
  * Resolve the `/tree/demo` alias to the real seeded demo tree id.
  *
- * The sidebar Tree View nav item points at `/tree/demo`, but the backend
- * has no 'demo' tree — raw ids 400 on every tree-scoped endpoint (Bane
- * 08-22, BUG-038/BUG-039). Look the tree up by label, fall back to the
- * stable UUID so the alias always resolves even when the search misses.
- * Any non-'demo' id passes through untouched.
+ * E2E-only fixture path (GAP-051): the E2E battery navigates to /tree/demo
+ * (tree-rendering, visual-regression, navigation tests), but the backend
+ * has no 'demo' tree — raw ids 400 on every tree-scoped endpoint. Look the
+ * tree up by label, fall back to the stable UUID so the alias always
+ * resolves even when the search misses. Any non-'demo' id passes through.
  */
 /**
  * Synchronous `/tree/demo` alias resolution. The seeded demo tree UUID is

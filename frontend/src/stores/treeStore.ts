@@ -462,7 +462,11 @@ export function deleteEdge(doc: TreeYDoc, edgeId: string): void {
 // ─── Seed demo data ───────────────────────────────────────────────────
 
 /**
- * Seed a tree document with demo nodes for E2E testing.
+ * Seed a tree document with demo nodes — E2E-ONLY TEST FIXTURE (GAP-051).
+ * Called exclusively via `window.__canopySeedDemoTree` by the E2E battery
+ * (tree-rendering / visual-regression tests). Never invoked by product
+ * code; the demo tree is confined to tests and removed from the live DB
+ * outside E2E windows (scripts/remove-demo-data.sql).
  * Creates a root node with several child reply nodes.
  */
 export function seedDemoTree(doc: TreeYDoc): void {
