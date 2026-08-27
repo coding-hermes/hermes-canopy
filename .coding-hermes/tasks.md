@@ -10547,3 +10547,25 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/416 present pre-write (ns tree walk: tick keys contiguous through 416). /ticks/417 (id b5828b24-3b99-4f3c-9fca-cff7d7f7a957, domain event) + /project/hermes-canopy/status/2026-08-27 (id 62b78d81-45a4-415d-8c2f-aae5fdfeafc0, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
 
 **Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T422 (window 422-427, first tick of window). **Watch:** (1) DB-wipe watch carries — verify trees ≥1 / users ≥1 at battery start before trusting the stack (T416 finding; canonical restore scripts/seed-demo-data.sql); (2) CI green streak continues.
+
+## Tick 418 — 2026-08-27 ~02:50Z (between-window MAINTENANCE)
+
+**Verdict: MAINTENANCE.** No E2E window due (416-421 satisfied at T416, 61/61 after DB-wipe recovery; next battery T422, window 422-427). Board: 13 pending (all P3 FTR-02..06 / PL-01..06 / STACK-01..02 post-MVP deferred by design), 0 in_progress, no actionable rows → no worker dispatch, no gitreins lifecycle (no task picked), no board event append (audit-only maintenance per T355-T385 protocol).
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler all packages PASS (db 62.2s, plugin 34.4s, rest <4s; total 1m49s, exit 0, CANOPY_TEST_DB_URL absent from env — no T415-style contamination), frontend `npx vitest run` 710/710 (37 files, 4.24s), gitleaks 0 leaks (337.68MB scanned, 12.7s), hilo 2343 edges / 337 files (unchanged — no code delta since T416).
+
+**CI:** 6/6 success pre-tick (tick 417 push @ 00:45Z, tick 416 @ 22:36Z, tick 415 @ 20:18Z, tick 414 @ 18:08Z (08-26), tick 413 @ 21:42Z, tick 412 @ 19:30Z (08-25) — all `board:`/`chore:` commits). No failures → no INT-CI task needed. Post-push run follows this tick's push (allow 4-7 min lag).
+
+**Scheduler:** hermes-canopy enabled=true (this tick fired), cooldown_s=7200 (fleet.toml pin 7200, file+API agree, no PUT), model deepseek-v4-flash @ deepseek-foreman. Latest tick = this fire (hermes-canopy-2026-08-27-02-47-36).
+
+**GitReins:** 0 pending / 0 in_progress (no task picked — lifecycle skipped by design).
+
+**Off-by-one:** :8766 health ok (uptime 2h27m44s at check). Discover `canopy-maintenance-tick` → not_found (no cached answer, not an API failure). Nothing debugged → no submit.
+
+**Push health:** 0 unpushed at tick start (origin/master = f527fac); tree clean.
+
+**Bookkeeping:** maintenance tick — tasks.jsonl / events.jsonl / board.jsonl header untouched (ticks_total stays 410; tasks.md remains the only board file updated this tick).
+
+**DuckBrain:** /ticks/417 present pre-write (ns tree walk: tick keys contiguous through 417). /ticks/418 (id 76b49d1c-54f8-4391-8d03-29527c184061, domain event) + /project/hermes-canopy/status/2026-08-27 (id bb726266-f266-4578-85d4-06bd1c34407e, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
+
+**Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T422 (window 422-427, first tick of window). **Watch:** (1) DB-wipe watch carries — verify trees ≥1 / users ≥1 at battery start before trusting the stack (T416 finding; canonical restore scripts/seed-demo-data.sql); (2) CI green streak continues.
