@@ -20,9 +20,12 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import { useGatewayRuns } from '../hooks/useGatewayRuns';
 import {
   buildTreeSections,
   countGroupedTrees,
@@ -61,6 +64,50 @@ interface Pagination {
 interface ListTreesResponse {
   trees: TreeSummary[];
   pagination: Pagination;
+}
+
+// ─── Live Hermes strip (GAP-050) ──────────────────────────────────────
+//
+// Real gateway state on the Trees page: connectivity, active run count,
+// and a shortcut to the live dashboard. Data comes from the gateway
+// through canopyd — never seeded.
+
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'not_found']);
+
+function LiveHermesStrip() {
+  const navigate = useNavigate();
+  const { status, runs } = useGatewayRuns();
+  const active = runs.filter((r) => !TERMINAL_RUN_STATUSES.has(r.status));
+  return (
+    <div
+      className="mb-4 flex items-center gap-2 rounded-lg border border-line-subtle bg-surface-panel px-3 py-2"
+      data-testid="live-hermes-strip"
+    >
+      {status?.connected ? (
+        <Wifi className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />
+      ) : (
+        <WifiOff className="h-3.5 w-3.5 text-rose-300" aria-hidden="true" />
+      )}
+      <span className="text-[11px] text-content-secondary">
+        {status?.connected ? (
+          <>
+            Live Hermes: <span data-testid="live-active-count">{active.length}</span> active ·{' '}
+            <span data-testid="live-total-count">{runs.length}</span> total runs
+          </>
+        ) : (
+          <>Hermes gateway offline{status?.error ? ` — ${status.error}` : ''}</>
+        )}
+      </span>
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="ml-auto text-[11px] font-medium text-accent-2-300 underline-offset-2 hover:underline"
+        data-testid="open-dashboard"
+      >
+        Open live dashboard →
+      </button>
+    </div>
+  );
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -556,6 +603,9 @@ export default function TreesPage() {
           </button>
         </div>
       )}
+
+      {/* Live Hermes strip (GAP-050) — real gateway state, links to the dashboard */}
+      <LiveHermesStrip />
 
       {/* Search (filters title/description; groups stay intact) */}
       {!loading && !error && trees.length > 0 && (

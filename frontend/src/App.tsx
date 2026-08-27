@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import TreeView from './components/TreeView'
 import ApprovalPanel from './components/ApprovalPanel'
+import DashboardPage from './pages/DashboardPage'
 import TreesPage from './pages/TreesPage'
 import NodesPage from './pages/NodesPage'
 import TopicsPage from './pages/TopicsPage'
@@ -60,19 +61,6 @@ const navLinkClass = (isActive: boolean) =>
       ? 'bg-accent-2/12 text-accent-2-300 ring-1 ring-inset ring-accent-2/30'
       : 'text-content-muted hover:bg-surface-hover/60 hover:text-content-primary',
   ].join(' ')
-
-function Dashboard() {
-  return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold tracking-tight text-content-primary">
-        Dashboard
-      </h1>
-      <p className="mt-2 text-content-muted">
-        Welcome to Hermes Canopy — your knowledge canopy.
-      </p>
-    </div>
-  )
-}
 
 function Layout() {
   const navigate = useNavigate()
@@ -230,7 +218,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
+        <Route index element={<DashboardPage />} />
         <Route path="trees" element={<TreesPage />} />
         <Route path="tree/:treeId" element={<TreeView />} />
         <Route path="nodes" element={<NodesPage />} />
