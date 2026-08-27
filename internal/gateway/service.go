@@ -253,7 +253,7 @@ func (s *Service) observe(runID string) {
 		s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
 		return
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	stream := NewSSEStream(body)
 	streamEnded := false

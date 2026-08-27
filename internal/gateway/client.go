@@ -84,7 +84,7 @@ func (c *Client) Health(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("gateway health: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gateway health: HTTP %d", resp.StatusCode)
 	}
@@ -213,7 +213,7 @@ func (c *Client) ObserveRun(ctx context.Context, runID string) (io.ReadCloser, e
 		return nil, fmt.Errorf("gateway observe %s: %w", runID, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return nil, fmt.Errorf("gateway observe %s: HTTP %d: %s", runID, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -271,7 +271,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body, out any,
 	if err != nil {
 		return fmt.Errorf("gateway %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return fmt.Errorf("gateway %s %s: read body: %w", method, path, err)
