@@ -10591,3 +10591,29 @@ Pending board: 13 tasks (FTR-02..06, PL-01..06, STACK-01/02 — all P3 deferred 
 **DuckBrain:** /ticks/418 present pre-write (ns tree walk: tick keys contiguous through 418, plus bankai-1/2). /ticks/419 (id ce515479-e18c-4ec4-bad9-cc878f4531ff, domain event) + /project/hermes-canopy/status/2026-08-27 (id 04b7cd5d-06ec-4275-b1d5-5f02ba760198, domain config) written via HTTP :3000 (X-API-Key foreman-status, ns hermes-canopy) — both verified via exact id-recall post-write.
 
 **Next tick:** open set = 13-row deferred backlog (FTR-02..06, PL-01..06, STACK-01..02 — all P3 post-MVP by design). Next E2E-001 battery due T422 (window 422-427, first tick of window). **Watch:** (1) DB-wipe watch carries — verify trees ≥1 / users ≥1 at battery start before trusting the stack (T416 finding; canonical restore scripts/seed-demo-data.sql); (2) CI green streak continues.
+
+## Tick 420 — 2026-08-27 ~02:00Z (BANKAI dispatch — GAP-050 delivered)
+
+**Verdict: GAP-050 COMPLETE** — live Hermes gateway wiring (Bane 08-27 BANKAI drive). Dashboard stub replaced with REAL gateway data; canopyd is now a client of the Hermes gateway api_server (hermes-webui pattern). Commits a009e3a (backend), 5a3f4e5 (frontend), 769f927 (docs) — pushed, 0 unpushed.
+
+**What landed:** (1) `internal/gateway` — HttpRunnerClient-style Go client (POST /v1/runs, GET /v1/runs/{id}, SSE /events stream parser, stop, approval, health; respond_clarify/queue_message/update_goal kept for contract parity — the live gateway api_server does not expose those routes), SSE parser with full event vocabulary (message.delta, tool.started/completed, reasoning.available, approval.request/responded, run.completed/failed/cancelled), in-memory run registry + background observer + subscriber fan-out (bounded history, slow-consumer drop, prune). (2) `/api/v1/gateway` handler: status, runs list (live status refresh for non-terminal), start (202), get, SSE events (history replay + live fan-out; stream closes for terminal runs like the gateway itself), stop, approval. (3) Config: HERMES_WEBUI_GATEWAY_BASE_URL (default http://127.0.0.1:8642) + HERMES_WEBUI_GATEWAY_API_KEY (API_SERVER_KEY fallback) — key stays server-side, browser never sees it. (4) Frontend: DashboardPage (gateway live banner, run registry w/ status badges, chat composer, live SSE event stream w/ transcript, approval card w/ once/session/always/deny, stop control), useGatewayRuns + useRunEventStream hooks, Trees page live Hermes strip. GAP-051 (seeded-data removal) is queued behind this; demo tree remains the E2E fixture, never the default view.
+
+**Gates (fresh):** go build PASS, go vet PASS, `go test -count=1 -p 1` non-handler 21 pkgs PASS (db 92.3s, plugin 37.3s; EXIT=0), handler TestGateway* 5/5 PASS, frontend `npx vitest run` 723/723 (39 files — 710 baseline + 13 new), `npx tsc -b` clean, gitleaks 0 leaks (339.10MB, 14.2s), E2E battery 61/61 PASS (13 files, 60.44s — zero visual drift, goldens untouched).
+
+**Live evidence (real gateway :8642, Bearer):** /api/v1/gateway/status connected=true; 4 real runs created through canopyd — run_e164... (canopy-live-ok, completed), run_207b... (1..10, completed), run_3f32... (essay, stopped mid-flight → gateway shows cancelled), run_3fdf... (ui-composer-ok via the ACTUAL UI composer, completed) — ALL confirmed independently via gateway `GET /v1/runs/{id}` (output + real usage ~40k input tokens). SSE streamed live deltas token-by-token through canopyd. Stop control verified: POST stop → gateway state cancelled. Browser-verified dashboard screenshot: /home/kara/.hermes/cache/screenshots/browser_screenshot_0cfca611ad384f87b2f053f8d8439367.png
+
+**CI:** pushes 01:57Z (3 commits, one push e005687..769f927). Run creation lags 4-7 min; verify next tick.
+
+**Scheduler:** hermes-canopy enabled=true, cooldown_s=7200 (fleet.toml pin; not touched — BANKAI dispatcher owns the scheduler).
+
+**GitReins:** NOT run per BANKAI doctrine (foreman owns GitReins; dispatcher owns gates during BANKAI).
+
+**Off-by-one:** :8766 health ok. Nothing to submit (feature build, no debug session).
+
+**Push health:** 0 unpushed (origin/master = 769f927); tree clean.
+
+**Bookkeeping:** tasks.jsonl GAP-050 → status=complete (commit_hash 769f927, guard_result PASS, foreman_note); event id=301 tick=420 appended (task_completed); board.jsonl header ticks_total=420/last_commit=769f927; board.db synced via sync_tasks_jsonl_to_db.py (GAP-050/051 rows were missing — pre-08-27 DB snapshot).
+
+**DuckBrain:** /ticks/420 + /project/hermes-canopy/status written post-commit, verified by id-recall.
+
+**Next tick:** GAP-051 (P1, depends on GAP-050) — replace seeded/mock demo data with real Hermes data; demo tree confined to E2E. Watch: (1) CI for the 3 GAP-050 commits; (2) E2E-001 window 422-427 first tick at T422.
