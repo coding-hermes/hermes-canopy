@@ -93,7 +93,7 @@ POST /api/v1/trees
   "description": "string (optional)",
   "rootMessage": {
     "content": "string (required)",
-    "contentFormat": "string (optional)",
+    "contentFormat": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
     "nodeType": "string (optional)"
   }
 }
@@ -201,7 +201,7 @@ POST /api/v1/trees/{tree_id}/nodes
 {
   "parent_id": "uuid (optional, empty = root child)",
   "content": "string (required, max 64KB)",
-  "content_format": "string (optional, default 'markdown')",
+  "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
   "node_type": "string (optional, default 'message')",
   "edge_type": "string (optional, default 'reply')",
   "metadata": "object (optional)"
@@ -235,7 +235,7 @@ PATCH /api/v1/trees/{tree_id}/nodes/{node_id}
 ```json
 {
   "content": "string (optional)",
-  "content_format": "string (optional)",
+  "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
   "metadata": "object (optional)"
 }
 ```
@@ -260,7 +260,7 @@ POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply
 ```json
 {
   "content": "string (required)",
-  "content_format": "string (optional)",
+  "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
   "node_type": "string (optional)",
   "metadata": "object (optional)"
 }
@@ -278,7 +278,7 @@ POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork
 ```json
 {
   "content": "string (required)",
-  "content_format": "string (optional)",
+  "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
   "node_type": "string (optional)",
   "metadata": "object (optional)"
 }
