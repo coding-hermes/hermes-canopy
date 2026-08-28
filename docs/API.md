@@ -147,12 +147,10 @@ DELETE /api/v1/trees/{tree_id}
 
 ## Nodes
 
-Two mount points exist:
+The node API is tree-scoped and membership-gated:
 
-1. **Tree-scoped:** `/api/v1/trees/{tree_id}/nodes` — membership-gated via
-   `TreeMembershipMiddleware`
-2. **Flat:** `/api/v1/nodes` — access-gated via `NodeAccessMiddleware` (resolves
-   the node's tree and checks membership)
+- **Tree-scoped:** `/api/v1/trees/{tree_id}/nodes` — membership-gated via
+  `TreeMembershipMiddleware`
 
 **Field naming (GAP-053):** tree-create and topic endpoints use camelCase
 (`rootMessage.contentFormat`, `rootMessage.nodeType`). The node
@@ -220,8 +218,7 @@ the edge connecting it to its parent.
 ### Get Node
 
 ```
-GET /api/v1/trees/{tree_id}/nodes/{node_id}   (tree-scoped)
-GET /api/v1/nodes/{tree_id}/nodes/{node_id}   (flat tree-scoped form)
+GET /api/v1/trees/{tree_id}/nodes/{node_id}
 ```
 
 **Response (200):** Full node detail.
@@ -231,7 +228,7 @@ GET /api/v1/nodes/{tree_id}/nodes/{node_id}   (flat tree-scoped form)
 ### Update Node
 
 ```
-PATCH /api/v1/nodes/nodes/{node_id}
+PATCH /api/v1/trees/{tree_id}/nodes/{node_id}
 ```
 
 **Request body:** (partial)
@@ -248,7 +245,7 @@ PATCH /api/v1/nodes/nodes/{node_id}
 ### Delete Node
 
 ```
-DELETE /api/v1/nodes/nodes/{node_id}
+DELETE /api/v1/trees/{tree_id}/nodes/{node_id}
 ```
 
 **Response (200):** Soft-deleted node detail (includes `deleted_at`).
@@ -256,7 +253,7 @@ DELETE /api/v1/nodes/nodes/{node_id}
 ### Reply to Node
 
 ```
-POST /api/v1/nodes/nodes/{node_id}/reply
+POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply
 ```
 
 **Request body:**
@@ -273,17 +270,8 @@ POST /api/v1/nodes/nodes/{node_id}/reply
 
 ### Fork from Node
 
-Preferred (tree-scoped, membership-enforced):
-
 ```
 POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork
-```
-
-Deprecated (flat mount, double `/nodes/` segment — still supported for
-backward compatibility):
-
-```
-POST /api/v1/nodes/nodes/{node_id}/fork
 ```
 
 **Request body:**
@@ -1056,42 +1044,35 @@ actual code:
    `GET /api/v1/events?tree_id={id}`, but the actual route is
    `GET /api/v1/trees/{tree_id}/events` (tree-scoped, membership-gated).
 
-4. **Nodes flat mount:** The README shows `GET /api/v1/nodes` and
-   `POST /api/v1/nodes` as flat endpoints, but the actual flat mount
-   (`/api/v1/nodes`) uses a `NodeAccessMiddleware` that expects paths like
-   `/api/v1/nodes/{tree_id}/nodes[/{node_id}]` (tree-scoped flat form) or
-   `/api/v1/nodes/nodes/{node_id}` for update/delete/reply/fork. The tree-scoped
-   mount at `/api/v1/trees/{tree_id}/nodes` is the primary list/create path.
-
-5. **Export/Import:** Registered directly on the `/api/v1/trees` router (not
+4. **Export/Import:** Registered directly on the `/api/v1/trees` router (not
    via Mount), so the paths are `/api/v1/trees/{tree_id}/export` and
    `/api/v1/trees/import` — not under a separate `/export` mount.
 
-6. **Context compiler:** `GET /api/v1/context/{node_id}` is registered but not
+5. **Context compiler:** `GET /api/v1/context/{node_id}` is registered but not
    documented in the README.
 
-7. **MCP endpoint:** `POST /api/v1/mcp` is registered but not documented in the
+6. **MCP endpoint:** `POST /api/v1/mcp` is registered but not documented in the
    README.
 
-8. **Plugin endpoints:** `POST /api/v1/plugins/register`, instance lifecycle,
+7. **Plugin endpoints:** `POST /api/v1/plugins/register`, instance lifecycle,
    and source retrieval are registered but not fully documented in the README.
 
-9. **Profile endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/profiles`
+8. **Profile endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/profiles`
    — not documented in the README.
 
-10. **Transport endpoints:** Mounted at `/api/v1/transports` — not documented
+9. **Transport endpoints:** Mounted at `/api/v1/transports` — not documented
     in the README.
 
-11. **MLS endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/mls` — not
+10. **MLS endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/mls` — not
     documented in the README.
 
-12. **Sync endpoints:** Mounted at `/api/v1/trees/{tree_id}/sync` — not
+11. **Sync endpoints:** Mounted at `/api/v1/trees/{tree_id}/sync` — not
     documented in the README.
 
-13. **Health probes:** `/health/transports/{type}` (public) — not documented in
+12. **Health probes:** `/health/transports/{type}` (public) — not documented in
     the README.
 
-14. **Live Hermes gateway (GAP-050):** Mounted at `/api/v1/gateway` — canopyd
+13. **Live Hermes gateway (GAP-050):** Mounted at `/api/v1/gateway` — canopyd
     is a CLIENT of the Hermes gateway api_server (`hermes gateway run`,
     default `http://127.0.0.1:8642`, configurable via
     `HERMES_WEBUI_GATEWAY_BASE_URL`; auth via `HERMES_WEBUI_GATEWAY_API_KEY`

@@ -190,16 +190,6 @@ Tree-scoped (primary, membership-gated):
 | `GET` | `/api/v1/trees/{tree_id}/nodes/{node_id}` | Get node details |
 | `POST` | `/api/v1/trees/{tree_id}/nodes/{node_id}/fork` | Fork a node (create child branch; source must already have ≥1 child) |
 
-Flat (by UUID, access-gated via `NodeAccessMiddleware`):
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/nodes/{tree_id}/nodes/{node_id}` | Get node details (flat form) |
-| `PATCH` | `/api/v1/nodes/nodes/{node_id}` | Update node content |
-| `DELETE` | `/api/v1/nodes/nodes/{node_id}` | Soft-delete a node |
-| `POST` | `/api/v1/nodes/nodes/{node_id}/reply` | Reply to a node |
-| `POST` | `/api/v1/nodes/nodes/{node_id}/fork` | Fork a node (deprecated flat form — use the tree-scoped route) |
-
 > Edges are managed **implicitly** through node operations (reply/fork/synthesis)
 > — there is no standalone edge API.
 

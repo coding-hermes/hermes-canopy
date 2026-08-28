@@ -142,13 +142,6 @@ func New(
 		treeNodes.Use(membershipMW)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
-		// Flat mount — membership-enforced (BUG-025): previously ANY
-		// authenticated user could read/mutate any node by UUID.
-		flatNodes := chi.NewRouter()
-		flatNodes.Use(handler.NodeAccessMiddleware(nodeSvc, membersRepo))
-		//nolint:staticcheck // SA1019: flat mount kept for backward compatibility (BUG-025); integration tests still exercise /api/v1/nodes/... — migrate to TreeRoutes per GAP-041 deprecation note (INT-CI-001).
-		flatNodes.Mount("/", nodeHandler.Routes())
-		r.Mount("/nodes", flatNodes)
 
 		// Sync endpoints (SPEC-DM-02 §7) — tree-scoped, membership-gated.
 		r.With(membershipMW).Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())

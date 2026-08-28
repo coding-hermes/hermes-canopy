@@ -53,8 +53,10 @@ output appears. Zero console errors in the 2026-08-27 probe.
 - **Create node:** `POST /api/v1/trees/{id}/nodes` body
   `{"parent_id","content","node_type":"message"}` → 201 `{node, edge}`.
   **snake_case here.**
-- **Reply/fork/update/delete (flat mount):** `/api/v1/nodes/nodes/{node_id}/reply`
-  and `/fork` — note the **double `nodes` segment**. Fork only works on nodes that
+- **Reply/fork/update/delete (tree-scoped):** `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply`,
+  `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork`,
+  `PATCH /api/v1/trees/{tree_id}/nodes/{node_id}`,
+  `DELETE /api/v1/trees/{tree_id}/nodes/{node_id}`. Fork only works on nodes that
   already have ≥1 child (leaf fork → 400 VALIDATION_ERROR, documented).
 - **Context manifest (headline feature):** `GET /api/v1/context/{node_id}` →
   `{content, manifest:{tokenBudget, tokensUsed, ancestry:[...]}}`. In the UI: click a
