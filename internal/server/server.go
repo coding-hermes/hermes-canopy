@@ -218,7 +218,11 @@ func New(
 			log.Warn().Err(gwErr).Msg("gateway: invalid HERMES_WEBUI_GATEWAY_BASE_URL; using default")
 			gwClient, _ = gateway.NewClient(gateway.DefaultBaseURL, cfg.GatewayAPIKey)
 		}
-		gatewaySvc := gateway.NewService(gwClient)
+		// Restore the persisted run registry and refresh non-terminal records
+		// against the gateway (GAP-054). NewServiceWithState never fails: a
+		// gateway that is down or missing endpoints only logs, so canopyd still
+		// boots and the /gateway routes still mount.
+		gatewaySvc := gateway.NewServiceWithState(gwClient, gateway.DefaultStateFile())
 		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc).Routes())
 	})
 

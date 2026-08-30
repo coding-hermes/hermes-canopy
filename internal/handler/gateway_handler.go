@@ -211,7 +211,10 @@ func (h *GatewayHandler) RunEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// StopRun interrupts the run on the Hermes gateway.
+// StopRun interrupts the run on the Hermes gateway. Stopping an
+// already-terminal run is idempotent (the service returns nil without
+// calling the gateway), so this returns 200 with the record's ACTUAL
+// status — e.g. completed/not_found — instead of a hardcoded "stopping".
 func (h *GatewayHandler) StopRun(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "run_id")
 	if err := h.svc.StopRun(r.Context(), runID); err != nil {
@@ -222,7 +225,11 @@ func (h *GatewayHandler) StopRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "gateway_unavailable", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run_id": runID, "status": "stopping"})
+	status := "stopping"
+	if rec, ok := h.svc.Run(runID); ok {
+		status = rec.Status
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"run_id": runID, "status": status})
 }
 
 // respondApprovalRequest resolves a pending approval on the gateway.

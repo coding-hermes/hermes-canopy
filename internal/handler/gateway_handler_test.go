@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,7 +22,8 @@ import (
 // gatewayStub simulates the Hermes gateway api_server for handler tests.
 type gatewayStub struct {
 	*httptest.Server
-	events []string
+	events  []string
+	stopped atomic.Int64
 }
 
 func newGatewayStub(events []string) *gatewayStub {
@@ -35,6 +39,7 @@ func newGatewayStub(events []string) *gatewayStub {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/runs/run_test":
 			fmt.Fprint(w, `{"status":"running","last_event":"message.delta"}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs/run_test/stop":
+			g.stopped.Add(1)
 			fmt.Fprint(w, `{"run_id":"run_test","status":"stopping"}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs/run_test/approval":
 			fmt.Fprint(w, `{"object":"hermes.run.approval_response","run_id":"run_test","choice":"once","resolved":1}`)
@@ -260,5 +265,76 @@ func TestGatewayRunEventsSSE(t *testing.T) {
 	}
 	if deltas != 1 || completed != 1 {
 		t.Fatalf("want 1 delta + 1 completed in SSE replay, got %d/%d", deltas, completed)
+	}
+}
+
+// TestGatewayStopTerminalRunReturns200 proves AC2 through the HTTP surface:
+// POST /gateway/runs/{id}/stop on an already-terminal run returns 200 with
+// the terminal status (not a hardcoded "stopping") and never calls the
+// gateway.
+func TestGatewayStopTerminalRunReturns200(t *testing.T) {
+	stub := newGatewayStub([]string{
+		`{"event":"run.completed","run_id":"run_test","timestamp":1.0,"output":"done"}`,
+	})
+	defer stub.Close()
+	r, svc := newGatewayTestRouter(stub)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if rec, ok := svc.Run("run_test"); ok && rec.Status == "completed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("run never completed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	resp, body := gwDoJSON(t, r, http.MethodPost, "/runs/run_test/stop", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stop on terminal run should 200, got %d: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"completed"`) || strings.Contains(body, `"stopping"`) {
+		t.Fatalf("stop body should carry the terminal status, got: %s", body)
+	}
+	if stub.stopped.Load() != 0 {
+		t.Fatalf("gateway stop called on terminal run: %d", stub.stopped.Load())
+	}
+}
+
+// TestGatewayListAfterRestore proves AC1 through the HTTP surface: a run
+// restored from the persisted state file surfaces in GET /gateway/runs.
+func TestGatewayListAfterRestore(t *testing.T) {
+	stub := newGatewayStub(nil)
+	defer stub.Close()
+
+	stateFile := filepath.Join(t.TempDir(), "runs.jsonl")
+	rec := gateway.RunRecord{
+		RunID:     "run_test",
+		Status:    "completed",
+		CreatedAt: time.Now().UTC(),
+	}
+	line, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stateFile, append(line, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c, _ := gateway.NewClient(stub.URL, "k")
+	svc := gateway.NewServiceWithState(c, stateFile)
+	rr := chi.NewRouter()
+	rr.Mount("/", NewGatewayHandler(svc).Routes())
+
+	resp, body := gwDoJSON(t, rr, http.MethodGet, "/runs", "")
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"run_id":"run_test"`) {
+		t.Fatalf("restored run missing from list: %d %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"completed"`) {
+		t.Fatalf("restored run should keep terminal status: %s", body)
 	}
 }

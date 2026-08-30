@@ -1,12 +1,16 @@
 package gateway
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,13 +54,29 @@ func (r *RunRecord) IsTerminal() bool {
 // Service owns the gateway client plus the in-memory run registry. It starts
 // real runs on the Hermes gateway, observes their SSE event streams in the
 // background, keeps a bounded event history per run, and fans events out to
-// live subscribers (the Canopy frontend SSE endpoints).
+// live subscribers (the Canopy frontend SSE endpoints). When statePath is
+// set, the registry is persisted to a JSONL state file on every status
+// transition and restored on startup (GAP-054).
 type Service struct {
 	client *Client
+
+	// statePath is the JSONL file the registry is persisted to ("" disables
+	// persistence). Defaults to DefaultStateFile() via NewServiceWithState.
+	statePath string
 
 	mu   sync.RWMutex
 	runs map[string]*RunRecord
 	subs map[string]map[chan StreamEvent]struct{}
+}
+
+// DefaultStateFile returns the default path for the persisted gateway run
+// registry, following the card.DataDir() convention (~/.hermes/canopy/<sub>).
+func DefaultStateFile() string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "/tmp"
+	}
+	return filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl")
 }
 
 // NewService builds a gateway Service around a client.
@@ -66,6 +86,20 @@ func NewService(client *Client) *Service {
 		runs:   make(map[string]*RunRecord),
 		subs:   make(map[string]map[chan StreamEvent]struct{}),
 	}
+}
+
+// NewServiceWithState builds a gateway Service backed by a persisted run
+// registry at statePath: existing records are loaded and non-terminal
+// records are refreshed against the gateway (best-effort). Any failure —
+// missing/corrupt state file, gateway down, gateway 405 on the list
+// endpoint — is logged, never fatal, so canopyd always boots and the
+// /gateway routes always mount (GAP-054).
+func NewServiceWithState(client *Client, statePath string) *Service {
+	s := NewService(client)
+	s.statePath = statePath
+	s.loadState()
+	s.Backfill(context.Background())
+	return s
 }
 
 // Client exposes the underlying gateway client (used by the handler for
@@ -100,6 +134,7 @@ func (s *Service) StartRun(ctx context.Context, message, sessionID string) (*Run
 	s.runs[ref.RunID] = rec
 	s.pruneLocked()
 	s.mu.Unlock()
+	s.persist()
 
 	go s.observe(ref.RunID)
 	return rec, nil
@@ -171,11 +206,35 @@ func (s *Service) refreshStatus(ctx context.Context, rec *RunRecord) {
 // longer knows (404 run_not_found).
 var ErrRunNotFound = errors.New("gateway: run not found")
 
-// StopRun interrupts the run on the gateway and marks the record.
+// StopRun interrupts the run on the gateway and marks the record. Stopping
+// an already-terminal run is idempotent: the gateway is not called and nil
+// is returned with the record's status unchanged. A run tracked locally but
+// no longer known to the gateway (swept race) is marked 'not_found' and
+// also returns nil; only a run absent from the registry AND unknown to the
+// gateway returns ErrRunNotFound.
 func (s *Service) StopRun(ctx context.Context, runID string) error {
+	s.mu.RLock()
+	rec, ok := s.runs[runID]
+	terminal := ok && rec.IsTerminal()
+	s.mu.RUnlock()
+	if terminal {
+		return nil
+	}
 	_, err := s.client.StopRun(ctx, runID)
 	if err != nil {
 		if IsNotFound(err) {
+			if ok {
+				// Swept race: the gateway no longer knows a run we still
+				// track — mark it terminal so it surfaces honestly.
+				s.mu.Lock()
+				if rec, ok := s.runs[runID]; ok {
+					rec.Status = "not_found"
+					rec.LastEvent = "run.not_found"
+				}
+				s.mu.Unlock()
+				s.persist()
+				return nil
+			}
 			return fmt.Errorf("%w: %s", ErrRunNotFound, runID)
 		}
 		return err
@@ -186,6 +245,7 @@ func (s *Service) StopRun(ctx context.Context, runID string) error {
 		rec.LastEvent = "run.stopping"
 	}
 	s.mu.Unlock()
+	s.persist()
 	return nil
 }
 
@@ -297,24 +357,31 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 		rec.Events = rec.Events[len(rec.Events)-maxEventsPerRun:]
 	}
 	rec.LastEvent = ev.Event
+	changed := false
 	switch ev.Event {
 	case "run.completed":
 		rec.Status = "completed"
 		rec.Output = ev.Output
 		rec.Usage = ev.Usage
+		changed = true
 	case "run.failed":
 		rec.Status = "failed"
 		rec.Error = ev.Error
+		changed = true
 	case "run.cancelled":
 		rec.Status = "cancelled"
+		changed = true
 	case "approval.request":
 		rec.Status = "waiting_for_approval"
+		changed = true
 	case "approval.responded", "message.delta", "tool.started", "tool.completed", "reasoning.available":
 		if rec.Status == "started" || rec.Status == "waiting_for_approval" {
 			rec.Status = "running"
+			changed = true
 		}
 	case "run.observe_error":
 		rec.Status = "disconnected"
+		changed = true
 	}
 
 	// Fan out to subscribers (non-blocking; slow subscribers are dropped).
@@ -336,6 +403,9 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 		}
 	}
 	s.mu.Unlock()
+	if changed {
+		s.persist()
+	}
 }
 
 func (s *Service) snapshot(r *RunRecord) RunRecord {
@@ -379,5 +449,140 @@ func (s *Service) pruneLocked() {
 			}
 			delete(s.runs, e.id)
 		}
+	}
+}
+
+// loadState loads persisted run records from the state file. A missing file
+// is a clean first boot; corrupt lines are skipped with a warning. The
+// registry is never failed by a bad state file.
+func (s *Service) loadState() {
+	if s.statePath == "" {
+		return
+	}
+	f, err := os.Open(s.statePath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: cannot open, starting empty")
+		}
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var rec RunRecord
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: skipping corrupt line")
+			continue
+		}
+		if rec.RunID == "" {
+			continue
+		}
+		s.runs[rec.RunID] = &rec
+	}
+	s.pruneLocked()
+}
+
+// Backfill refreshes non-terminal records restored from the state file
+// against the live gateway via the existing per-run GET /v1/runs/{id}
+// (there is NO list endpoint — the live gateway 405s GET /v1/runs). It is
+// best-effort and bounded (~5s): an unreachable or misbehaving gateway logs
+// a warning and keeps the persisted statuses, so canopyd still boots.
+func (s *Service) Backfill(ctx context.Context) {
+	if s.statePath == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	s.mu.RLock()
+	var live []*RunRecord
+	for _, r := range s.runs {
+		if !r.IsTerminal() {
+			live = append(live, r)
+		}
+	}
+	s.mu.RUnlock()
+	if len(live) == 0 {
+		return
+	}
+
+	if err := s.Connected(ctx); err != nil {
+		log.Warn().Err(err).Msg("gateway backfill: unreachable, keeping persisted statuses")
+		return
+	}
+	changed := false
+	for _, rec := range live {
+		before := rec.Status
+		// Startup-only window: no concurrent access to these records.
+		s.refreshStatus(ctx, rec)
+		if rec.Status != before {
+			changed = true
+		}
+	}
+	if changed {
+		s.persist()
+	}
+}
+
+// persist writes the registry to the state file atomically (tmp + rename).
+// A failed write only logs; it never fails the caller.
+func (s *Service) persist() {
+	if s.statePath == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.persistLocked()
+}
+
+// persistLocked writes the registry while the caller holds mu.
+func (s *Service) persistLocked() {
+	if s.statePath == "" {
+		return
+	}
+	dir := filepath.Dir(s.statePath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: mkdir failed")
+		return
+	}
+	tmp, err := os.CreateTemp(dir, ".runs-*.jsonl.tmp")
+	if err != nil {
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: create temp failed")
+		return
+	}
+	tmpName := tmp.Name()
+	w := bufio.NewWriter(tmp)
+	for _, r := range s.runs {
+		line, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		_, _ = w.Write(line)
+		_ = w.WriteByte('\n')
+	}
+	if err := w.Flush(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: write failed")
+		return
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: chmod failed")
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: close failed")
+		return
+	}
+	if err := os.Rename(tmpName, s.statePath); err != nil {
+		_ = os.Remove(tmpName)
+		log.Warn().Err(err).Str("path", s.statePath).Msg("gateway state: rename failed")
 	}
 }
