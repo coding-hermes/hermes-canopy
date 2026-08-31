@@ -1822,3 +1822,4 @@
 {"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/google/uuid","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/card","rel":"imports","provenance":"ast_exact","confidence":1.0}
 {"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/card","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/testutil/integration.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/db","rel":"imports","provenance":"ast_exact","confidence":1.0}
