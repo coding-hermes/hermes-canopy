@@ -40,8 +40,8 @@ This starts two services:
 - Built from `deploy/Dockerfile`
 
 > **Important:** The compose file maps PostgreSQL to host port **5437**, not the
-> default 5432. If you run the backend outside Docker (see §4), you must set
-> `DB_PORT=5437` or adjust the compose file.
+> default 5432. `make run` already defaults to `DB_PORT=5437`; if you run the raw
+> binary outside Docker (see §4), set `DB_PORT=5437` or adjust the compose file.
 
 ## 3. Database Migrations
 
@@ -101,16 +101,14 @@ all individual `DB_*` variables.
 # Using Docker PostgreSQL (from compose):
 docker compose up -d postgres
 
-# Run backend (connects to localhost:5432 by default):
+# Run backend with dev defaults (make run sets HTTP_ADDR=:8091, DB_PORT=5437 —
+# matching the Vite dev proxy target in §5 and the compose PostgreSQL host port):
 make run
-# or directly:
+# or run the raw binary directly (raw binary defaults: :8080 / :5432):
 ./bin/canopyd
 
 # If using compose's PostgreSQL on port 5437:
 DB_PORT=5437 ./bin/canopyd
-
-# Custom address (use :8091 to match the Vite dev proxy target in §5):
-HTTP_ADDR=:8091 ./bin/canopyd
 ```
 
 ### Health Check
