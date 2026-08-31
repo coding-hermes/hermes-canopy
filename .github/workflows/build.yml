@@ -62,6 +62,7 @@ jobs:
         run: go test ./... -count=1 -run 'TestIntegration' -timeout=180s
         env:
           CANOPY_TEST_DB_URL: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
+          CANOPY_REQUIRE_DB: "1"
 
       # ── Frontend ──────────────────────────────────────────────
 

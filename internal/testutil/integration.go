@@ -153,14 +153,18 @@ func pgReachable() bool {
 // SkipIfNoDB skips the test if integration tests are disabled.
 // Set CANOPY_SKIP_INTEGRATION=1 to always skip.
 //
-// Under -short, additionally skip when PostgreSQL is not reachable: the guard
+// PostgreSQL reachability is probed in both modes: under -short the guard
 // does a fast TCP probe (probeTimeout) of the admin DB host:port and skips if
-// the connection cannot be established. This lets `make test-short` complete
+// the connection cannot be established, letting `make test-short` complete
 // standalone without a running PostgreSQL (GAP-011). NOTE (GAP-039): the pool
 // helpers (NewIntegrationPool / NewSharedIntegrationPool) skip outright in
 // -short mode before reaching this guard, so the reachability branch below
-// only applies to direct SkipIfNoDB callers. Full mode (no -short) is
-// unchanged: it never skips on reachability and still requires a live PG.
+// only applies to direct SkipIfNoDB callers.
+//
+// In full mode (no -short), PostgreSQL unreachability also SKIPS instead of
+// failing at setup, so `go test ./...` exits 0 on machines without PostgreSQL
+// on :5437 (QA-CAN-002). Set CANOPY_REQUIRE_DB=1 to restore loud failure
+// when the DB is down — CI sets it so integration tests never silently skip.
 func SkipIfNoDB(t *testing.T) {
 	t.Helper()
 	if os.Getenv("CANOPY_SKIP_INTEGRATION") != "" {
@@ -168,6 +172,9 @@ func SkipIfNoDB(t *testing.T) {
 	}
 	if testing.Short() && !pgReachable() {
 		t.Skip("short mode: PostgreSQL not reachable")
+	}
+	if !testing.Short() && !pgReachable() && os.Getenv("CANOPY_REQUIRE_DB") == "" {
+		t.Skip("PostgreSQL not reachable at " + resolveAdminURL() + " — skipping integration tests (set CANOPY_REQUIRE_DB=1 to fail instead)")
 	}
 }
 
