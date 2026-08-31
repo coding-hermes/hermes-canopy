@@ -67,7 +67,7 @@ Each type has an independent SQLite database at `~/.hermes/canopy/cards/{type}.d
 | Dismiss behavior | Dismiss changes status and emits `card_dismissed`; it does not erase data | The user can inspect or restore a dismissed card |
 | Archive behavior | Archive changes status and rejects app-data updates | Preserves immutable historical cards while stopping active work |
 | Renderer isolation | Plugin-backed renderer runs through the sandbox host in SPEC-PL-01 | Cards inherit capability-scoped execution rather than creating a second sandbox model |
-| Built-in rendering | Built-in card renderers are compiled into the frontend bundle | Core Task, File, and Code cards work without an installation step |
+| Built-in rendering | Built-in card renderers are compiled into the frontend bundle | Core compact, expanded, and iteration cards work without an installation step |
 | Accessibility | Card actions are buttons with labels, keyboard focus, and live region event announcements | Interactive graph content remains usable with keyboard and assistive technologies |
 | Observability | Every HTTP write and sync decision emits a structured server log with card ID and type | Operators can trace routing and replication without logging private JSON payloads |
 

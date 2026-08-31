@@ -1435,7 +1435,7 @@ These are noted but NOT spec'd for MVP implementation:
 
 2. **Reference to specific message** — `#topic-slug/message-id` or `#topic-slug~node-id` syntax to reference a specific node within a topic, not just the whole topic scope.
 
-3. **Reference to card** — `#card:file-id` or `#file:filename` syntax for referencing File, Task, and Code cards from message content.
+3. **Reference to card** — `#card:file-id` or `#file:filename` syntax for referencing compact, expanded, and iteration cards from message content.
 
 4. **Inline reference preview** — On hover, show an inline preview card of the topic's first few messages without navigating away from the current thread.
 

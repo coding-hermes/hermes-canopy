@@ -9,7 +9,7 @@ Technical power users working with AI agents across multi-session projects who n
 1. **Conversation DAG** — Messages are nodes. Edges are reply, fork, or synthesis. Multi-parent nodes synthesize from multiple sources.
 2. **Context Compiler** — Transparently assembles a budgeted, auditable context for every model call. Visible manifest shows exactly what was sent.
 3. **View Modes** — Graph Overview, Thread Focus, Synthesis View. Fluid transitions, not hierarchy levels.
-4. **Cards** — Graph nodes with structured data and interactive behavior. Three built-in in MVP: File, Task, Code.
+4. **Cards** — Graph nodes with structured data and interactive behavior. Three built-in in MVP: compact, expanded, iteration.
 5. **Topics** — Named, searchable subgraphs with #references. Context compiler resolves references per budget rules.
 
 ## Architecture
@@ -23,7 +23,7 @@ Technical power users working with AI agents across multi-session projects who n
 - **Deployment:** `canopyd serve` + local PostgreSQL + PWA in browser
 
 ## MVP Scope
-Single-user, desktop-first PWA + local server. Branch from any message. Multi-node synthesis. Searchable topics with #references. Visible context manifest + token budget. Three Cards (File, Task, Code). Import/export. Basic plugin sandbox.
+Single-user, desktop-first PWA + local server. Branch from any message. Multi-node synthesis. Searchable topics with #references. Visible context manifest + token budget. Three Cards (compact, expanded, iteration). Import/export. Basic plugin sandbox.
 
 ## Deferred (Post-MVP)
 Multi-user collaboration, approval gates, arbitrary JS plugins, multi-agent federation, MLS encryption, multi-user CRDTs, all deployment modes beyond local server.
