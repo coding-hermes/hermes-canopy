@@ -1815,3 +1815,10 @@
 {"from":"internal/gateway/service.go","to":"internal/gateway/service_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}
 {"from":"internal/handler/gateway_handler.go","to":"internal/handler/gateway_handler_test.go","rel":"tests","provenance":"heuristic","confidence":0.8}
 {"from":"internal/handler/gateway_handler_test.go","to":"internal/handler/gateway_handler.go","rel":"tested_by","provenance":"heuristic","confidence":0.8}
+{"from":"internal/card/duckdb/duckdb_repo.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/card","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"std:context","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"std:encoding/json","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"std:testing","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/google/uuid","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/card","rel":"imports","provenance":"ast_exact","confidence":1.0}
+{"from":"internal/card/duckdb/duckdb_repo_test.go","to":"pkg:github.com/coding-hermes/hermes-canopy/internal/card","rel":"tested_by","provenance":"ast_exact","confidence":1.0}
