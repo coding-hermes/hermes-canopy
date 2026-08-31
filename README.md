@@ -22,12 +22,20 @@ make build
 # build-tagged `//go:build cgo`, so it is excluded when CGO_ENABLED=0; the
 # default SQLite card backend (modernc.org/sqlite) is pure Go and unaffected.
 
-# Start PostgreSQL (Docker)
-# Host port 5437 matches docker-compose.yml (which maps 5437:5432) so the same
-# DB_PORT works whether you use the standalone container or `docker compose up`.
-docker run -d --name canopy-pg \
-  -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
-  -e POSTGRES_DB=canopy -p 5437:5432 postgres:16
+# Start PostgreSQL (Docker) — standalone option.
+# Already running the compose stack? Skip this block: `docker compose up -d`
+# (docs/INTEGRATION.md §2) already starts a postgres service publishing host
+# port 5437, and this command would fail on the port. The standalone container
+# uses a DISTINCT name (`canopy-pg-standalone`) so it never collides with
+# compose's `canopy-pg`. Host port 5437 matches docker-compose.yml (which maps
+# 5437:5432) so the same DB_PORT works on either path.
+if docker ps --format '{{.Ports}}' | grep -q ':5437->'; then
+  echo "PostgreSQL already running on :5437 (compose stack) — skipping standalone Postgres (docs/INTEGRATION.md §2)."
+else
+  docker run -d --name canopy-pg-standalone \
+    -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
+    -e POSTGRES_DB=canopy -p 5437:5432 postgres:16
+fi
 
 # Run (dev: backend on :8091 to match the Vite dev proxy target)
 DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
