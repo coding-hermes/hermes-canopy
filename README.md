@@ -18,6 +18,10 @@ git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 make build
 
+# The DuckDB card backend (internal/card/duckdb, go-duckdb) is cgo-only and is
+# build-tagged `//go:build cgo`, so it is excluded when CGO_ENABLED=0; the
+# default SQLite card backend (modernc.org/sqlite) is pure Go and unaffected.
+
 # Start PostgreSQL (Docker)
 # Host port 5437 matches docker-compose.yml (which maps 5437:5432) so the same
 # DB_PORT works whether you use the standalone container or `docker compose up`.

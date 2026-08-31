@@ -1,3 +1,5 @@
+//go:build cgo
+
 // Package duckdb implements the CardRepository interface backed by an
 // in-process DuckDB database. This provides an alternative to the SQLite
 // backend with stronger analytical capabilities.
