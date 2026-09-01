@@ -324,3 +324,4 @@
 {"id": 326, "type": "task_completed", "task_id": "GAP-059/061/063", "actor": "bankai-codex-gpt56sol", "ts": "2026-09-01 04:19:46", "note": "3x P2 docs gaps closed in one wave; commit d6913fd"}
 {"id": 327, "type": "task_completed", "task_id": "FTR-02", "actor": "bankai-codex-gpt56sol", "ts": "2026-09-01 04:49:21", "note": "Phase P1 slice (commit 5671831); P2-P7 remain open per spec phasing"}
 {"id": 328, "type": "task_created", "task_id": "FTR-02-P2", "actor": "bankai-codex-gpt56sol", "ts": "2026-09-01 04:50:08", "note": "P2-P7 remainder row opened to keep spec phasing visible"}
+{"id": 329, "type": "task_completed", "task_id": "FTR-02-P2", "actor": "bankai-codex-gpt56sol", "ts": "2026-09-01 05:13:22", "note": "FTL transport P2 slice; foreman fixes: upsert param index, test ECDHE arg"}
