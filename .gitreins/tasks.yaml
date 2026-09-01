@@ -1600,3 +1600,17 @@ tasks:
   status: complete
   created_at: '2026-09-01T06:27:15.182499+00:00'
   completed_at: '2026-09-01T06:40:28.782528+00:00'
+- id: FTR-02-P5
+  title: "FTR-02 Phase P5 Federation UI (SPEC-FTR-02 \xA79): Peers page with link/handshake\
+    \ flow, peer status cards, relay health indicators"
+  criteria:
+  - React PeersPage lists peers with state badges (pending/connected/revoked), create-link
+    dialog calls POST /api/v1/federation/link, handshake trigger + result display,
+    revoke button, relay lag + queue depth per peer, vitest component tests for render
+    + interactions, tsc clean
+  - frontend/src/pages/PeersPage.tsx with peers list, link dialog, handshake panel;
+    federationApi.ts client extensions; App routes/nav entry; vitest tests for all
+    interactions; existing suites unaffected
+  status: complete
+  created_at: '2026-09-01T06:55:52.327485+00:00'
+  completed_at: '2026-09-01T07:03:01.596267+00:00'

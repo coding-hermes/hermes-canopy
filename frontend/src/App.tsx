@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Bot,
   GitPullRequest,
+  RadioTower,
   X,
 } from 'lucide-react'
 import TreeView from './components/TreeView'
@@ -22,6 +23,7 @@ import CardsPage from './pages/CardsPage'
 import WorkspacePage from './pages/WorkspacePage'
 import AgentsPage from './pages/AgentsPage'
 import ReviewPage from './pages/ReviewPage'
+import PeersPage from './pages/PeersPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
 import TopicSearchPanel from './components/TopicSearchPanel'
@@ -52,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/cards', label: 'Cards', ariaLabel: 'Cards', icon: LayoutGrid },
   { to: '/workspace', label: 'Workspace', ariaLabel: 'Workspace', icon: MessageSquare },
   { to: '/agents', label: 'Agents', ariaLabel: 'Agent roster', icon: Bot },
+  { to: '/peers', label: 'Peers', ariaLabel: 'Federation peers', icon: RadioTower },
   { to: '/reviews', label: 'Reviews', ariaLabel: 'PR reviews', icon: GitPullRequest },
   { to: '/approvals', label: 'Approvals', ariaLabel: 'Approvals', icon: ShieldCheck },
 ]
@@ -228,6 +231,7 @@ export default function App() {
         <Route path="cards" element={<CardsPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="agents" element={<AgentsPage />} />
+        <Route path="peers" element={<PeersPage />} />
         <Route path="reviews" element={<ReviewPage />} />
         <Route path="approvals" element={<ApprovalPanel />} />
       </Route>
