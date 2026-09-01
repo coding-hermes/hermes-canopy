@@ -180,7 +180,11 @@ func New(
 		// is inherited from this /api/v1 router.
 		if federationSvc != nil {
 			fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr, sseHub)
+			if profileRouter, ok := federationSvc.(federation.ProfileRouter); ok {
+				fedHandler.WithProfileRouter(profileRouter)
+			}
 			r.Mount("/federation/link", fedHandler.LinkRoutes())
+			r.Mount("/federation/routes", fedHandler.RouteRoutes())
 		}
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
@@ -239,6 +243,9 @@ func New(
 	// user-only JWT middleware mounted on the main /api/v1 router.
 	if federationSvc != nil {
 		fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr, sseHub)
+		if profileRouter, ok := federationSvc.(federation.ProfileRouter); ok {
+			fedHandler.WithProfileRouter(profileRouter)
+		}
 		r.With(handler.FederationAuthMiddleware(jwtSecret, federationSvc)).Post("/api/v1/federation/handshake", fedHandler.Handshake)
 		r.Get("/api/v1/federation/events", fedHandler.Events)
 		r.Post("/api/v1/federation/events", fedHandler.PostEvent)

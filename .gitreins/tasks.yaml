@@ -1567,3 +1567,21 @@ tasks:
   status: complete
   created_at: '2026-09-01T05:09:23.462026+00:00'
   completed_at: '2026-09-01T05:16:01.067976+00:00'
+- id: FTR-02-P3
+  title: 'FTR-02 Phase P3 Profile Router (SPEC-FTR-02): route table CRUD, local/remote
+    resolution, route lookup'
+  criteria:
+  - profile_routes migration (000035) applies up+down cleanly per repo conventions
+  - 'Route CRUD service+repo: create/list/update/delete with validation, tree+profile
+    scoped per spec section 6'
+  - 'Resolution: resolve(profile,tree) returns local vs remote(peer) deterministically;
+    remote returns peer and route used'
+  - Handler routes per spec section 5 registered and dual-auth protected; unknown
+    route returns repo 404 error shape
+  - 'Lookup integrated: node/event send path consults route table before dispatch
+    (no behavior change for local routes)'
+  - go build+vet clean; new service+handler tests pass on live PG :5437; existing
+    suites unaffected
+  status: complete
+  created_at: '2026-09-01T05:23:54.549203+00:00'
+  completed_at: '2026-09-01T06:12:03.361946+00:00'

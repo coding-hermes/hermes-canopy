@@ -17,6 +17,7 @@ import (
 
 type Service struct {
 	repo      Repository
+	router    ProfileRouter
 	signer    *tokenSigner
 	mu        sync.RWMutex
 	sessions  map[uuid.UUID][]byte
@@ -28,7 +29,46 @@ func NewService(repo Repository, signingKey []byte, serverID uuid.UUID, serverUR
 }
 
 func newService(repo Repository, signer *tokenSigner) *Service {
-	return &Service{repo: repo, signer: signer, sessions: make(map[uuid.UUID][]byte), localECDH: make(map[uuid.UUID][]byte)}
+	service := &Service{repo: repo, signer: signer, sessions: make(map[uuid.UUID][]byte), localECDH: make(map[uuid.UUID][]byte)}
+	if pgRepo, ok := repo.(*PGRepository); ok {
+		service.router = NewPGProfileRouter(pgRepo.pool)
+	}
+	return service
+}
+
+func (s *Service) Create(ctx context.Context, route *Route) (*Route, error) {
+	if s.router == nil {
+		return nil, ErrRouteNotFound
+	}
+	return s.router.Create(ctx, route)
+}
+
+func (s *Service) List(ctx context.Context, profileID, treeID *uuid.UUID) ([]Route, error) {
+	if s.router == nil {
+		return nil, ErrRouteNotFound
+	}
+	return s.router.List(ctx, profileID, treeID)
+}
+
+func (s *Service) Update(ctx context.Context, id uuid.UUID, update RouteUpdate) (*Route, error) {
+	if s.router == nil {
+		return nil, ErrRouteNotFound
+	}
+	return s.router.Update(ctx, id, update)
+}
+
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	if s.router == nil {
+		return ErrRouteNotFound
+	}
+	return s.router.Delete(ctx, id)
+}
+
+func (s *Service) Resolve(ctx context.Context, profileID, treeID uuid.UUID) (*Route, error) {
+	if s.router == nil {
+		return nil, ErrRouteNotFound
+	}
+	return s.router.Resolve(ctx, profileID, treeID)
 }
 
 func (s *Service) SigningPublicKey() []byte { return append([]byte(nil), s.signer.publicKey...) }

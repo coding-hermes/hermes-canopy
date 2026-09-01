@@ -19,6 +19,7 @@ import (
 
 type FederationHandler struct {
 	svc       federation.FederationService
+	router    federation.ProfileRouter
 	serverURL string
 	hub       sse.SSEHub
 	mu        sync.RWMutex
@@ -33,12 +34,170 @@ func NewFederationHandler(svc federation.FederationService, serverURL string, hu
 	return &FederationHandler{svc: svc, serverURL: serverURL, hub: hub, relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{})}
 }
 
+func (h *FederationHandler) WithProfileRouter(router federation.ProfileRouter) *FederationHandler {
+	h.router = router
+	return h
+}
+
 func (h *FederationHandler) LinkRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.CreateLink)
 	r.Get("/", h.ListLinks)
 	r.Delete("/{peer_id}", h.RevokeLink)
 	return r
+}
+
+func (h *FederationHandler) RouteRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Post("/", h.CreateRoute)
+	r.Get("/", h.ListRoutes)
+	r.Patch("/", h.UpdateRoute)
+	r.Delete("/", h.DeleteRoute)
+	r.Patch("/{route_id}", h.UpdateRoute)
+	r.Delete("/{route_id}", h.DeleteRoute)
+	return r
+}
+
+type routeRequest struct {
+	ID        uuid.UUID            `json:"id,omitempty"`
+	ProfileID uuid.UUID            `json:"profile_id,omitempty"`
+	TreeID    *uuid.UUID           `json:"tree_id,omitempty"`
+	PeerID    *uuid.UUID           `json:"peer_id,omitempty"`
+	RouteType federation.RouteType `json:"route_type,omitempty"`
+	Priority  *int                 `json:"priority,omitempty"`
+}
+
+func (h *FederationHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
+	if h.router == nil {
+		writeError(w, http.StatusServiceUnavailable, "PROFILE_ROUTER_UNAVAILABLE", "profile router is unavailable")
+		return
+	}
+	var req routeRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	priority := 0
+	if req.Priority != nil {
+		priority = *req.Priority
+	}
+	route, err := h.router.Create(r.Context(), &federation.Route{ProfileID: req.ProfileID, TreeID: req.TreeID, PeerID: req.PeerID, RouteType: req.RouteType, Priority: priority})
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, route)
+}
+
+func (h *FederationHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
+	if h.router == nil {
+		writeError(w, http.StatusServiceUnavailable, "PROFILE_ROUTER_UNAVAILABLE", "profile router is unavailable")
+		return
+	}
+	profileID, ok := optionalUUIDQuery(w, r, "profile_id")
+	if !ok {
+		return
+	}
+	treeID, ok := optionalUUIDQuery(w, r, "tree_id")
+	if !ok {
+		return
+	}
+	routes, err := h.router.List(r.Context(), profileID, treeID)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"routes": routes})
+}
+
+func optionalUUIDQuery(w http.ResponseWriter, r *http.Request, name string) (*uuid.UUID, bool) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return nil, true
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_"+strings.ToUpper(name), name+" must be a valid UUID")
+		return nil, false
+	}
+	return &id, true
+}
+
+func routeID(w http.ResponseWriter, r *http.Request, bodyID uuid.UUID) (uuid.UUID, bool) {
+	raw := chi.URLParam(r, "route_id")
+	if raw == "" {
+		raw = r.URL.Query().Get("id")
+	}
+	if raw == "" && bodyID != uuid.Nil {
+		return bodyID, true
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ROUTE_ID", "route_id must be a valid UUID")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func (h *FederationHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
+	if h.router == nil {
+		writeError(w, http.StatusServiceUnavailable, "PROFILE_ROUTER_UNAVAILABLE", "profile router is unavailable")
+		return
+	}
+	var req routeRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	id, ok := routeID(w, r, req.ID)
+	if !ok {
+		return
+	}
+	var routeType *federation.RouteType
+	if req.RouteType != "" {
+		routeType = &req.RouteType
+	}
+	var treeID **uuid.UUID
+	if req.TreeID != nil {
+		treeID = &req.TreeID
+	}
+	var peerID **uuid.UUID
+	if req.PeerID != nil {
+		peerID = &req.PeerID
+	} else if req.RouteType == federation.RouteLocal {
+		// Switching a route to local also clears its remote peer.
+		var noPeer *uuid.UUID
+		peerID = &noPeer
+	}
+	route, err := h.router.Update(r.Context(), id, federation.RouteUpdate{TreeID: treeID, PeerID: peerID, RouteType: routeType, Priority: req.Priority})
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, route)
+}
+
+func (h *FederationHandler) DeleteRoute(w http.ResponseWriter, r *http.Request) {
+	if h.router == nil {
+		writeError(w, http.StatusServiceUnavailable, "PROFILE_ROUTER_UNAVAILABLE", "profile router is unavailable")
+		return
+	}
+	var req routeRequest
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+			return
+		}
+	}
+	id, ok := routeID(w, r, req.ID)
+	if !ok {
+		return
+	}
+	if err := h.router.Delete(r.Context(), id); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type createFederationLinkRequest struct {
@@ -227,12 +386,23 @@ func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, err)
 		return
 	}
+	dispatchPeerID := envelope.PeerID
+	if h.router != nil {
+		route, resolveErr := h.router.Resolve(r.Context(), envelope.SenderProfileID, envelope.TreeID)
+		if resolveErr != nil && !errors.Is(resolveErr, federation.ErrRouteNotFound) {
+			h.writeError(w, resolveErr)
+			return
+		}
+		if resolveErr == nil && route.RouteType == federation.RouteRemote && route.PeerID != nil {
+			dispatchPeerID = *route.PeerID
+		}
+	}
 	if h.hub != nil {
 		h.hub.Broadcast(envelope.TreeID, sse.ComposeEvent(envelope.TreeID, envelope.SenderProfileID, inner.EventType, inner.Payload))
 	}
 	h.mu.RLock()
-	subscribers := make([]chan federation.FTLEnvelope, 0, len(h.relays[envelope.PeerID]))
-	for ch := range h.relays[envelope.PeerID] {
+	subscribers := make([]chan federation.FTLEnvelope, 0, len(h.relays[dispatchPeerID]))
+	for ch := range h.relays[dispatchPeerID] {
 		subscribers = append(subscribers, ch)
 	}
 	h.mu.RUnlock()
@@ -261,6 +431,8 @@ func (h *FederationHandler) writeError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "FEDERATION_LINK_EXISTS", "federation link already exists")
 	case errors.Is(err, federation.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "federation link fields are invalid")
+	case errors.Is(err, federation.ErrRouteNotFound):
+		writeError(w, http.StatusNotFound, "PROFILE_ROUTE_NOT_FOUND", "profile route not found")
 	default:
 		log.Error().Err(err).Msg("federation handler")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "federation operation failed")

@@ -25,6 +25,26 @@ type relayRepo struct {
 	peer *federation.FederationPeer
 }
 
+type resolveSpy struct {
+	called bool
+	route  *federation.Route
+}
+
+func (s *resolveSpy) Create(context.Context, *federation.Route) (*federation.Route, error) {
+	return nil, nil
+}
+func (s *resolveSpy) List(context.Context, *uuid.UUID, *uuid.UUID) ([]federation.Route, error) {
+	return nil, nil
+}
+func (s *resolveSpy) Update(context.Context, uuid.UUID, federation.RouteUpdate) (*federation.Route, error) {
+	return nil, nil
+}
+func (s *resolveSpy) Delete(context.Context, uuid.UUID) error { return nil }
+func (s *resolveSpy) Resolve(context.Context, uuid.UUID, uuid.UUID) (*federation.Route, error) {
+	s.called = true
+	return s.route, nil
+}
+
 func (r *relayRepo) Create(_ context.Context, p *federation.FederationPeer) (*federation.FederationPeer, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -35,6 +55,37 @@ func (r *relayRepo) Create(_ context.Context, p *federation.FederationPeer) (*fe
 	c.CreatedAt = time.Now()
 	r.peer = &c
 	return &c, nil
+}
+
+func TestPostEventConsultsProfileRouter(t *testing.T) {
+	peerID, treeID, profileID := uuid.New(), uuid.New(), uuid.New()
+	senderRepo, receiverRepo := &relayRepo{}, &relayRepo{}
+	sender := federation.NewService(senderRepo, []byte("dispatch-sender"), uuid.New(), "http://sender.local")
+	receiver := federation.NewService(receiverRepo, []byte("dispatch-receiver"), uuid.New(), "http://receiver.local")
+	_, _ = senderRepo.Create(context.Background(), &federation.FederationPeer{ID: peerID, TreeID: treeID, SigningKeyFP: fingerprintForTest(receiver.SigningPublicKey()), SigningPublicKey: receiver.SigningPublicKey(), State: federation.PeerConnected})
+	_, _ = receiverRepo.Create(context.Background(), &federation.FederationPeer{ID: peerID, TreeID: treeID, SigningKeyFP: fingerprintForTest(sender.SigningPublicKey()), SigningPublicKey: sender.SigningPublicKey(), State: federation.PeerConnected})
+	aPub, aPriv, _ := federation.GenerateECDHKeyPair()
+	bPub, bPriv, _ := federation.GenerateECDHKeyPair()
+	_ = sender.EstablishSession(peerID, aPriv, bPub)
+	_ = receiver.EstablishSession(peerID, bPriv, aPub)
+	token, _ := sender.GenerateToken(profileID, treeID)
+	envelope, err := sender.EncryptEnvelope(context.Background(), peerID, profileID, 1, "remote_node_added", []byte(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spy := &resolveSpy{route: &federation.Route{ProfileID: profileID, TreeID: &treeID, RouteType: federation.RouteLocal}}
+	h := NewFederationHandler(receiver, "http://receiver.local").WithProfileRouter(spy)
+	body, _ := json.Marshal(envelope)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/federation/events", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	h.PostEvent(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if !spy.called {
+		t.Fatal("Resolve was not consulted")
+	}
 }
 func (r *relayRepo) UpsertAccepted(ctx context.Context, p *federation.FederationPeer) (*federation.FederationPeer, error) {
 	if r.peer != nil {

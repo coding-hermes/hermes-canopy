@@ -103,3 +103,71 @@ func TestFederationHandlerHandshake(t *testing.T) {
 		t.Fatalf("revoked handshake status = %d, want 410", resp.StatusCode)
 	}
 }
+
+func TestFederationHandlerRouteEndpoints(t *testing.T) {
+	t.Setenv("CANOPY_REQUIRE_DB", "1")
+	pool := testutil.NewIntegrationPool(t)
+	ctx := context.Background()
+	ownerID, profileID := uuid.New(), uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (id, hermes_user_id, display_name) VALUES ($1,$2,'Route Handler Owner')`, ownerID, "route-handler-"+ownerID.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO profiles (id, owner_id, profile_type, name, display_name) VALUES ($1,$2,'hermes-profile',$3,'Route Handler Profile')`, profileID, ownerID, "route-handler-"+profileID.String()); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := db.NewPGTreeRepo(pool).Create(ctx, &db.Tree{Title: "Route Handler Tree", OwnerID: profileID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := federation.NewService(federation.NewPGRepository(pool), []byte("route-handler-secret"), uuid.New(), "https://local.example")
+	h := NewFederationHandler(svc, "https://local.example").WithProfileRouter(federation.NewPGProfileRouter(pool))
+	r := chi.NewRouter()
+	r.Mount("/api/v1/federation/routes", h.RouteRoutes())
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	data, _ := json.Marshal(map[string]any{"profile_id": profileID, "tree_id": tree.ID, "route_type": "local", "priority": 3})
+	resp, err := srv.Client().Post(srv.URL+"/api/v1/federation/routes/", "application/json", bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST status = %d", resp.StatusCode)
+	}
+	var created federation.Route
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = srv.Client().Get(srv.URL + "/api/v1/federation/routes/?profile_id=" + profileID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET status = %d", resp.StatusCode)
+	}
+
+	patch, _ := json.Marshal(map[string]any{"priority": 8})
+	req, _ := http.NewRequest(http.MethodPatch, srv.URL+"/api/v1/federation/routes/"+created.ID.String(), bytes.NewReader(patch))
+	resp, err = srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH status = %d", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/federation/routes/"+created.ID.String(), nil)
+	resp, err = srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d", resp.StatusCode)
+	}
+}
