@@ -328,3 +328,4 @@
 {"id":333,"type":"task_completed","task_id":"FTR-02-P3","actor":"bankai-codex-wave4","ts":"2026-09-01 06:26:55","data":{"commit":"0ca7874","verdict":"beb63c8d"}}
 {"id":334,"type":"correction","task_id":"FTR-02-P3","actor":"bankai-foreman","ts":"2026-09-01 06:45:00","data":{"field":"commit_hash","was":"0ca7874","now":"dafa863","reason":"recorded hash before reading full commit output"}}
 {"id": 335, "type": "task_completed", "task_id": "FTR-02-P4", "actor": "bankai-wave-5", "at": "2026-09-01 06:55:32", "commit_hash": "6a43f7b", "judge": "7d64b76f"}
+{"id": 332, "type": "task_completed", "task_id": "FTR-02-P5", "actor": "bankai-codex-wave6", "at": "2026-09-01 07:05:18", "detail": "Federation UI PeersPage + X25519 handshake; vitest 728/728; judge PASS 4878625c; commit 94be96e"}
