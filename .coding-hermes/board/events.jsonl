@@ -331,3 +331,4 @@
 {"id": 332, "type": "task_completed", "task_id": "FTR-02-P5", "actor": "bankai-codex-wave6", "at": "2026-09-01 07:05:18", "detail": "Federation UI PeersPage + X25519 handshake; vitest 728/728; judge PASS 4878625c; commit 94be96e"}
 {"id": 336, "ts": "2026-09-01 07:17:05", "type": "task_completed", "task_id": "FTR-02-P6", "actor": "bankai-codex-wave7", "commit_hash": "6a04d96", "detail": "judge ad919be7 PASS; live-PG tests: LWW+idempotency+manual-resolve all green"}
 {"id": 337, "ts": "2026-09-01 07:18:32", "type": "task_completed", "task_id": "FTR-02-P6", "actor": "bankai-codex-wave7", "commit_hash": "2bb2bd9", "detail": "row appended+closed; judge ad919be7 PASS"}
+{"id": 330, "type": "task_completed", "task_id": "FTR-02-P7", "actor": "bankai-codex-wave8", "at": "2026-09-01 07:55:53", "data": {"judge": "14388717", "umbrella": "FTR-02 spec complete P1-P7"}}
