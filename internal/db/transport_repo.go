@@ -60,9 +60,34 @@ type TransportEvent struct {
 // TransportConnectionRepo persists transport connections.
 type TransportConnectionRepo interface {
 	Create(ctx context.Context, conn *TransportConnection) (*TransportConnection, error)
+	Upsert(ctx context.Context, conn *TransportConnection) (*TransportConnection, error)
 	GetByPeer(ctx context.Context, peerID, transportType string) ([]TransportConnection, error)
 	UpdateState(ctx context.Context, id uuid.UUID, state string, seqHigh int64) error
 	ListActive(ctx context.Context) ([]TransportConnection, error)
+}
+
+// Upsert persists the latest state for a stable connection ID.
+func (r *PGTransportConnectionRepo) Upsert(ctx context.Context, conn *TransportConnection) (*TransportConnection, error) {
+	if conn.ID == uuid.Nil {
+		conn.ID = uuid.New()
+	}
+	now := time.Now().UTC()
+	if conn.LastActivity.IsZero() {
+		conn.LastActivity = now
+	}
+	meta, err := json.Marshal(conn.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("transport_connection: marshal metadata: %w", err)
+	}
+	row := r.pool.QueryRow(ctx, `INSERT INTO transport_connections
+		(id,peer_id,transport_type,state,target,established_at,last_activity,sequence_high,metadata,created_at,updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
+		ON CONFLICT (id) DO UPDATE SET state=EXCLUDED.state,target=EXCLUDED.target,
+		established_at=EXCLUDED.established_at,last_activity=EXCLUDED.last_activity,
+		sequence_high=EXCLUDED.sequence_high,metadata=EXCLUDED.metadata,updated_at=EXCLUDED.updated_at
+		RETURNING id,peer_id,transport_type,state,target,established_at,last_activity,sequence_high,metadata,created_at,updated_at`,
+		conn.ID, conn.PeerID, conn.TransportType, conn.State, conn.Target, conn.EstablishedAt, conn.LastActivity, conn.SequenceHigh, meta, now)
+	return scanTransportConnection(row)
 }
 
 // TransportConfigRepo persists per-transport configuration.

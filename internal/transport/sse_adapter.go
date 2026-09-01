@@ -223,10 +223,16 @@ func (a *SSEAdapter) consumeHTTP(ctx context.Context, sc *sseConnection, timeout
 		if ctx.Err() != nil {
 			return
 		}
-		if sc.conn.State == StateActive {
+		rmu := stateMuFor(sc.conn)
+		rmu.Lock()
+		wasActive := sc.conn.State == StateActive
+		if !wasActive {
+			sc.conn.State = StateDegraded
+		}
+		rmu.Unlock()
+		if wasActive {
 			backoff = time.Second
 		}
-		sc.conn.State = StateDegraded
 		jitter := time.Duration(float64(backoff) * (0.75 + rand.Float64()*0.5))
 		timer := time.NewTimer(jitter)
 		select {

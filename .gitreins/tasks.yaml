@@ -1665,3 +1665,21 @@ tasks:
   status: complete
   created_at: '2026-09-01T08:16:15.531504+00:00'
   completed_at: '2026-09-01T08:26:29.081245+00:00'
+- id: FTR-04-P3
+  title: "FTR-04 Phase 3 Selector + Degradation (SPEC-FTR-04 \xA73.5/\xA73.6/\xA7\
+    5): TransportSelector w/ priority matrix + hysteresis health loop, fallback chain\
+    \ walk + degradation events, transport_connections/configs DDL 000038 + repo"
+  criteria:
+  - 'selector.go: Select() returns best healthy transport per DeploymentMode priority
+    matrix, ErrNoTransport when all down'
+  - 'health.go: hysteresis (N-up/M-down) transitions + SSE degradation event hooks
+    + graceful Stop'
+  - fallback chain walk order correct for local/lan/wan/airgapped (table-tested)
+  - "migration 000038 transport_connections+transport_configs per spec \xA74.1/\xA7\
+    4.2, repo round-trip on live PG (fail-loud, no skips)"
+  - ConnectionManager.SetSelector optional wiring, nil = zero regression
+  - go test -race ./internal/transport/ -count=1 ALL PASS; build+vet clean; fed handler
+    suite unaffected
+  status: complete
+  created_at: '2026-09-01T08:31:34.510796+00:00'
+  completed_at: '2026-09-01T08:46:08.032405+00:00'

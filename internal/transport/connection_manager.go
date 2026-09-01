@@ -38,6 +38,9 @@ func NewConnectionManager(selector *TransportSelector, adapters ...TransportAdap
 	for _, adapter := range adapters {
 		if typed, ok := adapter.(interface{ TransportType() TransportType }); ok {
 			registered[typed.TransportType()] = adapter
+			if selector != nil {
+				_ = selector.RegisterAdapter(adapter)
+			}
 		}
 	}
 	return &ConnectionManager{
@@ -48,6 +51,19 @@ func NewConnectionManager(selector *TransportSelector, adapters ...TransportAdap
 		rateLimiters:  make(map[string]*RateLimiter),
 		adapters:      registered,
 	}
+}
+
+// SetSelector enables health-aware routing. A nil selector preserves the
+// original first-active-connection behavior.
+func (cm *ConnectionManager) SetSelector(selector *TransportSelector) {
+	cm.mu.Lock()
+	cm.selector = selector
+	if selector != nil {
+		for _, a := range cm.adapters {
+			_ = selector.RegisterAdapter(a)
+		}
+	}
+	cm.mu.Unlock()
 }
 
 // RegisterAdapter makes an adapter available for routing by transport type.
@@ -69,6 +85,9 @@ func (cm *ConnectionManager) RegisterAdapter(adapter TransportAdapter) error {
 	}
 	cm.mu.Lock()
 	cm.adapters[tt] = adapter
+	if cm.selector != nil {
+		_ = cm.selector.RegisterAdapter(adapter)
+	}
 	cm.mu.Unlock()
 	return nil
 }
@@ -104,6 +123,17 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 	}
 	if err := adapter.Send(ctx, conn, msg); err != nil {
 		if err == ErrConnectionClosed || err == ErrNotConnected || err == ErrTransportUnreachable {
+			if cm.selector != nil {
+				cm.selector.MarkDegraded(conn.TransportType, "connection_closed")
+				if fallback := cm.activeConnection(peerID); fallback != nil {
+					cm.mu.RLock()
+					fallbackAdapter := cm.adapters[fallback.TransportType]
+					cm.mu.RUnlock()
+					if fallbackAdapter != nil && fallbackAdapter.Send(ctx, fallback, msg) == nil {
+						return nil
+					}
+				}
+			}
 			_ = cm.enqueueOffline(peerID, msg)
 		}
 		return err
@@ -141,7 +171,7 @@ func (cm *ConnectionManager) OnConnect(conn *Connection) error {
 		if existing == conn || (conn.ID != "" && existing.ID == conn.ID) {
 			continue
 		}
-		if existing != nil && existing.State == StateActive {
+		if existing != nil && existing.State == StateActive && existing.TransportType == conn.TransportType {
 			existing.State = StateClosed
 			continue
 		}
@@ -376,22 +406,11 @@ func (cm *ConnectionManager) activeConnection(peerID string) *Connection {
 		return nil
 	}
 
-	current := cm.selector.SelectPrimary(peerID)
-	visited := make(map[TransportType]struct{})
-	for {
-		if conn := byTransport[current]; conn != nil {
-			return conn
-		}
-		if _, seen := visited[current]; seen {
-			return nil
-		}
-		visited[current] = struct{}{}
-		next, err := cm.selector.SelectFallback(current)
-		if err != nil {
-			return nil
-		}
-		current = next
+	selected, err := cm.selector.Select(peerID)
+	if err != nil {
+		return nil
 	}
+	return byTransport[selected]
 }
 
 func contextError(ctx context.Context) error {
