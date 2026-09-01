@@ -337,3 +337,4 @@
 {"id":333,"type":"audit","task_id":"FTR-04-P2","actor":"bankai-foreman","reason":"row added complete at close (wave-start row add was missed); feat 6dfd131, judge a9556d98","created_at":"2026-09-01 08:30:17"}
 {"id":338,"ts":"2026-09-01 08:51:49","type":"task_completed","task_id":"FTR-04-P3","actor":"bankai-codex","detail":{"commit_hash":"e08bc33","judge":"1e8e8f13","wave":11}}
 {"id":339,"type":"task_completed","task_id":"FTR-04-P4","actor":"bankai-codex-wave12","at":"2026-09-01 09:03:42","commit":"33c0d87","judge":"78f80c2b","summary":"FTR-04-P4 complete: production NATS wiring, judge PASS"}
+{"id":340,"ts":"2026-09-01 09:12:24","type":"task_completed","actor":"bankai-codex-wave13","task_id":"FTR-04-P5","commit":"24e62c7","verdict":"cf9e9e74","summary":"FTR-04-P5 WebRTC adapter + relay fallback complete; judge PASS"}
