@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net"
+	"strconv"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -172,6 +174,58 @@ func (db *DB) MigrateWith(ctx context.Context, src fs.FS, dir string) error {
 	}
 	db.migrated = true
 	return nil
+}
+
+// EmbeddedMaxVersion returns the highest migration version compiled into
+// this binary (parsed from the embedded migrations FS). Used by the
+// stale-build guard in main(): a database schema NEWER than this value
+// means the running binary predates the schema and must be rebuilt.
+func EmbeddedMaxVersion() (int64, error) {
+	entries, err := fs.ReadDir(MigrateSource(), ".")
+	if err != nil {
+		return 0, fmt.Errorf("db: read embedded migrations: %w", err)
+	}
+	var max int64
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".up.sql") {
+			continue
+		}
+		base := strings.TrimSuffix(name, ".up.sql")
+		if i := strings.IndexByte(base, '_'); i > 0 {
+			base = base[:i]
+		}
+		v, err := strconv.ParseInt(base, 10, 64)
+		if err != nil {
+			continue
+		}
+		if v > max {
+			max = v
+		}
+	}
+	if max == 0 {
+		return 0, fmt.Errorf("db: no embedded migrations found")
+	}
+	return max, nil
+}
+
+// SchemaVersion returns the database's current schema_migrations version
+// (0 when the table does not exist yet, i.e. before the first migration).
+func (db *DB) SchemaVersion(ctx context.Context) (int64, error) {
+	if db == nil || db.Pool == nil {
+		return 0, fmt.Errorf("db: pool not initialized")
+	}
+	var v int64
+	err := db.Pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT max(version) FROM schema_migrations), 0)`).Scan(&v)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return 0, nil // relation does not exist: fresh database
+		}
+		return 0, fmt.Errorf("db: schema version: %w", err)
+	}
+	return v, nil
 }
 
 // Close releases the underlying pool. Always call via defer in main().

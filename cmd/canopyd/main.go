@@ -117,6 +117,25 @@ func main() {
 		log.Fatal().Err(err).Msg("database initialization failed")
 	}
 	defer database.Close()
+
+	// Stale-build guard (DF-HERMES-CANOPY-1): a database schema NEWER than
+	// the migrations embedded in this binary means the running executable
+	// predates the schema (e.g. a rebuilt DB from a newer checkout, or a
+	// compose image built from older HEAD). Older-binary-with-newer-DB
+	// produces silent, opaque 4xx/5xx failures — fail loudly here instead.
+	if embedded, err := db.EmbeddedMaxVersion(); err == nil {
+		schemaV, err := database.SchemaVersion(ctx)
+		if err != nil {
+			log.Fatal().Err(err).Msg("schema version check failed")
+		}
+		if schemaV > embedded {
+			log.Fatal().
+				Int64("db_schema_version", schemaV).
+				Int64("binary_embedded_version", embedded).
+				Msg("STALE BUILD: database schema is newer than this binary's embedded migrations — rebuild (make build) or redeploy a current image; refusing to start against a schema this binary cannot understand")
+		}
+	}
+
 	if err := database.Migrate(ctx); err != nil {
 		log.Fatal().Err(err).Msg("database migration failed")
 	}
@@ -289,7 +308,8 @@ func main() {
 		log.Fatal().Err(err).Msg("initialize federation identity")
 	}
 
-	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
+	srv := server.New(
+		healthProbe{database}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
 		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, cfg)
@@ -406,4 +426,19 @@ func (m *pgMLSKeyPackageManager) GetKeyPackage(ctx context.Context, profileID uu
 
 func (m *pgMLSKeyPackageManager) ExpireKeyPackage(ctx context.Context, keyPackageID uuid.UUID) error {
 	return m.Expire(ctx, keyPackageID)
+}
+
+// healthProbe adapts *db.DB to the server.healthDB interface used by /health.
+type healthProbe struct{ d *db.DB }
+
+func (h healthProbe) SchemaVersion(ctx context.Context) (int64, error) {
+	return h.d.SchemaVersion(ctx)
+}
+
+func (h healthProbe) EmbeddedMigrations() int64 {
+	v, err := db.EmbeddedMaxVersion()
+	if err != nil {
+		return -1
+	}
+	return v
 }

@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -36,6 +37,7 @@ import (
 type Server struct {
 	httpServer      *http.Server
 	router          *chi.Mux
+	healthDB        HealthDB
 	sseHub          sse.SSEHub
 	transportMgr    *transport.ConnectionManager
 	transportAdaper transport.TransportAdapter
@@ -47,6 +49,7 @@ type Server struct {
 
 // New creates a new Server with middleware and routes wired.
 func New(
+	healthProbe HealthDB,
 	addr string,
 	jwtSecret string,
 	treeSvc service.TreeService,
@@ -77,6 +80,17 @@ func New(
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
+
+	// Stale-build visibility (DF-HERMES-CANOPY-1): /health reports the
+	// live schema version vs. this binary's embedded migrations.
+	if healthProbe != nil {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				ctx := context.WithValue(req.Context(), healthSchemaKey{}, healthProbe)
+				next.ServeHTTP(w, req.WithContext(ctx))
+			})
+		})
+	}
 
 	// === Global middleware (applied to every route) ===
 	r.Use(middleware.RequestID)
@@ -348,11 +362,31 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return errors.Join(drainErr, s.httpServer.Shutdown(ctx))
 }
 
-// healthHandler responds with a simple health check.
+// healthHandler responds with a simple health check. schema_version and
+// embedded_migrations are reported so a stale binary (older embedded
+// migrations than the live DB) is visible from a single curl — the
+// diagnostic DF-HERMES-CANOPY-1 lacked.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
+	schemaV, embeddedV := int64(-1), int64(-1)
+	if dbh, ok := r.Context().Value(healthSchemaKey{}).(HealthDB); ok {
+		schemaV, _ = dbh.SchemaVersion(r.Context())
+		embeddedV = dbh.EmbeddedMigrations()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok","service":"canopyd"}`))
+	fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d}`,
+		schemaV, embeddedV)
+}
+
+// healthSchemaKey/healthDB let main() inject a read-only schema-version
+// probe into the health handler without widening the Server constructor.
+type healthSchemaKey struct{}
+
+// HealthDB is the read-only probe surfaced on /health (implemented by
+// cmd/canopyd over *db.DB).
+type HealthDB interface {
+	SchemaVersion(ctx context.Context) (int64, error)
+	EmbeddedMigrations() int64
 }
 
 // versionHandler responds with the server version.

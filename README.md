@@ -47,6 +47,15 @@ cd frontend
 npm install
 npm run dev
 
+# Troubleshooting: "STALE BUILD" at startup
+# If canopyd refuses to start with `STALE BUILD: database schema is newer than
+# this binary's embedded migrations`, your database was created by a NEWER
+# canopyd than the one you just ran (common after `git pull` without rebuild,
+# or a compose image built from older HEAD). Fix: `make build` (or rebuild the
+# docker image) and run again. `/health` reports both versions for comparison:
+#   curl http://localhost:8091/health
+#   -> {"status":"ok","service":"canopyd","schema_version":38,"embedded_migrations":38}
+
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
 # The canopyd binary is API-only in MVP — the PWA is served separately:

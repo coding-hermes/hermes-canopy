@@ -23,15 +23,21 @@ func TestHealthHandler(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
 	}
 
-	var body map[string]string
+	var body map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if body["status"] != "ok" {
-		t.Errorf("expected status 'ok', got %q", body["status"])
+		t.Errorf("expected status 'ok', got %v", body["status"])
 	}
 	if body["service"] != "canopyd" {
-		t.Errorf("expected service 'canopyd', got %q", body["service"])
+		t.Errorf("expected service 'canopyd', got %v", body["service"])
+	}
+	// DF-HERMES-CANOPY-1: health now reports schema/embedded versions.
+	for _, key := range []string{"schema_version", "embedded_migrations"} {
+		if _, ok := body[key]; !ok {
+			t.Errorf("health response missing %q", key)
+		}
 	}
 }
 
