@@ -71,7 +71,9 @@ func (s *SSESignalingChannel) SendSignal(ctx context.Context, signal WebRTCSigna
 	if err != nil {
 		return fmt.Errorf("transport: encode WebRTC signal: %w", err)
 	}
-	return s.adapter.Send(ctx, s.conn, &Message{Opcode: OpHeartbeat, TreeID: signal.To, Timestamp: time.Now().UnixMilli(), Payload: payload, Origin: "webrtc_signal"})
+	sendCtx, cancel := context.WithTimeout(ctx, OutboundRequestTimeout)
+	defer cancel()
+	return s.adapter.Send(sendCtx, s.conn, &Message{Opcode: OpHeartbeat, TreeID: signal.To, Timestamp: time.Now().UnixMilli(), Payload: payload, Origin: "webrtc_signal"})
 }
 
 func (s *SSESignalingChannel) ReceiveSignals(ctx context.Context, id string) (<-chan WebRTCSignal, error) {
@@ -208,7 +210,15 @@ func NewWebRTCTransportAdapter(factory PeerConnectionFactory, signaling Signalin
 
 func (a *WebRTCAdapter) TransportType() TransportType { return TransportWebRTC }
 
-func (a *WebRTCAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connection, error) {
+func (a *WebRTCAdapter) Connect(ctx context.Context, opts ConnectOptions) (result *Connection, resultErr error) {
+	Metrics().IncConnectAttempt(TransportWebRTC)
+	defer func() {
+		if resultErr != nil {
+			Metrics().IncConnectFailure(TransportWebRTC)
+		} else {
+			Metrics().IncConnectSuccess(TransportWebRTC)
+		}
+	}()
 	if opts.TransportType != "" && opts.TransportType != TransportWebRTC {
 		return nil, ErrTransportMismatch
 	}
@@ -352,6 +362,7 @@ func (a *WebRTCAdapter) Send(ctx context.Context, conn *Connection, msg *Message
 	mu.Lock()
 	conn.LastActivity = time.Now().UTC()
 	mu.Unlock()
+	Metrics().IncMessageSent(TransportWebRTC)
 	return nil
 }
 
@@ -404,6 +415,7 @@ func (a *WebRTCAdapter) Disconnect(_ context.Context, conn *Connection) error {
 	mu.Lock()
 	conn.State = StateClosed
 	mu.Unlock()
+	Metrics().RecordTransition(TransportWebRTC)
 	return nil
 }
 
@@ -452,6 +464,7 @@ func (wc *webRTCConnection) deliver(data []byte) {
 	}
 	select {
 	case wc.recv <- &msg:
+		Metrics().IncMessageReceived(TransportWebRTC)
 		mu := stateMuFor(wc.conn)
 		mu.Lock()
 		wc.conn.LastActivity = time.Now().UTC()

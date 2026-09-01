@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"time"
 
 	pion "github.com/pion/webrtc/v4"
 )
@@ -134,13 +135,22 @@ func (p *pionPeerConnection) Send(ctx context.Context, data []byte) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
-	p.mu.RLock()
-	dc := p.dc
-	p.mu.RUnlock()
-	if dc == nil || dc.ReadyState() != pion.DataChannelStateOpen {
-		return ErrConnectionClosed
+	// The negotiated DataChannel opens asynchronously after the peer
+	// connection reports connected — wait bounded instead of failing.
+	for {
+		p.mu.RLock()
+		dc := p.dc
+		open := dc != nil && dc.ReadyState() == pion.DataChannelStateOpen
+		p.mu.RUnlock()
+		if open {
+			return dc.Send(data)
+		}
+		select {
+		case <-ctx.Done():
+			return ErrConnectionClosed
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
-	return dc.Send(data)
 }
 
 func (p *pionPeerConnection) State() PeerConnectionState { return mapPionState(p.pc.ConnectionState()) }

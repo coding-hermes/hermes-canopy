@@ -127,6 +127,7 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 	}
 	if err := adapter.Send(ctx, conn, msg); err != nil {
 		if err == ErrConnectionClosed || err == ErrNotConnected || err == ErrTransportUnreachable {
+			Metrics().IncReconnect(conn.TransportType)
 			if cm.selector != nil {
 				cm.selector.MarkDegraded(conn.TransportType, "connection_closed")
 				if fallback := cm.activeConnection(peerID); fallback != nil {
@@ -187,6 +188,37 @@ func (cm *ConnectionManager) Adapter(tt TransportType) TransportAdapter {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.adapters[tt]
+}
+
+func (cm *ConnectionManager) CurrentTransport() TransportType {
+	cm.mu.RLock()
+	selector := cm.selector
+	cm.mu.RUnlock()
+	if selector == nil {
+		return ""
+	}
+	return selector.Current()
+}
+
+// TransportState returns the most relevant live state for a transport.
+func (cm *ConnectionManager) TransportState(tt TransportType) ConnectionState {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	state := StateClosed
+	for _, connections := range cm.connections {
+		for _, conn := range connections {
+			if conn == nil || conn.TransportType != tt {
+				continue
+			}
+			if conn.State == StateActive {
+				return StateActive
+			}
+			if state == StateClosed {
+				state = conn.State
+			}
+		}
+	}
+	return state
 }
 
 // Shutdown gracefully closes every registered adapter connection. Adapters

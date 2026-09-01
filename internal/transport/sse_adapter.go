@@ -60,7 +60,15 @@ func NewSSEAdapter(hub sse.SSEHub) *SSEAdapter {
 
 func (a *SSEAdapter) TransportType() TransportType { return TransportSSE }
 
-func (a *SSEAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connection, error) {
+func (a *SSEAdapter) Connect(ctx context.Context, opts ConnectOptions) (result *Connection, resultErr error) {
+	Metrics().IncConnectAttempt(TransportSSE)
+	defer func() {
+		if resultErr != nil {
+			Metrics().IncConnectFailure(TransportSSE)
+		} else {
+			Metrics().IncConnectSuccess(TransportSSE)
+		}
+	}()
 	if opts.TransportType != "" && opts.TransportType != TransportSSE {
 		return nil, ErrTransportMismatch
 	}
@@ -82,7 +90,10 @@ func (a *SSEAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connect
 		a.mu.Lock()
 		a.conns[conn.ID] = sc
 		a.mu.Unlock()
+		mu := stateMuFor(conn)
+		mu.Lock()
 		conn.State = StateActive
+		mu.Unlock()
 		go a.consumeHTTP(runCtx, sc, opts.Timeout)
 		return conn, nil
 	}
@@ -104,12 +115,22 @@ func (a *SSEAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connect
 	a.mu.Lock()
 	a.conns[conn.ID] = sc
 	a.mu.Unlock()
+	mu := stateMuFor(conn)
+	mu.Lock()
 	conn.State = StateActive
+	mu.Unlock()
 	return conn, nil
 }
 
 func (a *SSEAdapter) Send(ctx context.Context, conn *Connection, msg *Message) error {
-	if conn == nil || conn.State != StateActive {
+	if conn == nil {
+		return ErrNotConnected
+	}
+	mu := stateMuFor(conn)
+	mu.Lock()
+	state := conn.State
+	mu.Unlock()
+	if state != StateActive {
 		return ErrConnectionClosed
 	}
 	if msg == nil || msg.Opcode < OpTreeCreate || msg.Opcode > OpAck {
@@ -135,6 +156,7 @@ func (a *SSEAdapter) Send(ctx context.Context, conn *Connection, msg *Message) e
 		return ErrNotConnected
 	}
 	a.hub.Broadcast(sc.treeID, sse.SSEEvent{Type: msg.Opcode.String(), Data: data, TreeID: sc.treeID, Timestamp: time.Now().UTC()})
+	Metrics().IncMessageSent(TransportSSE)
 	conn.LastActivity = time.Now().UTC()
 	return nil
 }
@@ -176,13 +198,10 @@ func (a *SSEAdapter) Disconnect(_ context.Context, conn *Connection) error {
 	sc := a.conns[conn.ID]
 	delete(a.conns, conn.ID)
 	a.mu.Unlock()
-	mu := stateMuFor(conn)
-	mu.Lock()
-	conn.State = StateClosed
-	mu.Unlock()
 	if sc == nil {
-		return nil
+		return nil // already disconnected (idempotent)
 	}
+	mu := stateMuFor(conn)
 	mu.Lock()
 	conn.State = StateDisconnecting
 	mu.Unlock()
@@ -192,7 +211,10 @@ func (a *SSEAdapter) Disconnect(_ context.Context, conn *Connection) error {
 	}
 	sc.cancel()
 	sc.closeOnce.Do(func() { close(sc.recv) })
+	mu.Lock()
 	conn.State = StateClosed
+	mu.Unlock()
+	Metrics().RecordTransition(TransportSSE)
 	return nil
 }
 
@@ -215,6 +237,7 @@ func (a *SSEAdapter) consumeHTTP(ctx context.Context, sc *sseConnection, timeout
 	defer sc.closeOnce.Do(func() { close(sc.recv) })
 	backoff := time.Second
 	for ctx.Err() == nil {
+		Metrics().IncReconnect(TransportSSE)
 		mu := stateMuFor(sc.conn)
 		mu.Lock()
 		sc.conn.State = StateConnecting
@@ -242,8 +265,8 @@ func (a *SSEAdapter) consumeHTTP(ctx context.Context, sc *sseConnection, timeout
 		case <-timer.C:
 		}
 		backoff *= 2
-		if backoff > 32*time.Second {
-			backoff = 32 * time.Second
+		if backoff > ReconnectBackoffMax {
+			backoff = ReconnectBackoffMax
 		}
 	}
 }
@@ -291,6 +314,7 @@ func (a *SSEAdapter) consumeOnce(ctx context.Context, sc *sseConnection, timeout
 		}
 		select {
 		case sc.recv <- &msg:
+			Metrics().IncMessageReceived(TransportSSE)
 			mu := stateMuFor(sc.conn)
 			mu.Lock()
 			sc.conn.LastActivity = time.Now().UTC()
@@ -373,6 +397,7 @@ func (c *adapterSSEClient) Send(ev sse.SSEEvent) error {
 	}
 	select {
 	case c.events <- &msg:
+		Metrics().IncMessageReceived(TransportSSE)
 		return nil
 	case <-c.done:
 		return ErrConnectionClosed

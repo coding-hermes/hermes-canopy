@@ -44,11 +44,38 @@ func NewTransportHandler(
 // Routes mounts the transport endpoints under /api/v1/transports.
 func (h *TransportHandler) Routes() chi.Router {
 	r := chi.NewRouter()
+	r.Get("/health", h.Health)
 	r.Get("/status", h.Status)
 	r.Get("/{type}", h.GetConfig)
 	r.Put("/{type}", h.UpdateConfig)
 	r.Delete("/{type}", h.DisableTransport)
 	return r
+}
+
+type transportHealthItem struct {
+	Type             string    `json:"type"`
+	State            string    `json:"state"`
+	LastTransition   time.Time `json:"last_transition,omitempty"`
+	MessagesSent     int64     `json:"messages_sent"`
+	MessagesReceived int64     `json:"messages_received"`
+	QueueDepth       int       `json:"queue_depth"`
+}
+
+func (h *TransportHandler) Health(w http.ResponseWriter, _ *http.Request) {
+	snapshot := transport.Metrics().Snapshot()
+	items := make([]transportHealthItem, 0, len(transport.AllTransportTypes()))
+	current := transport.TransportType("")
+	if h.connMgr != nil {
+		for _, tt := range transport.AllTransportTypes() {
+			depth := 0
+			if relay, ok := h.connMgr.Adapter(tt).(*transport.RelayService); ok {
+				depth = relay.QueueDepth()
+			}
+			items = append(items, transportHealthItem{Type: string(tt), State: h.connMgr.TransportState(tt).String(), LastTransition: snapshot.LastTransition[tt], MessagesSent: snapshot.MessagesSent[tt], MessagesReceived: snapshot.MessagesReceived[tt], QueueDepth: depth})
+		}
+		current = h.connMgr.CurrentTransport()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"transports": items, "current_transport": current})
 }
 
 // --- GET /api/v1/transports/status -----------------------------------------

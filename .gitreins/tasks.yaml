@@ -1732,3 +1732,18 @@ tasks:
   status: complete
   created_at: '2026-09-01T09:13:05.946874+00:00'
   completed_at: '2026-09-01T09:25:14.779990+00:00'
+- id: FTR-04-P7
+  title: "FTR-04 Phase 7 Transport Observability + Hardening + Docs (SPEC-FTR-04 \xA7\
+    7/\xA78/\xA79): TransportMetrics counters wired all adapters, relay per-peer rate\
+    \ limit, 15s/30s outbound caps, JWT-authed /transports/health, docs/API.md transports\
+    \ section"
+  criteria:
+  - 'TransportMetrics in internal/transport/metrics.go (atomics, copy-safe Snapshot)
+    wired SSE/NATS/WebRTC/ConnectionManager/relay; per-peer fixed-window relay limiter
+    600/min sanitized 429; named timeout constants 15s outbound + 30s backoff cap;
+    /api/v1/transports/health JWT-authed per-transport state+counters+queue depth+selector
+    pick; docs/API.md relay+health+env gates; tests: metrics incr/snapshot, limiter
+    601st 429, health shape, timeout constants'
+  status: complete
+  created_at: '2026-09-01T09:30:52.453856+00:00'
+  completed_at: '2026-09-01T10:07:02.248292+00:00'

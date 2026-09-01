@@ -60,3 +60,19 @@ func TestRelayHTTPRequiresJWT(t *testing.T) {
 		t.Fatalf("status = %d, want 401", rr.Code)
 	}
 }
+
+func TestRelayPOSTRateLimitReturns429On601stRequest(t *testing.T) {
+	s := transport.NewRelayService()
+	body, _ := json.Marshal(relayEnvelope("same-event", 1))
+	for i := 1; i <= transport.RelayRequestsPerMinute+1; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transport/relay", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		s.Post(rr, req)
+		if i <= transport.RelayRequestsPerMinute && rr.Code != http.StatusAccepted {
+			t.Fatalf("request %d status=%d", i, rr.Code)
+		}
+		if i == transport.RelayRequestsPerMinute+1 && rr.Code != http.StatusTooManyRequests {
+			t.Fatalf("601st request status=%d body=%s", rr.Code, rr.Body.String())
+		}
+	}
+}

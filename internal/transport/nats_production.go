@@ -61,7 +61,7 @@ func buildNATSOptions(cfg ProductionBusConfig, disconnected nats.ConnErrHandler,
 	}
 	reconnectWait := heartbeat
 	if reconnectWait > 32*time.Second {
-		reconnectWait = 32 * time.Second
+		reconnectWait = ReconnectBackoffMax
 	}
 	if reconnectWait < time.Second {
 		reconnectWait = time.Second

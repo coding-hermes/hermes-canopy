@@ -889,6 +889,39 @@ GET /health/transports/{type}
 
 **Response (200):** Transport health status.
 
+### Aggregate Transport Health
+
+```
+GET /api/v1/transports/health
+```
+
+JWT authentication is required. The response reports each transport's current
+state, last transition, sent/received message counters, relay queue depth, and
+the selector's current transport. Counters are process-local and reset when
+`canopyd` restarts.
+
+### Store-and-Forward Relay
+
+```
+POST /api/v1/transport/relay
+GET /api/v1/transport/relay/poll?peer_id={peer_id}
+```
+
+Both endpoints require JWT authentication. `POST` accepts a relay envelope and
+returns `202 Accepted`; `GET` drains the queued envelopes for the peer. Relay
+POST ingress is limited to 600 requests per minute per peer. Request 601 in a
+fixed one-minute window returns `429 Too Many Requests` with a sanitized JSON
+error; the next window starts with a fresh allowance.
+
+### Production Transport Gates
+
+- WebRTC/Pion wiring is opt-in with `CANOPY_WEBRTC_ENABLED=1`.
+- NATS wiring is enabled when `CANOPY_NATS_URL` is set. Optional credentials
+  are read from `CANOPY_NATS_CREDS`; credentials and bearer tokens are never
+  included in transport metrics or health responses.
+- Relay polling and WebRTC signaling outbound operations time out after 15
+  seconds. Transport reconnect delay is capped at 30 seconds.
+
 ---
 
 ## MLS (Messaging Layer Security)

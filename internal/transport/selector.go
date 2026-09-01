@@ -174,6 +174,10 @@ func (ts *TransportSelector) Available() []TransportType {
 	defer ts.mu.RUnlock()
 	return append([]TransportType(nil), ts.available...)
 }
+func (ts *TransportSelector) Current() TransportType {
+	tt, _ := ts.Select("")
+	return tt
+}
 func (ts *TransportSelector) SetTopology(t NetworkTopology) {
 	ts.mu.Lock()
 	ts.topology = t

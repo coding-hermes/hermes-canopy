@@ -108,7 +108,15 @@ func NewNATSTransportAdapter(clients ...NATSClient) *NATSTransportAdapter {
 
 func (a *NATSAdapter) TransportType() TransportType { return TransportNATS }
 
-func (a *NATSAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connection, error) {
+func (a *NATSAdapter) Connect(ctx context.Context, opts ConnectOptions) (result *Connection, resultErr error) {
+	Metrics().IncConnectAttempt(TransportNATS)
+	defer func() {
+		if resultErr != nil {
+			Metrics().IncConnectFailure(TransportNATS)
+		} else {
+			Metrics().IncConnectSuccess(TransportNATS)
+		}
+	}()
 	if opts.TransportType != "" && opts.TransportType != TransportNATS {
 		return nil, ErrTransportMismatch
 	}
@@ -211,6 +219,7 @@ func (a *NATSAdapter) Send(ctx context.Context, conn *Connection, msg *Message) 
 	mu.Lock()
 	conn.LastActivity = time.Now().UTC()
 	mu.Unlock()
+	Metrics().IncMessageSent(TransportNATS)
 	return nil
 }
 
@@ -271,6 +280,7 @@ func (a *NATSAdapter) Disconnect(_ context.Context, conn *Connection) error {
 	mu.Lock()
 	conn.State = StateClosed
 	mu.Unlock()
+	Metrics().RecordTransition(TransportNATS)
 	return nil
 }
 
@@ -296,6 +306,7 @@ func (nc *natsConnection) deliver(data []byte) {
 	}
 	select {
 	case nc.recv <- &msg:
+		Metrics().IncMessageReceived(TransportNATS)
 		mu := stateMuFor(nc.conn)
 		mu.Lock()
 		nc.conn.LastActivity = time.Now().UTC()
@@ -345,6 +356,7 @@ func connectNATSWithBackoff(ctx context.Context, timeout time.Duration, connect 
 	}
 	backoff := time.Second
 	for {
+		Metrics().IncReconnect(TransportNATS)
 		err := connect(attemptCtx)
 		if err == nil {
 			return nil
@@ -361,8 +373,8 @@ func connectNATSWithBackoff(ctx context.Context, timeout time.Duration, connect 
 		case <-timer.C:
 		}
 		backoff *= 2
-		if backoff > 32*time.Second {
-			backoff = 32 * time.Second
+		if backoff > ReconnectBackoffMax {
+			backoff = ReconnectBackoffMax
 		}
 	}
 }

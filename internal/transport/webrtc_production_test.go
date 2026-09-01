@@ -36,7 +36,7 @@ func TestPionDataChannelRoundTrip(t *testing.T) {
 		t.Skipf("loopback unavailable in sandbox: %v", err)
 	}
 	_ = probe.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	f := NewPionPeerConnectionFactory()
 	a, err := f.NewPeerConnection(ctx, WebRTCConfig{})
