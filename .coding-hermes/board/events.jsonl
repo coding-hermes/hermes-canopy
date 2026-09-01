@@ -344,3 +344,4 @@
 {"id":344,"ts":"2026-09-01 10:10:52","task_id":"STACK-01","type":"fold","status":"complete","note":"FOLDED into FTR-04-P2/P4: production NATS adapter + nats.go wiring shipped (6dfd131 factory, 33c0d87 production wiring w/ transport_configs, Drain lifecycle, env gates). Stub replaced by real implementation."}
 {"id":345,"ts":"2026-09-01 10:10:52","task_id":"STACK-02","type":"fold","status":"complete","note":"FOLDED into FTR-04-P5/P6: WebRTC adapter + pion/webrtc v4 production factory shipped (24e62c7 neutral adapter, db90283 pion wiring + two-real-peer loopback round trip + relay fallback). Stub replaced by real implementation."}
 {"id":346,"ts":"2026-09-01 10:57:18","task_id":"DF-HERMES-CANOPY-1","type":"fix","status":"complete","note":"stale-build guard + health reporting (ea45ef0, judge DF-HP0)"}
+{"id":"347","ts":"2026-09-01 12:15:49","type":"task_complete","task_id":"DF-HERMES-CANOPY-2/3/4","summary":"P1 batch fixed in c840e5c (judge 15edbd66)"}
