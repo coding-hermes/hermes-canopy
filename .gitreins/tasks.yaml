@@ -1638,3 +1638,17 @@ tasks:
   status: complete
   created_at: '2026-09-01T07:19:11.682202+00:00'
   completed_at: '2026-09-01T07:32:23.168592+00:00'
+- id: FTR-04-P1
+  title: "FTR-04 Phase 1 Core Interface + SSE (SPEC-FTR-04 \xA73/\xA79): TransportAdapter\
+    \ interface, ConnectOptions/ConnectionState/AuthMaterial types, sentinel errors,\
+    \ Message+Opcode payloads, SSEAdapter+SSEHub connection lifecycle + reconnection,\
+    \ ConnectionManager SSE-only routing with offline buffer"
+  criteria:
+  - "TransportAdapter interface in internal/transport with all \xA73.1 types and sentinel\
+    \ errors; SSEAdapter+SSEHub wire real SSE lifecycle (connect/subscribe/disconnect/reconnect\
+    \ with backoff); ConnectionManager routes via SSE and buffers offline messages;\
+    \ unit tests: single-transport lifecycle + SSE reconnection; live-PG-free (pure\
+    \ unit) but go build/vet/gofmt clean and existing transport tests unaffected"
+  status: complete
+  created_at: '2026-09-01T07:56:48.362241+00:00'
+  completed_at: '2026-09-01T08:11:00.200993+00:00'

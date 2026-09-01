@@ -27,19 +27,39 @@ type ConnectionManager struct {
 	selector      *TransportSelector
 	bandwidth     map[string]*BandwidthProfile
 	rateLimiters  map[string]*RateLimiter
+	adapters      map[TransportType]TransportAdapter
 	mu            sync.RWMutex
 }
 
 // NewConnectionManager creates a ConnectionManager with the given
 // TransportSelector.
-func NewConnectionManager(selector *TransportSelector) *ConnectionManager {
+func NewConnectionManager(selector *TransportSelector, adapters ...TransportAdapter) *ConnectionManager {
+	registered := make(map[TransportType]TransportAdapter)
+	for _, adapter := range adapters {
+		if typed, ok := adapter.(interface{ TransportType() TransportType }); ok {
+			registered[typed.TransportType()] = adapter
+		}
+	}
 	return &ConnectionManager{
 		connections:   make(map[string][]*Connection),
 		messageQueues: make(map[string]*MessageQueue),
 		selector:      selector,
 		bandwidth:     make(map[string]*BandwidthProfile),
 		rateLimiters:  make(map[string]*RateLimiter),
+		adapters:      registered,
 	}
+}
+
+// RegisterAdapter makes an adapter available for routing. Phase 1 accepts SSE only.
+func (cm *ConnectionManager) RegisterAdapter(adapter TransportAdapter) error {
+	typed, ok := adapter.(interface{ TransportType() TransportType })
+	if !ok || typed.TransportType() != TransportSSE {
+		return ErrTransportMismatch
+	}
+	cm.mu.Lock()
+	cm.adapters[TransportSSE] = adapter
+	cm.mu.Unlock()
+	return nil
 }
 
 // RouteMessage sends a message to a peer via the best available active
@@ -65,6 +85,19 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 		return err
 	}
 
+	cm.mu.RLock()
+	adapter := cm.adapters[conn.TransportType]
+	cm.mu.RUnlock()
+	if adapter == nil {
+		return ErrNotConnected
+	}
+	if err := adapter.Send(ctx, conn, msg); err != nil {
+		if err == ErrConnectionClosed || err == ErrNotConnected || err == ErrTransportUnreachable {
+			_ = cm.enqueueOffline(peerID, msg)
+		}
+		return err
+	}
+
 	cm.mu.Lock()
 	// The connection may have been degraded or disconnected while the rate
 	// limiter was being checked. Do not report success for a stale route.
@@ -78,9 +111,6 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 	conn.LastActivity = time.Now().UTC()
 	cm.mu.Unlock()
 
-	// TransportAdapter is intentionally not stored on ConnectionManager's
-	// contract. The selected active connection is the routing hand-off; the
-	// owning adapter performs the actual Send operation.
 	return nil
 }
 
@@ -93,7 +123,6 @@ func (cm *ConnectionManager) OnConnect(conn *Connection) error {
 
 	now := time.Now().UTC()
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
 
 	connections := cm.connections[conn.Peer]
 	filtered := make([]*Connection, 0, len(connections))
@@ -120,6 +149,22 @@ func (cm *ConnectionManager) OnConnect(conn *Connection) error {
 			float64(DefaultRateLimitOutbound),
 			DefaultRateLimitOutbound*2,
 		)
+	}
+	adapter := cm.adapters[conn.TransportType]
+	queue := cm.messageQueues[conn.Peer]
+	cm.mu.Unlock()
+
+	// Best-effort replay preserves FIFO order when an offline peer reconnects.
+	if adapter != nil && queue != nil {
+		pending := queue.Drain()
+		for i, msg := range pending {
+			if err := adapter.Send(context.Background(), conn, msg); err != nil {
+				for _, unsent := range pending[i:] {
+					_ = queue.Enqueue(unsent)
+				}
+				break
+			}
+		}
 	}
 	return nil
 }

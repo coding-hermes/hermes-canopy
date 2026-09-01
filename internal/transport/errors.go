@@ -31,4 +31,7 @@ var (
 	// ErrNoTransportAvailable is returned when all transports in the fallback
 	// chain are exhausted or unavailable, including an offline queue overflow.
 	ErrNoTransportAvailable = errors.New("transport: no transport available in fallback chain")
+	ErrNotConnected         = errors.New("transport: not connected")
+	ErrConnectionFailed     = errors.New("transport: connection failed")
+	ErrUnsupportedOpcode    = errors.New("transport: unsupported opcode")
 )
