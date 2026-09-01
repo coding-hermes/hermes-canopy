@@ -33,18 +33,20 @@ const (
 
 // Detection errors — mapped to HTTP error codes in the handler layer.
 var (
-	ErrProposalNotFound      = errors.New("topic proposal not found")
-	ErrProposalExpired       = errors.New("topic proposal has expired")
+	ErrTopicTreeNotFound       = errors.New("topic tree not found")
+	ErrTopicRootNodeNotFound   = errors.New("topic root node not found")
+	ErrProposalNotFound        = errors.New("topic proposal not found")
+	ErrProposalExpired         = errors.New("topic proposal has expired")
 	ErrProposalAlreadyResolved = errors.New("topic proposal is already resolved")
-	ErrDetectionDisabled     = errors.New("topic detection is disabled for this tree")
-	ErrProposalRateLimited   = errors.New("topic proposal rate limit reached")
-	ErrProposalDuplicate     = errors.New("an existing topic already covers this node")
-	ErrSubjectCooldown       = errors.New("topic detection is cooling down for this subject")
-	ErrProposalRootInvalid   = errors.New("topic proposal root node is invalid")
-	ErrProposalTitleRequired = errors.New("topic proposal title is required")
-	ErrProposalTitleTooLong  = errors.New("topic proposal title must be 1-200 characters")
-	ErrInvalidDetectionLevel = errors.New("detection level must be off, explicit_only, or full")
-	ErrInvalidDetectionConfig = errors.New("invalid topic detection configuration")
+	ErrDetectionDisabled       = errors.New("topic detection is disabled for this tree")
+	ErrProposalRateLimited     = errors.New("topic proposal rate limit reached")
+	ErrProposalDuplicate       = errors.New("an existing topic already covers this node")
+	ErrSubjectCooldown         = errors.New("topic detection is cooling down for this subject")
+	ErrProposalRootInvalid     = errors.New("topic proposal root node is invalid")
+	ErrProposalTitleRequired   = errors.New("topic proposal title is required")
+	ErrProposalTitleTooLong    = errors.New("topic proposal title must be 1-200 characters")
+	ErrInvalidDetectionLevel   = errors.New("detection level must be off, explicit_only, or full")
+	ErrInvalidDetectionConfig  = errors.New("invalid topic detection configuration")
 )
 
 // TopicServiceImpl is the real implementation of TopicService.
@@ -112,10 +114,16 @@ func (s *TopicServiceImpl) detectionEnabled() bool {
 // CreateTopic validates inputs and creates a new topic.
 func (s *TopicServiceImpl) CreateTopic(ctx context.Context, treeID, rootNodeID uuid.UUID, title, description string) (*TopicSummary, error) {
 	if _, err := s.treeRepo.GetByID(ctx, treeID); err != nil {
-		return nil, fmt.Errorf("service: tree not found: %w", err)
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, fmt.Errorf("%w: %v", ErrTopicTreeNotFound, err)
+		}
+		return nil, fmt.Errorf("service: get topic tree: %w", err)
 	}
 	node, err := s.nodeRepo.GetByID(ctx, rootNodeID)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, fmt.Errorf("%w: %v", ErrTopicRootNodeNotFound, err)
+		}
 		return nil, fmt.Errorf("service: root node not found: %w", err)
 	}
 	if node.TreeID != treeID {

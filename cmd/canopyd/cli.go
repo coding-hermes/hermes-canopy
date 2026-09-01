@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const defaultServerURL = "http://localhost:8080"
+const defaultServerURL = "http://localhost:8091"
 
 // --- API response types -------------------------------------------------------
 
@@ -176,7 +176,7 @@ func printTreeUsage() {
 // --- HTTP helpers --------------------------------------------------------------
 
 // serverURL reads CANOPY_SERVER_URL from the environment, defaulting to
-// http://localhost:8080.
+// http://localhost:8091.
 func serverURL() string {
 	if u := os.Getenv("CANOPY_SERVER_URL"); u != "" {
 		return strings.TrimRight(u, "/")
@@ -189,7 +189,7 @@ func serverURL() string {
 func authHeader() string {
 	tok := os.Getenv("CANOPY_TOKEN")
 	if tok == "" {
-		fmt.Fprintln(os.Stderr, "Warning: CANOPY_TOKEN not set — sending requests without auth (dev mode)")
+		fmt.Fprintln(os.Stderr, "Warning: CANOPY_TOKEN is not set; get a dev token from `canopyd serve` startup output and export CANOPY_TOKEN (continuing without auth)")
 		return ""
 	}
 	return "Bearer " + tok

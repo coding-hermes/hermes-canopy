@@ -23,12 +23,12 @@ import (
 // TreeHandler wires the tree CRUD HTTP routes to the TreeService interface
 // and broadcasts mutations through the SyncEngine.
 type TreeHandler struct {
-	svc         service.TreeService
-	sync        sync.SyncEngine
-	users       db.UserRepo
-	members     db.TreeMemberRepo
-	hub         sse.SSEHub
-	presence    *presenceRegistry
+	svc      service.TreeService
+	sync     sync.SyncEngine
+	users    db.UserRepo
+	members  db.TreeMemberRepo
+	hub      sse.SSEHub
+	presence *presenceRegistry
 }
 
 // NewTreeHandler returns a handler wired to the given TreeService and SyncEngine.
@@ -107,6 +107,12 @@ func (h *TreeHandler) CreateTree(w http.ResponseWriter, r *http.Request) {
 		params.RootContent = req.RootMessage.Content
 		params.ContentFormat = service.ContentFormat(req.RootMessage.ContentFormat)
 		params.NodeType = service.NodeType(req.RootMessage.NodeType)
+		if params.ContentFormat == "" {
+			params.ContentFormat = service.FormatMarkdown
+		}
+		if params.NodeType == "" {
+			params.NodeType = service.NodeTypeMessage
+		}
 	}
 
 	out, err := h.svc.CreateTree(r.Context(), params)

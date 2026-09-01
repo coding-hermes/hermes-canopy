@@ -76,6 +76,26 @@ func TestWantsServeHelp(t *testing.T) {
 	}
 }
 
+func TestCLIDefaultServerURL(t *testing.T) {
+	t.Setenv("CANOPY_SERVER_URL", "")
+	if got := serverURL(); got != "http://localhost:8091" {
+		t.Fatalf("serverURL() = %q, want http://localhost:8091", got)
+	}
+}
+
+func TestMissingTokenHint(t *testing.T) {
+	t.Setenv("CANOPY_TOKEN", "")
+	_, out := captureStderr(t, func() int {
+		if got := authHeader(); got != "" {
+			t.Fatalf("authHeader() = %q, want empty", got)
+		}
+		return 0
+	})
+	if !strings.Contains(out, "CANOPY_TOKEN") || !strings.Contains(out, "canopyd serve") {
+		t.Fatalf("missing-token hint lacks env var or dev-token source: %q", out)
+	}
+}
+
 // captureStderr runs f with os.Stderr redirected to a pipe and returns the
 // exit code f produced and everything f wrote to stderr.
 func captureStderr(t *testing.T, f func() int) (int, string) {

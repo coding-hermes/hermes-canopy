@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -94,6 +95,10 @@ func (h *TopicHandler) CreateTopic(w http.ResponseWriter, r *http.Request) {
 
 	topic, err := h.svc.CreateTopic(r.Context(), req.TreeID, req.RootNodeID, req.Title, req.Description)
 	if err != nil {
+		if errors.Is(err, service.ErrTopicTreeNotFound) {
+			writeError(w, http.StatusNotFound, "TREE_NOT_FOUND", "tree not found")
+			return
+		}
 		log.Ctx(r.Context()).Error().Err(err).Msg("topic create failed")
 		writeError(w, http.StatusInternalServerError, "TOPIC_CREATE_ERROR", "internal server error")
 		return

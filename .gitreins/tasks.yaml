@@ -1747,3 +1747,32 @@ tasks:
   status: complete
   created_at: '2026-09-01T09:30:52.453856+00:00'
   completed_at: '2026-09-01T10:07:02.248292+00:00'
+- id: DF-HP0
+  title: 'DF-HERMES-CANOPY-1 fresh-DB quick start opaque 503 (dogfood P0): stale-build
+    guard + health schema reporting'
+  criteria:
+  - '1) db.EmbeddedMaxVersion parses highest embedded migration; 2) db.SchemaVersion
+    reads live schema_migrations; 3) main() guard BEFORE Migrate fatals when DB schema
+    newer than binary, message names both versions + fix; 4) /health reports schema_version+embedded_migrations
+    via HealthDB probe; 5) README troubleshooting section; 6) verified live: fresh
+    DB boot reaches v38 health 200 showing 38/38; 7) simulated v999 DB refuses start
+    non-zero with STALE BUILD naming versions; 8) server+transport+handler suites
+    green, federation/transport race clean'
+  status: complete
+  created_at: '2026-09-01T10:40:06.896476+00:00'
+  completed_at: '2026-09-01T10:57:20.392598+00:00'
+- id: DF-P1BATCH
+  title: 'DF-HERMES-CANOPY-2/3/4 P1 batch: API contract drift (documented-optional
+    fields wrongly rejected), topic create zero UUID + 500 on soft-deleted trees,
+    CLI wrong default port + silent unauthenticated operation'
+  criteria:
+  - 1) contract test asserting documented request shapes accepted per docs/API.md;
+    documented-optional fields no longer 400; 2) topic create returns real generated
+    UUID in response; soft-deleted tree topic create returns 404/409 JSON envelope
+    not 500; 3) CLI default port 8091 matching README; missing credentials prints
+    stderr hint (env var + dev-token source) while continuing; 4) gofmt/build/vet
+    clean; 5) new tests compile in-sandbox, pass on live PG via foreman; 6) unrelated
+    suites stay green
+  status: complete
+  created_at: '2026-09-01T11:47:40.484139+00:00'
+  completed_at: '2026-09-01T12:03:08.562727+00:00'

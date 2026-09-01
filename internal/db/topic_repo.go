@@ -79,6 +79,7 @@ func NewPGTopicRepo(pool *pgxpool.Pool) *PGTopicRepo {
 
 // Create inserts a new topic. Generates slug from title.
 func (r *PGTopicRepo) Create(ctx context.Context, input TopicCreateInput) (*Topic, error) {
+	topicID := uuid.New()
 	slug := generateSlug(input.Title)
 	// Default topic_tags to empty slice so PostgreSQL NOT NULL constraint
 	// is satisfied even when the caller omits the field.
@@ -87,11 +88,11 @@ func (r *PGTopicRepo) Create(ctx context.Context, input TopicCreateInput) (*Topi
 		tags = []string{}
 	}
 	row := r.pool.QueryRow(ctx, `
-        INSERT INTO topics (tree_id, root_node_id, title, description, slug,
+		INSERT INTO topics (id, tree_id, root_node_id, title, description, slug,
                             parent_topic_id, topic_tags)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING `+topicColumns,
-		input.TreeID, input.RootNodeID, input.Title, input.Description,
+		topicID, input.TreeID, input.RootNodeID, input.Title, input.Description,
 		slug, input.ParentTopicID, tags,
 	)
 	var t Topic
