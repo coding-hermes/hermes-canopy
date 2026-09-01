@@ -32,6 +32,7 @@ make build
 if docker ps --format '{{.Ports}}' | grep -q ':5437->'; then
   echo "PostgreSQL already running on :5437 (compose stack) — skipping standalone Postgres (docs/INTEGRATION.md §2)."
 else
+  # Skip this step after `docker compose up -d` (it already runs `canopy-pg`), or use a distinct container name.
   docker run -d --name canopy-pg-standalone \
     -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
     -e POSTGRES_DB=canopy -p 5437:5432 postgres:16

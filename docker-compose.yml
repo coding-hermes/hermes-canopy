@@ -30,12 +30,22 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: canopy-server
     ports:
-      - "8091:8080"
+      # :8092 on the host — :8091 is reserved for the host systemd
+      # canopy-canopyd.service (primary instance). Compose stack is the
+      # containerized alternative (GAP-063).
+      - "8092:8080"
     environment:
       HTTP_ADDR: ":8080"
       CANOPY_DB_URL: postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable
       CANOPY_DEV: "false"
       METRICS_ENABLED: "true"
+      # Hermes gateway (GAP-050): the api_server listens on the HOST loopback,
+      # so the container must reach it via host-gateway — never 127.0.0.1.
+      HERMES_WEBUI_GATEWAY_BASE_URL: "http://host.docker.internal:8642"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
