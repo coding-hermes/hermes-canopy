@@ -74,6 +74,7 @@ var (
 	ErrDecryptionFailed   = errors.New("federation: payload decryption failed")
 	ErrNoSharedSecret     = errors.New("federation: ECDH session not established; call EstablishSession first")
 	ErrPeerOffline        = errors.New("federation: peer is offline, event queued for later delivery")
+	ErrRateLimited        = errors.New("federation: rate limit exceeded for this peer")
 )
 
 type Repository interface {

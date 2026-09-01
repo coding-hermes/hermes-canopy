@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 var ErrConflictNotFound = errors.New("federation: conflict not found")
@@ -97,10 +98,12 @@ func (s *conflictStore) apply(ctx context.Context, treeID uuid.UUID, incoming *m
 	merged := currentClock.Merge(incoming.Clock)
 	winnerPayload, winnerLamport, winnerPeer := incoming.Payload, incoming.Lamport, incoming.PeerID
 	if relation == Concurrent {
+		Metrics().IncConflict()
 		if _, err = tx.Exec(ctx, `INSERT INTO federation_conflicts(tree_id,node_id,left_payload,right_payload) VALUES($1,$2,$3,$4)`,
 			treeID, incoming.NodeID, currentPayload, incoming.Payload); err != nil {
 			return err
 		}
+		log.Warn().Str("tree_id", treeID.String()).Str("node_id", incoming.NodeID.String()).Int("conflict_count", 1).Msg("federation conflict detected")
 		if currentLamport > incoming.Lamport || (currentLamport == incoming.Lamport && currentPeer.String() > incoming.PeerID.String()) {
 			winnerPayload, winnerLamport, winnerPeer = currentPayload, currentLamport, currentPeer
 		}
@@ -175,6 +178,7 @@ func (s *conflictStore) list(ctx context.Context, treeID *uuid.UUID, unresolved 
 }
 
 func (s *conflictStore) resolve(ctx context.Context, id uuid.UUID, resolution string) (*Conflict, error) {
+	Metrics().IncConflictResolved()
 	if resolution != "left" && resolution != "right" {
 		return nil, ErrInvalidInput
 	}

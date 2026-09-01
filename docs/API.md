@@ -49,6 +49,15 @@ Authorization: Bearer <token>
 
 ---
 
+## Federation Health
+
+`GET /api/v1/federation/health` is JWT-authenticated and reports aggregate
+`peers_connected` and `queue_depth` values plus each active peer's ID, state,
+pending queue depth, and last heartbeat. It does not expose tokens, key
+material, or remote server URLs.
+
+---
+
 ## Trees
 
 Mounted at `/api/v1/trees`. All require auth.

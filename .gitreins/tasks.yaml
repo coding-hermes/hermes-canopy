@@ -1626,3 +1626,15 @@ tasks:
   status: complete
   created_at: '2026-09-01T07:06:04.480248+00:00'
   completed_at: '2026-09-01T07:14:26.606861+00:00'
+- id: FTR-02-P7
+  title: "FTR-02 Phase P7 Operational Hardening (SPEC-FTR-02 \xA710): observability\
+    \ logging+metrics, per-peer rate limiting, outbound timeouts/bounds, graceful\
+    \ degradation, no-secrets-in-logs review, queue-overflow test, federation health\
+    \ endpoint"
+  criteria:
+  - metrics.go/ratelimit.go in internal/federation; health endpoint authenticated;
+    overflow test; all live-PG tests CANOPY_REQUIRE_DB=1 fail-loud; gofmt/build/vet
+    clean
+  status: complete
+  created_at: '2026-09-01T07:19:11.682202+00:00'
+  completed_at: '2026-09-01T07:32:23.168592+00:00'

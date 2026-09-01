@@ -18,7 +18,7 @@ import (
 )
 
 func TestFederationHandlerHandshake(t *testing.T) {
-	testutil.SkipIfNoDB(t)
+	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID := uuid.New(), uuid.New()

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 	DefaultReplayLimit    = 100
 	MaxReplayLimit        = 500
 	DefaultFailureLimit   = 5
+	MaxPeerQueueDepth     = 10000
 )
 
 type RelayStatus string
@@ -68,6 +70,10 @@ type RelayRepository interface {
 	RecordReceipt(context.Context, uuid.UUID, uuid.UUID, int64) (bool, error)
 }
 
+type queueDepthRepository interface {
+	QueueDepth(context.Context, uuid.UUID) (int, error)
+}
+
 type PGRelayRepository struct{ pool *pgxpool.Pool }
 
 func NewPGRelayRepository(pool *pgxpool.Pool) *PGRelayRepository {
@@ -100,8 +106,15 @@ func (r *PGRelayRepository) Enqueue(ctx context.Context, event *RelayEvent) (*Re
 	}
 	_, err = r.pool.Exec(ctx, `DELETE FROM federation_events WHERE event_id IN (
 		SELECT event_id FROM federation_events WHERE target_peer_id=$1
-		ORDER BY (status <> 'delivered') DESC, sequence_no DESC OFFSET 10000)`, event.TargetPeerID)
+		ORDER BY (status <> 'delivered') DESC, sequence_no DESC OFFSET $2)`, event.TargetPeerID, MaxPeerQueueDepth)
 	return result, err
+}
+
+func (r *PGRelayRepository) QueueDepth(ctx context.Context, peerID uuid.UUID) (int, error) {
+	var depth int
+	err := r.pool.QueryRow(ctx, `SELECT count(*) FROM federation_events
+		WHERE target_peer_id=$1 AND status IN ('pending','failed')`, peerID).Scan(&depth)
+	return depth, err
 }
 
 func (r *PGRelayRepository) list(ctx context.Context, query string, args ...any) ([]RelayEvent, error) {
@@ -211,6 +224,7 @@ func (s *RelayService) Dispatch(ctx context.Context, peerID uuid.UUID, envelope 
 }
 
 func (s *RelayService) Replay(ctx context.Context, peerID uuid.UUID, cursor int64, limit int) ([]RelayEvent, error) {
+	Metrics().IncReplay()
 	if limit <= 0 {
 		limit = DefaultReplayLimit
 	}
@@ -222,6 +236,14 @@ func (s *RelayService) Replay(ctx context.Context, peerID uuid.UUID, cursor int6
 
 func (s *RelayService) RecordReceipt(ctx context.Context, eventID, peerID uuid.UUID, sequence int64) (bool, error) {
 	return s.queue.RecordReceipt(ctx, eventID, peerID, sequence)
+}
+
+func (s *RelayService) QueueDepth(ctx context.Context, peerID uuid.UUID) (int, error) {
+	repo, ok := s.queue.(queueDepthRepository)
+	if !ok {
+		return 0, nil
+	}
+	return repo.QueueDepth(ctx, peerID)
 }
 
 func (s *RelayService) Frames(event RelayEvent) []RelayFrame {
@@ -253,11 +275,15 @@ func (s *RelayService) DeliverPending(ctx context.Context, peerID uuid.UUID) err
 	if err != nil {
 		return err
 	}
+	if len(events) > 0 {
+		log.Info().Str("peer_id", peerID.String()).Int("replay_volume", len(events)).Msg("federation replay batch")
+	}
 	for _, event := range events {
 		if err = s.deliver(ctx, peer, event); err != nil {
 			_ = s.queue.MarkAttempt(ctx, event.EventID, err, false)
 			if event.DeliveryAttempts+1 >= s.failureLimit {
 				_ = s.peers.SetState(ctx, peerID, PeerDisconnected, nil, nil)
+				log.Warn().Str("peer_id", peerID.String()).Int("failure_count", event.DeliveryAttempts+1).Msg("federation peer unreachable")
 			}
 			return err // causal order: never pass a failed sequence
 		}
@@ -286,14 +312,17 @@ func (s *RelayService) deliver(ctx context.Context, peer *FederationPeer, event 
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := s.client.Do(req)
 		if err != nil {
+			Metrics().RecordError()
 			return err
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+			Metrics().RecordError()
 			return fmt.Errorf("federation relay: peer ACK status %d", resp.StatusCode)
 		}
 	}
+	Metrics().IncRelayed()
 	return nil
 }
 

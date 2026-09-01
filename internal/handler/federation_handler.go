@@ -21,14 +21,16 @@ import (
 )
 
 type FederationHandler struct {
-	svc       federation.FederationService
-	router    federation.ProfileRouter
-	serverURL string
-	hub       sse.SSEHub
-	mu        sync.RWMutex
-	relays    map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}
-	relay     *federation.RelayService
-	chunks    map[uuid.UUID]*relayAssembly
+	svc              federation.FederationService
+	router           federation.ProfileRouter
+	serverURL        string
+	hub              sse.SSEHub
+	mu               sync.RWMutex
+	relays           map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}
+	relay            *federation.RelayService
+	chunks           map[uuid.UUID]*relayAssembly
+	eventsLimiter    *federation.PeerRateLimiter
+	handshakeLimiter *federation.PeerRateLimiter
 }
 
 type relayAssembly struct {
@@ -44,7 +46,8 @@ func NewFederationHandler(svc federation.FederationService, serverURL string, hu
 		hub = hubs[0]
 	}
 	h := &FederationHandler{svc: svc, serverURL: serverURL, hub: hub,
-		relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}), chunks: make(map[uuid.UUID]*relayAssembly)}
+		relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}), chunks: make(map[uuid.UUID]*relayAssembly),
+		eventsLimiter: federation.NewPeerRateLimiter(500, time.Minute), handshakeLimiter: federation.NewPeerRateLimiter(10, time.Hour)}
 	if provider, ok := svc.(interface {
 		Relay() *federation.RelayService
 	}); ok {
@@ -87,6 +90,45 @@ func (h *FederationHandler) ConflictRoutes() chi.Router {
 	r.Get("/", h.ListConflicts)
 	r.Post("/{conflict_id}/resolve", h.ResolveConflict)
 	return r
+}
+
+func (h *FederationHandler) Health(w http.ResponseWriter, r *http.Request) {
+	peers, err := h.svc.ListAllPeers(r.Context())
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	type peerHealth struct {
+		PeerID        uuid.UUID  `json:"peer_id"`
+		State         string     `json:"state"`
+		QueueDepth    int        `json:"queue_depth"`
+		LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	}
+	result := make([]peerHealth, 0, len(peers))
+	connected, queued := 0, 0
+	for _, peer := range peers {
+		depth := 0
+		if h.relay != nil {
+			depth, err = h.relay.QueueDepth(r.Context(), peer.ID)
+			if err != nil {
+				h.writeError(w, err)
+				return
+			}
+		}
+		if peer.State == federation.PeerConnected {
+			connected++
+		}
+		queued += depth
+		result = append(result, peerHealth{peer.ID, peer.State.String(), depth, peer.LastHeartbeat})
+	}
+	snap := federation.Metrics().Snapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":          "ok",
+		"peers_connected": connected,
+		"queue_depth":     queued,
+		"metrics":         snap,
+		"peers":           result,
+	})
 }
 
 type conflictService interface {
@@ -141,6 +183,7 @@ func (h *FederationHandler) ResolveConflict(w http.ResponseWriter, r *http.Reque
 	}
 	conflict, err := svc.ResolveConflict(r.Context(), id, req.Resolution)
 	if err != nil {
+		log.Error().Str("conflict_id", id.String()).Err(err).Msg("federation conflict resolve failed")
 		h.writeError(w, err)
 		return
 	}
@@ -315,6 +358,7 @@ func (h *FederationHandler) CreateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	peer, _, err := h.svc.CreateFederationLink(r.Context(), req.RemoteServerURL, req.LocalProfileID, req.TreeID)
 	if err != nil {
+		log.Warn().Str("tree_id", req.TreeID.String()).Err(err).Msg("federation link creation failed")
 		h.writeError(w, err)
 		return
 	}
@@ -387,6 +431,12 @@ func (h *FederationHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
 		return
 	}
+	if !h.handshakeLimiter.Allow(req.ServerURL) {
+		log.Warn().Msg("federation handshake rate limited")
+		federation.Metrics().IncRateLimited()
+		h.writeError(w, federation.ErrRateLimited)
+		return
+	}
 	key, err := base64.StdEncoding.DecodeString(req.ECDHEPublicKey)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_ECDHE_PUBLIC_KEY", "ecdhe_public_key must be base64")
@@ -399,15 +449,19 @@ func (h *FederationHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 	}
 	peer, err := h.svc.AcceptFederationLink(r.Context(), req.Token, req.ServerURL, key, signingKey)
 	if err != nil {
+		log.Warn().Err(err).Msg("federation handshake failed")
+		federation.Metrics().RecordError()
 		h.writeError(w, err)
 		return
 	}
+	federation.Metrics().IncHandshake()
 	localKey, err := h.svc.LocalECDHEPublicKey(peer.ID)
 	if err != nil {
 		h.writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, federationHandshakeResponse{PeerID: peer.ID, ServerURL: h.serverURL, ECDHEPublicKey: base64.StdEncoding.EncodeToString(localKey), SigningPublicKey: base64.StdEncoding.EncodeToString(h.svc.SigningPublicKey())})
+	log.Info().Str("peer_id", peer.ID.String()).Str("signing_key_fp", peer.SigningKeyFP).Msg("federation peer connected")
 	if h.relay != nil {
 		go func() { _ = h.relay.DeliverPending(context.Background(), peer.ID) }()
 	}
@@ -492,6 +546,7 @@ func (h *FederationHandler) Replay(w http.ResponseWriter, r *http.Request) {
 	}
 	events, err := h.relay.Replay(r.Context(), peerID, cursor, limit)
 	if err != nil {
+		log.Error().Str("peer_id", peerID.String()).Err(err).Msg("federation replay failed")
 		h.writeError(w, err)
 		return
 	}
@@ -508,6 +563,12 @@ func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 	if json.Unmarshal(body, &frame) == nil && frame.EventID != uuid.Nil {
 		if _, err := h.svc.AuthenticatePeerToken(r.Context(), bearerToken(r), frame.PeerID); err != nil {
 			h.writeError(w, err)
+			return
+		}
+		if !h.eventsLimiter.Allow(frame.PeerID.String()) {
+			log.Warn().Str("peer_id", frame.PeerID.String()).Msg("federation event rate limited")
+			federation.Metrics().IncRateLimited()
+			h.writeError(w, federation.ErrRateLimited)
 			return
 		}
 		payload, complete, frameErr := h.acceptFrame(frame)
@@ -530,6 +591,13 @@ func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, err)
 		return
 	}
+	if frame.EventID == uuid.Nil && !h.eventsLimiter.Allow(envelope.PeerID.String()) {
+		log.Warn().Str("peer_id", envelope.PeerID.String()).Msg("federation event rate limited")
+		federation.Metrics().IncRateLimited()
+		h.writeError(w, federation.ErrRateLimited)
+		return
+	}
+	federation.Metrics().IncEventAccepted()
 	inner, err := h.svc.ReceiveEvent(r.Context(), &envelope)
 	if err != nil {
 		h.writeError(w, err)
@@ -625,6 +693,8 @@ func (h *FederationHandler) writeError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "PROFILE_ROUTE_NOT_FOUND", "profile route not found")
 	case errors.Is(err, federation.ErrConflictNotFound):
 		writeError(w, http.StatusNotFound, "FEDERATION_CONFLICT_NOT_FOUND", "federation conflict not found")
+	case errors.Is(err, federation.ErrRateLimited):
+		writeError(w, http.StatusTooManyRequests, "FEDERATION_RATE_LIMITED", "federation rate limit exceeded")
 	default:
 		log.Error().Err(err).Msg("federation handler")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "federation operation failed")

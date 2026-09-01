@@ -187,6 +187,7 @@ func New(
 			r.Mount("/federation/link", fedHandler.LinkRoutes())
 			r.Mount("/federation/routes", fedHandler.RouteRoutes())
 			r.Mount("/federation/conflicts", fedHandler.ConflictRoutes())
+			r.Get("/federation/health", fedHandler.Health)
 		}
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
