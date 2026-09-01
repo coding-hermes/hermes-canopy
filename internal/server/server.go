@@ -23,7 +23,6 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
-	"github.com/coding-hermes/hermes-canopy/internal/plugin"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
@@ -73,7 +72,7 @@ func New(
 	collabSvc collaboration.CollaborationService,
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
-	pluginSvc plugin.Service,
+	pluginSvc service.PluginRegistryService,
 	topicSearchSvc search.TopicSearchService,
 	referenceSvc reference.ReferenceService,
 	federationSvc federation.FederationService,

@@ -28,7 +28,6 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/mls"
-	"github.com/coding-hermes/hermes-canopy/internal/plugin"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
 	"github.com/coding-hermes/hermes-canopy/internal/server"
@@ -292,9 +291,9 @@ func main() {
 		cfg.ContextMaxRefs,
 	)
 
-	// Plugin sandbox — GAP-002 (register/list/source/install + permission gate).
-	pluginRepo := plugin.NewPGPluginRepo(database.Pool)
-	pluginSvc := plugin.NewService(pluginRepo, cfg.PluginMaxSize)
+	// Plugin registry — PL-01 Phase 1. Sandbox execution is wired later.
+	pluginRepo := db.NewPGPluginRegistryRepo(database.Pool)
+	pluginSvc := service.NewPluginRegistryService(pluginRepo)
 
 	// Federation identity is a singleton Ed25519 keypair persisted in PostgreSQL.
 	federationURL := cfg.HTTPAddr

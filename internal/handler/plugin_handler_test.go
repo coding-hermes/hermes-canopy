@@ -5,541 +5,159 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-
-	"github.com/coding-hermes/hermes-canopy/internal/plugin"
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
-// --- Stub plugin service --------------------------------------------------
-
-type stubPluginService struct {
-	registerErr error
-	registerOut *plugin.Plugin
-	getErr      error
-	getOut      *plugin.Plugin
-	installErr  error
-	installOut  *plugin.PluginInstance
-	sourceOut   string
-	sourceSHA   string
-	sourceErr   error
-	updateErr   error
-	updateOut   *plugin.Plugin
-	rollbackErr error
-	rollbackOut *plugin.Plugin
-	listVersErr error
-	listVersOut []plugin.PluginVersion
+type registryStub struct {
+	rows   []db.Plugin
+	audits int
 }
 
-func newStubPluginService() *stubPluginService {
-	return &stubPluginService{
-		registerOut: &plugin.Plugin{ID: uuid.New(), Name: "csv-viewer", Version: "1.0.0"},
-		installOut:  &plugin.PluginInstance{ID: uuid.New(), Status: "active"},
-		getOut:      &plugin.Plugin{ID: uuid.New(), Name: "csv-viewer", Version: "1.0.0"},
-		updateOut:   &plugin.Plugin{ID: uuid.New(), Name: "csv-viewer", Version: "1.1.0"},
-		rollbackOut: &plugin.Plugin{ID: uuid.New(), Name: "csv-viewer", Version: "1.0.0"},
+func (s *registryStub) Register(_ context.Context, p *db.Plugin) (*db.Plugin, error) {
+	for _, x := range s.rows {
+		if x.Name == p.Name && x.Version == p.Version {
+			return nil, db.ErrPluginDuplicate
+		}
 	}
-}
-
-func (s *stubPluginService) Register(_ context.Context, _ plugin.PluginManifest, _ string, _ uuid.UUID) (*plugin.Plugin, error) {
-	if s.registerErr != nil {
-		return nil, s.registerErr
+	p.ID = uuid.New()
+	p.Status = "active"
+	p.IsRootVersion = len(s.rows) == 0
+	for i := range s.rows {
+		if s.rows[i].Name == p.Name && s.rows[i].Status == "active" {
+			s.rows[i].Status = "archived"
+			p.PreviousVersionID = &s.rows[i].ID
+		}
 	}
-	return s.registerOut, nil
+	s.rows = append(s.rows, *p)
+	return p, nil
 }
-func (s *stubPluginService) Get(_ context.Context, _ uuid.UUID) (*plugin.Plugin, error) {
-	return s.getOut, s.getErr
+func (s *registryStub) GetByID(_ context.Context, id uuid.UUID) (*db.Plugin, error) {
+	for i := range s.rows {
+		if s.rows[i].ID == id {
+			return &s.rows[i], nil
+		}
+	}
+	return nil, db.ErrPluginNotFound
 }
-func (s *stubPluginService) List(_ context.Context, _, _ int) ([]plugin.Plugin, int, error) {
-	return nil, 0, nil
+func (s *registryStub) ListActive(context.Context) ([]db.Plugin, error) {
+	var o []db.Plugin
+	for _, p := range s.rows {
+		if p.Status == "active" {
+			o = append(o, p)
+		}
+	}
+	return o, nil
 }
-func (s *stubPluginService) Install(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _ uuid.UUID, _ []plugin.Permission) (*plugin.PluginInstance, error) {
-	return s.installOut, s.installErr
+func (s *registryStub) Versions(_ context.Context, n string) ([]db.Plugin, error) {
+	var o []db.Plugin
+	for _, p := range s.rows {
+		if p.Name == n {
+			o = append(o, p)
+		}
+	}
+	return o, nil
 }
-func (s *stubPluginService) CheckPermission(_ context.Context, _ uuid.UUID, _ string) error {
+func (s *registryStub) Activate(_ context.Context, n string, id uuid.UUID) (*db.Plugin, error) {
+	for i := range s.rows {
+		if s.rows[i].Name == n && s.rows[i].Status == "active" {
+			s.rows[i].Status = "archived"
+		}
+		if s.rows[i].ID == id {
+			s.rows[i].Status = "active"
+		}
+	}
+	return s.GetByID(context.Background(), id)
+}
+func (s *registryStub) Disable(_ context.Context, n string) (*db.Plugin, error) {
+	return s.status(n, "disabled")
+}
+func (s *registryStub) Archive(_ context.Context, n string) (*db.Plugin, error) {
+	return s.status(n, "archived")
+}
+func (s *registryStub) Rollback(context.Context, string) (*db.Plugin, error) {
+	return nil, errors.New("unused")
+}
+func (s *registryStub) Audit(context.Context, uuid.UUID, string, uuid.UUID, map[string]any) error {
+	s.audits++
 	return nil
 }
-func (s *stubPluginService) GetSource(_ context.Context, _ uuid.UUID) (string, string, error) {
-	return s.sourceOut, s.sourceSHA, s.sourceErr
-}
-func (s *stubPluginService) ListInstances(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]plugin.PluginInstance, error) {
-	return nil, nil
-}
-func (s *stubPluginService) PauseInstance(_ context.Context, _ uuid.UUID) error { return nil }
-func (s *stubPluginService) ResumeInstance(_ context.Context, _ uuid.UUID) error {
-	return nil
-}
-func (s *stubPluginService) Update(_ context.Context, _ string, _ string, _ uuid.UUID) (*plugin.Plugin, error) {
-	return s.updateOut, s.updateErr
-}
-func (s *stubPluginService) Rollback(_ context.Context, _ string, _ string, _ uuid.UUID) (*plugin.Plugin, error) {
-	return s.rollbackOut, s.rollbackErr
-}
-func (s *stubPluginService) ListVersions(_ context.Context, _ string) ([]plugin.PluginVersion, error) {
-	return s.listVersOut, s.listVersErr
-}
-func (s *stubPluginService) GetVersion(_ context.Context, _, _ string) (*plugin.PluginVersion, error) {
-	return nil, nil
-}
-
-// --- Test harness ---------------------------------------------------------
-
-const pluginTestSecret = "plugin-test-secret"
-
-func pluginTestToken(t *testing.T, userID uuid.UUID) string {
-	t.Helper()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": userID.String(),
-	})
-	raw, err := token.SignedString([]byte(pluginTestSecret))
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
+func (s *registryStub) status(n, v string) (*db.Plugin, error) {
+	for i := range s.rows {
+		if s.rows[i].Name == n && s.rows[i].Status == "active" {
+			s.rows[i].Status = v
+			return &s.rows[i], nil
+		}
 	}
-	return raw
+	return nil, db.ErrPluginNotFound
 }
 
-// newPluginTestRouter builds a chi router with auth middleware + the plugin
-// routes, mirroring the server.go wiring (GAP-002 §4.2).
-func newPluginTestRouter(t *testing.T, svc plugin.Service) *chi.Mux {
+func pluginSource(name, version, permission string) string {
+	return `/*@@canopy.manifest@@ {"name":"` + name + `","version":"` + version + `","description":"test","permissions":["` + permission + `"],"render_type":"card","entry_point":"main"} @@end@@*/ function main(){}`
+}
+func pluginReq(t *testing.T, h *PluginHandler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	r := chi.NewRouter()
-	r.Use(AuthMiddleware(pluginTestSecret))
-	r.Mount("/api/v1/plugins", NewPluginHandler(svc).Routes())
-	return r
-}
-
-func doJSON(t *testing.T, r *chi.Mux, method, path, token, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	var req *http.Request
-	if body == "" {
-		req = httptest.NewRequest(method, path, nil)
-	} else {
-		req = httptest.NewRequest(method, path, bytes.NewBufferString(body))
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	req.Header.Set("Content-Type", "application/json")
+	r.Mount("/api/v1/plugins", h.Routes())
+	q := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	q = q.WithContext(context.WithValue(q.Context(), userIDContextKey{}, uuid.New()))
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	r.ServeHTTP(w, q)
 	return w
 }
-
-func validSource() string {
-	return `/**
- * @canopy-manifest
- * {"name": "csv-viewer", "version": "1.0.0", "description": "CSV cards",
- *  "permissions": ["data_read"], "render_type": "card", "entry_point": "main"}
- * @end-canopy-manifest
- */
-function main() {}`
+func pluginBody(src string) string {
+	b, _ := json.Marshal(map[string]string{"source_js": src})
+	return string(b)
 }
 
-// --- Handler scenarios (GAP-002 §8) ----------------------------------------
-
-// register 201.
-func TestPluginHandlerRegister201(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := fmt.Sprintf(`{"source": %q}`, validSource())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/register", token, body)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+func TestPluginRegistryRegistrationScenarios(t *testing.T) {
+	cases := []struct {
+		name, src string
+		want      int
+	}{{"valid", pluginSource("viewer", "1.0.0", "data_read"), 201}, {"malformed", "/*@@canopy.manifest@@ {bad} @@end@@*/", 400}, {"oversize", pluginSource("viewer", "1.0.0", "data_read") + strings.Repeat("x", 1_048_576), 400}, {"semver", pluginSource("viewer", "1.2", "data_read"), 400}, {"permission", pluginSource("viewer", "1.0.0", "quantum_compute"), 400}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &registryStub{}
+			w := pluginReq(t, NewPluginHandler(service.NewPluginRegistryService(repo)), http.MethodPost, "/api/v1/plugins/", pluginBody(tc.src))
+			if w.Code != tc.want {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if tc.want == 201 && (!repo.rows[0].IsRootVersion || repo.audits != 1) {
+				t.Fatalf("root=%v audits=%d", repo.rows[0].IsRootVersion, repo.audits)
+			}
+		})
 	}
-	var resp struct {
-		Plugin plugin.Plugin `json:"plugin"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Plugin.ID != svc.registerOut.ID {
-		t.Errorf("plugin id = %s, want %s", resp.Plugin.ID, svc.registerOut.ID)
-	}
-}
-
-// register 400 bad manifest.
-func TestPluginHandlerRegister400BadManifest(t *testing.T) {
-	svc := newStubPluginService()
-	svc.registerErr = plugin.ErrInvalidManifest
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"source": "function main() {}"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/register", token, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "INVALID_MANIFEST") {
-		t.Errorf("body = %s, want INVALID_MANIFEST code", w.Body.String())
+	repo := &registryStub{}
+	h := NewPluginHandler(service.NewPluginRegistryService(repo))
+	body := pluginBody(pluginSource("dup", "1.0.0", "data_read"))
+	pluginReq(t, h, http.MethodPost, "/api/v1/plugins/", body)
+	if w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/", body); w.Code != 409 {
+		t.Fatalf("duplicate=%d", w.Code)
 	}
 }
-
-// register 413 oversized.
-func TestPluginHandlerRegister413(t *testing.T) {
-	svc := newStubPluginService()
-	svc.registerErr = plugin.ErrPluginTooLarge
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := fmt.Sprintf(`{"source": %q}`, validSource())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/register", token, body)
-	if w.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("status = %d, want 413", w.Code)
+func TestPluginRegistryRollbackAndArchive(t *testing.T) {
+	repo := &registryStub{}
+	h := NewPluginHandler(service.NewPluginRegistryService(repo))
+	for _, v := range []string{"1.0.0", "2.0.0"} {
+		if w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/", pluginBody(pluginSource("viewer", v, "data_read"))); w.Code != 201 {
+			t.Fatal(w.Body.String())
+		}
 	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_TOO_LARGE") {
-		t.Errorf("body = %s, want PLUGIN_TOO_LARGE code", w.Body.String())
+	if w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/viewer/activate", `{"version":"1.0.0"}`); w.Code != 200 || repo.rows[0].Status != "active" {
+		t.Fatalf("rollback=%d", w.Code)
 	}
-}
-
-// install 201.
-func TestPluginHandlerInstall201(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-	pluginID := uuid.New()
-	treeID := uuid.New()
-
-	body := fmt.Sprintf(`{"treeId": %q, "grantedPermissions": ["data_read"]}`, treeID.String())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+pluginID.String()+"/install", token, body)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	if w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/viewer/archive", ""); w.Code != 200 {
+		t.Fatal(w.Body.String())
 	}
-	var resp struct {
-		Instance plugin.PluginInstance `json:"instance"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Instance.ID != svc.installOut.ID {
-		t.Errorf("instance id = %s, want %s", resp.Instance.ID, svc.installOut.ID)
-	}
-}
-
-// install 409 duplicate.
-func TestPluginHandlerInstall409(t *testing.T) {
-	svc := newStubPluginService()
-	svc.installErr = plugin.ErrAlreadyInstalled
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"grantedPermissions": ["data_read"]}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/install", token, body)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_ALREADY_INSTALLED") {
-		t.Errorf("body = %s, want PLUGIN_ALREADY_INSTALLED code", w.Body.String())
-	}
-}
-
-// get 404 unknown.
-func TestPluginHandlerGet404(t *testing.T) {
-	svc := newStubPluginService()
-	svc.getErr = plugin.ErrPluginNotFound
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String(), token, "")
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_NOT_FOUND") {
-		t.Errorf("body = %s, want PLUGIN_NOT_FOUND code", w.Body.String())
-	}
-}
-
-// source 200 + sha header.
-func TestPluginHandlerSource200(t *testing.T) {
-	svc := newStubPluginService()
-	svc.sourceOut = validSource()
-	svc.sourceSHA = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String()+"/source", token, "")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	if got := w.Header().Get("X-Source-SHA256"); got != svc.sourceSHA {
-		t.Errorf("X-Source-SHA256 = %q, want %q", got, svc.sourceSHA)
-	}
-	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
-		t.Errorf("Content-Type = %q, want text/javascript", ct)
-	}
-	if !strings.Contains(w.Body.String(), "@canopy-manifest") {
-		t.Error("body does not contain plugin source")
-	}
-}
-
-// unauth 401.
-func TestPluginHandlerUnauth401(t *testing.T) {
-	router := newPluginTestRouter(t, newStubPluginService())
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins", "", "")
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", w.Code)
-	}
-}
-
-// install 400 invalid treeId (defensive — route contract says valid UUID).
-func TestPluginHandlerInstallInvalidTreeID(t *testing.T) {
-	router := newPluginTestRouter(t, newStubPluginService())
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"treeId": "not-a-uuid", "grantedPermissions": []}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/install", token, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-}
-
-// register with a manifest validation failure maps to MANIFEST_VALIDATION_FAILED.
-func TestPluginHandlerRegisterManifestValidation(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"source": "/**\n * @canopy-manifest\n * {\"name\": \"x\", \"version\": \"1.2\"}\n * @end-canopy-manifest\n */\nfunction main() {}"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/register", token, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "MANIFEST_VALIDATION_FAILED") {
-		t.Errorf("body = %s, want MANIFEST_VALIDATION_FAILED code", w.Body.String())
-	}
-}
-
-// register with an unknown permission maps to 422 INVALID_PERMISSION.
-func TestPluginHandlerRegister422(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"source": "/**\n * @canopy-manifest\n * {\"name\": \"x\", \"version\": \"1.0.0\", \"permissions\": [\"quantum_compute\"],\n *  \"render_type\": \"card\", \"entry_point\": \"main\"}\n * @end-canopy-manifest\n */\nfunction main() {}"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/register", token, body)
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want 422", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "INVALID_PERMISSION") {
-		t.Errorf("body = %s, want INVALID_PERMISSION code", w.Body.String())
-	}
-}
-
-// database unavailable → 503.
-func TestPluginHandlerDBUnavailable503(t *testing.T) {
-	svc := newStubPluginService()
-	svc.getErr = fmt.Errorf("wrapped: %w", service.ErrDatabaseUnavailable)
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String(), token, "")
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "SERVICE_UNAVAILABLE") {
-		t.Errorf("body = %s, want SERVICE_UNAVAILABLE code", w.Body.String())
-	}
-}
-
-// unknown service error → generic 500 (BUG-020 pattern).
-func TestPluginHandlerInternal500(t *testing.T) {
-	svc := newStubPluginService()
-	svc.getErr = errors.New("boom")
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String(), token, "")
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", w.Code)
-	}
-	if strings.Contains(w.Body.String(), "boom") {
-		t.Errorf("body leaks internal error: %s", w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "INTERNAL_ERROR") {
-		t.Errorf("body = %s, want INTERNAL_ERROR code", w.Body.String())
-	}
-}
-
-// --- Version lifecycle routes (SPEC-PL-01 §4.4) ----------------------------
-
-// update 200.
-func TestPluginHandlerUpdate200(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := fmt.Sprintf(`{"source": %q}`, validSource())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/update", token, body)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Plugin plugin.Plugin `json:"plugin"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Plugin.ID != svc.updateOut.ID {
-		t.Errorf("plugin id = %s, want %s", resp.Plugin.ID, svc.updateOut.ID)
-	}
-}
-
-// update 409 same version → VERSION_CONFLICT (scenario 9).
-func TestPluginHandlerUpdate409(t *testing.T) {
-	svc := newStubPluginService()
-	svc.updateErr = plugin.ErrVersionConflict
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := fmt.Sprintf(`{"source": %q}`, validSource())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/update", token, body)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "VERSION_CONFLICT") {
-		t.Errorf("body = %s, want VERSION_CONFLICT code", w.Body.String())
-	}
-}
-
-// update 400 invalid manifest.
-func TestPluginHandlerUpdate400BadManifest(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"source": "function main() { // no manifest"}}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/update", token, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "INVALID_MANIFEST") {
-		t.Errorf("body = %s, want INVALID_MANIFEST code", w.Body.String())
-	}
-}
-
-// update 404 unknown plugin.
-func TestPluginHandlerUpdate404(t *testing.T) {
-	svc := newStubPluginService()
-	svc.updateErr = plugin.ErrPluginNotFound
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := fmt.Sprintf(`{"source": %q}`, validSource())
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/update", token, body)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_NOT_FOUND") {
-		t.Errorf("body = %s, want PLUGIN_NOT_FOUND code", w.Body.String())
-	}
-}
-
-// rollback 200 (scenario 17).
-func TestPluginHandlerRollback200(t *testing.T) {
-	svc := newStubPluginService()
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"version": "1.0.0"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/rollback", token, body)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Plugin plugin.Plugin `json:"plugin"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Plugin.ID != svc.rollbackOut.ID {
-		t.Errorf("plugin id = %s, want %s", resp.Plugin.ID, svc.rollbackOut.ID)
-	}
-}
-
-// rollback 400 unknown version → ROLLBACK_FAILED (scenario 18).
-func TestPluginHandlerRollback400(t *testing.T) {
-	svc := newStubPluginService()
-	svc.rollbackErr = plugin.ErrRollbackFailed
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"version": "9.9.9"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/rollback", token, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "ROLLBACK_FAILED") {
-		t.Errorf("body = %s, want ROLLBACK_FAILED code", w.Body.String())
-	}
-}
-
-// rollback 404 unknown plugin.
-func TestPluginHandlerRollback404(t *testing.T) {
-	svc := newStubPluginService()
-	svc.getErr = plugin.ErrPluginNotFound
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	body := `{"version": "1.0.0"}`
-	w := doJSON(t, router, http.MethodPost, "/api/v1/plugins/"+uuid.New().String()+"/rollback", token, body)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_NOT_FOUND") {
-		t.Errorf("body = %s, want PLUGIN_NOT_FOUND code", w.Body.String())
-	}
-}
-
-// versions 200 with ordered slim list + total (scenario 24).
-func TestPluginHandlerVersions200(t *testing.T) {
-	svc := newStubPluginService()
-	svc.listVersOut = []plugin.PluginVersion{
-		{ID: uuid.New(), Name: "csv-viewer", Version: "1.1.0", Status: plugin.PluginStatusActive, Permissions: []plugin.Permission{plugin.PermissionDataRead}},
-		{ID: uuid.New(), Name: "csv-viewer", Version: "1.0.0", Status: plugin.PluginStatusArchived, Permissions: []plugin.Permission{plugin.PermissionDataRead}},
-	}
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String()+"/versions", token, "")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Versions []plugin.PluginVersion `json:"versions"`
-		Total    int                    `json:"total"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Versions) != 2 || resp.Total != 2 {
-		t.Errorf("versions/total = %d/%d, want 2/2", len(resp.Versions), resp.Total)
-	}
-	if resp.Versions[0].Version != "1.1.0" || resp.Versions[1].Version != "1.0.0" {
-		t.Errorf("order = [%s, %s], want [1.1.0, 1.0.0]", resp.Versions[0].Version, resp.Versions[1].Version)
-	}
-}
-
-// versions 404 unknown plugin.
-func TestPluginHandlerVersions404(t *testing.T) {
-	svc := newStubPluginService()
-	svc.getErr = plugin.ErrPluginNotFound
-	router := newPluginTestRouter(t, svc)
-	token := pluginTestToken(t, uuid.New())
-
-	w := doJSON(t, router, http.MethodGet, "/api/v1/plugins/"+uuid.New().String()+"/versions", token, "")
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "PLUGIN_NOT_FOUND") {
-		t.Errorf("body = %s, want PLUGIN_NOT_FOUND code", w.Body.String())
+	active, _ := repo.ListActive(context.Background())
+	if len(active) != 0 {
+		t.Fatalf("active=%d", len(active))
 	}
 }

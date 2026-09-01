@@ -27,14 +27,14 @@ pipeline:
       condition: "true"
       max_iterations: 250
       max_time: 45m
-      max_input_tokens: 6000000
+      max_input_tokens: 9000000
       max_output_tokens: 400000
       tools: [read_file, run_command, search_pattern, read_diff]
 
 evaluator:
   max_iterations: 250
   max_time: 45m
-  max_input_tokens: 6000000
+  max_input_tokens: 9000000
   max_output_tokens: 400000
   tool_call_weight: 0.1
   fast_track: auto

@@ -1776,3 +1776,25 @@ tasks:
   status: complete
   created_at: '2026-09-01T11:47:40.484139+00:00'
   completed_at: '2026-09-01T12:03:08.562727+00:00'
+- id: PL01-P1
+  title: "PL-01 Phase 1 Plugin Registry + Contract (SPEC-PL-01 \xA73/\xA74/\xA76/\xA7\
+    12): migration 000039 plugin_registry + plugin_instances + audit (spec \xA73 DDL\
+    \ adapted: uuidv7\u2192gen_random_uuid), plugin repo (register/version-history/activate/rollback/archive),\
+    \ manifest+source validation (semver, sha256, <1MB, canonical permissions subset),\
+    \ HTTP endpoints per \xA76 (register/list/get/versions/activate/disable/archive),\
+    \ handler tests on live PG"
+  criteria:
+  - "1) migration 000039 creates plugin_registry+plugin_instances+plugin_audit per\
+    \ spec \xA73 (gen_random_uuid instead of uuidv7); 2) repo layer: register preserves\
+    \ full history, partial unique index enforces one active per name, rollback chain\
+    \ via previous_version_id/superseded_by_id; 3) validation: semver regex, source<1MB,\
+    \ sha256 hex, permissions subset of canonical set, malformed manifest 400 INVALID_MANIFEST;\
+    \ 4) HTTP: POST /api/v1/plugins (201+row), GET /plugins, GET /plugins/{id}, GET\
+    \ /plugins/{name}/versions, POST /plugins/{name}/activate, POST /plugins/{name}/disable,\
+    \ POST /plugins/{name}/archive \u2014 all JWT-authed; 5) \xA712 scenarios 1-8\
+    \ as tests (register valid/invalid manifest/oversize source/bad semver/perm escalation/duplicate\
+    \ version/rollback/archive); 6) gofmt/build/vet clean, live-PG tests pass via\
+    \ foreman"
+  status: complete
+  created_at: '2026-09-01T12:38:57.541491+00:00'
+  completed_at: '2026-09-01T14:58:20.908222+00:00'
