@@ -18,6 +18,22 @@ func TestFromEnvJWTSecret(t *testing.T) {
 	}
 }
 
+func TestFromEnvNATSOptionalWiring(t *testing.T) {
+	t.Setenv("CANOPY_NATS_URL", "")
+	t.Setenv("CANOPY_NATS_CREDS", "")
+	c := FromEnv()
+	if c.NATSURL != "" || c.NATSCreds != "" {
+		t.Fatalf("unset NATS environment enabled wiring: %#v", c)
+	}
+
+	t.Setenv("CANOPY_NATS_URL", "nats://example:4222")
+	t.Setenv("CANOPY_NATS_CREDS", "/run/secrets/nats.creds")
+	c = FromEnv()
+	if c.NATSURL != "nats://example:4222" || c.NATSCreds != "/run/secrets/nats.creds" {
+		t.Fatalf("NATS environment was not mapped: URL=%q creds=%q", c.NATSURL, c.NATSCreds)
+	}
+}
+
 func TestFromEnv_CANOPY_DB_URL(t *testing.T) {
 	t.Setenv("CANOPY_DB_URL", "postgres://myuser:mypass@myhost:5433/mydb?sslmode=require")
 	c := FromEnv()

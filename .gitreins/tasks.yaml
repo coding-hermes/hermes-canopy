@@ -1683,3 +1683,24 @@ tasks:
   status: complete
   created_at: '2026-09-01T08:31:34.510796+00:00'
   completed_at: '2026-09-01T08:46:08.032405+00:00'
+- id: FTR-04-P4
+  title: "FTR-04 Phase 4 Production NATS Wiring (SPEC-FTR-04 \xA76): nats.go client\
+    \ factory honoring transport_configs, graceful Drain lifecycle, native reconnect\
+    \ + status-callback state mapping, cred-safe logging, optional env wiring (unset=NATS\
+    \ not registered)"
+  criteria:
+  - 1. Factory + option builder mapped from transport_configs (000038), malformed-config
+    errors not panics
+  - 2. Drain-on-shutdown wired into canopyd lifecycle; RetryOnFailedConnect/MaxReconnects/ReconnectWait
+    from config
+  - 3. Status callbacks map DISCONNECTED/RECONNECTED to adapter states; table-tested
+  - 4. No creds in logs; fingerprint-only
+  - "5. CANOPY_NATS_URL unset \u2192 SSE-only selector, zero regression; set \u2192\
+    \ adapter registered"
+  - '6. Hermetic tests (no live NATS/PG): factory errors, option builder, state table,
+    Drain recording, env-unset path'
+  - 7. go test -race ./internal/transport/ green; build+vet+fmt clean; only new dep
+    is nats.go
+  status: complete
+  created_at: '2026-09-01T08:52:53.285874+00:00'
+  completed_at: '2026-09-01T09:00:25.758943+00:00'

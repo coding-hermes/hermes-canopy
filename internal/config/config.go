@@ -46,6 +46,8 @@ type Config struct {
 	// Hermes gateway (GAP-050 — live gateway client)
 	GatewayBaseURL string // HERMES_WEBUI_GATEWAY_BASE_URL, default http://127.0.0.1:8642
 	GatewayAPIKey  string // HERMES_WEBUI_GATEWAY_API_KEY, fallback API_SERVER_KEY
+	NATSURL        string
+	NATSCreds      string
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -219,6 +221,8 @@ func FromEnv() *Config {
 			}
 		}
 	}
+	c.NATSURL = os.Getenv("CANOPY_NATS_URL")
+	c.NATSCreds = os.Getenv("CANOPY_NATS_CREDS")
 	return c
 }
 

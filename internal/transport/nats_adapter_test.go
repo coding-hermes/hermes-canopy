@@ -19,6 +19,7 @@ type fakeNATSBus struct {
 	subs          map[int]fakeNATSSubscriber
 	nextID        int
 	pingErr       error
+	drainCalls    int
 }
 
 type fakeNATSSubscriber struct {
@@ -85,8 +86,9 @@ func (b *fakeNATSBus) Ping(context.Context) error {
 	return nil
 }
 
-func (b *fakeNATSBus) Close() error {
+func (b *fakeNATSBus) Drain() error {
 	b.mu.Lock()
+	b.drainCalls++
 	b.connected = false
 	b.mu.Unlock()
 	return nil
@@ -188,6 +190,9 @@ func TestNATSAdapterLifecycleAndRouting(t *testing.T) {
 	bus.mu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("subscriptions = %d, want 0", remaining)
+	}
+	if bus.drainCalls != 1 {
+		t.Fatalf("Drain calls = %d, want 1", bus.drainCalls)
 	}
 	if err := adapter.Disconnect(context.Background(), conn); err != nil {
 		t.Fatalf("second Disconnect: %v", err)

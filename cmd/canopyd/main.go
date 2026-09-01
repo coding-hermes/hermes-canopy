@@ -224,6 +224,29 @@ func main() {
 	ss := transport.NewTransportSelector(transport.ModeLocal, transport.TopologyLoopback)
 	connMgr := transport.NewConnectionManager(ss)
 	tptAdapter := transport.NewSSEAdapter(sseHub)
+	if err := connMgr.RegisterAdapter(tptAdapter); err != nil {
+		log.Fatal().Err(err).Msg("register SSE transport")
+	}
+	var natsBus transport.NATSClient
+	if cfg.NATSURL != "" {
+		natsConfig, err := database.TransportConfigs.Get(ctx, string(transport.TransportNATS))
+		if err != nil {
+			log.Fatal().Err(err).Msg("load NATS transport configuration")
+		}
+		natsBus, err = transport.NewProductionBus(transport.ProductionBusConfig{
+			URL: cfg.NATSURL, Credentials: cfg.NATSCreds,
+			ConnectTimeout: time.Duration(natsConfig.ConnectTimeout) * time.Second,
+			RetryMax:       natsConfig.RetryMax,
+			Heartbeat:      time.Duration(natsConfig.HeartbeatSecs) * time.Second,
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msg("configure NATS transport")
+		}
+		if err := connMgr.RegisterAdapter(transport.NewNATSAdapter(natsBus)); err != nil {
+			log.Fatal().Err(err).Msg("register NATS transport")
+		}
+		log.Info().Str("transport", "nats").Msg("NATS transport registered")
+	}
 
 	// Prometheus metrics — nil by default, enabled via METRICS_ENABLED=true.
 	var metrics *telemetry.Metrics
@@ -261,6 +284,9 @@ func main() {
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
 		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, cfg)
+	if natsBus != nil {
+		srv.SetTransportDrain(natsBus.Drain)
+	}
 
 	// Start server in background
 

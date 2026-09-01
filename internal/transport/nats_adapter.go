@@ -25,7 +25,7 @@ type NATSClient interface {
 	Publish(ctx context.Context, subject string, data []byte) error
 	Subscribe(ctx context.Context, subject string, handler func([]byte)) (NATSSubscription, error)
 	Ping(ctx context.Context) error
-	Close() error
+	Drain() error
 }
 
 // NATSSubscription is the cleanup surface needed by the adapter.
@@ -45,7 +45,11 @@ func (unavailableNATSClient) Subscribe(context.Context, string, func([]byte)) (N
 	return nil, ErrTransportUnreachable
 }
 func (unavailableNATSClient) Ping(context.Context) error { return ErrTransportUnreachable }
-func (unavailableNATSClient) Close() error               { return nil }
+func (unavailableNATSClient) Drain() error               { return nil }
+
+type natsStatusHandlerSetter interface {
+	SetStatusHandler(func(ConnectionState, error))
+}
 
 // NATSAdapter maps tree messages to NATS subjects. A real nats.go client is
 // intentionally deferred; callers may inject a client implementing NATSClient.
@@ -77,7 +81,24 @@ func NewNATSAdapter(clients ...NATSClient) *NATSAdapter {
 	if len(clients) > 0 && clients[0] != nil {
 		client = clients[0]
 	}
-	return &NATSAdapter{client: client, conns: make(map[string]*natsConnection)}
+	a := &NATSAdapter{client: client, conns: make(map[string]*natsConnection)}
+	if statusClient, ok := client.(natsStatusHandlerSetter); ok {
+		statusClient.SetStatusHandler(a.handleStatus)
+	}
+	return a
+}
+
+func (a *NATSAdapter) handleStatus(state ConnectionState, _ error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, nc := range a.conns {
+		mu := stateMuFor(nc.conn)
+		mu.Lock()
+		if nc.conn.State != StateDisconnecting && nc.conn.State != StateClosed {
+			nc.conn.State = state
+		}
+		mu.Unlock()
+	}
 }
 
 // NewNATSTransportAdapter creates the spec-named NATS transport adapter.
@@ -126,14 +147,14 @@ func (a *NATSAdapter) Connect(ctx context.Context, opts ConnectOptions) (*Connec
 	filter := "canopy.*.*"
 	if treeID := opts.Metadata["tree_id"]; treeID != "" {
 		if !validNATSSubjectToken(treeID) {
-			_ = a.client.Close()
+			_ = a.client.Drain()
 			return nil, errors.Join(ErrConnectionFailed, fmt.Errorf("transport: invalid NATS tree ID %q", treeID))
 		}
 		filter = "canopy." + treeID + ".*"
 	}
 	sub, err := a.client.Subscribe(ctx, filter, func(data []byte) { nc.deliver(data) })
 	if err != nil {
-		_ = a.client.Close()
+		_ = a.client.Drain()
 		return nil, errors.Join(ErrConnectionFailed, err)
 	}
 	nc.sub = sub
@@ -245,7 +266,7 @@ func (a *NATSAdapter) Disconnect(_ context.Context, conn *Connection) error {
 		nc.delivery.Unlock()
 	}
 	if remaining == 0 {
-		_ = a.client.Close()
+		_ = a.client.Drain()
 	}
 	mu.Lock()
 	conn.State = StateClosed

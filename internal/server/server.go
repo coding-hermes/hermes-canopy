@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"time"
@@ -41,6 +42,7 @@ type Server struct {
 	mlsHandler      *handler.MLSHandler
 	metrics         *telemetry.Metrics
 	relayCancel     context.CancelFunc
+	transportDrain  func() error
 }
 
 // New creates a new Server with middleware and routes wired.
@@ -323,12 +325,20 @@ func (s *Server) Start() error {
 	return s.httpServer.ListenAndServe()
 }
 
+// SetTransportDrain attaches an optional production transport lifecycle.
+// Nil preserves the existing HTTP/SSE-only shutdown behavior.
+func (s *Server) SetTransportDrain(drain func() error) { s.transportDrain = drain }
+
 // Shutdown gracefully stops the HTTP server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.relayCancel != nil {
 		s.relayCancel()
 	}
-	return s.httpServer.Shutdown(ctx)
+	var drainErr error
+	if s.transportDrain != nil {
+		drainErr = s.transportDrain()
+	}
+	return errors.Join(drainErr, s.httpServer.Shutdown(ctx))
 }
 
 // healthHandler responds with a simple health check.
