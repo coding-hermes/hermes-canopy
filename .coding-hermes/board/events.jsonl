@@ -335,4 +335,4 @@
 {"id": 331, "type": "task_completed", "task_id": "FTR-04-P1", "actor": "bankai-codex-wave9", "at": "2026-09-01 08:15:30", "data": {"judge": "6b69f5a1", "commit": "1df13bf", "race_fix": "connStateMu"}}
 {"id":332,"type":"task_completed","task_id":"FTR-04-P2","actor":"bankai-codex-wave10","commit_hash":"6dfd131","reason":"judge a9556d98 PASS; 11 transport tests + race clean; live-PG fed suite ok","created_at":"2026-09-01 08:28:57"}
 {"id":333,"type":"audit","task_id":"FTR-04-P2","actor":"bankai-foreman","reason":"row added complete at close (wave-start row add was missed); feat 6dfd131, judge a9556d98","created_at":"2026-09-01 08:30:17"}
-{"id":338,"ts":"2026-09-01 08:51:49","type":"task_completed","task_id":"FTR-04-P3","actor":"bankai-codex","detail":{"commit_hash":"PENDING_HASH","judge":"PENDING_VERDICT","wave":11}}
+{"id":338,"ts":"2026-09-01 08:51:49","type":"task_completed","task_id":"FTR-04-P3","actor":"bankai-codex","detail":{"commit_hash":"e08bc33","judge":"1e8e8f13","wave":11}}
