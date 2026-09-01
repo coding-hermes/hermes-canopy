@@ -49,3 +49,4 @@
 - **What works (real evidence):** context manifest API + UI panel ("74 / 8,000 tokens"), DAG canvas render + SSE, composer→canvas sync (BUG-032), MCP tools/list + create_node, topics/cards/export APIs, JWT auth.
 - **Left behind:** docs/dogfood/2026-08-17-integration.md · docs/dogfood/diagnostics.md · skills/hermes-canopy-usage/SKILL.md · board rows GAP-040..045 (tasks.jsonl + tasks.md section).
 - **Foreman:** not woken (cooldown 21600s < 43200s; board has 3 pending stand-in tasks + 6 new dogfood tasks — it will pick them up on its normal cycle).
+2026-09-01 | PROMISING-BUT-ROUGH | 20s t2fs | friction 11 | 5 findings
