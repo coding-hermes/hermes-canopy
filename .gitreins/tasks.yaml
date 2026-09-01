@@ -1798,3 +1798,39 @@ tasks:
   status: complete
   created_at: '2026-09-01T12:38:57.541491+00:00'
   completed_at: '2026-09-01T14:58:20.908222+00:00'
+- id: PL01-P2
+  title: "PL-01 Phase 2 Plugin Sandbox Host frontend (SPEC-PL-01 \xA75/\xA77/\xA7\
+    9): TS types+Zod, sandbox host w/ nonce validation + envelope routing, permission-gated\
+    \ plugin API, React PluginHost iframe component, vitest coverage"
+  criteria:
+  - "1) pluginTypes.ts with Zod schemas matching backend canonical permission set\
+    \ (data_read,data_write,notification,calendar_read,calendar_write,network_request);\
+    \ 2) sandbox srcDoc contains \xA77.1 CSP verbatim (default-src 'none'; script-src\
+    \ 'unsafe-inline'; style-src 'unsafe-inline'; connect-src none; img-src data:\
+    \ https:; font-src data:); 3) per-instance nonce: forged/missing nonce messages\
+    \ rejected; 4) envelope id-correlation: api_response resolves the matching pending\
+    \ request promise; 5) permission gate: un-permitted api_call returns structured\
+    \ denied error; 6) PluginHost.tsx iframe has sandbox=allow-scripts (NOT allow-same-origin)\
+    \ + referrerPolicy no-referrer + stable name; 7) deps limited to zod ^3 (explicitly\
+    \ required by SPEC-PL-01 sec 5.2 amendment; supersedes the original no-new-deps\
+    \ brief line); tsc+vitest+oxlint gates pass on foreman run"
+  status: complete
+  created_at: '2026-09-01T15:58:29.518407+00:00'
+  completed_at: '2026-09-01T16:27:04.464088+00:00'
+- id: PL01-P2Z
+  title: "PL-01 Phase 2 zod remediation (SPEC-PL-01 \xA75.2): convert pluginTypes.ts\
+    \ hand-rolled validator to real zod schemas, same exported surface, +invalid-permission\
+    \ safeParse test"
+  criteria:
+  - "1) import { z } from 'zod' in pluginTypes.ts with z.object schemas for PluginManifest/PluginMessage\
+    \ envelope/api_call/api_response/init/event keeping exported names identical;\
+    \ 2) permission enum = canonical set (data_read,data_write,notification,calendar_read,calendar_write,network_request);\
+    \ 3) new test: safeParse rejects manifest with permission not in canonical set;\
+    \ 4) minimal delta for the wave itself (pluginTypes.ts + pluginSandbox.test.tsx);\
+    \ pre-existing working-tree housekeeping NOT part of this wave (package.json/package-lock\
+    \ zod dep, DashboardPage.tsx scrollIntoView optional-chaining fix) is foreman-owned\
+    \ and explicitly in scope of the overall delivery \u2014 not a violation; 5) tsc+vitest\
+    \ (734+)+oxlint clean on foreman"
+  status: complete
+  created_at: '2026-09-01T16:13:33.511305+00:00'
+  completed_at: '2026-09-01T16:23:57.178546+00:00'

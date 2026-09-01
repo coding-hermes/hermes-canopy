@@ -347,3 +347,4 @@
 {"id":"347","ts":"2026-09-01 12:15:49","type":"task_complete","task_id":"DF-HERMES-CANOPY-2/3/4","summary":"P1 batch fixed in c840e5c (judge 15edbd66)"}
 {"id":"348","ts":"2026-09-01 12:38:06","type":"status_fix","task_id":"DF-HERMES-CANOPY-2/3/4","summary":"status corrected pending\u2192complete (rows pre-existed; close script only appended)"}
 {"id":"349","ts":"2026-09-01 15:17:02","type":"task_complete","task_id":"PL01-P1","summary":"commit 9a2f6e1, judge 91c2c888; migrations 000037/000039 committed to repo; judge cap 6M->9M"}
+{"seq": 350, "ts": "2026-09-01 16:35:00", "kind": "task_complete", "task": "PL01-P2", "commit": "e0f7992", "verdicts": ["ebec3aba", "7280a132"], "note": "P2 sandbox host frontend + zod remediation; judge verified live (tsc/vitest 735/oxlint)"}
