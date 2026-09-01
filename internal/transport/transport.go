@@ -47,6 +47,14 @@ type ConnectOptions struct {
 	TLSConfig      *tls.Config
 	Timeout        time.Duration
 	MaxMessageSize int64
+	// ConfigJSON carries transport_configs.config_json for adapters whose
+	// settings are not part of the common transport contract.
+	ConfigJSON map[string]interface{}
+	// ICE servers supplied by a caller take precedence over ConfigJSON.
+	ICEServers []ICEServer
+	TURNURL    string
+	TURNUser   string
+	TURNCred   string
 }
 
 // --- Connection (SPEC-FTR-04 §3.1) -----------------------------------------

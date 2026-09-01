@@ -1704,3 +1704,16 @@ tasks:
   status: complete
   created_at: '2026-09-01T08:52:53.285874+00:00'
   completed_at: '2026-09-01T09:00:25.758943+00:00'
+- id: FTR-04-P5
+  title: "FTR-04 Phase 5 WebRTC + Relay Fallback (SPEC-FTR-04 \xA74.3): WebRTCTransportAdapter\
+    \ on peer-connection interface, SSE signaling, TURN/STUN fallback, selector integration,\
+    \ state mapping, hermetic tests, race-clean"
+  criteria:
+  - 'webrtc_adapter.go: offer/answer/ICE lifecycle + DataChannel message path; signaling
+    over existing SSE control messages; ICE config from transport_configs config_json;
+    selector chains updated; state table + signaling round-trip + Close lifecycle
+    tests via injected PeerConnection fake; no pion dependency (P6); go test -race
+    green'
+  status: complete
+  created_at: '2026-09-01T09:04:26.594415+00:00'
+  completed_at: '2026-09-01T09:10:07.835923+00:00'

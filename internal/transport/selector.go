@@ -68,8 +68,8 @@ func NewTransportSelector(mode DeploymentMode, topology NetworkTopology) *Transp
 }
 func (ts *TransportSelector) applyPriorityMatrix() {
 	ts.available = map[DeploymentMode][]TransportType{
-		ModeLocal: {TransportSSE}, ModeLAN: {TransportSSE, TransportWebRTC}, ModeSelfHosted: {TransportSSE, TransportRedis, TransportRelay},
-		ModeSaaS: {TransportSSE, TransportNATS, TransportRelay}, ModeP2P: {TransportWebRTC, TransportSSE, TransportRelay},
+		ModeLocal: {TransportSSE}, ModeLAN: {TransportWebRTC, TransportNATS, TransportSSE}, ModeSelfHosted: {TransportWebRTC, TransportNATS, TransportSSE, TransportRedis, TransportRelay},
+		ModeSaaS: {TransportWebRTC, TransportNATS, TransportSSE, TransportRelay}, ModeP2P: {TransportWebRTC, TransportNATS, TransportSSE, TransportRelay},
 		ModeFederated: {TransportNATS, TransportRedis, TransportWebRTC, TransportRelay}, ModeAirGapped: {TransportRelay},
 	}[ts.mode]
 	if len(ts.available) == 0 {

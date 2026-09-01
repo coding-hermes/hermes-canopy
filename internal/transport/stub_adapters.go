@@ -12,33 +12,6 @@ import "context"
 //
 // TODO(post-MVP): implement each adapter per the phase plan in SPEC-FTR-04 §9.
 
-// --- WebRTCAdapter (Phase 4) ------------------------------------------------
-
-// WebRTCAdapter is a stub for the WebRTC DataChannel transport.
-// TODO(post-MVP): implement with pion/webrtc (SPEC-FTR-04 §9 Phase 4).
-type WebRTCAdapter struct{}
-
-// NewWebRTCAdapter returns a stub WebRTC adapter.
-func NewWebRTCAdapter() *WebRTCAdapter { return &WebRTCAdapter{} }
-
-func (a *WebRTCAdapter) TransportType() TransportType { return TransportWebRTC }
-
-func (a *WebRTCAdapter) Connect(_ context.Context, _ ConnectOptions) (*Connection, error) {
-	return nil, ErrTransportUnreachable
-}
-func (a *WebRTCAdapter) Send(_ context.Context, _ *Connection, _ *Message) error {
-	return ErrTransportUnreachable
-}
-func (a *WebRTCAdapter) Receive(_ context.Context, _ *Connection) (<-chan *Message, error) {
-	return nil, ErrTransportUnreachable
-}
-func (a *WebRTCAdapter) Disconnect(_ context.Context, _ *Connection) error {
-	return ErrTransportUnreachable
-}
-func (a *WebRTCAdapter) Health(_ context.Context) error {
-	return ErrTransportUnreachable
-}
-
 // --- RedisAdapter (Phase 2) -------------------------------------------------
 
 // RedisAdapter is a stub for the Redis Streams transport.

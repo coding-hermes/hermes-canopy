@@ -38,10 +38,10 @@ func TestPriorityChains(t *testing.T) {
 		want []transport.TransportType
 	}{
 		{transport.ModeLocal, []transport.TransportType{transport.TransportSSE}},
-		{transport.ModeLAN, []transport.TransportType{transport.TransportSSE, transport.TransportWebRTC}},
-		{transport.ModeSelfHosted, []transport.TransportType{transport.TransportSSE, transport.TransportRedis, transport.TransportRelay}},
-		{transport.ModeSaaS, []transport.TransportType{transport.TransportSSE, transport.TransportNATS, transport.TransportRelay}},
-		{transport.ModeP2P, []transport.TransportType{transport.TransportWebRTC, transport.TransportSSE, transport.TransportRelay}},
+		{transport.ModeLAN, []transport.TransportType{transport.TransportWebRTC, transport.TransportNATS, transport.TransportSSE}},
+		{transport.ModeSelfHosted, []transport.TransportType{transport.TransportWebRTC, transport.TransportNATS, transport.TransportSSE, transport.TransportRedis, transport.TransportRelay}},
+		{transport.ModeSaaS, []transport.TransportType{transport.TransportWebRTC, transport.TransportNATS, transport.TransportSSE, transport.TransportRelay}},
+		{transport.ModeP2P, []transport.TransportType{transport.TransportWebRTC, transport.TransportNATS, transport.TransportSSE, transport.TransportRelay}},
 		{transport.ModeFederated, []transport.TransportType{transport.TransportNATS, transport.TransportRedis, transport.TransportWebRTC, transport.TransportRelay}},
 		{transport.ModeAirGapped, []transport.TransportType{transport.TransportRelay}},
 	}
@@ -62,12 +62,12 @@ func TestPriorityChains(t *testing.T) {
 
 func TestConnectionManagerImmediateFailoverEvent(t *testing.T) {
 	s := transport.NewTransportSelector(transport.ModeSaaS, transport.TopologyPublic)
-	primary := &healthAdapter{tt: transport.TransportSSE, sendErr: transport.ErrConnectionClosed}
+	primary := &healthAdapter{tt: transport.TransportWebRTC, sendErr: transport.ErrConnectionClosed}
 	fallback := &healthAdapter{tt: transport.TransportNATS}
 	cm := transport.NewConnectionManager(s, primary, fallback)
 	events := make(chan transport.TransportEvent, 1)
 	s.SetEventHandler(func(e transport.TransportEvent) { events <- e })
-	if err := cm.OnConnect(&transport.Connection{ID: "s", Peer: "peer", TransportType: transport.TransportSSE}); err != nil {
+	if err := cm.OnConnect(&transport.Connection{ID: "w", Peer: "peer", TransportType: transport.TransportWebRTC}); err != nil {
 		t.Fatal(err)
 	}
 	if err := cm.OnConnect(&transport.Connection{ID: "n", Peer: "peer", TransportType: transport.TransportNATS}); err != nil {
@@ -78,7 +78,7 @@ func TestConnectionManagerImmediateFailoverEvent(t *testing.T) {
 	}
 	select {
 	case e := <-events:
-		if !e.Degraded || e.Type != transport.TransportSSE {
+		if !e.Degraded || e.Type != transport.TransportWebRTC {
 			t.Fatalf("event = %#v", e)
 		}
 	default:
@@ -102,8 +102,8 @@ func (a *healthAdapter) setHealth(err error) { a.mu.Lock(); a.healthErr = err; a
 func TestSelectorHysteresisAndFallback(t *testing.T) {
 	s := transport.NewTransportSelector(transport.ModeSaaS, transport.TopologyPublic)
 	s.HealthSettings(0, 2, 3)
-	sse, nats := &healthAdapter{tt: transport.TransportSSE}, &healthAdapter{tt: transport.TransportNATS}
-	if err := s.RegisterAdapter(sse); err != nil {
+	webrtc, nats := &healthAdapter{tt: transport.TransportWebRTC}, &healthAdapter{tt: transport.TransportNATS}
+	if err := s.RegisterAdapter(webrtc); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RegisterAdapter(nats); err != nil {
@@ -112,30 +112,30 @@ func TestSelectorHysteresisAndFallback(t *testing.T) {
 	events := make([]transport.TransportEvent, 0, 2)
 	h := s.StartHealthMonitor(context.Background(), func(e transport.TransportEvent) { events = append(events, e) })
 	defer h.Stop()
-	sse.setHealth(errors.New("down"))
+	webrtc.setHealth(errors.New("down"))
 	h.Check(context.Background())
 	h.Check(context.Background())
-	if got, _ := s.Select("tree"); got != transport.TransportSSE {
+	if got, _ := s.Select("tree"); got != transport.TransportWebRTC {
 		t.Fatalf("selected before threshold = %s", got)
 	}
 	h.Check(context.Background())
 	if got, _ := s.Select("tree"); got != transport.TransportNATS {
 		t.Fatalf("fallback = %s", got)
 	}
-	sse.setHealth(nil)
+	webrtc.setHealth(nil)
 	h.Check(context.Background())
-	if s.IsHealthy(transport.TransportSSE) {
+	if s.IsHealthy(transport.TransportWebRTC) {
 		t.Fatal("recovered before up threshold")
 	}
 	h.Check(context.Background())
-	if !s.IsHealthy(transport.TransportSSE) || len(events) != 2 {
-		t.Fatalf("healthy=%v events=%d", s.IsHealthy(transport.TransportSSE), len(events))
+	if !s.IsHealthy(transport.TransportWebRTC) || len(events) != 2 {
+		t.Fatalf("healthy=%v events=%d", s.IsHealthy(transport.TransportWebRTC), len(events))
 	}
 	nats.setHealth(errors.New("down"))
 	for i := 0; i < 3; i++ {
 		h.Check(context.Background())
 	}
-	sse.setHealth(errors.New("down"))
+	webrtc.setHealth(errors.New("down"))
 	for i := 0; i < 3; i++ {
 		h.Check(context.Background())
 	}

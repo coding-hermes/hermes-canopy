@@ -65,8 +65,8 @@ func TestTransportSelector(t *testing.T) {
 		t.Fatalf("primary = %q, want %q for MVP", got, TransportSSE)
 	}
 	fallback, err := selector.SelectFallback(TransportWebRTC)
-	if err != nil || fallback != TransportSSE {
-		t.Fatalf("fallback = (%q, %v), want (%q, nil)", fallback, err, TransportSSE)
+	if err != nil || fallback != TransportNATS {
+		t.Fatalf("fallback = (%q, %v), want (%q, nil)", fallback, err, TransportNATS)
 	}
 	if _, err := selector.SelectFallback(TransportRelay); err != ErrNoTransportAvailable {
 		t.Fatalf("terminal fallback error = %v, want %v", err, ErrNoTransportAvailable)
