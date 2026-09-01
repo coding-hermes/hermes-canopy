@@ -73,6 +73,7 @@ var (
 	ErrSignatureMismatch  = errors.New("federation: envelope signature does not match sender")
 	ErrDecryptionFailed   = errors.New("federation: payload decryption failed")
 	ErrNoSharedSecret     = errors.New("federation: ECDH session not established; call EstablishSession first")
+	ErrPeerOffline        = errors.New("federation: peer is offline, event queued for later delivery")
 )
 
 type Repository interface {

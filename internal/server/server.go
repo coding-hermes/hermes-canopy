@@ -40,6 +40,7 @@ type Server struct {
 	transportAdaper transport.TransportAdapter
 	mlsHandler      *handler.MLSHandler
 	metrics         *telemetry.Metrics
+	relayCancel     context.CancelFunc
 }
 
 // New creates a new Server with middleware and routes wired.
@@ -249,6 +250,7 @@ func New(
 		r.With(handler.FederationAuthMiddleware(jwtSecret, federationSvc)).Post("/api/v1/federation/handshake", fedHandler.Handshake)
 		r.Get("/api/v1/federation/events", fedHandler.Events)
 		r.Post("/api/v1/federation/events", fedHandler.PostEvent)
+		r.Get("/api/v1/federation/events/replay", fedHandler.Replay)
 	}
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
@@ -273,6 +275,14 @@ func New(
 		r.Get("/health/transports/"+string(tt), transHandler.HealthProbe(string(tt)))
 	}
 
+	var relayCancel context.CancelFunc
+	if provider, ok := federationSvc.(interface {
+		Relay() *federation.RelayService
+	}); ok && provider.Relay() != nil {
+		var relayCtx context.Context
+		relayCtx, relayCancel = context.WithCancel(context.Background())
+		go provider.Relay().Run(relayCtx)
+	}
 	return &Server{
 		router:          r,
 		sseHub:          sseHub,
@@ -280,6 +290,7 @@ func New(
 		transportAdaper: transportAdaper,
 		mlsHandler:      mlsHandler,
 		metrics:         metrics,
+		relayCancel:     relayCancel,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
@@ -312,6 +323,9 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully stops the HTTP server.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.relayCancel != nil {
+		s.relayCancel()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 

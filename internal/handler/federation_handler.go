@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +27,15 @@ type FederationHandler struct {
 	hub       sse.SSEHub
 	mu        sync.RWMutex
 	relays    map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}
+	relay     *federation.RelayService
+	chunks    map[uuid.UUID]*relayAssembly
+}
+
+type relayAssembly struct {
+	peerID   uuid.UUID
+	sequence int64
+	total    int
+	parts    map[int][]byte
 }
 
 func NewFederationHandler(svc federation.FederationService, serverURL string, hubs ...sse.SSEHub) *FederationHandler {
@@ -31,7 +43,19 @@ func NewFederationHandler(svc federation.FederationService, serverURL string, hu
 	if len(hubs) > 0 {
 		hub = hubs[0]
 	}
-	return &FederationHandler{svc: svc, serverURL: serverURL, hub: hub, relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{})}
+	h := &FederationHandler{svc: svc, serverURL: serverURL, hub: hub,
+		relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}), chunks: make(map[uuid.UUID]*relayAssembly)}
+	if provider, ok := svc.(interface {
+		Relay() *federation.RelayService
+	}); ok {
+		h.relay = provider.Relay()
+	}
+	return h
+}
+
+func (h *FederationHandler) WithRelay(relay *federation.RelayService) *FederationHandler {
+	h.relay = relay
+	return h
 }
 
 func (h *FederationHandler) WithProfileRouter(router federation.ProfileRouter) *FederationHandler {
@@ -319,6 +343,9 @@ func (h *FederationHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, federationHandshakeResponse{PeerID: peer.ID, ServerURL: h.serverURL, ECDHEPublicKey: base64.StdEncoding.EncodeToString(localKey), SigningPublicKey: base64.StdEncoding.EncodeToString(h.svc.SigningPublicKey())})
+	if h.relay != nil {
+		go func() { _ = h.relay.DeliverPending(context.Background(), peer.ID) }()
+	}
 }
 
 func bearerToken(r *http.Request) string {
@@ -329,7 +356,7 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// Events streams live FTL envelopes. P4 replay and buffering are deliberately absent.
+// Events streams live FTL envelopes.
 func (h *FederationHandler) Events(w http.ResponseWriter, r *http.Request) {
 	peerID, err := uuid.Parse(r.URL.Query().Get("peer_id"))
 	if err != nil {
@@ -371,9 +398,66 @@ func (h *FederationHandler) Events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *FederationHandler) Replay(w http.ResponseWriter, r *http.Request) {
+	if h.relay == nil {
+		writeError(w, http.StatusServiceUnavailable, "FEDERATION_RELAY_UNAVAILABLE", "federation relay is unavailable")
+		return
+	}
+	peerID, err := uuid.Parse(r.URL.Query().Get("peer"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_PEER_ID", "peer must be a valid UUID")
+		return
+	}
+	if _, err = h.svc.AuthenticatePeerToken(r.Context(), bearerToken(r), peerID); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	cursor, err := strconv.ParseInt(r.URL.Query().Get("cursor"), 10, 64)
+	if err != nil || cursor < 0 {
+		writeError(w, http.StatusBadRequest, "INVALID_CURSOR", "cursor must be a non-negative integer")
+		return
+	}
+	limit := federation.DefaultReplayLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit <= 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit must be a positive integer")
+			return
+		}
+	}
+	events, err := h.relay.Replay(r.Context(), peerID, cursor, limit)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
 func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	var frame federation.RelayFrame
+	if json.Unmarshal(body, &frame) == nil && frame.EventID != uuid.Nil {
+		if _, err := h.svc.AuthenticatePeerToken(r.Context(), bearerToken(r), frame.PeerID); err != nil {
+			h.writeError(w, err)
+			return
+		}
+		payload, complete, frameErr := h.acceptFrame(frame)
+		if frameErr != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_CHUNK", frameErr.Error())
+			return
+		}
+		if !complete {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		body = payload
+	}
 	var envelope federation.FTLEnvelope
-	if err := decodeJSON(r, &envelope); err != nil {
+	if err := json.Unmarshal(body, &envelope); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
 		return
 	}
@@ -385,6 +469,17 @@ func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeError(w, err)
 		return
+	}
+	if frame.EventID != uuid.Nil && h.relay != nil {
+		fresh, receiptErr := h.relay.RecordReceipt(r.Context(), frame.EventID, envelope.PeerID, envelope.Sequence)
+		if receiptErr != nil {
+			h.writeError(w, receiptErr)
+			return
+		}
+		if !fresh {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 	}
 	dispatchPeerID := envelope.PeerID
 	if h.router != nil {
@@ -413,6 +508,36 @@ func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *FederationHandler) acceptFrame(frame federation.RelayFrame) ([]byte, bool, error) {
+	if frame.ChunkTotal < 1 || frame.ChunkSeq < 1 || frame.ChunkSeq > frame.ChunkTotal {
+		return nil, false, errors.New("invalid chunk metadata")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	a := h.chunks[frame.EventID]
+	if a == nil {
+		a = &relayAssembly{peerID: frame.PeerID, sequence: frame.SequenceNo, total: frame.ChunkTotal, parts: make(map[int][]byte)}
+		h.chunks[frame.EventID] = a
+	}
+	if a.peerID != frame.PeerID || a.sequence != frame.SequenceNo || a.total != frame.ChunkTotal {
+		return nil, false, errors.New("inconsistent chunk metadata")
+	}
+	a.parts[frame.ChunkSeq] = append([]byte(nil), frame.ChunkPayload...)
+	if len(a.parts) != a.total {
+		return nil, false, nil
+	}
+	var payload []byte
+	for i := 1; i <= a.total; i++ {
+		part, ok := a.parts[i]
+		if !ok {
+			return nil, false, nil
+		}
+		payload = append(payload, part...)
+	}
+	delete(h.chunks, frame.EventID)
+	return payload, true, nil
 }
 
 func linkResponse(peer *federation.FederationPeer) federationLinkResponse {

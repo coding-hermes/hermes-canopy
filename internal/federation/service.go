@@ -22,6 +22,7 @@ type Service struct {
 	mu        sync.RWMutex
 	sessions  map[uuid.UUID][]byte
 	localECDH map[uuid.UUID][]byte
+	relay     *RelayService
 }
 
 func NewService(repo Repository, signingKey []byte, serverID uuid.UUID, serverURL string) *Service {
@@ -32,9 +33,15 @@ func newService(repo Repository, signer *tokenSigner) *Service {
 	service := &Service{repo: repo, signer: signer, sessions: make(map[uuid.UUID][]byte), localECDH: make(map[uuid.UUID][]byte)}
 	if pgRepo, ok := repo.(*PGRepository); ok {
 		service.router = NewPGProfileRouter(pgRepo.pool)
+		service.relay = NewRelayService(NewPGRelayRepository(pgRepo.pool), repo, nil,
+			func(_ context.Context, peer *FederationPeer) (string, error) {
+				return service.GenerateToken(peer.CreatedBy, peer.TreeID)
+			})
 	}
 	return service
 }
+
+func (s *Service) Relay() *RelayService { return s.relay }
 
 func (s *Service) Create(ctx context.Context, route *Route) (*Route, error) {
 	if s.router == nil {

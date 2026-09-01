@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +17,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 type relayRepo struct {
@@ -195,4 +198,103 @@ func TestFederationTwoInstanceRelay(t *testing.T) {
 func fingerprintForTest(key []byte) string {
 	sum := sha256.Sum256(key)
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+type outageTransport struct {
+	mu      sync.Mutex
+	online  bool
+	handler http.Handler
+}
+
+func (t *outageTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	online, target := t.online, t.handler
+	t.mu.Unlock()
+	if !online {
+		return nil, errors.New("simulated peer outage")
+	}
+	recorder := httptest.NewRecorder()
+	target.ServeHTTP(recorder, req)
+	return recorder.Result(), nil
+}
+
+// TestFederationRelayQueueThenReplayAcrossOutage uses two separately migrated
+// PostgreSQL instances and an in-process HTTP transport so CANOPY_REQUIRE_DB=1
+// fails loudly when the required :5437 database is unavailable.
+func TestFederationRelayQueueThenReplayAcrossOutage(t *testing.T) {
+	t.Setenv("CANOPY_REQUIRE_DB", "1")
+	senderPool := testutil.NewIntegrationPool(t)
+	receiverPool := testutil.NewIntegrationPool(t)
+	ctx := context.Background()
+	peerID, treeID, profileID := uuid.New(), uuid.New(), uuid.New()
+	seed := func(pool *pgxpool.Pool) {
+		ownerID := uuid.New()
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,hermes_user_id,display_name) VALUES($1,$2,'Relay Owner')`, ownerID, "relay-"+ownerID.String()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO profiles(id,owner_id,profile_type,name,display_name) VALUES($1,$2,'hermes-profile',$3,'Relay Profile')`, profileID, ownerID, "relay-"+profileID.String()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO trees(id,owner_id,title) VALUES($1,$2,'Relay Tree')`, treeID, profileID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed(senderPool)
+	seed(receiverPool)
+	sender := federation.NewService(federation.NewPGRepository(senderPool), []byte("relay-a"), uuid.New(), "http://sender.local")
+	receiver := federation.NewService(federation.NewPGRepository(receiverPool), []byte("relay-b"), uuid.New(), "http://receiver.local")
+	insertPeer := func(pool *pgxpool.Pool, url, fp string, key []byte) {
+		_, err := pool.Exec(ctx, `INSERT INTO federation_peers(id,server_url,signing_key_fp,signing_public_key,state,tree_id,created_by) VALUES($1,$2,$3,$4,2,$5,$6)`, peerID, url, fp, key, treeID, profileID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	insertPeer(senderPool, "http://receiver.local", fingerprintForTest(receiver.SigningPublicKey()), receiver.SigningPublicKey())
+	insertPeer(receiverPool, "http://sender.local", fingerprintForTest(sender.SigningPublicKey()), sender.SigningPublicKey())
+	aPub, aPriv, _ := federation.GenerateECDHKeyPair()
+	bPub, bPriv, _ := federation.GenerateECDHKeyPair()
+	if err := sender.EstablishSession(peerID, aPriv, bPub); err != nil {
+		t.Fatal(err)
+	}
+	if err := receiver.EstablishSession(peerID, bPriv, aPub); err != nil {
+		t.Fatal(err)
+	}
+
+	receiverHandler := NewFederationHandler(receiver, "http://receiver.local")
+	transport := &outageTransport{handler: http.HandlerFunc(receiverHandler.PostEvent)}
+	senderRelay := federation.NewRelayService(federation.NewPGRelayRepository(senderPool), federation.NewPGRepository(senderPool), &http.Client{Transport: transport}, func(_ context.Context, _ *federation.FederationPeer) (string, error) {
+		return sender.GenerateToken(profileID, treeID)
+	})
+	envelope, err := sender.EncryptEnvelope(ctx, peerID, profileID, 1, "remote_node_added", []byte(`{"node_id":"offline"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := senderRelay.Enqueue(ctx, peerID, envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := senderRelay.DeliverPending(ctx, peerID); err == nil {
+		t.Fatal("delivery during outage unexpectedly succeeded")
+	}
+
+	transport.mu.Lock()
+	transport.online = true
+	transport.mu.Unlock()
+	if err := senderRelay.DeliverPending(ctx, peerID); err != nil {
+		t.Fatal(err)
+	}
+	// Force at-least-once redelivery; receiver receipt must suppress it.
+	if _, err := senderPool.Exec(ctx, `UPDATE federation_events SET status='failed' WHERE event_id=$1`, event.EventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := senderRelay.DeliverPending(ctx, peerID); err != nil {
+		t.Fatal(err)
+	}
+	var receipts int
+	if err := receiverPool.QueryRow(ctx, `SELECT count(*) FROM federation_event_receipts WHERE event_id=$1`, event.EventID).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 1 {
+		t.Fatalf("receipts = %d, want exactly 1", receipts)
+	}
 }
