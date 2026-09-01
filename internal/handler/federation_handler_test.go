@@ -171,3 +171,48 @@ func TestFederationHandlerRouteEndpoints(t *testing.T) {
 		t.Fatalf("DELETE status = %d", resp.StatusCode)
 	}
 }
+
+func TestFederationConflictManualResolveEndpoint(t *testing.T) {
+	t.Setenv("CANOPY_REQUIRE_DB", "1")
+	pool := testutil.NewIntegrationPool(t)
+	ctx := context.Background()
+	ownerID, profileID, treeID, nodeID, peerID, conflictID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO users(id,hermes_user_id,display_name) VALUES($1,$2,'Resolve Owner')`, ownerID, "resolve-"+ownerID.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO profiles(id,owner_id,profile_type,name,display_name) VALUES($1,$2,'hermes-profile',$3,'Resolve Profile')`, profileID, ownerID, "resolve-"+profileID.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO trees(id,owner_id,title) VALUES($1,$2,'Resolve Tree')`, treeID, profileID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO nodes(id,tree_id,author_id,content) VALUES($1,$2,$3,'right')`, nodeID, treeID, profileID); err != nil {
+		t.Fatal(err)
+	}
+	left := map[string]any{"node_id": nodeID, "content": "left"}
+	right := map[string]any{"node_id": nodeID, "content": "right"}
+	if _, err := pool.Exec(ctx, `INSERT INTO federation_node_clocks(tree_id,node_id,clock,winner_payload,winner_lamport,winner_peer_id)
+		VALUES($1,$2,'{}',$3,1,$4)`, treeID, nodeID, right, peerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO federation_conflicts(id,tree_id,node_id,left_payload,right_payload) VALUES($1,$2,$3,$4,$5)`, conflictID, treeID, nodeID, left, right); err != nil {
+		t.Fatal(err)
+	}
+	svc := federation.NewService(federation.NewPGRepository(pool), []byte("resolve-secret"), uuid.New(), "https://local.example")
+	h := NewFederationHandler(svc, "https://local.example")
+	router := chi.NewRouter()
+	router.Mount("/api/v1/federation/conflicts", h.ConflictRoutes())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/federation/conflicts/"+conflictID.String()+"/resolve", bytes.NewBufferString(`{"resolution":"left"}`))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var content, resolution string
+	if err := pool.QueryRow(ctx, `SELECT n.content,c.resolution FROM nodes n JOIN federation_conflicts c ON c.node_id=n.id WHERE c.id=$1`, conflictID).Scan(&content, &resolution); err != nil {
+		t.Fatal(err)
+	}
+	if content != "left" || resolution != "left" {
+		t.Fatalf("content = %q, resolution = %q", content, resolution)
+	}
+}

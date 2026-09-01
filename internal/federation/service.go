@@ -23,6 +23,7 @@ type Service struct {
 	sessions  map[uuid.UUID][]byte
 	localECDH map[uuid.UUID][]byte
 	relay     *RelayService
+	conflicts *conflictStore
 }
 
 func NewService(repo Repository, signingKey []byte, serverID uuid.UUID, serverURL string) *Service {
@@ -37,11 +38,26 @@ func newService(repo Repository, signer *tokenSigner) *Service {
 			func(_ context.Context, peer *FederationPeer) (string, error) {
 				return service.GenerateToken(peer.CreatedBy, peer.TreeID)
 			})
+		service.conflicts = newConflictStore(pgRepo.pool)
 	}
 	return service
 }
 
 func (s *Service) Relay() *RelayService { return s.relay }
+
+func (s *Service) ListConflicts(ctx context.Context, treeID *uuid.UUID, unresolved bool) ([]Conflict, error) {
+	if s.conflicts == nil {
+		return nil, ErrConflictNotFound
+	}
+	return s.conflicts.list(ctx, treeID, unresolved)
+}
+
+func (s *Service) ResolveConflict(ctx context.Context, id uuid.UUID, resolution string) (*Conflict, error) {
+	if s.conflicts == nil || id == uuid.Nil {
+		return nil, ErrConflictNotFound
+	}
+	return s.conflicts.resolve(ctx, id, resolution)
+}
 
 func (s *Service) Create(ctx context.Context, route *Route) (*Route, error) {
 	if s.router == nil {

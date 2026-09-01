@@ -82,6 +82,71 @@ func (h *FederationHandler) RouteRoutes() chi.Router {
 	return r
 }
 
+func (h *FederationHandler) ConflictRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", h.ListConflicts)
+	r.Post("/{conflict_id}/resolve", h.ResolveConflict)
+	return r
+}
+
+type conflictService interface {
+	ListConflicts(context.Context, *uuid.UUID, bool) ([]federation.Conflict, error)
+	ResolveConflict(context.Context, uuid.UUID, string) (*federation.Conflict, error)
+}
+
+func (h *FederationHandler) ListConflicts(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.svc.(conflictService)
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "FEDERATION_CONFLICTS_UNAVAILABLE", "conflict resolution is unavailable")
+		return
+	}
+	treeID, valid := optionalUUIDQuery(w, r, "tree_id")
+	if !valid {
+		return
+	}
+	unresolved := false
+	if raw := r.URL.Query().Get("unresolved"); raw != "" {
+		var err error
+		unresolved, err = strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_UNRESOLVED", "unresolved must be a boolean")
+			return
+		}
+	}
+	conflicts, err := svc.ListConflicts(r.Context(), treeID, unresolved)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"conflicts": conflicts})
+}
+
+func (h *FederationHandler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.svc.(conflictService)
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "FEDERATION_CONFLICTS_UNAVAILABLE", "conflict resolution is unavailable")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "conflict_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_CONFLICT_ID", "conflict_id must be a valid UUID")
+		return
+	}
+	var req struct {
+		Resolution string `json:"resolution"`
+	}
+	if decodeJSON(r, &req) != nil || (req.Resolution != "left" && req.Resolution != "right") {
+		writeError(w, http.StatusBadRequest, "INVALID_RESOLUTION", "resolution must be left or right")
+		return
+	}
+	conflict, err := svc.ResolveConflict(r.Context(), id, req.Resolution)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, conflict)
+}
+
 type routeRequest struct {
 	ID        uuid.UUID            `json:"id,omitempty"`
 	ProfileID uuid.UUID            `json:"profile_id,omitempty"`
@@ -558,6 +623,8 @@ func (h *FederationHandler) writeError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "federation link fields are invalid")
 	case errors.Is(err, federation.ErrRouteNotFound):
 		writeError(w, http.StatusNotFound, "PROFILE_ROUTE_NOT_FOUND", "profile route not found")
+	case errors.Is(err, federation.ErrConflictNotFound):
+		writeError(w, http.StatusNotFound, "FEDERATION_CONFLICT_NOT_FOUND", "federation conflict not found")
 	default:
 		log.Error().Err(err).Msg("federation handler")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "federation operation failed")

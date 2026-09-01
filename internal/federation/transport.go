@@ -160,5 +160,10 @@ func (s *Service) ReceiveEvent(ctx context.Context, envelope *FTLEnvelope) (*FTL
 	if json.Unmarshal(plaintext, &inner) != nil {
 		return nil, ErrDecryptionFailed
 	}
+	if mutation, ok := decodeMutation(&inner, envelope); ok && s.conflicts != nil {
+		if err := s.conflicts.apply(ctx, envelope.TreeID, mutation); err != nil {
+			return nil, err
+		}
+	}
 	return &inner, nil
 }
