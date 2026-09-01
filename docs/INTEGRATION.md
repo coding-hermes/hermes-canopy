@@ -33,11 +33,20 @@ This starts two services:
 - Persistent volume: `pgdata` at `/var/lib/postgresql/data`
 
 **canopyd** (container name: `canopy-server`)
-- Port: **8091** (host) → 8080 (container)
+- Port: **8092** (host) → 8080 (container) — 8091 is reserved for the host
+  systemd `canopy-canopyd.service` primary instance; compose is the
+  containerized alternative and must not fight it for the port
 - Connects to postgres via `CANOPY_DB_URL=postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable`
 - Waits for postgres health check before starting
 - Metrics enabled by default (`METRICS_ENABLED=true`)
 - Built from `deploy/Dockerfile`
+- Gateway integration (GAP-050): reaches the Hermes api_server via
+  `HERMES_WEBUI_GATEWAY_BASE_URL=http://host.docker.internal:8642`
+  (`extra_hosts: host-gateway`), with the key supplied by `.env`
+  (`API_SERVER_KEY`, gitignored). NOTE: this only works if the Hermes
+  api_server listens on a non-loopback interface (e.g.
+  `HERMES_API_SERVER_HOST=0.0.0.0`); bound to `127.0.0.1` the container
+  cannot reach it and `/api/v1/gateway/status` reports `connected:false`.
 
 > **Important:** The compose file maps PostgreSQL to host port **5437**, not the
 > default 5432. `make run` already defaults to `DB_PORT=5437`; if you run the raw
