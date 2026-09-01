@@ -340,3 +340,4 @@
 {"id":340,"ts":"2026-09-01 09:12:24","type":"task_completed","actor":"bankai-codex-wave13","task_id":"FTR-04-P5","commit":"24e62c7","verdict":"cf9e9e74","summary":"FTR-04-P5 WebRTC adapter + relay fallback complete; judge PASS"}
 {"id": 341, "task_id": "FTR-04-P6", "type": "complete", "ts": "2026-09-01 09:30:15", "data": {"commit": "db90283", "judge": "daf34065", "summary": "pion wiring + relay fallback verified live (two-peer RT, relay trio, env gate)"}}
 {"id":342,"ts":"2026-09-01 10:09:37","task_id":"FTR-04","type":"status_change","status":"complete","note":"FTR-04 SPEC COMPLETE P1-P7 (P7: 2799615, judge c5f3a3dc)"}
+{"id":343,"ts":"2026-09-01 10:10:01","task_id":"FTR-04-P7","type":"status_change","status":"complete","note":"row added complete (2799615, judge c5f3a3dc)"}
