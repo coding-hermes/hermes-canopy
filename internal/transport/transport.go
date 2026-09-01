@@ -147,6 +147,7 @@ func AllTransportTypes() []TransportType {
 
 // AuthMaterial carries transport-specific credentials.
 type AuthMaterial struct {
+	Bearer   string
 	Token    string
 	CertPEM  []byte
 	KeyPEM   []byte

@@ -4,40 +4,13 @@ import "context"
 
 // --- Stub adapters (SPEC-FTR-04 §1, Implementation Plan Phase 2–5) -----------
 //
-// NATSAdapter, WebRTCAdapter, RedisAdapter, and RelayAdapter are placeholders
+// WebRTCAdapter, RedisAdapter, and RelayAdapter are placeholders
 // for post-MVP implementation. Every method returns ErrTransportUnreachable
 // so that the TransportSelector fallback chain and ConnectionManager degrade
 // gracefully: a stub transport is treated as permanently unavailable, and the
 // selector moves to the next entry in the chain.
 //
 // TODO(post-MVP): implement each adapter per the phase plan in SPEC-FTR-04 §9.
-
-// --- NATSAdapter (Phase 2) --------------------------------------------------
-
-// NATSAdapter is a stub for the NATS JetStream transport.
-// TODO(post-MVP): implement with nats.go + JetStream (SPEC-FTR-04 §9 Phase 2).
-type NATSAdapter struct{}
-
-// NewNATSAdapter returns a stub NATS adapter.
-func NewNATSAdapter() *NATSAdapter { return &NATSAdapter{} }
-
-func (a *NATSAdapter) TransportType() TransportType { return TransportNATS }
-
-func (a *NATSAdapter) Connect(_ context.Context, _ ConnectOptions) (*Connection, error) {
-	return nil, ErrTransportUnreachable
-}
-func (a *NATSAdapter) Send(_ context.Context, _ *Connection, _ *Message) error {
-	return ErrTransportUnreachable
-}
-func (a *NATSAdapter) Receive(_ context.Context, _ *Connection) (<-chan *Message, error) {
-	return nil, ErrTransportUnreachable
-}
-func (a *NATSAdapter) Disconnect(_ context.Context, _ *Connection) error {
-	return ErrTransportUnreachable
-}
-func (a *NATSAdapter) Health(_ context.Context) error {
-	return ErrTransportUnreachable
-}
 
 // --- WebRTCAdapter (Phase 4) ------------------------------------------------
 

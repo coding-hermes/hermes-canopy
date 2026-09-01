@@ -50,14 +50,25 @@ func NewConnectionManager(selector *TransportSelector, adapters ...TransportAdap
 	}
 }
 
-// RegisterAdapter makes an adapter available for routing. Phase 1 accepts SSE only.
+// RegisterAdapter makes an adapter available for routing by transport type.
 func (cm *ConnectionManager) RegisterAdapter(adapter TransportAdapter) error {
 	typed, ok := adapter.(interface{ TransportType() TransportType })
-	if !ok || typed.TransportType() != TransportSSE {
+	if !ok || adapter == nil {
+		return ErrTransportMismatch
+	}
+	tt := typed.TransportType()
+	known := false
+	for _, candidate := range AllTransportTypes() {
+		if tt == candidate {
+			known = true
+			break
+		}
+	}
+	if !known {
 		return ErrTransportMismatch
 	}
 	cm.mu.Lock()
-	cm.adapters[TransportSSE] = adapter
+	cm.adapters[tt] = adapter
 	cm.mu.Unlock()
 	return nil
 }
