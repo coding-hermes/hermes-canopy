@@ -245,15 +245,17 @@ func main() {
 	pluginRepo := plugin.NewPGPluginRepo(database.Pool)
 	pluginSvc := plugin.NewService(pluginRepo, cfg.PluginMaxSize)
 
-	// Core federation (SPEC-FTR-02 P1). P1 derives its deterministic HMAC
-	// signing identity from existing server configuration; persistent Ed25519
-	// key management is part of P2.
+	// Federation identity is a singleton Ed25519 keypair persisted in PostgreSQL.
 	federationURL := cfg.HTTPAddr
 	if !strings.HasPrefix(federationURL, "http://") && !strings.HasPrefix(federationURL, "https://") {
 		federationURL = "http://" + federationURL
 	}
 	federationID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(federationURL))
-	federationSvc := federation.NewService(federation.NewPGRepository(database.Pool), []byte(cfg.JWTSecret), federationID, federationURL)
+	federationRepo := federation.NewPGRepository(database.Pool)
+	federationSvc, err := federationRepo.NewPersistentService(ctx, []byte(cfg.JWTSecret), federationID, federationURL)
+	if err != nil {
+		log.Fatal().Err(err).Msg("initialize federation identity")
+	}
 
 	srv := server.New(cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -12,15 +14,23 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 type FederationHandler struct {
 	svc       federation.FederationService
 	serverURL string
+	hub       sse.SSEHub
+	mu        sync.RWMutex
+	relays    map[uuid.UUID]map[chan federation.FTLEnvelope]struct{}
 }
 
-func NewFederationHandler(svc federation.FederationService, serverURL string) *FederationHandler {
-	return &FederationHandler{svc: svc, serverURL: serverURL}
+func NewFederationHandler(svc federation.FederationService, serverURL string, hubs ...sse.SSEHub) *FederationHandler {
+	var hub sse.SSEHub
+	if len(hubs) > 0 {
+		hub = hubs[0]
+	}
+	return &FederationHandler{svc: svc, serverURL: serverURL, hub: hub, relays: make(map[uuid.UUID]map[chan federation.FTLEnvelope]struct{})}
 }
 
 func (h *FederationHandler) LinkRoutes() chi.Router {
@@ -90,15 +100,17 @@ func (h *FederationHandler) RevokeLink(w http.ResponseWriter, r *http.Request) {
 }
 
 type federationHandshakeRequest struct {
-	Token          string `json:"token"`
-	ServerURL      string `json:"server_url"`
-	ECDHEPublicKey string `json:"ecdhe_public_key"`
+	Token            string `json:"token"`
+	ServerURL        string `json:"server_url"`
+	ECDHEPublicKey   string `json:"ecdhe_public_key"`
+	SigningPublicKey string `json:"signing_public_key,omitempty"`
 }
 
 type federationHandshakeResponse struct {
-	PeerID         uuid.UUID `json:"peer_id"`
-	ServerURL      string    `json:"server_url"`
-	ECDHEPublicKey string    `json:"ecdhe_public_key"`
+	PeerID           uuid.UUID `json:"peer_id"`
+	ServerURL        string    `json:"server_url"`
+	ECDHEPublicKey   string    `json:"ecdhe_public_key"`
+	SigningPublicKey string    `json:"signing_public_key"`
 }
 
 // FederationAuthMiddleware implements SPEC-FTR-02 §5's dual authentication
@@ -111,7 +123,7 @@ func FederationAuthMiddleware(jwtSecret string, svc federation.FederationService
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			parts := strings.Fields(r.Header.Get("Authorization"))
 			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-				if _, err := svc.VerifyToken(parts[1]); err == nil {
+				if _, err := svc.VerifyToken(parts[1]); err == nil || strings.Count(parts[1], ".") == 1 {
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -132,14 +144,105 @@ func (h *FederationHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_ECDHE_PUBLIC_KEY", "ecdhe_public_key must be base64")
 		return
 	}
-	peer, err := h.svc.AcceptFederationLink(r.Context(), req.Token, req.ServerURL, key)
+	signingKey, err := base64.StdEncoding.DecodeString(req.SigningPublicKey)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_SIGNING_PUBLIC_KEY", "signing_public_key must be base64")
+		return
+	}
+	peer, err := h.svc.AcceptFederationLink(r.Context(), req.Token, req.ServerURL, key, signingKey)
 	if err != nil {
 		h.writeError(w, err)
 		return
 	}
-	// P1 persists but does not use the peer key. A local response key is not
-	// generated until P2, so the deterministic empty byte string is returned.
-	writeJSON(w, http.StatusOK, federationHandshakeResponse{PeerID: peer.ID, ServerURL: h.serverURL, ECDHEPublicKey: base64.StdEncoding.EncodeToString(nil)})
+	localKey, err := h.svc.LocalECDHEPublicKey(peer.ID)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, federationHandshakeResponse{PeerID: peer.ID, ServerURL: h.serverURL, ECDHEPublicKey: base64.StdEncoding.EncodeToString(localKey), SigningPublicKey: base64.StdEncoding.EncodeToString(h.svc.SigningPublicKey())})
+}
+
+func bearerToken(r *http.Request) string {
+	parts := strings.Fields(r.Header.Get("Authorization"))
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return parts[1]
+	}
+	return ""
+}
+
+// Events streams live FTL envelopes. P4 replay and buffering are deliberately absent.
+func (h *FederationHandler) Events(w http.ResponseWriter, r *http.Request) {
+	peerID, err := uuid.Parse(r.URL.Query().Get("peer_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_PEER_ID", "peer_id must be a valid UUID")
+		return
+	}
+	if _, err = h.svc.AuthenticatePeerToken(r.Context(), bearerToken(r), peerID); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "SSE_UNSUPPORTED", "streaming unsupported")
+		return
+	}
+	ch := make(chan federation.FTLEnvelope, 16)
+	h.mu.Lock()
+	if h.relays[peerID] == nil {
+		h.relays[peerID] = make(map[chan federation.FTLEnvelope]struct{})
+	}
+	h.relays[peerID][ch] = struct{}{}
+	h.mu.Unlock()
+	defer func() { h.mu.Lock(); delete(h.relays[peerID], ch); h.mu.Unlock() }()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+	encoder := json.NewEncoder(w)
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case envelope := <-ch:
+			_, _ = w.Write([]byte("event: ftl_event\ndata: "))
+			_ = encoder.Encode(envelope)
+			_, _ = w.Write([]byte("\n"))
+			flusher.Flush()
+		}
+	}
+}
+
+func (h *FederationHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
+	var envelope federation.FTLEnvelope
+	if err := decodeJSON(r, &envelope); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	if _, err := h.svc.AuthenticatePeerToken(r.Context(), bearerToken(r), envelope.PeerID); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	inner, err := h.svc.ReceiveEvent(r.Context(), &envelope)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	if h.hub != nil {
+		h.hub.Broadcast(envelope.TreeID, sse.ComposeEvent(envelope.TreeID, envelope.SenderProfileID, inner.EventType, inner.Payload))
+	}
+	h.mu.RLock()
+	subscribers := make([]chan federation.FTLEnvelope, 0, len(h.relays[envelope.PeerID]))
+	for ch := range h.relays[envelope.PeerID] {
+		subscribers = append(subscribers, ch)
+	}
+	h.mu.RUnlock()
+	for _, ch := range subscribers {
+		select {
+		case ch <- envelope:
+		default:
+		}
+	}
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func linkResponse(peer *federation.FederationPeer) federationLinkResponse {

@@ -1,12 +1,12 @@
 package federation
 
 import (
+	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -24,39 +24,48 @@ type TokenClaims struct {
 	SigningKeyFP string    `json:"signing_key_fp"`
 }
 
-// tokenSigner implements the signed payload in SPEC-FTR-02 §4.2 with HMAC-
-// SHA256 for P1. The spec's design decision already calls federation tokens
-// HMAC-verified; Ed25519 key exchange/management is explicitly deferred to P2.
 type tokenSigner struct {
-	key       []byte
-	serverID  uuid.UUID
-	serverURL string
-	now       func() time.Time
+	legacyKey  []byte
+	publicKey  ed25519.PublicKey
+	privateKey ed25519.PrivateKey
+	serverID   uuid.UUID
+	serverURL  string
+	now        func() time.Time
 }
 
-func newTokenSigner(key []byte, serverID uuid.UUID, serverURL string) *tokenSigner {
-	return &tokenSigner{key: key, serverID: serverID, serverURL: serverURL, now: func() time.Time { return time.Now().UTC() }}
+func newTokenSigner(legacyKey []byte, serverID uuid.UUID, serverURL string) *tokenSigner {
+	seed := sha256.Sum256(append([]byte("hermes-federation-ed25519:"), legacyKey...))
+	return newTokenSignerWithIdentity(legacyKey, ed25519.NewKeyFromSeed(seed[:]), serverID, serverURL)
 }
 
-func (s *tokenSigner) fingerprint() string {
-	sum := sha256.Sum256(s.key)
+func newTokenSignerWithIdentity(legacyKey []byte, privateKey ed25519.PrivateKey, serverID uuid.UUID, serverURL string) *tokenSigner {
+	publicKey := append(ed25519.PublicKey(nil), privateKey.Public().(ed25519.PublicKey)...)
+	return &tokenSigner{append([]byte(nil), legacyKey...), publicKey, append(ed25519.PrivateKey(nil), privateKey...), serverID, serverURL, func() time.Time { return time.Now().UTC() }}
+}
+
+func keyFingerprint(key []byte) string {
+	sum := sha256.Sum256(key)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
+
+func (s *tokenSigner) fingerprint() string { return keyFingerprint(s.publicKey) }
 
 func (s *tokenSigner) generate(profileID, treeID uuid.UUID) (string, error) {
 	now := s.now()
 	claims := TokenClaims{1, s.serverID, s.serverURL, profileID, treeID, now, now.Add(24 * time.Hour), s.fingerprint()}
 	payload, err := json.Marshal(claims)
 	if err != nil {
-		return "", fmt.Errorf("federation: marshal token: %w", err)
+		return "", err
 	}
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(encoded))
-	return encoded + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
+	return encoded + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(s.privateKey, []byte(encoded))), nil
 }
 
 func (s *tokenSigner) verify(token string) (*TokenClaims, error) {
+	return s.verifyWithKey(token, s.publicKey)
+}
+
+func (s *tokenSigner) verifyWithKey(token string, publicKey ed25519.PublicKey) (*TokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return nil, ErrTokenInvalid
@@ -65,9 +74,15 @@ func (s *tokenSigner) verify(token string) (*TokenClaims, error) {
 	if err != nil {
 		return nil, ErrTokenInvalid
 	}
-	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(parts[0]))
-	if !hmac.Equal(sig, mac.Sum(nil)) {
+	edValid := len(publicKey) == ed25519.PublicKeySize && ed25519.Verify(publicKey, []byte(parts[0]), sig)
+	legacyValid := false
+	// P2 transition: accept P1 HMAC tokens until their 24-hour expiry.
+	if !edValid && len(s.legacyKey) > 0 {
+		mac := hmac.New(sha256.New, s.legacyKey)
+		_, _ = mac.Write([]byte(parts[0]))
+		legacyValid = hmac.Equal(sig, mac.Sum(nil))
+	}
+	if !edValid && !legacyValid {
 		return nil, ErrTokenInvalid
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
@@ -75,7 +90,10 @@ func (s *tokenSigner) verify(token string) (*TokenClaims, error) {
 		return nil, ErrTokenInvalid
 	}
 	var claims TokenClaims
-	if err := json.Unmarshal(payload, &claims); err != nil || claims.TokenVersion != 1 || claims.ServerID == uuid.Nil || claims.ProfileID == uuid.Nil || claims.TreeID == uuid.Nil || claims.ServerURL == "" || claims.SigningKeyFP != s.fingerprint() {
+	if json.Unmarshal(payload, &claims) != nil || claims.TokenVersion != 1 || claims.ServerID == uuid.Nil || claims.ProfileID == uuid.Nil || claims.TreeID == uuid.Nil || claims.ServerURL == "" {
+		return nil, ErrTokenInvalid
+	}
+	if edValid && claims.SigningKeyFP != keyFingerprint(publicKey) {
 		return nil, ErrTokenInvalid
 	}
 	if !claims.ExpiresAt.After(s.now()) {

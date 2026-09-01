@@ -2,6 +2,8 @@ package federation
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"time"
@@ -15,12 +17,34 @@ type PGRepository struct{ pool *pgxpool.Pool }
 
 func NewPGRepository(pool *pgxpool.Pool) *PGRepository { return &PGRepository{pool: pool} }
 
-const peerColumns = `id, server_url, signing_key_fp, ecdhe_public_key, role, state,
+// NewPersistentService loads or atomically creates the singleton Ed25519
+// identity stored in federation_identity. ECDH session material is never stored.
+func (r *PGRepository) NewPersistentService(ctx context.Context, legacyKey []byte, serverID uuid.UUID, serverURL string) (*Service, error) {
+	var publicKey, privateKey []byte
+	err := r.pool.QueryRow(ctx, `SELECT public_key, private_key FROM federation_identity WHERE singleton=true`).Scan(&publicKey, &privateKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		publicKey, privateKey, err = ed25519.GenerateKey(rand.Reader)
+		if err == nil {
+			err = r.pool.QueryRow(ctx, `INSERT INTO federation_identity (singleton, public_key, private_key) VALUES (true,$1,$2)
+				ON CONFLICT (singleton) DO UPDATE SET singleton=EXCLUDED.singleton
+				RETURNING public_key, private_key`, publicKey, privateKey).Scan(&publicKey, &privateKey)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("federation: load signing identity: %w", err)
+	}
+	if len(publicKey) != ed25519.PublicKeySize || len(privateKey) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("federation: invalid persisted signing identity")
+	}
+	return newService(r, newTokenSignerWithIdentity(legacyKey, ed25519.PrivateKey(privateKey), serverID, serverURL)), nil
+}
+
+const peerColumns = `id, server_url, signing_key_fp, ecdhe_public_key, signing_public_key, role, state,
 tree_id, created_by, created_at, connected_at, last_heartbeat, revoked_at, revoke_reason`
 
 func scanPeer(row pgx.Row) (*FederationPeer, error) {
 	var p FederationPeer
-	if err := row.Scan(&p.ID, &p.ServerURL, &p.SigningKeyFP, &p.ECDHEPublicKey, &p.Role, &p.State,
+	if err := row.Scan(&p.ID, &p.ServerURL, &p.SigningKeyFP, &p.ECDHEPublicKey, &p.SigningPublicKey, &p.Role, &p.State,
 		&p.TreeID, &p.CreatedBy, &p.CreatedAt, &p.ConnectedAt, &p.LastHeartbeat, &p.RevokedAt, &p.RevokeReason); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrFederationNotFound
@@ -32,21 +56,21 @@ func scanPeer(row pgx.Row) (*FederationPeer, error) {
 
 func (r *PGRepository) Create(ctx context.Context, p *FederationPeer) (*FederationPeer, error) {
 	return scanPeer(r.pool.QueryRow(ctx, `INSERT INTO federation_peers
-        (server_url, signing_key_fp, ecdhe_public_key, role, state, tree_id, created_by, connected_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+peerColumns,
-		p.ServerURL, p.SigningKeyFP, p.ECDHEPublicKey, p.Role, p.State, p.TreeID, p.CreatedBy, p.ConnectedAt))
+        (server_url, signing_key_fp, ecdhe_public_key, signing_public_key, role, state, tree_id, created_by, connected_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+peerColumns,
+		p.ServerURL, p.SigningKeyFP, p.ECDHEPublicKey, p.SigningPublicKey, p.Role, p.State, p.TreeID, p.CreatedBy, p.ConnectedAt))
 }
 
 func (r *PGRepository) UpsertAccepted(ctx context.Context, p *FederationPeer) (*FederationPeer, error) {
 	return scanPeer(r.pool.QueryRow(ctx, `INSERT INTO federation_peers
-        (server_url, signing_key_fp, ecdhe_public_key, role, state, tree_id, created_by, connected_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (server_url, signing_key_fp, ecdhe_public_key, signing_public_key, role, state, tree_id, created_by, connected_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (server_url, tree_id) DO UPDATE SET
-          signing_key_fp=EXCLUDED.signing_key_fp, ecdhe_public_key=EXCLUDED.ecdhe_public_key,
+          signing_key_fp=EXCLUDED.signing_key_fp, ecdhe_public_key=EXCLUDED.ecdhe_public_key, signing_public_key=EXCLUDED.signing_public_key,
           state=EXCLUDED.state, connected_at=EXCLUDED.connected_at
-        WHERE federation_peers.state <> $9
+        WHERE federation_peers.state <> $10
         RETURNING `+peerColumns,
-		p.ServerURL, p.SigningKeyFP, p.ECDHEPublicKey, p.Role, p.State, p.TreeID, p.CreatedBy, p.ConnectedAt, PeerRevoked))
+		p.ServerURL, p.SigningKeyFP, p.ECDHEPublicKey, p.SigningPublicKey, p.Role, p.State, p.TreeID, p.CreatedBy, p.ConnectedAt, PeerRevoked))
 }
 
 func (r *PGRepository) Get(ctx context.Context, id uuid.UUID) (*FederationPeer, error) {

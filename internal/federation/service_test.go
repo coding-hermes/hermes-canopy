@@ -109,11 +109,15 @@ func TestServiceHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer, err := svc.AcceptFederationLink(ctx, token, "https://local.example", []byte("peer-key"))
+	peerKey, _, err := GenerateECDHKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, err := svc.AcceptFederationLink(ctx, token, "https://local.example", peerKey)
 	if err != nil {
 		t.Fatalf("AcceptFederationLink: %v", err)
 	}
-	if peer.Role != RoleAcceptor || peer.State != PeerConnected || string(peer.ECDHEPublicKey) != "peer-key" {
+	if peer.Role != RoleAcceptor || peer.State != PeerConnected || string(peer.ECDHEPublicKey) != string(peerKey) {
 		t.Fatalf("accepted peer = %+v", peer)
 	}
 

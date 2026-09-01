@@ -2,23 +2,36 @@ package federation
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	repo   Repository
-	signer *tokenSigner
+	repo      Repository
+	signer    *tokenSigner
+	mu        sync.RWMutex
+	sessions  map[uuid.UUID][]byte
+	localECDH map[uuid.UUID][]byte
 }
 
 func NewService(repo Repository, signingKey []byte, serverID uuid.UUID, serverURL string) *Service {
-	return &Service{repo: repo, signer: newTokenSigner(signingKey, serverID, strings.TrimRight(serverURL, "/"))}
+	return newService(repo, newTokenSigner(signingKey, serverID, strings.TrimRight(serverURL, "/")))
 }
+
+func newService(repo Repository, signer *tokenSigner) *Service {
+	return &Service{repo: repo, signer: signer, sessions: make(map[uuid.UUID][]byte), localECDH: make(map[uuid.UUID][]byte)}
+}
+
+func (s *Service) SigningPublicKey() []byte { return append([]byte(nil), s.signer.publicKey...) }
 
 func (s *Service) GenerateToken(profileID, treeID uuid.UUID) (string, error) {
 	if profileID == uuid.Nil || treeID == uuid.Nil {
@@ -28,6 +41,18 @@ func (s *Service) GenerateToken(profileID, treeID uuid.UUID) (string, error) {
 }
 
 func (s *Service) VerifyToken(token string) (*TokenClaims, error) { return s.signer.verify(token) }
+
+func (s *Service) AuthenticatePeerToken(ctx context.Context, token string, peerID uuid.UUID) (*TokenClaims, error) {
+	peer, err := s.repo.Get(ctx, peerID)
+	if err != nil {
+		return nil, err
+	}
+	claims, err := s.signer.verifyWithKey(token, ed25519.PublicKey(peer.SigningPublicKey))
+	if err != nil || claims.TreeID != peer.TreeID {
+		return nil, ErrTokenInvalid
+	}
+	return claims, nil
+}
 
 func (s *Service) CreateFederationLink(ctx context.Context, remoteURL string, profileID, treeID uuid.UUID) (*FederationPeer, string, error) {
 	remoteURL = strings.TrimRight(strings.TrimSpace(remoteURL), "/")
@@ -55,8 +80,15 @@ func (s *Service) CreateFederationLink(ctx context.Context, remoteURL string, pr
 	return peer, token, nil
 }
 
-func (s *Service) AcceptFederationLink(ctx context.Context, token, requestServerURL string, ecdhePublicKey []byte) (*FederationPeer, error) {
-	claims, err := s.VerifyToken(token)
+func (s *Service) AcceptFederationLink(ctx context.Context, token, requestServerURL string, ecdhePublicKey []byte, signingKeys ...[]byte) (*FederationPeer, error) {
+	var signingKey ed25519.PublicKey
+	if len(signingKeys) > 0 {
+		signingKey = signingKeys[0]
+	}
+	claims, err := s.signer.verifyWithKey(token, signingKey)
+	if len(signingKey) == 0 {
+		claims, err = s.VerifyToken(token)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +101,52 @@ func (s *Service) AcceptFederationLink(ctx context.Context, token, requestServer
 	} else if findErr != nil && !errors.Is(findErr, ErrFederationNotFound) {
 		return nil, fmt.Errorf("federation: find handshake peer: %w", findErr)
 	}
+	curve := ecdh.X25519()
+	remoteKey, keyErr := curve.NewPublicKey(ecdhePublicKey)
+	if keyErr != nil {
+		return nil, ErrInvalidInput
+	}
+	localPrivate, keyErr := curve.GenerateKey(rand.Reader)
+	if keyErr != nil {
+		return nil, fmt.Errorf("federation: generate ECDH key: %w", keyErr)
+	}
+	shared, keyErr := localPrivate.ECDH(remoteKey)
+	if keyErr != nil {
+		return nil, ErrInvalidInput
+	}
 	now := time.Now().UTC()
-	peer, err := s.repo.UpsertAccepted(ctx, &FederationPeer{ServerURL: requestServerURL, SigningKeyFP: claims.SigningKeyFP, ECDHEPublicKey: ecdhePublicKey, Role: RoleAcceptor, State: PeerConnected, TreeID: claims.TreeID, CreatedBy: claims.ProfileID, ConnectedAt: &now})
+	peer, err := s.repo.UpsertAccepted(ctx, &FederationPeer{ServerURL: requestServerURL, SigningKeyFP: claims.SigningKeyFP, ECDHEPublicKey: ecdhePublicKey, SigningPublicKey: signingKey, Role: RoleAcceptor, State: PeerConnected, TreeID: claims.TreeID, CreatedBy: claims.ProfileID, ConnectedAt: &now})
 	if err != nil {
 		return nil, fmt.Errorf("federation: accept link: %w", err)
 	}
+	s.mu.Lock()
+	s.sessions[peer.ID] = shared
+	s.localECDH[peer.ID] = append([]byte(nil), localPrivate.PublicKey().Bytes()...)
+	s.mu.Unlock()
 	return peer, nil
+}
+
+func (s *Service) LocalECDHEPublicKey(peerID uuid.UUID) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	key, ok := s.localECDH[peerID]
+	if !ok {
+		return nil, ErrNoSharedSecret
+	}
+	return append([]byte(nil), key...), nil
+}
+
+// EstablishSession derives and installs an ephemeral session key. It is used
+// by the initiating side after receiving the handshake response.
+func (s *Service) EstablishSession(peerID uuid.UUID, localPrivateKey, remotePublicKey []byte) error {
+	shared, err := DeriveSharedSecret(localPrivateKey, remotePublicKey)
+	if err != nil {
+		return ErrInvalidInput
+	}
+	s.mu.Lock()
+	s.sessions[peerID] = shared
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Service) RevokeFederationLink(ctx context.Context, peerID uuid.UUID) error {

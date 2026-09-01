@@ -32,6 +32,10 @@ func TestFederationHandlerHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ecdhPublicKey, _, err := federation.GenerateECDHKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	secret := []byte("federation-handler-secret")
 	svc := federation.NewService(federation.NewPGRepository(pool), secret, uuid.New(), "https://canopy-a.example.com")
@@ -56,7 +60,7 @@ func TestFederationHandlerHandshake(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := map[string]string{"token": tt.token, "server_url": "https://canopy-a.example.com", "ecdhe_public_key": base64.StdEncoding.EncodeToString([]byte("x25519-public-key"))}
+			body := map[string]string{"token": tt.token, "server_url": "https://canopy-a.example.com", "ecdhe_public_key": base64.StdEncoding.EncodeToString(ecdhPublicKey), "signing_public_key": base64.StdEncoding.EncodeToString(svc.SigningPublicKey())}
 			data, _ := json.Marshal(body)
 			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/federation/handshake", bytes.NewReader(data))
 			req.Header.Set("Authorization", "Bearer "+tt.token)
@@ -80,14 +84,14 @@ func TestFederationHandlerHandshake(t *testing.T) {
 		})
 	}
 
-	peer, err := svc.AcceptFederationLink(ctx, token, "https://canopy-a.example.com", nil)
+	peer, err := svc.AcceptFederationLink(ctx, token, "https://canopy-a.example.com", ecdhPublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.RevokeFederationLink(ctx, peer.ID); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := json.Marshal(map[string]string{"token": token, "server_url": "https://canopy-a.example.com", "ecdhe_public_key": ""})
+	body, _ := json.Marshal(map[string]string{"token": token, "server_url": "https://canopy-a.example.com", "ecdhe_public_key": base64.StdEncoding.EncodeToString(ecdhPublicKey), "signing_public_key": base64.StdEncoding.EncodeToString(svc.SigningPublicKey())})
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/federation/handshake", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := srv.Client().Do(req)

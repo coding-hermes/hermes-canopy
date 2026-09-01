@@ -1547,3 +1547,23 @@ tasks:
   status: complete
   created_at: '2026-09-01T04:35:35.559603+00:00'
   completed_at: '2026-09-01T04:35:51.989362+00:00'
+- id: FTR-02-P2
+  title: "FTR-02 Phase P2 FTL Transport (SPEC-FTR-02 \xA74): Ed25519 identity + legacy-HMAC\
+    \ compat, X25519 ECDH handshake, AES-256-GCM FTL envelopes, signed event relay\
+    \ SSE+POST, two-instance relay integration test on live PG"
+  criteria:
+  - Ed25519 identity persisted (federation_identity); tokens Ed25519-signed with P1
+    HMAC verify compat
+  - Handshake performs real X25519 ECDH and returns a non-empty local ECDHE response
+    key
+  - FTL envelopes AES-256-GCM encrypted with associated data (peer_id, sequence);
+    tamper rejected
+  - Signed relay endpoints GET/POST /api/v1/federation/events wired into the local
+    SSE hub
+  - Two-instance relay integration test exists and passes (internal/handler/federation_relay_test.go
+    TestFederationTwoInstanceRelay)
+  - go build+vet clean; federation + handler Federation tests + db suite pass on live
+    PG :5437
+  status: complete
+  created_at: '2026-09-01T05:09:23.462026+00:00'
+  completed_at: '2026-09-01T05:16:01.067976+00:00'

@@ -179,7 +179,7 @@ func New(
 		// Federation link management (SPEC-FTR-02 P1, §5.1). User JWT auth
 		// is inherited from this /api/v1 router.
 		if federationSvc != nil {
-			fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr)
+			fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr, sseHub)
 			r.Mount("/federation/link", fedHandler.LinkRoutes())
 		}
 
@@ -238,8 +238,10 @@ func New(
 	// Federation handshake is P2P-authenticated, so it cannot inherit the
 	// user-only JWT middleware mounted on the main /api/v1 router.
 	if federationSvc != nil {
-		fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr)
+		fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr, sseHub)
 		r.With(handler.FederationAuthMiddleware(jwtSecret, federationSvc)).Post("/api/v1/federation/handshake", fedHandler.Handshake)
+		r.Get("/api/v1/federation/events", fedHandler.Events)
+		r.Post("/api/v1/federation/events", fedHandler.PostEvent)
 	}
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
