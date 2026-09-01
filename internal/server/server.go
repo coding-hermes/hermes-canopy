@@ -17,6 +17,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/federation"
 	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
@@ -69,6 +70,7 @@ func New(
 	pluginSvc plugin.Service,
 	topicSearchSvc search.TopicSearchService,
 	referenceSvc reference.ReferenceService,
+	federationSvc federation.FederationService,
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
@@ -174,6 +176,13 @@ func New(
 		// membership, and invitations.
 		r.Mount("/collab", handler.NewCollabHandler(collabSvc).Routes())
 
+		// Federation link management (SPEC-FTR-02 P1, §5.1). User JWT auth
+		// is inherited from this /api/v1 router.
+		if federationSvc != nil {
+			fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr)
+			r.Mount("/federation/link", fedHandler.LinkRoutes())
+		}
+
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
 		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 
@@ -225,6 +234,13 @@ func New(
 		gatewaySvc := gateway.NewServiceWithState(gwClient, gateway.DefaultStateFile())
 		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc).Routes())
 	})
+
+	// Federation handshake is P2P-authenticated, so it cannot inherit the
+	// user-only JWT middleware mounted on the main /api/v1 router.
+	if federationSvc != nil {
+		fedHandler := handler.NewFederationHandler(federationSvc, cfg.HTTPAddr)
+		r.With(handler.FederationAuthMiddleware(jwtSecret, federationSvc)).Post("/api/v1/federation/handshake", fedHandler.Handshake)
+	}
 
 	// Transport adapter endpoints per SPEC-FTR-04 §6 (authenticated).
 	nodeID, _ := os.Hostname()
