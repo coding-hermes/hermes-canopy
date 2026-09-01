@@ -214,7 +214,7 @@ export default function DashboardPage() {
       setComposer('');
       setSelectedRunId(runId);
       // Reconnect the feed to the fresh run.
-      requestAnimationFrame(() => feedRef.current?.scrollIntoView({ block: 'nearest' }));
+      requestAnimationFrame(() => feedRef.current?.scrollIntoView?.({ block: 'end' }));
     } catch (err) {
       setComposerError(err instanceof Error ? err.message : String(err));
     } finally {
