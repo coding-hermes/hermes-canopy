@@ -227,6 +227,15 @@ func main() {
 	if err := connMgr.RegisterAdapter(tptAdapter); err != nil {
 		log.Fatal().Err(err).Msg("register SSE transport")
 	}
+	relayService := transport.NewRelayService()
+	if err := connMgr.RegisterAdapter(relayService); err != nil {
+		log.Fatal().Err(err).Msg("register relay transport")
+	}
+	if enabled, err := transport.RegisterPionAdapterFromEnv(connMgr, nil); err != nil {
+		log.Fatal().Err(err).Msg("register WebRTC transport")
+	} else if enabled {
+		log.Info().Str("transport", "webrtc").Msg("Pion WebRTC transport registered")
+	}
 	var natsBus transport.NATSClient
 	if cfg.NATSURL != "" {
 		natsConfig, err := database.TransportConfigs.Get(ctx, string(transport.TransportNATS))

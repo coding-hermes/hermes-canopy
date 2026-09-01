@@ -267,6 +267,10 @@ func New(
 		r.Use(authMW)
 		r.Mount("/", transHandler.Routes())
 	})
+	if relay, ok := connMgr.Adapter(transport.TransportRelay).(*transport.RelayService); ok {
+		r.With(authMW).Post("/api/v1/transport/relay", relay.Post)
+		r.With(authMW).Get("/api/v1/transport/relay/poll", relay.PollHTTP)
+	}
 
 	// Workspace MLS endpoints per SPEC-FTR-03 (authenticated).
 	r.Route("/api/v1/workspaces/{workspace_id}/mls", func(r chi.Router) {
@@ -337,6 +341,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	var drainErr error
 	if s.transportDrain != nil {
 		drainErr = s.transportDrain()
+	}
+	if s.transportMgr != nil {
+		drainErr = errors.Join(drainErr, s.transportMgr.Shutdown(ctx))
 	}
 	return errors.Join(drainErr, s.httpServer.Shutdown(ctx))
 }

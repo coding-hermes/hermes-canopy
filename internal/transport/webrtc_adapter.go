@@ -424,6 +424,22 @@ func (a *WebRTCAdapter) Health(ctx context.Context) error {
 	return ErrTransportUnreachable
 }
 
+// Shutdown closes all Pion peer connections owned by the adapter, including
+// connections that have not yet been handed to ConnectionManager.
+func (a *WebRTCAdapter) Shutdown(ctx context.Context) error {
+	a.mu.RLock()
+	connections := make([]*Connection, 0, len(a.conns))
+	for _, wc := range a.conns {
+		connections = append(connections, wc.conn)
+	}
+	a.mu.RUnlock()
+	var result error
+	for _, conn := range connections {
+		result = errors.Join(result, a.Disconnect(ctx, conn))
+	}
+	return result
+}
+
 func (wc *webRTCConnection) deliver(data []byte) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Opcode < OpTreeCreate || msg.Opcode > OpAck {

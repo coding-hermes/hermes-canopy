@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -102,6 +103,9 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 
 	conn := cm.activeConnection(peerID)
 	if conn == nil {
+		if cm.routeViaRelay(ctx, peerID, msg) == nil {
+			return nil
+		}
 		if err := cm.enqueueOffline(peerID, msg); err != nil {
 			return ErrNoTransportAvailable
 		}
@@ -153,6 +157,69 @@ func (cm *ConnectionManager) RouteMessage(ctx context.Context, peerID string, ms
 	cm.mu.Unlock()
 
 	return nil
+}
+
+func (cm *ConnectionManager) routeViaRelay(ctx context.Context, peerID string, msg *Message) error {
+	cm.mu.RLock()
+	adapter := cm.adapters[TransportRelay]
+	cm.mu.RUnlock()
+	if adapter == nil {
+		return ErrNoTransport
+	}
+	conn, err := adapter.Connect(ctx, ConnectOptions{Target: peerID, TransportType: TransportRelay})
+	if err != nil {
+		return err
+	}
+	err = adapter.Send(ctx, conn, msg)
+	_ = adapter.Disconnect(context.Background(), conn)
+	return err
+}
+
+// HasAdapter reports whether a transport was registered at startup.
+func (cm *ConnectionManager) HasAdapter(tt TransportType) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.adapters[tt] != nil
+}
+
+// Adapter returns a registered adapter for server wiring and diagnostics.
+func (cm *ConnectionManager) Adapter(tt TransportType) TransportAdapter {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.adapters[tt]
+}
+
+// Shutdown gracefully closes every registered adapter connection. Adapters
+// with service-level shutdown hooks (notably relay) are drained last.
+func (cm *ConnectionManager) Shutdown(ctx context.Context) error {
+	cm.mu.RLock()
+	connections := make([]*Connection, 0)
+	for _, peerConnections := range cm.connections {
+		connections = append(connections, peerConnections...)
+	}
+	adapters := make(map[TransportType]TransportAdapter, len(cm.adapters))
+	for tt, adapter := range cm.adapters {
+		adapters[tt] = adapter
+	}
+	cm.mu.RUnlock()
+	var result error
+	for _, conn := range connections {
+		if adapter := adapters[conn.TransportType]; adapter != nil {
+			result = errors.Join(result, adapter.Disconnect(ctx, conn))
+		}
+	}
+	for tt, adapter := range adapters {
+		if tt == TransportRelay {
+			continue
+		}
+		if shutdown, ok := adapter.(interface{ Shutdown(context.Context) error }); ok {
+			result = errors.Join(result, shutdown.Shutdown(ctx))
+		}
+	}
+	if relay, ok := adapters[TransportRelay].(*RelayService); ok {
+		relay.Shutdown()
+	}
+	return result
 }
 
 // OnConnect registers a new connection for a peer. If the peer already has an

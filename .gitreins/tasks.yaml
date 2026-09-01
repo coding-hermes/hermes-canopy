@@ -1717,3 +1717,18 @@ tasks:
   status: complete
   created_at: '2026-09-01T09:04:26.594415+00:00'
   completed_at: '2026-09-01T09:10:07.835923+00:00'
+- id: FTR-04-P6
+  title: "FTR-04 Phase 6 Pion WebRTC + Relay Fallback Service (SPEC-FTR-04 \xA74.3):\
+    \ pion/webrtc v4 factory over P5 interfaces, in-memory-signaling two-peer loopback\
+    \ test, store-and-forward relay service (POST relay + GET poll, bounded 10k/peer,\
+    \ idempotent), optional CANOPY_WEBRTC_ENABLED wiring, graceful shutdown"
+  criteria:
+  - pion factory maps transport_configs ICE/TURN config and state callbacks to adapter
+    states; DataChannel open-send-receive round trip between two real pion peers via
+    injected signaling, offline; relay enqueue-poll round trip idempotent bounded
+    drop-oldest + 401 unauthenticated; env unset = no pion adapter registered (SSE+NATS+relay
+    only); graceful shutdown closes peers and drains queues; go test -race ./internal/transport
+    -count=1 green; go build+vet clean; pion is the only new dependency
+  status: complete
+  created_at: '2026-09-01T09:13:05.946874+00:00'
+  completed_at: '2026-09-01T09:25:14.779990+00:00'
