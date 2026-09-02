@@ -5,6 +5,24 @@ Canopy OS — graph-native collaboration surface for human-agent work.
 Messages are nodes in a DAG. Every model call has a visible context manifest.
 Every Card is a graph node with structured data.
 
+<p align="center">
+  <img src="docs/screenshots/canopy-hero.jpg" alt="Hermes Canopy — graph-native collaboration surface" width="100%">
+</p>
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/canopy-tree-view.png" alt="Conversation DAG in the macro tree view" width="100%">
+  <br>
+  <em>Conversations render as a live DAG — branch, fork, and synthesize messages as graph nodes.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/canopy-live-gateway.png" alt="Live Hermes gateway runs and event stream" width="100%">
+  <br>
+  <em>Chat with a live Hermes gateway from inside Canopy — real runs, real events, no seeded data.</em>
+</p>
+
 ## Quick Start
 
 ```bash
