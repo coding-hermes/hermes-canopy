@@ -69,7 +69,11 @@ func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSE
 		return nil, err
 	}
 	if transport == nil {
-		transport = noopRelayTransport{}
+		if cfg.ListenAddr != "" {
+			transport = NewRelayHub(cfg)
+		} else {
+			transport = noopRelayTransport{}
+		}
 	}
 	return &RelayService{config: cfg, transport: transport, hub: hub, clock: realClock{}, status: StatusDisabled}, nil
 }

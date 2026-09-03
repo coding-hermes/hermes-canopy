@@ -37,7 +37,11 @@ type DeploymentConfig struct {
 	TLSMutual        bool       `json:"tls_mutual"`
 	HMACKeyRotatedAt *time.Time `json:"hmac_key_rotated_at"`
 	HMACKeyID        int        `json:"hmac_key_id"`
-	Enabled          bool       `json:"enabled"`
+	// HMAC keys are runtime secrets and are deliberately not persisted in relay_config.
+	HMACKey       []byte `json:"-"`
+	HMACKeyPrev   []byte `json:"-"`
+	HMACKeyPrevID int    `json:"-"`
+	Enabled       bool   `json:"enabled"`
 }
 
 func DefaultConfig() DeploymentConfig {

@@ -1912,3 +1912,21 @@ tasks:
   status: complete
   created_at: '2026-09-03T01:32:27.412285+00:00'
   completed_at: '2026-09-03T01:41:54.805134+00:00'
+- id: FTR05-P2
+  title: "FTR-05 Phase 2 RelayHub + binary protocol (SPEC-FTR-05 \xA711 P2, T1.8 \xA7\
+    3.5): hand-rolled frame codec, HMAC-SHA256 dual-key auth, TCP RelayHub with HELLO\
+    \ handshake/session limits/drain, wired into RelayService via Phase 1 hook; stdlib-only,\
+    \ no frontend"
+  criteria:
+  - "1) frame.go codec mirrors T1.8 \xA73.5 byte layout exactly (magic/version/type/hmac\
+    \ key id uint16/length/payload); round-trip + truncation + bad-magic/version tests;\
+    \ 2) auth.go HMAC-SHA256 per-frame verify, dual-key (current+prev) map, unknown\
+    \ key id rejected, tamper tests; 3) hub.go TCP accept loop on configured addr\
+    \ when enabled, HELLO within 10s or close, HELLO_ACK/PONG/BYE semantics, max_sessions\
+    \ enforcement, wired into RelayService.Start hook, drain mid-session, sessions\
+    \ in Health(); loopback integration tests incl auth reject + session limit + drain;\
+    \ 4) relay_status SSE on hub start/stop/drain transitions; 5) go.mod/go.sum untouched;\
+    \ build/vet + relay/handler/cmd green; gofmt clean; vitest untouched"
+  status: complete
+  created_at: '2026-09-03T01:58:11.953081+00:00'
+  completed_at: '2026-09-03T02:08:33.733998+00:00'
