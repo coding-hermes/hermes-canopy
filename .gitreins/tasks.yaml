@@ -1983,3 +1983,19 @@ tasks:
   status: complete
   created_at: '2026-09-03T04:43:24.380129+00:00'
   completed_at: '2026-09-03T04:56:16.507287+00:00'
+- id: FTR05-P6
+  title: "FTR-05 Phase 6 CGNAT fallback (SPEC-FTR-05 \xA711-P6): RelayClient outbound-only\
+    \ mode (dial, HELLO handshake via shared codec, heartbeat PINGs, capped backoff\
+    \ reconnect, BYE), CGNAT listen-failure detection -> automatic client-mode fallback\
+    \ with relay_status SSE, loopback hub+client integration test"
+  criteria:
+  - '1) client.go: dial ConnectAddr, authenticated HELLO, PING at HeartbeatSecs, reconnect
+    backoff 1s..30s capped, BYE honored, inbound DATA to handler; 2) CGNAT decision
+    fn (listen error + config -> fallback decision), synthetic-error unit tests, fallback
+    logged + relay_status SSE; 3) loopback integration: hub server + client connect
+    over 127.0.0.1, handshake+PONG+DATA delivery+BYE clean close; 4) Health() client
+    state (connected/connecting/backoff/last-error); 5) no new deps/frontend; build/vet
+    + relay+handler+cmd green; gofmt clean'
+  status: complete
+  created_at: '2026-09-03T05:31:12.072668+00:00'
+  completed_at: '2026-09-03T05:43:18.736637+00:00'

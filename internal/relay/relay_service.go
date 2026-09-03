@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/url"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
@@ -17,6 +21,8 @@ const (
 	StatusRunning  = "running"
 	StatusDraining = "draining"
 )
+
+var errCGNATProbeSucceeded = errors.New("relay: outbound probe succeeded")
 
 // RelayTransport is the Phase 2 protocol boundary.
 type RelayTransport interface {
@@ -49,12 +55,14 @@ type realClock struct{}
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type RelayHealth struct {
-	Mode       string `json:"mode"`
-	ListenAddr string `json:"listen_addr"`
-	Status     string `json:"status"`
-	Sessions   int    `json:"sessions"`
-	HMACKeyID  uint32 `json:"hmac_key_id"`
-	Rotations  uint64 `json:"rotations"`
+	Mode        string `json:"mode"`
+	ListenAddr  string `json:"listen_addr"`
+	Status      string `json:"status"`
+	Sessions    int    `json:"sessions"`
+	HMACKeyID   uint32 `json:"hmac_key_id"`
+	Rotations   uint64 `json:"rotations"`
+	ClientState string `json:"client_state,omitempty"`
+	LastError   string `json:"last_error,omitempty"`
 }
 
 type RelayService struct {
@@ -78,7 +86,9 @@ func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSE
 		return nil, err
 	}
 	if transport == nil {
-		if cfg.ListenAddr != "" {
+		if cfg.Mode == ModeSelfHosted && cfg.ConnectAddr != "" && cfg.ListenAddr == "" {
+			transport = NewRelayClient(cfg)
+		} else if cfg.ListenAddr != "" {
 			relayHub := NewRelayHub(cfg)
 			if len(registries) > 0 && registries[0] != nil {
 				relayHub.SetHeartbeatHook(cfg.InstanceID, registries[0].UpdateInstanceHeartbeat)
@@ -111,7 +121,19 @@ func (r *RelayService) Start(ctx context.Context) error {
 		return nil
 	}
 	if err := r.transport.Start(ctx, r.config); err != nil {
-		return err
+		fallback := ShouldFallbackToRelayClient(err, r.config)
+		if !fallback && r.publicListenConfigured() && r.probeConnectAddr(ctx) {
+			fallback = ShouldFallbackToRelayClient(errors.Join(err, errCGNATProbeSucceeded), r.config)
+		}
+		if !fallback {
+			return err
+		}
+		client := NewRelayClient(r.config)
+		r.transport = client
+		logCGNATFallback(r.config, err)
+		if err := client.Start(ctx, r.config); err != nil {
+			return err
+		}
 	}
 	r.status = StatusRunning
 	r.publishLocked()
@@ -164,13 +186,58 @@ func (r *RelayService) Health() RelayHealth {
 	if r.status != StatusDisabled {
 		sessions = r.transport.ActiveSessions()
 	}
-	return RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: sessions, HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations}
+	health := RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: sessions, HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations}
+	if client, ok := r.transport.(interface{ ClientHealth() (string, string) }); ok {
+		health.ClientState, health.LastError = client.ClientHealth()
+	}
+	return health
 }
 
 func (r *RelayService) publishLocked() {
 	if r.hub == nil {
 		return
 	}
-	b, _ := json.Marshal(RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: r.transport.ActiveSessions(), HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations})
+	health := RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: r.transport.ActiveSessions(), HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations}
+	if client, ok := r.transport.(interface{ ClientHealth() (string, string) }); ok {
+		health.ClientState, health.LastError = client.ClientHealth()
+	}
+	b, _ := json.Marshal(health)
 	r.hub.Broadcast(uuid.Nil, sse.SSEEvent{Type: "relay_status", Data: b})
+}
+
+// ShouldFallbackToRelayClient is the deterministic CGNAT policy seam. Runtime
+// probing is represented by errCGNATProbeSucceeded so tests need no sockets.
+func ShouldFallbackToRelayClient(listenErr error, cfg DeploymentConfig) bool {
+	return cfg.Mode == ModeSelfHosted && cfg.ConnectAddr != "" && cfg.ListenAddr != "" &&
+		(errors.Is(listenErr, syscall.EADDRNOTAVAIL) || errors.Is(listenErr, errCGNATProbeSucceeded))
+}
+
+func (r *RelayService) probeConnectAddr(ctx context.Context) bool {
+	u, err := url.Parse(r.config.ConnectAddr)
+	if err != nil || u.Scheme != "tcp" {
+		return false
+	}
+	conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", u.Host)
+	if err == nil {
+		_ = conn.Close()
+	}
+	return err == nil
+}
+
+func (r *RelayService) publicListenConfigured() bool {
+	u, err := url.Parse(r.config.ListenAddr)
+	if err != nil {
+		return false
+	}
+	host, _, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return host == "" || host == "0.0.0.0" || host == "::" || (ip != nil && !ip.IsLoopback() && !ip.IsPrivate())
+}
+
+func logCGNATFallback(cfg DeploymentConfig, err error) {
+	log.Info().Str("event", "relay_cgnat_fallback").Str("listen_addr", cfg.ListenAddr).
+		Str("connect_addr", cfg.ConnectAddr).Err(err).Msg("relay falling back to outbound client mode")
 }
