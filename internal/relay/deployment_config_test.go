@@ -25,6 +25,12 @@ func TestDeploymentConfigValidation(t *testing.T) {
 		{"missing scheme", func(c *DeploymentConfig) { c.ConnectAddr = "localhost:9443" }, "scheme"},
 		{"zero heartbeat", func(c *DeploymentConfig) { c.HeartbeatSecs = 0 }, "heartbeat"},
 		{"zero drain", func(c *DeploymentConfig) { c.DrainTimeoutSecs = 0 }, "drain"},
+		{"tls without key", func(c *DeploymentConfig) { cert := "relay.crt"; c.TLSEnabled = true; c.TLSCertFile = &cert }, "certificate and key"},
+		{"mutual without ca", func(c *DeploymentConfig) {
+			cert, key := "relay.crt", "relay.key"
+			c.TLSMutual = true
+			c.TLSCertFile, c.TLSKeyFile = &cert, &key
+		}, "CA"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

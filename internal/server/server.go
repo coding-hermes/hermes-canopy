@@ -115,6 +115,7 @@ func New(
 	// Health and version endpoints (public — no auth).
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
+	r.Get("/health/relay", healthHandler)
 	r.Get("/version", versionHandler)
 
 	// Prometheus /metrics endpoint (public — standard practice for /metrics).

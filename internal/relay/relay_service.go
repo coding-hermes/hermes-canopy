@@ -55,14 +55,16 @@ type realClock struct{}
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type RelayHealth struct {
-	Mode        string `json:"mode"`
-	ListenAddr  string `json:"listen_addr"`
-	Status      string `json:"status"`
-	Sessions    int    `json:"sessions"`
-	HMACKeyID   uint32 `json:"hmac_key_id"`
-	Rotations   uint64 `json:"rotations"`
-	ClientState string `json:"client_state,omitempty"`
-	LastError   string `json:"last_error,omitempty"`
+	Mode              string `json:"mode"`
+	ListenAddr        string `json:"listen_addr"`
+	Status            string `json:"status"`
+	Sessions          int    `json:"sessions"`
+	HMACKeyID         uint32 `json:"hmac_key_id"`
+	Rotations         uint64 `json:"rotations"`
+	ClientState       string `json:"client_state,omitempty"`
+	LastError         string `json:"last_error,omitempty"`
+	Degraded          bool   `json:"degraded"`
+	DegradationReason string `json:"degradation_reason,omitempty"`
 }
 
 type RelayService struct {
@@ -94,6 +96,7 @@ func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSE
 				relayHub.SetHeartbeatHook(cfg.InstanceID, registries[0].UpdateInstanceHeartbeat)
 				relayHub.SetTenantHooks(registries[0].ResolveInstanceTenant, registries[0].OpenSession)
 			}
+			relayHub.SetSessionEventHub(hub)
 			transport = relayHub
 		} else {
 			transport = noopRelayTransport{}
@@ -190,6 +193,7 @@ func (r *RelayService) Health() RelayHealth {
 	if client, ok := r.transport.(interface{ ClientHealth() (string, string) }); ok {
 		health.ClientState, health.LastError = client.ClientHealth()
 	}
+	health.Degraded, health.DegradationReason = tlsCertificateHealth(r.config, r.now())
 	return health
 }
 
@@ -201,6 +205,7 @@ func (r *RelayService) publishLocked() {
 	if client, ok := r.transport.(interface{ ClientHealth() (string, string) }); ok {
 		health.ClientState, health.LastError = client.ClientHealth()
 	}
+	health.Degraded, health.DegradationReason = tlsCertificateHealth(r.config, r.now())
 	b, _ := json.Marshal(health)
 	r.hub.Broadcast(uuid.Nil, sse.SSEEvent{Type: "relay_status", Data: b})
 }

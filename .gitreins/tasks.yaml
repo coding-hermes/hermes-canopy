@@ -1999,3 +1999,21 @@ tasks:
   status: complete
   created_at: '2026-09-03T05:31:12.072668+00:00'
   completed_at: '2026-09-03T05:43:18.736637+00:00'
+- id: FTR05-P7
+  title: "FTR-05 Phase 7 TLS + integration (SPEC-FTR-05 \xA711-P7): crypto/tls hub+client\
+    \ (cert/key/ca/mutual from relay_config), CLI relay-tls-* flags with precedence+validation,\
+    \ relay_session_event SSE on session open/close per \xA76, self-signed in-test\
+    \ TLS + mTLS negative tests, plain-TCP regression; closes FTR-05 spec"
+  criteria:
+  - "1) hub TLS: TLSEnabled wraps listener (cert/key/ca files), tls_mutual requires\
+    \ client certs verified before HELLO deadline, missing cert files -> Start fails\
+    \ clearly; client TLS: RootCAs + optional client cert/key pair; plain TCP unchanged;\
+    \ 2) CLI flags --relay-tls-enabled/cert/key/ca/mutual, flag>DB>default persisted,\
+    \ validation (mutual needs cert+key+ca; tls needs cert+key); 3) relay_session_event\
+    \ SSE on session open/close mirroring \xA76 JSON shape (deviations noted); 4)\
+    \ tests: self-signed in-test CA happy path, mTLS client-cert reject negative,\
+    \ config validation matrix, session events captured, existing plain tests unchanged;\
+    \ 5) no new deps/frontend; build/vet + relay+handler+cmd green; gofmt clean"
+  status: complete
+  created_at: '2026-09-03T06:10:37.631832+00:00'
+  completed_at: '2026-09-03T06:23:30.352677+00:00'

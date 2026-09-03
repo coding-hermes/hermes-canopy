@@ -68,12 +68,25 @@ func (c DeploymentConfig) Validate() error {
 	if c.HeartbeatSecs <= 0 || c.DrainTimeoutSecs <= 0 {
 		return errors.New("relay: heartbeat and drain timeout must be greater than zero")
 	}
+	if c.TLSEnabled && (stringValue(c.TLSCertFile) == "" || stringValue(c.TLSKeyFile) == "") {
+		return errors.New("relay: TLS enabled requires certificate and key files")
+	}
+	if c.TLSMutual && (stringValue(c.TLSCertFile) == "" || stringValue(c.TLSKeyFile) == "" || stringValue(c.TLSCAFile) == "") {
+		return errors.New("relay: mutual TLS requires certificate, key, and CA files")
+	}
 	for name, addr := range map[string]string{"listen": c.ListenAddr, "connect": c.ConnectAddr} {
 		if err := validateAddress(addr); err != nil {
 			return fmt.Errorf("relay: invalid %s address: %w", name, err)
 		}
 	}
 	return nil
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func validateAddress(addr string) error {
@@ -84,7 +97,7 @@ func validateAddress(addr string) error {
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return errors.New("expected scheme://host:port")
 	}
-	if u.Scheme != "tcp" && u.Scheme != "quic" {
+	if u.Scheme != "tcp" && u.Scheme != "quic" && u.Scheme != "tls" && u.Scheme != "https" && u.Scheme != "wss" {
 		return fmt.Errorf("unsupported scheme %q", u.Scheme)
 	}
 	_, port, err := net.SplitHostPort(u.Host)

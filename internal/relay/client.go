@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -50,8 +51,20 @@ func (c *RelayClient) SetDataHandler(handler func(Frame)) {
 
 func (c *RelayClient) Start(ctx context.Context, cfg DeploymentConfig) error {
 	u, err := url.Parse(cfg.ConnectAddr)
-	if err != nil || u.Scheme != "tcp" {
-		return fmt.Errorf("relay: client requires tcp connect address")
+	if err != nil || (u.Scheme != "tcp" && u.Scheme != "tls" && u.Scheme != "https" && u.Scheme != "wss") {
+		return fmt.Errorf("relay: client requires tcp, tls, https, or wss connect address")
+	}
+	useTLS := cfg.TLSEnabled || u.Scheme == "tls" || u.Scheme == "https" || u.Scheme == "wss"
+	var tlsCfg *tls.Config
+	if useTLS {
+		host, _, splitErr := net.SplitHostPort(u.Host)
+		if splitErr != nil {
+			return splitErr
+		}
+		tlsCfg, err = relayClientTLSConfig(cfg, host)
+		if err != nil {
+			return err
+		}
 	}
 	c.mu.Lock()
 	if c.cancel != nil {
@@ -61,16 +74,22 @@ func (c *RelayClient) Start(ctx context.Context, cfg DeploymentConfig) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	c.cancel, c.done = cancel, make(chan struct{})
 	c.mu.Unlock()
-	go c.run(runCtx, u.Host, cfg, c.done)
+	go c.run(runCtx, u.Host, cfg, tlsCfg, c.done)
 	return nil
 }
 
-func (c *RelayClient) run(ctx context.Context, addr string, cfg DeploymentConfig, done chan struct{}) {
+func (c *RelayClient) run(ctx context.Context, addr string, cfg DeploymentConfig, tlsCfg *tls.Config, done chan struct{}) {
 	defer close(done)
 	backoff := time.Second
 	for {
 		c.setState(ClientConnecting, nil)
-		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		var conn net.Conn
+		var err error
+		if tlsCfg != nil {
+			conn, err = (&tls.Dialer{NetDialer: &net.Dialer{}, Config: tlsCfg}).DialContext(ctx, "tcp", addr)
+		} else {
+			conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		}
 		if err == nil {
 			err = c.serve(ctx, conn, cfg)
 		}

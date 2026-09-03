@@ -2,6 +2,8 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 const helloTimeout = 10 * time.Second
@@ -45,7 +49,10 @@ type RelayHub struct {
 	resolveInstance func(context.Context, uuid.UUID) (uuid.UUID, string, error)
 	openSession     func(context.Context, *RelaySession) error
 	rateLimiter     *TenantRateLimiter
+	events          sse.SSEHub
 }
+
+func (h *RelayHub) SetSessionEventHub(events sse.SSEHub) { h.events = events }
 
 // SetHeartbeatHook wires registry liveness updates without changing the relay protocol.
 func (h *RelayHub) SetHeartbeatHook(instanceID uuid.UUID, hook func(context.Context, uuid.UUID) error) {
@@ -94,6 +101,14 @@ func (h *RelayHub) Start(ctx context.Context, cfg DeploymentConfig) error {
 	ln, err := net.Listen("tcp", u.Host)
 	if err != nil {
 		return fmt.Errorf("relay: listen: %w", err)
+	}
+	if cfg.TLSEnabled {
+		tlsCfg, tlsErr := relayServerTLSConfig(cfg)
+		if tlsErr != nil {
+			_ = ln.Close()
+			return tlsErr
+		}
+		ln = tls.NewListener(ln, tlsCfg)
 	}
 	h.mu.Lock()
 	h.listener = ln
@@ -190,7 +205,25 @@ func (h *RelayHub) acceptConn(conn net.Conn) (*RelaySession, error) {
 	if h.heartbeat != nil && h.instanceID != uuid.Nil {
 		_ = h.heartbeat(context.Background(), h.instanceID)
 	}
+	h.publishSessionEvent(s, "connected")
 	return s, nil
+}
+
+func (h *RelayHub) publishSessionEvent(session *RelaySession, eventType string) {
+	if h.events == nil {
+		return
+	}
+	payload := struct {
+		SessionID     string    `json:"session_id"`
+		EventType     string    `json:"event_type"`
+		RemoteAddr    string    `json:"remote_addr"`
+		InstanceID    uuid.UUID `json:"instance_id"`
+		TenantID      uuid.UUID `json:"tenant_id"`
+		Protocol      string    `json:"protocol"`
+		EstablishedAt time.Time `json:"established_at"`
+	}{session.ID, eventType, session.Conn.RemoteAddr().String(), session.InstanceID, session.TenantID, "tcp", session.Established.UTC()}
+	b, _ := json.Marshal(payload)
+	h.events.Broadcast(uuid.Nil, sse.SSEEvent{Type: "relay_session_event", Data: b})
 }
 
 // encodeCBORText covers the fixed, short text payloads used by Phase 2 control
@@ -335,12 +368,17 @@ func (h *RelayHub) write(conn net.Conn, f Frame) error {
 }
 
 func (h *RelayHub) removeSession(s *RelaySession) {
-	s.closeOnce.Do(func() { _ = s.Conn.Close(); close(s.done) })
+	removed := false
+	s.closeOnce.Do(func() { removed = true; _ = s.Conn.Close(); close(s.done) })
+	if !removed {
+		return
+	}
 	h.mu.Lock()
 	delete(h.sessions, s.ID)
 	empty := len(h.sessions) == 0
 	accepting := h.listener != nil
 	h.mu.Unlock()
+	h.publishSessionEvent(s, "disconnected")
 	if empty && !accepting {
 		h.drainOnce.Do(func() { close(h.drainDone) })
 	}

@@ -76,6 +76,11 @@ func main() {
 	maxRelaySessions := flag.Int("max-relay-sessions", 500, "maximum concurrent relay sessions")
 	relayHeartbeat := flag.Duration("relay-heartbeat", 30*time.Second, "relay heartbeat interval")
 	relayDrainTimeout := flag.Duration("relay-drain-timeout", 30*time.Second, "relay graceful drain timeout")
+	relayTLSEnabled := flag.Bool("relay-tls-enabled", false, "enable TLS for relay connections")
+	relayTLSCert := flag.String("relay-tls-cert", "", "TLS certificate file path")
+	relayTLSKey := flag.String("relay-tls-key", "", "TLS key file path")
+	relayTLSCA := flag.String("relay-tls-ca", "", "TLS CA certificate file path")
+	relayTLSMutual := flag.Bool("relay-tls-mutual", false, "require mutual TLS")
 	flag.Usage = printServerUsage
 	flag.Parse()
 
@@ -166,6 +171,16 @@ func main() {
 			relayConfig.HeartbeatSecs = int(*relayHeartbeat / time.Second)
 		case "relay-drain-timeout":
 			relayConfig.DrainTimeoutSecs = int(*relayDrainTimeout / time.Second)
+		case "relay-tls-enabled":
+			relayConfig.TLSEnabled = *relayTLSEnabled
+		case "relay-tls-cert":
+			relayConfig.TLSCertFile = relayTLSCert
+		case "relay-tls-key":
+			relayConfig.TLSKeyFile = relayTLSKey
+		case "relay-tls-ca":
+			relayConfig.TLSCAFile = relayTLSCA
+		case "relay-tls-mutual":
+			relayConfig.TLSMutual = *relayTLSMutual
 		}
 	})
 	if err := relayConfigManager.Save(ctx, database.Pool, relayConfig); err != nil {
