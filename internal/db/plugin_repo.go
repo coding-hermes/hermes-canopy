@@ -51,6 +51,89 @@ type PluginRepo interface {
 	Archive(context.Context, string) (*Plugin, error)
 	Rollback(context.Context, string) (*Plugin, error)
 	Audit(context.Context, uuid.UUID, string, uuid.UUID, map[string]any) error
+	Update(context.Context, *Plugin, uuid.UUID) (*Plugin, error)
+	RollbackTo(context.Context, string, string, uuid.UUID) (*Plugin, error)
+}
+
+func (r *PGPluginRepo) Update(ctx context.Context, p *Plugin, actor uuid.UUID) (*Plugin, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var activeID uuid.UUID
+	var activeVersion string
+	if err = tx.QueryRow(ctx, `SELECT id,version FROM plugin_registry WHERE slug=$1 AND status='active' FOR UPDATE`, p.Slug).Scan(&activeID, &activeVersion); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPluginNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	if activeVersion == p.Version {
+		return nil, ErrPluginDuplicate
+	}
+	var exists uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM plugin_registry WHERE name=$1 AND version=$2`, p.Name, p.Version).Scan(&exists); err == nil {
+		return nil, ErrPluginDuplicate
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plugin_registry SET status='archived',archived_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, activeID); err != nil {
+		return nil, err
+	}
+	row := tx.QueryRow(ctx, `INSERT INTO plugin_registry (name,slug,version,description,author_profile_id,permissions,manifest_json,source_js,source_sha256,source_byte_size,icon_url,status,is_root_version,previous_version_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',false,$12) RETURNING `+registryColumns, p.Name, p.Slug, p.Version, p.Description, p.AuthorProfileID, p.Permissions, p.ManifestJSON, p.SourceJS, p.SourceSHA256, p.SourceByteSize, p.IconURL, activeID)
+	out, err := scanRegistry(row)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plugin_registry SET superseded_by_id=$2 WHERE id=$1`, activeID, out.ID); err != nil {
+		return nil, err
+	}
+	meta, _ := json.Marshal(map[string]any{"name": out.Name, "version": out.Version, "previous_version": activeVersion})
+	if _, err = tx.Exec(ctx, `INSERT INTO plugin_audit_log(plugin_id,event_type,actor_profile_id,metadata) VALUES($1,'updated',$2,$3)`, out.ID, actor, meta); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *PGPluginRepo) RollbackTo(ctx context.Context, slug, version string, actor uuid.UUID) (*Plugin, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var activeID uuid.UUID
+	var name, activeVersion string
+	if err = tx.QueryRow(ctx, `SELECT id,name,version FROM plugin_registry WHERE slug=$1 AND status='active' FOR UPDATE`, slug).Scan(&activeID, &name, &activeVersion); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPluginNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	var targetID uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM plugin_registry WHERE name=$1 AND version=$2 FOR UPDATE`, name, version).Scan(&targetID); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPluginNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	if targetID == activeID {
+		return nil, ErrPluginDuplicate
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plugin_registry SET status='archived',archived_at=clock_timestamp(),superseded_by_id=$2,updated_at=clock_timestamp() WHERE id=$1`, activeID, targetID); err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plugin_registry SET status='active',archived_at=NULL,previous_version_id=$2,superseded_by_id=NULL,updated_at=clock_timestamp() WHERE id=$1`, targetID, activeID); err != nil {
+		return nil, err
+	}
+	meta, _ := json.Marshal(map[string]any{"name": name, "version": version, "previous_version": activeVersion})
+	if _, err = tx.Exec(ctx, `INSERT INTO plugin_audit_log(plugin_id,event_type,actor_profile_id,metadata) VALUES($1,'rolled_back',$2,$3)`, targetID, actor, meta); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, targetID)
 }
 
 type PGPluginRepo struct{ pool *pgxpool.Pool }

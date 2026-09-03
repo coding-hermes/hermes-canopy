@@ -3,8 +3,16 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PluginHost from '../components/PluginHost';
 import { PluginApiHost } from '../lib/pluginApi';
-import { buildSandboxDoc, PluginSandboxHost, SANDBOX_CSP, type SandboxPlugin } from '../lib/pluginSandbox';
+import { buildSandboxDoc, PluginSandboxHost, SANDBOX_CSP, sha256Hex, type SandboxPlugin } from '../lib/pluginSandbox';
 import { PluginManifestSchema, type PluginManifest, type PluginMessage } from '../lib/pluginTypes';
+
+async function waitForDom(check: () => void, timeoutMs = 2000): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    try { check(); return; } catch { if (Date.now() - start > timeoutMs) throw new Error('waitForDom timeout'); }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -87,5 +95,25 @@ describe('PluginHost iframe', () => {
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(iframe?.getAttribute('name')).toBe('canopy-plugin-plugin-1-instance-1');
+  });
+  it('hot reloads an updated source and initializes the new manifest', async () => {
+    const stream = new EventTarget() as EventSource;
+    const source = '/*@@canopy.manifest@@ {"name":"test-plugin","version":"2.0.0","description":"Test","permissions":["data_read"],"render_type":"card","entry_point":"main"} @@end@@*/ void 0;';
+    const digest = await sha256Hex(source);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(source, { status: 200 })));
+    await act(async () => { root.render(<PluginHost plugin={{ id: 'plugin-1', name: 'Test Plugin', manifest, sourceJS: 'void 0;' }} instanceId="instance-1" eventSource={stream} />); await Promise.resolve(); });
+    const oldIframe = container.querySelector('iframe');
+    await act(async () => { stream.dispatchEvent(new MessageEvent('plugin_updated', { data: JSON.stringify({ plugin_id:'plugin-1',version:'2.0.0',source_sha256:digest }) })); });
+    let nextIframe: HTMLIFrameElement | null = null;
+    await waitForDom(() => {
+      nextIframe = container.querySelector('iframe');
+      if (!nextIframe || nextIframe === oldIframe) throw new Error('iframe not swapped yet');
+      if (!nextIframe.srcdoc.includes('"version":"2.0.0"')) throw new Error('new manifest not in srcdoc yet');
+    });
+    // Effects (host re-attach) and the load handler are act-deferred; wait for the
+    // observable outcome (initialize stamping the dataset) instead of a fixed instant.
+    await act(async () => { nextIframe!.dispatchEvent(new Event('load')); });
+    await waitForDom(() => { expect(nextIframe!.dataset.initManifestVersion).toBe('2.0.0'); });
+    vi.unstubAllGlobals();
   });
 });

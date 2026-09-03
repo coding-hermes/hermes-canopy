@@ -1834,3 +1834,26 @@ tasks:
   status: complete
   created_at: '2026-09-01T16:13:33.511305+00:00'
   completed_at: '2026-09-01T16:23:57.178546+00:00'
+- id: PL01-P3
+  title: "PL-01 Phase 3 hot-reload + API quotas (SPEC-PL-01 \xA78/\xA79): update+rollback\
+    \ TX flows with version-chain relink + audit, plugin_updated/plugin_rolled_back\
+    \ SSE, GET source no-store, \xA78.2 client reload (sha256 verify, iframe swap),\
+    \ \xA78.4 update banner/changelog/dismiss, 100/min data quota limiter; no new\
+    \ deps"
+  criteria:
+  - '1) POST /plugins/{slug}/update: TX archive-active->insert-new (is_root_version=false),
+    superseded_by_id/previous_version_id relink, audit(''updated''), 409 PLUGIN_VERSION_EXISTS
+    on same semver; SSE plugin_updated with {plugin_id,slug,version,source_sha256};
+    2) POST /plugins/{slug}/rollback: 404 PLUGIN_VERSION_NOT_FOUND on missing target,
+    TX swap+relink+audit(''rolled_back''), SSE plugin_rolled_back; 3) GET /plugins/{id}/source:
+    200 application/javascript + Cache-Control no-store, active version; 4) client
+    hot-reload (spec 8.2): fetch source, WebCrypto sha256 == event metadata (mismatch
+    -> warn + 1 retry), destroy old iframe (100ms), mount new iframe same slot, init
+    carries new manifest; 5) spec 8.4 PluginUpdateBanner: Update now -> POST install,
+    Dismiss -> localStorage per plugin+version, Changelog -> manifest permission delta
+    modal, vitest-covered; 6) data_read quota 100 calls/min/instance sliding window
+    -> QUOTA_EXCEEDED, unit-tested; 7) no new deps; go build/vet + vitest(735+) +
+    oxlint green'
+  status: complete
+  created_at: '2026-09-01T16:33:45.542530+00:00'
+  completed_at: '2026-09-03T00:47:16.529700+00:00'

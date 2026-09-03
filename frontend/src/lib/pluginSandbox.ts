@@ -4,6 +4,7 @@ import {
   type PluginApiResponsePayload, type PluginEventPayload, type PluginManifest,
   type PluginMessage, type PluginPermission,
 } from './pluginTypes';
+import { PluginManifestSchema } from './pluginTypes';
 
 export const SANDBOX_CSP = `default-src 'none';
              script-src 'unsafe-inline';
@@ -20,6 +21,17 @@ export interface SandboxPlugin {
   sourceJS: string;
   nonce: string;
   parentOrigin: string;
+}
+
+export function parseEmbeddedManifest(source: string): PluginManifest {
+  const match = source.match(/\/\*@@canopy\.manifest@@([\s\S]*?)@@end@@\*\//);
+  if (!match) throw new Error('Plugin source has no embedded manifest');
+  return PluginManifestSchema.parse(JSON.parse(match[1]));
+}
+
+export async function sha256Hex(source: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
 function js(value: string): string { return JSON.stringify(value).replaceAll('<', '\\u003c'); }
@@ -106,6 +118,7 @@ export class PluginSandboxHost {
   private nextId = 1;
   private destroyed = false;
   private initialized = false;
+  private pendingInit = false;
   private readonly api: PluginApiHost;
   private readonly options: PluginSandboxHostOptions;
   private readonly listener = (event: MessageEvent) => { void this.handleMessage(event); };
@@ -116,11 +129,18 @@ export class PluginSandboxHost {
     window.addEventListener('message', this.listener);
   }
 
-  attach(iframe: HTMLIFrameElement): void { this.iframe = iframe; }
+  attach(iframe: HTMLIFrameElement): void {
+    this.iframe = iframe;
+    // A load event may fire before the attach effect commits; run the deferred init now.
+    if (this.pendingInit) { this.pendingInit = false; this.initialize(); }
+  }
 
   initialize(): void {
     if (this.initialized || this.destroyed) return;
+    if (!this.iframe) { this.pendingInit = true; return; }
     this.initialized = true;
+    this.pendingInit = false;
+	this.iframe.dataset.initManifestVersion = this.options.manifest.version;
     this.post('init', `init-${this.nextId++}`, {
       pluginId: this.options.pluginId, instanceId: this.options.instanceId,
       manifest: this.options.manifest, grantedPermissions: [...this.options.grantedPermissions],

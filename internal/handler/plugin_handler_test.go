@@ -89,6 +89,17 @@ func (s *registryStub) Audit(context.Context, uuid.UUID, string, uuid.UUID, map[
 	s.audits++
 	return nil
 }
+func (s *registryStub) Update(_ context.Context, p *db.Plugin, _ uuid.UUID) (*db.Plugin, error) {
+	return s.Register(context.Background(), p)
+}
+func (s *registryStub) RollbackTo(ctx context.Context, n, v string, _ uuid.UUID) (*db.Plugin, error) {
+	for _, p := range s.rows {
+		if p.Slug == n && p.Version == v {
+			return s.Activate(ctx, p.Name, p.ID)
+		}
+	}
+	return nil, db.ErrPluginNotFound
+}
 func (s *registryStub) status(n, v string) (*db.Plugin, error) {
 	for i := range s.rows {
 		if s.rows[i].Name == n && s.rows[i].Status == "active" {
@@ -159,5 +170,30 @@ func TestPluginRegistryRollbackAndArchive(t *testing.T) {
 	active, _ := repo.ListActive(context.Background())
 	if len(active) != 0 {
 		t.Fatalf("active=%d", len(active))
+	}
+}
+
+func TestPluginUpdateSourceAndRollbackNotFound(t *testing.T) {
+	repo := &registryStub{}
+	h := NewPluginHandler(service.NewPluginRegistryService(repo))
+	if w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/", pluginBody(pluginSource("viewer", "1.0.0", "data_read"))); w.Code != 201 {
+		t.Fatal(w.Body.String())
+	}
+	actor := uuid.New()
+	source := pluginSource("viewer", "2.0.0", "data_read")
+	body, _ := json.Marshal(map[string]any{"source_js": source, "actor_profile_id": actor})
+	w := pluginReq(t, h, http.MethodPost, "/api/v1/plugins/viewer/update", string(body))
+	if w.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", w.Code, w.Body.String())
+	}
+	active := repo.rows[len(repo.rows)-1]
+	w = pluginReq(t, h, http.MethodGet, "/api/v1/plugins/"+active.ID.String()+"/source", "")
+	if w.Code != http.StatusOK || w.Body.String() != source || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Content-Type") != "application/javascript" {
+		t.Fatalf("source status=%d headers=%v body=%s", w.Code, w.Header(), w.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{"target_version": "9.9.9", "actor_profile_id": actor})
+	w = pluginReq(t, h, http.MethodPost, "/api/v1/plugins/viewer/rollback", string(body))
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "PLUGIN_VERSION_NOT_FOUND") {
+		t.Fatalf("rollback status=%d body=%s", w.Code, w.Body.String())
 	}
 }

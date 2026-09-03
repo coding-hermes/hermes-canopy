@@ -237,7 +237,9 @@ func New(
 		r.Get("/context/{node_id}", handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).Compile)
 
 		// Plugin sandbox (GAP-002) — register/list/source/install + instances.
-		r.Mount("/plugins", handler.NewPluginHandler(pluginSvc).Routes())
+		// Plugin lifecycle events use the existing SSE hub, keyed by plugin id.
+		r.Get("/plugins/{tree_id}/events", sse.NewHandler(sseHub).HandleTreeEvents)
+		r.Mount("/plugins", handler.NewPluginHandler(pluginSvc, sseHub).Routes())
 
 		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
 		// gateway api_server (hermes-webui pattern). The service is constructed

@@ -37,7 +37,40 @@ type PluginRegistryService interface {
 	Activate(context.Context, string, string, uuid.UUID) (*db.Plugin, error)
 	Disable(context.Context, string, uuid.UUID) (*db.Plugin, error)
 	Archive(context.Context, string, uuid.UUID) (*db.Plugin, error)
+	Update(context.Context, string, string, uuid.UUID) (*db.Plugin, error)
+	Rollback(context.Context, string, string, uuid.UUID) (*db.Plugin, error)
 }
+
+func (s *PluginRegistryServiceImpl) Update(c context.Context, slug, source string, actor uuid.UUID) (*db.Plugin, error) {
+	if len([]byte(source)) >= 1_048_576 {
+		return nil, ErrInvalidPluginManifest
+	}
+	m, raw, e := parseRegistryManifest(source)
+	if e != nil {
+		return nil, e
+	}
+	if registrySlug(m.Name) != slug {
+		return nil, ErrInvalidPluginManifest
+	}
+	sum := sha256.Sum256([]byte(source))
+	p := &db.Plugin{Name: m.Name, Slug: slug, Version: m.Version, Description: m.Description, AuthorProfileID: actor, Permissions: m.Permissions, ManifestJSON: raw, SourceJS: source, SourceSHA256: hex.EncodeToString(sum[:]), SourceByteSize: len([]byte(source)), IconURL: m.IconURL}
+	p, e = s.repo.Update(c, p, actor)
+	if errors.Is(e, db.ErrPluginDuplicate) {
+		return nil, ErrPluginConflict
+	}
+	if errors.Is(e, db.ErrPluginNotFound) {
+		return nil, ErrPluginRegistryMissing
+	}
+	return p, e
+}
+func (s *PluginRegistryServiceImpl) Rollback(c context.Context, slug, version string, actor uuid.UUID) (*db.Plugin, error) {
+	p, e := s.repo.RollbackTo(c, slug, version, actor)
+	if errors.Is(e, db.ErrPluginNotFound) {
+		return nil, ErrPluginRegistryMissing
+	}
+	return p, e
+}
+
 type PluginRegistryServiceImpl struct{ repo db.PluginRepo }
 
 func NewPluginRegistryService(r db.PluginRepo) *PluginRegistryServiceImpl {
