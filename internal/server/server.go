@@ -24,6 +24,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/relay"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
@@ -373,6 +374,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if dbh, ok := r.Context().Value(healthSchemaKey{}).(HealthDB); ok {
 		schemaV, _ = dbh.SchemaVersion(r.Context())
 		embeddedV = dbh.EmbeddedMigrations()
+		if rh, ok := dbh.(interface{ RelayHealth() relay.RelayHealth }); ok {
+			health := rh.RelayHealth()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d}}`,
+				schemaV, embeddedV, health.Mode, health.Status, health.Sessions)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

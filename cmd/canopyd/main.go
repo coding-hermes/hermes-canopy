@@ -29,6 +29,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/mls"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	relaypkg "github.com/coding-hermes/hermes-canopy/internal/relay"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
 	"github.com/coding-hermes/hermes-canopy/internal/server"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
@@ -69,6 +70,12 @@ func main() {
 
 	// Server mode: parse server flags.
 	showVersion := flag.Bool("version", false, "print version and exit")
+	relayMode := flag.String("relay-mode", relaypkg.ModeAirGapped, "relay mode: air_gapped, self_hosted, or saas")
+	relayListen := flag.String("relay-listen", "", "relay listener address (tcp:// or quic://)")
+	relayConnect := flag.String("relay-connect", "", "upstream relay address (tcp:// or quic://)")
+	maxRelaySessions := flag.Int("max-relay-sessions", 500, "maximum concurrent relay sessions")
+	relayHeartbeat := flag.Duration("relay-heartbeat", 30*time.Second, "relay heartbeat interval")
+	relayDrainTimeout := flag.Duration("relay-drain-timeout", 30*time.Second, "relay graceful drain timeout")
 	flag.Usage = printServerUsage
 	flag.Parse()
 
@@ -139,6 +146,32 @@ func main() {
 		log.Fatal().Err(err).Msg("database migration failed")
 	}
 
+	relayConfigManager := relaypkg.NewDeploymentConfigManager()
+	relayConfig, err := relayConfigManager.Load(ctx, database.Pool)
+	if err != nil {
+		log.Fatal().Err(err).Msg("load relay configuration")
+	}
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "relay-mode":
+			relayConfig.Mode = *relayMode
+			relayConfig.Enabled = *relayMode != relaypkg.ModeAirGapped
+		case "relay-listen":
+			relayConfig.ListenAddr = *relayListen
+		case "relay-connect":
+			relayConfig.ConnectAddr = *relayConnect
+		case "max-relay-sessions":
+			relayConfig.MaxSessions = *maxRelaySessions
+		case "relay-heartbeat":
+			relayConfig.HeartbeatSecs = int(*relayHeartbeat / time.Second)
+		case "relay-drain-timeout":
+			relayConfig.DrainTimeoutSecs = int(*relayDrainTimeout / time.Second)
+		}
+	})
+	if err := relayConfigManager.Save(ctx, database.Pool, relayConfig); err != nil {
+		log.Fatal().Err(err).Msg("persist relay configuration")
+	}
+
 	treeService := service.NewTreeService(
 		database.Trees,
 		database.Nodes,
@@ -157,6 +190,13 @@ func main() {
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
 	// 1000-event ring per tree.
 	sseHub := sse.NewHub()
+	coreRelay, err := relaypkg.NewRelayService(relayConfig, nil, sseHub)
+	if err != nil {
+		log.Fatal().Err(err).Msg("configure relay service")
+	}
+	if err := coreRelay.Start(ctx); err != nil {
+		log.Fatal().Err(err).Msg("start relay service")
+	}
 
 	nodeService := service.NewNodeService(
 		database.Nodes,
@@ -308,7 +348,7 @@ func main() {
 	}
 
 	srv := server.New(
-		healthProbe{database}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
+		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
 		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, cfg)
@@ -335,7 +375,12 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer shutdownCancel()
 
-	// Drain SSE first so connected clients receive a "done" event.
+	// Relay publishes its draining transition before SSE clients are closed.
+	if err := coreRelay.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("relay shutdown error")
+	}
+
+	// Drain SSE after relay so connected clients can receive relay_status.
 	if err := sseHub.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("sse hub shutdown error")
 	}
@@ -428,7 +473,10 @@ func (m *pgMLSKeyPackageManager) ExpireKeyPackage(ctx context.Context, keyPackag
 }
 
 // healthProbe adapts *db.DB to the server.healthDB interface used by /health.
-type healthProbe struct{ d *db.DB }
+type healthProbe struct {
+	d     *db.DB
+	relay *relaypkg.RelayService
+}
 
 func (h healthProbe) SchemaVersion(ctx context.Context) (int64, error) {
 	return h.d.SchemaVersion(ctx)
@@ -441,3 +489,5 @@ func (h healthProbe) EmbeddedMigrations() int64 {
 	}
 	return v
 }
+
+func (h healthProbe) RelayHealth() relaypkg.RelayHealth { return h.relay.Health() }

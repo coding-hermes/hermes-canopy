@@ -1857,3 +1857,58 @@ tasks:
   status: complete
   created_at: '2026-09-01T16:33:45.542530+00:00'
   completed_at: '2026-09-03T00:47:16.529700+00:00'
+- id: PL01-P4
+  title: "PL-01 Phase 4 remaining \xA79 API surface (SPEC-PL-01 \xA79.2-\xA79.6):\
+    \ per-method quotas, client dispatch for mutate/notify/calendar/network, canopyd\
+    \ network proxy"
+  criteria:
+  - 1) per-method quota table in internal/plugin/quota.go (data.query 100, data.mutate
+    30, notify 10, calendar.query 30, calendar.create 10, network.fetch 60 calls/min/instance)
+    wired into CheckPermission, unit-tested per-method independence + expiry
+  - '2) pluginApi.ts dispatch: data.mutate maps nodes to existing REST + enforces
+    own-created-ids tracking (documented server-side identity gap), notify toasts
+    + window.Notification w/ ttl + max-3-actions, calendar.* structured NOT_IMPLEMENTED
+    after permission gate, network.fetch wraps new proxy'
+  - '3) Go POST /api/v1/plugins/network-proxy: JWT, https-only (400 INVALID_URL),
+    strips Cookie/Authorization, 30s timeout, 10MB cap (413), returns {status,statusText,headers,body,durationMs},
+    httptest coverage'
+  - '4) vitest: mutate gate + ownership, notify toast+ttl, calendar NOT_IMPLEMENTED,
+    network.fetch proxy round-trip'
+  - 5) no new deps/migrations; go build/vet + vitest(739+) + oxlint green
+  status: complete
+  created_at: '2026-09-03T00:56:01.062710+00:00'
+  completed_at: '2026-09-03T01:09:12.734451+00:00'
+- id: FTR05-P1
+  title: "FTR-05 Phase 1 core relay service (SPEC-FTR-05 \xA711 P1): relay_config\
+    \ DDL 000040, DeploymentConfigManager (load/save/reload/validate), RelayService\
+    \ Start/Shutdown with graceful drain + relay_status SSE, CLI flags with flag>DB>default\
+    \ precedence, /health relay block, air_gapped disabled default; stdlib only"
+  criteria:
+  - "1) migration 000040_relay_config up/down matches spec \xA74 column set, committed;\
+    \ 2) DeploymentConfigManager load/save/reload/validate against live PG with defaults\
+    \ when row absent; 3) RelayService Start/Shutdown graceful drain (drain_timeout\
+    \ honored, fake-clock tested) + Health mode/status/sessions + relay_status SSE\
+    \ on transitions; air_gapped = disabled, zero goroutines; 4) CLI flags --relay-mode/--relay-listen/--relay-connect/--max-relay-sessions/--relay-heartbeat/--relay-drain-timeout,\
+    \ precedence flag>DB>default, resolved config persisted; startup wires Start before\
+    \ serve + Shutdown on SIGTERM/INT; /health gains relay block; 5) no new Go deps;\
+    \ go build/vet green; relay suite green live-PG; handler TestPlugin green; frontend\
+    \ untouched (vitest 744)"
+  status: complete
+  created_at: '2026-09-03T01:16:15.168348+00:00'
+  completed_at: '2026-09-03T01:27:03.392601+00:00'
+- id: FTR05-P1FIX
+  title: "FTR-05 P1 remediation: relay_config migration rewritten to spec \xA74.1\
+    \ exact columns (instance_id/deployment_mode/heartbeat_secs/drain_timeout_secs/tls_*/hmac_*/enabled)\
+    \ + air_gapped-disabled default precedence fixed (explicit flag > DB row > default\
+    \ air_gapped)"
+  criteria:
+  - "1) migration 000040 up/down matches spec \xA74.1 column set verbatim (all of:\
+    \ instance_id, deployment_mode, heartbeat_secs, drain_timeout_secs, tls_enabled,\
+    \ tls_cert_file, tls_key_file, tls_ca_file, tls_mutual, hmac_key_rotated_at, hmac_key_id,\
+    \ enabled); 2) default mode = air_gapped + disabled when DB empty and no flag\
+    \ (precedence flag>DB>default), relay does not start goroutines; 3) Go code+tests\
+    \ use real column names, tls/hmac fields round-trip Load/Save; 4) go build/vet\
+    \ + relay/handler/cmd suites green; gofmt clean on changed files; 5) no new deps"
+  status: complete
+  created_at: '2026-09-03T01:32:27.412285+00:00'
+  completed_at: '2026-09-03T01:41:54.805134+00:00'
