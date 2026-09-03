@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -39,15 +40,14 @@ func newRegistryPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `CREATE TABLE tenants (tenant_id UUID PRIMARY KEY)`); err != nil {
-		t.Fatal(err)
-	}
-	ddl, err := migrations.FS().ReadFile("000041_relay_registry.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(ddl)); err != nil {
-		t.Fatal(err)
+	for _, migration := range []string{"000041_relay_registry.up.sql", "000042_tenants.up.sql"} {
+		ddl, err := migrations.FS().ReadFile(migration)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(ddl)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		pool.Close()
@@ -69,11 +69,33 @@ func provisioningToken(t *testing.T, secret string, tenantID uuid.UUID, tokenID 
 	return raw
 }
 
+func TestTenantRepositoryLivePostgres(t *testing.T) {
+	pool := newRegistryPool(t)
+	repo := NewTenantRepository(pool)
+	ctx := context.Background()
+	tenant, err := repo.CreateTenant(ctx, "Acme", "free")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := repo.GetTenant(ctx, tenant.TenantID); err != nil || got.Name != "Acme" {
+		t.Fatalf("tenant=%+v err=%v", got, err)
+	}
+	if got, err := repo.UpdateTier(ctx, tenant.TenantID, "pro"); err != nil || got.Tier != "pro" {
+		t.Fatalf("tenant=%+v err=%v", got, err)
+	}
+	if tenants, err := repo.ListTenants(ctx); err != nil || len(tenants) != 1 {
+		t.Fatalf("tenants=%+v err=%v", tenants, err)
+	}
+	if _, err := repo.UpdateTier(ctx, tenant.TenantID, "invalid"); !errors.Is(err, ErrInvalidTier) {
+		t.Fatalf("invalid tier err=%v", err)
+	}
+}
+
 func TestRelayRegistryLivePostgres(t *testing.T) {
 	pool := newRegistryPool(t)
 	ctx := context.Background()
 	tenantID := uuid.New()
-	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id) VALUES ($1)`, tenantID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id,name) VALUES ($1,'test tenant')`, tenantID); err != nil {
 		t.Fatal(err)
 	}
 	registry := NewRelayRegistry(pool, ModeSaaS, "provisioning-secret")

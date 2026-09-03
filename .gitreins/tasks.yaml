@@ -1966,3 +1966,20 @@ tasks:
   status: complete
   created_at: '2026-09-03T02:46:01.096128+00:00'
   completed_at: '2026-09-03T03:18:38.837004+00:00'
+- id: FTR05-P5
+  title: "FTR-05 Phase 5 tenant isolation + rate limiting (SPEC-FTR-05 \xA711-P5):\
+    \ tenants table (000042, FK to relay tables per documented P3 deviation), per-tenant\
+    \ tiered token-bucket limiter in hub forwarding path, cross-tenant routing rejection,\
+    \ tenant_id on sessions, relay_tenant_event SSE, discovery tier filter"
+  criteria:
+  - '1) migration 000042 tenants table + FK wiring into relay_instances/relay_sessions
+    (nullable tenant_id keeps self-hosted legal), fresh-chain 000001->000042 applies
+    clean; 2) tenant repo CRUD (create/get/update-tier/list); 3) per-tenant token
+    bucket by tier (free/pro/enterprise limits per spec or stated defaults), thread-safe
+    expiry, -race clean, tier-boundary tests; 4) hub: sessions carry tenant_id, cross-tenant
+    message delivery REJECTED (same-tenant allowed), relay_sessions.tenant_id updated
+    on open; 5) relay_tenant_event SSE on tenant lifecycle; no new deps/frontend;
+    build/vet + relay+handler+cmd green; gofmt clean'
+  status: complete
+  created_at: '2026-09-03T04:43:24.380129+00:00'
+  completed_at: '2026-09-03T04:56:16.507287+00:00'

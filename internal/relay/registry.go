@@ -200,6 +200,29 @@ func (reg *RelayRegistry) UpdateInstanceHeartbeat(ctx context.Context, instanceI
 	return nil
 }
 
+func (reg *RelayRegistry) ResolveInstanceTenant(ctx context.Context, instanceID uuid.UUID) (uuid.UUID, string, error) {
+	var tenantID uuid.UUID
+	var tier string
+	err := reg.db.QueryRow(ctx, `SELECT i.tenant_id,t.tier FROM relay_instances i
+		JOIN tenants t ON t.tenant_id=i.tenant_id WHERE i.instance_id=$1 AND i.enabled=true`, instanceID).Scan(&tenantID, &tier)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, "", ErrInstanceNotFound
+	}
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("relay: resolve instance tenant: %w", err)
+	}
+	return tenantID, tier, nil
+}
+
+func (reg *RelayRegistry) OpenSession(ctx context.Context, s *RelaySession) error {
+	_, err := reg.db.Exec(ctx, `INSERT INTO relay_sessions (session_id,instance_id,tenant_id,remote_addr,established_at,last_activity_at)
+		VALUES ($1,$2,$3,$4,$5,$5)`, s.ID, s.InstanceID, s.TenantID, s.Conn.RemoteAddr().String(), s.Established)
+	if err != nil {
+		return fmt.Errorf("relay: record session: %w", err)
+	}
+	return nil
+}
+
 func (reg *RelayRegistry) DeleteInstance(ctx context.Context, instanceID uuid.UUID) error {
 	tag, err := reg.db.Exec(ctx, `DELETE FROM relay_instances WHERE instance_id=$1`, instanceID)
 	if err != nil {

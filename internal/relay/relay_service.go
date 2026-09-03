@@ -82,6 +82,7 @@ func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSE
 			relayHub := NewRelayHub(cfg)
 			if len(registries) > 0 && registries[0] != nil {
 				relayHub.SetHeartbeatHook(cfg.InstanceID, registries[0].UpdateInstanceHeartbeat)
+				relayHub.SetTenantHooks(registries[0].ResolveInstanceTenant, registries[0].OpenSession)
 			}
 			transport = relayHub
 		} else {

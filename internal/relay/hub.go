@@ -17,6 +17,8 @@ const helloTimeout = 10 * time.Second
 type RelaySession struct {
 	ID           string
 	InstanceID   uuid.UUID
+	TenantID     uuid.UUID
+	Tier         string
 	Conn         net.Conn
 	Established  time.Time
 	LastActivity time.Time
@@ -26,24 +28,36 @@ type RelaySession struct {
 }
 
 type RelayHub struct {
-	mu           sync.RWMutex
-	listener     net.Listener
-	sessions     map[string]*RelaySession
-	sessionLimit int
-	auth         *FrameAuthenticator
-	keyID        uint16
-	drainDone    chan struct{}
-	drainOnce    sync.Once
-	closed       chan struct{}
-	closeOnce    sync.Once
-	wg           sync.WaitGroup
-	heartbeat    func(context.Context, uuid.UUID) error
-	instanceID   uuid.UUID
+	mu              sync.RWMutex
+	listener        net.Listener
+	sessions        map[string]*RelaySession
+	sessionLimit    int
+	auth            *FrameAuthenticator
+	keyID           uint16
+	drainDone       chan struct{}
+	drainOnce       sync.Once
+	closed          chan struct{}
+	closeOnce       sync.Once
+	wg              sync.WaitGroup
+	heartbeat       func(context.Context, uuid.UUID) error
+	instanceID      uuid.UUID
+	tenantRequired  bool
+	resolveInstance func(context.Context, uuid.UUID) (uuid.UUID, string, error)
+	openSession     func(context.Context, *RelaySession) error
+	rateLimiter     *TenantRateLimiter
 }
 
 // SetHeartbeatHook wires registry liveness updates without changing the relay protocol.
 func (h *RelayHub) SetHeartbeatHook(instanceID uuid.UUID, hook func(context.Context, uuid.UUID) error) {
 	h.instanceID, h.heartbeat = instanceID, hook
+}
+
+// SetTenantHooks wires SaaS identity lookup and durable session recording.
+func (h *RelayHub) SetTenantHooks(
+	resolve func(context.Context, uuid.UUID) (uuid.UUID, string, error),
+	open func(context.Context, *RelaySession) error,
+) {
+	h.resolveInstance, h.openSession = resolve, open
 }
 
 func NewRelayHub(cfg DeploymentConfig) *RelayHub {
@@ -58,6 +72,7 @@ func NewRelayHub(cfg DeploymentConfig) *RelayHub {
 		sessions: make(map[string]*RelaySession), sessionLimit: cfg.MaxSessions,
 		auth:  auth,
 		keyID: uint16(cfg.HMACKeyID), drainDone: make(chan struct{}), closed: make(chan struct{}),
+		tenantRequired: cfg.Mode == ModeSaaS, rateLimiter: NewTenantRateLimiter(time.Minute),
 	}
 }
 
@@ -132,6 +147,25 @@ func (h *RelayHub) acceptConn(conn net.Conn) (*RelaySession, error) {
 		return nil, ErrAuthFailed
 	}
 
+	var instanceID, tenantID uuid.UUID
+	tier := ""
+	// Phase 5 extends HELLO with the registered instance UUID as a raw 16-byte
+	// payload. Empty/non-UUID payloads remain legal only for self-hosted mode.
+	if len(f.Payload) == 16 {
+		copy(instanceID[:], f.Payload)
+	}
+	if h.tenantRequired {
+		if instanceID == uuid.Nil || h.resolveInstance == nil {
+			_ = conn.Close()
+			return nil, ErrAuthFailed
+		}
+		var resolveErr error
+		tenantID, tier, resolveErr = h.resolveInstance(context.Background(), instanceID)
+		if resolveErr != nil || tenantID == uuid.Nil {
+			_ = conn.Close()
+			return nil, ErrAuthFailed
+		}
+	}
 	h.mu.Lock()
 	if h.listener == nil || len(h.sessions) >= h.sessionLimit {
 		h.mu.Unlock()
@@ -139,9 +173,15 @@ func (h *RelayHub) acceptConn(conn net.Conn) (*RelaySession, error) {
 		_ = conn.Close()
 		return nil, errors.New("relay: session limit reached")
 	}
-	s := &RelaySession{ID: uuid.NewString(), Conn: conn, Established: time.Now(), LastActivity: time.Now(), done: make(chan struct{})}
+	s := &RelaySession{ID: uuid.NewString(), InstanceID: instanceID, TenantID: tenantID, Tier: tier, Conn: conn, Established: time.Now(), LastActivity: time.Now(), done: make(chan struct{})}
 	h.sessions[s.ID] = s
 	h.mu.Unlock()
+	if h.openSession != nil && instanceID != uuid.Nil {
+		if err := h.openSession(context.Background(), s); err != nil {
+			h.removeSession(s)
+			return nil, err
+		}
+	}
 	_ = conn.SetReadDeadline(time.Time{})
 	if err := h.writeSession(s, Frame{Type: FrameHelloAck, Payload: encodeCBORText(s.ID)}); err != nil {
 		h.removeSession(s)
@@ -161,6 +201,10 @@ func encodeCBORText(value string) []byte {
 		return append([]byte{0x60 | byte(n)}, value...)
 	}
 	return append([]byte{0x78, byte(n)}, value...)
+}
+
+func encodeCBORError(code string) []byte {
+	return append([]byte{0xa1, 0x64, 'c', 'o', 'd', 'e'}, encodeCBORText(code)...)
 }
 
 // HandleConnection processes control frames until the session closes.
@@ -183,6 +227,29 @@ func (h *RelayHub) HandleConnection(ctx context.Context, s *RelaySession) error 
 			}
 		case FrameBye:
 			return nil
+		case FrameData:
+			if s.TenantID != uuid.Nil && h.resolveInstance != nil {
+				tenantID, tier, err := h.resolveInstance(ctx, s.InstanceID)
+				if err != nil || tenantID != s.TenantID {
+					return ErrTenantIsolation
+				}
+				s.Tier = tier
+			}
+			if s.TenantID != uuid.Nil && !h.rateLimiter.Allow(s.TenantID, s.Tier) {
+				if err := h.writeSession(s, Frame{Type: FrameError, Payload: encodeCBORError("RATE_LIMITED")}); err != nil {
+					return err
+				}
+				continue
+			}
+			if len(f.Payload) < 16 {
+				_ = h.writeSession(s, Frame{Type: FrameError, Payload: encodeCBORError("INVALID_TARGET")})
+				continue
+			}
+			var target uuid.UUID
+			copy(target[:], f.Payload[:16])
+			if err := h.RouteToInstance(s, target, f); err != nil {
+				_ = h.writeSession(s, Frame{Type: FrameError, Payload: encodeCBORError(err.Error())})
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -190,6 +257,45 @@ func (h *RelayHub) HandleConnection(ctx context.Context, s *RelaySession) error 
 		default:
 		}
 	}
+}
+
+var ErrTenantIsolation = errors.New("TENANT_ISOLATION")
+
+// RouteToInstance forwards a DATA frame only when source and destination have
+// the same tenant. The destination UUID occupies the first 16 payload bytes.
+func (h *RelayHub) RouteToInstance(source *RelaySession, target uuid.UUID, frame Frame) error {
+	h.mu.RLock()
+	var destination *RelaySession
+	for _, candidate := range h.sessions {
+		if candidate.InstanceID == target {
+			destination = candidate
+			break
+		}
+	}
+	h.mu.RUnlock()
+	if destination == nil {
+		return errors.New("INSTANCE_NOT_CONNECTED")
+	}
+	if source.TenantID != destination.TenantID {
+		return ErrTenantIsolation
+	}
+	return h.writeSession(destination, frame)
+}
+
+func (h *RelayHub) BroadcastToTenant(tenantID uuid.UUID, frame Frame) error {
+	h.mu.RLock()
+	sessions := make([]*RelaySession, 0)
+	for _, s := range h.sessions {
+		if s.TenantID == tenantID {
+			sessions = append(sessions, s)
+		}
+	}
+	h.mu.RUnlock()
+	var err error
+	for _, s := range sessions {
+		err = errors.Join(err, h.writeSession(s, frame))
+	}
+	return err
 }
 
 // CloseSession sends BYE and removes the named live session.

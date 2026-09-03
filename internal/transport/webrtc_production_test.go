@@ -36,7 +36,10 @@ func TestPionDataChannelRoundTrip(t *testing.T) {
 		t.Skipf("loopback unavailable in sandbox: %v", err)
 	}
 	_ = probe.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// 20s is marginal when the guard runs this package alongside ~15 others
+	// (three guard FAILs traced here: connection just misses the deadline under
+	// package-parallel load). 60s still fails fast on real regressions.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	f := NewPionPeerConnectionFactory()
 	a, err := f.NewPeerConnection(ctx, WebRTCConfig{})
