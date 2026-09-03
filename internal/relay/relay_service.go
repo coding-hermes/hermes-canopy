@@ -64,13 +64,17 @@ type RelayService struct {
 	status    string
 }
 
-func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSEHub) (*RelayService, error) {
+func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSEHub, registries ...*RelayRegistry) (*RelayService, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	if transport == nil {
 		if cfg.ListenAddr != "" {
-			transport = NewRelayHub(cfg)
+			relayHub := NewRelayHub(cfg)
+			if len(registries) > 0 && registries[0] != nil {
+				relayHub.SetHeartbeatHook(cfg.InstanceID, registries[0].UpdateInstanceHeartbeat)
+			}
+			transport = relayHub
 		} else {
 			transport = noopRelayTransport{}
 		}

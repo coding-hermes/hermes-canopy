@@ -10,6 +10,8 @@ import (
 )
 
 type userIDContextKey struct{}
+type tenantIDContextKey struct{}
+type roleContextKey struct{}
 
 // AuthMiddleware validates HS256 Bearer tokens and stores the authenticated
 // user's UUID in the request context. Health and version routes are public.
@@ -58,9 +60,33 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userIDContextKey{}, userID)
+			if raw, ok := claims["tenant_id"].(string); ok {
+				if tenantID, parseErr := uuid.Parse(raw); parseErr == nil {
+					ctx = context.WithValue(ctx, tenantIDContextKey{}, tenantID)
+				}
+			}
+			if role, ok := claims["role"].(string); ok {
+				ctx = context.WithValue(ctx, roleContextKey{}, role)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if role, _ := r.Context().Value(roleContextKey{}).(string); role != "admin" {
+			writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "admin role required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// TenantIDFromContext returns the tenant scope carried by the authenticated JWT.
+func TenantIDFromContext(ctx context.Context) uuid.UUID {
+	tenantID, _ := ctx.Value(tenantIDContextKey{}).(uuid.UUID)
+	return tenantID
 }
 
 // UserIDFromContext returns the authenticated user UUID or uuid.Nil when the

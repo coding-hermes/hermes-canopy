@@ -37,6 +37,13 @@ type RelayHub struct {
 	closed       chan struct{}
 	closeOnce    sync.Once
 	wg           sync.WaitGroup
+	heartbeat    func(context.Context, uuid.UUID) error
+	instanceID   uuid.UUID
+}
+
+// SetHeartbeatHook wires registry liveness updates without changing the relay protocol.
+func (h *RelayHub) SetHeartbeatHook(instanceID uuid.UUID, hook func(context.Context, uuid.UUID) error) {
+	h.instanceID, h.heartbeat = instanceID, hook
 }
 
 func NewRelayHub(cfg DeploymentConfig) *RelayHub {
@@ -125,6 +132,9 @@ func (h *RelayHub) acceptConn(conn net.Conn) (*RelaySession, error) {
 	if err := h.writeSession(s, Frame{Type: FrameHelloAck, Payload: encodeCBORText(s.ID)}); err != nil {
 		h.removeSession(s)
 		return nil, err
+	}
+	if h.heartbeat != nil && h.instanceID != uuid.Nil {
+		_ = h.heartbeat(context.Background(), h.instanceID)
 	}
 	return s, nil
 }

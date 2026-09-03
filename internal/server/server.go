@@ -77,6 +77,7 @@ func New(
 	topicSearchSvc search.TopicSearchService,
 	referenceSvc reference.ReferenceService,
 	federationSvc federation.FederationService,
+	relayRegistry *relay.RelayRegistry,
 	cfg *config.Config,
 ) *Server {
 	r := chi.NewRouter()
@@ -204,6 +205,10 @@ func New(
 			r.Mount("/federation/routes", fedHandler.RouteRoutes())
 			r.Mount("/federation/conflicts", fedHandler.ConflictRoutes())
 			r.Get("/federation/health", fedHandler.Health)
+		}
+
+		if relayRegistry.DiscoveryAPIEnabled() {
+			r.Mount("/relays", handler.NewRelayRegistryHandler(relayRegistry).Routes())
 		}
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.

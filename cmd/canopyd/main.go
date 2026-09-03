@@ -190,7 +190,8 @@ func main() {
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
 	// 1000-event ring per tree.
 	sseHub := sse.NewHub()
-	coreRelay, err := relaypkg.NewRelayService(relayConfig, nil, sseHub)
+	relayRegistry := relaypkg.NewRelayRegistry(database.Pool, relayConfig.Mode, cfg.JWTSecret)
+	coreRelay, err := relaypkg.NewRelayService(relayConfig, nil, sseHub, relayRegistry)
 	if err != nil {
 		log.Fatal().Err(err).Msg("configure relay service")
 	}
@@ -351,7 +352,7 @@ func main() {
 		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
-		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, cfg)
+		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg)
 	if natsBus != nil {
 		srv.SetTransportDrain(natsBus.Drain)
 	}

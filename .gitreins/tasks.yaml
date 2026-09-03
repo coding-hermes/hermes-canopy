@@ -1930,3 +1930,22 @@ tasks:
   status: complete
   created_at: '2026-09-03T01:58:11.953081+00:00'
   completed_at: '2026-09-03T02:08:33.733998+00:00'
+- id: FTR05-P3
+  title: "FTR-05 Phase 3 RelayRegistry (SPEC-FTR-05 \xA73.3/\xA74/\xA78/\xA711-P3):\
+    \ relay_instances+relay_sessions DDL 000041 verbatim, registry service (register/discovery/heartbeat,\
+    \ one-time provisioning JWT), 3 JWT endpoints, hub HELLO heartbeat hook; self-hosted\
+    \ local registration"
+  criteria:
+  - "1) migration 000041 up/down matches \xA74 relay_instances+relay_sessions DDL\
+    \ verbatim (columns per spec, no invented names); 2) registry.go types mirror\
+    \ \xA73.3 (Instance/RegisterRequest/RegisterResponse/RelayNodeInfo), RegisterInstance\
+    \ validates one-time provisioning JWT in SaaS + generates relay_secret, self-hosted\
+    \ registers locally; GetAvailableRelays tenant-scoped load-ordered excludes disabled/unhealthy;\
+    \ heartbeat updates last-seen; live-PG tests incl duplicate-token rejection; 3)\
+    \ handler: POST /api/v1/relays/instances + DELETE /{id} + GET /api/v1/relays JWT-authed,\
+    \ envelope style, httptest (401 bad token, 404 unknown, discovery shape); 4) hub\
+    \ calls UpdateInstanceHeartbeat on successful HELLO; routes mounted; 5) no new\
+    \ deps, no frontend changes, build/vet+relay+handler+cmd green, gofmt clean"
+  status: complete
+  created_at: '2026-09-03T02:22:30.495497+00:00'
+  completed_at: '2026-09-03T02:38:15.685700+00:00'
