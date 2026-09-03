@@ -82,6 +82,41 @@ describe('PluginApiHost', () => {
     await expect(api.call('getTree', { treeId: 'tree-1' })).rejects.toMatchObject({ code: 'PERMISSION_DENIED', message: 'Plugin not granted permission: data_read' });
     expect(getTree).not.toHaveBeenCalled();
   });
+
+  it('gates mutations and only updates or deletes nodes created by this instance', async () => {
+    const dataApi = { getTree: vi.fn(), getNode: vi.fn(), search: vi.fn(), createNode: vi.fn().mockResolvedValue({ node: { id: 'own' } }), updateNode: vi.fn(), deleteNode: vi.fn() };
+    await expect(new PluginApiHost([], dataApi).call('data.mutate', { collection: 'nodes', op: 'insert', document: { treeId: 'tree', content: 'x' } })).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    const api = new PluginApiHost(['data_write'], dataApi);
+    await expect(api.call('data.mutate', { collection: 'nodes', op: 'update', id: 'foreign', document: {} })).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    await api.call('data.mutate', { collection: 'nodes', op: 'insert', document: { treeId: 'tree', content: 'x' } });
+    await api.call('data.mutate', { collection: 'nodes', op: 'update', id: 'own', document: { content: 'y' } });
+    await api.call('data.mutate', { collection: 'nodes', op: 'delete', id: 'own' });
+    expect(dataApi.updateNode).toHaveBeenCalledWith('own', { content: 'y' });
+    expect(dataApi.deleteNode).toHaveBeenCalledWith('own');
+  });
+
+  it('delivers typed notifications with their ttl to the toast bus and desktop API', async () => {
+    const onNotify = vi.fn(); const desktop = vi.fn(); Object.assign(desktop, { permission: 'granted' }); vi.stubGlobal('Notification', desktop);
+    const api = new PluginApiHost(['notification'], undefined, onNotify);
+    await api.call('notify', { title: 'Done', body: 'Finished', level: 'success', ttl_seconds: 2 });
+    expect(onNotify).toHaveBeenCalledWith(expect.objectContaining({ level: 'success', ttl_seconds: 2 }));
+    expect(desktop).toHaveBeenCalledWith('Done', { body: 'Finished' });
+    vi.unstubAllGlobals();
+  });
+
+  it('checks calendar permissions before returning the structured MVP error', async () => {
+    await expect(new PluginApiHost([]).call('calendar.query', {})).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    await expect(new PluginApiHost(['calendar_read']).call('calendar.query', {})).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED', message: 'Calendar subsystem is not part of Canopy MVP' });
+    await expect(new PluginApiHost(['calendar_write']).call('calendar.create', {})).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
+  });
+
+  it('posts network.fetch through the authenticated proxy and returns JSON', async () => {
+    const result = { status: 200, statusText: 'OK', headers: {}, body: 'ok', durationMs: 1 };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } })); vi.stubGlobal('fetch', fetchMock);
+    await expect(new PluginApiHost(['network_request']).call('network.fetch', { url: 'https://example.com' })).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/plugins/network-proxy', expect.objectContaining({ method: 'POST', credentials: 'include' }));
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('PluginHost iframe', () => {
@@ -95,6 +130,18 @@ describe('PluginHost iframe', () => {
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(iframe?.getAttribute('name')).toBe('canopy-plugin-plugin-1-instance-1');
+  });
+  it('renders and expires an in-app toast from the notify API', async () => {
+    vi.useFakeTimers();
+    const notificationManifest: PluginManifest = { ...manifest, permissions: ['notification'] };
+    await act(async () => { root.render(<PluginHost plugin={{ id: 'plugin-1', name: 'Test Plugin', manifest: notificationManifest, sourceJS: 'void 0;' }} instanceId="instance-1" />); await Promise.resolve(); });
+    const iframe = container.querySelector('iframe')!;
+    const nonce = iframe.srcdoc.match(/const NONCE = "([^"]+)"/)?.[1];
+    await act(async () => { window.dispatchEvent(new MessageEvent('message', { source: iframe.contentWindow, data: { type: 'api_call', id: 'notify-1', target: 'host', nonce, timestamp: Date.now(), payload: { method: 'notify', params: { title: 'Saved', body: 'Complete', level: 'success', ttl_seconds: 2 } } } })); await Promise.resolve(); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Saved');
+    act(() => vi.advanceTimersByTime(2000));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    vi.useRealTimers();
   });
   it('hot reloads an updated source and initializes the new manifest', async () => {
     const stream = new EventTarget() as EventSource;

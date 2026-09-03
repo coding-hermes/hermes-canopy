@@ -71,7 +71,7 @@ type Service interface {
 type PluginServiceImpl struct {
 	repo          Repo
 	maxSourceSize int
-	dataReadQuota *InstanceRateLimiter
+	quotas        *MethodQuotaRegistry
 }
 
 // NewService returns a Service backed by repo with the configured maximum
@@ -80,7 +80,7 @@ func NewService(repo Repo, maxSourceSize int) *PluginServiceImpl {
 	if maxSourceSize <= 0 {
 		maxSourceSize = 1048576 // 1 MB default
 	}
-	return &PluginServiceImpl{repo: repo, maxSourceSize: maxSourceSize, dataReadQuota: NewInstanceRateLimiter(100, time.Minute)}
+	return &PluginServiceImpl{repo: repo, maxSourceSize: maxSourceSize, quotas: NewMethodQuotaRegistry(time.Minute)}
 }
 
 // Register implements the GAP-002 §5 register algorithm (exact order):
@@ -270,7 +270,7 @@ func (s *PluginServiceImpl) CheckPermission(ctx context.Context, instanceID uuid
 	if err := CheckPermissionGate(inst.GrantedPermissions, method); err != nil {
 		return err
 	}
-	if method == "data.query" && !s.dataReadQuota.Allow(instanceID) {
+	if !s.quotas.Allow(method, instanceID) {
 		return ErrQuotaExceeded
 	}
 	if err := s.repo.IncrementInvokeCount(ctx, instanceID); err != nil {

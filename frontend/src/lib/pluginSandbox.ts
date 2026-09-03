@@ -69,7 +69,10 @@ const shim = (plugin: SandboxPlugin) => `(function() {
   });
   window.canopy = {
     version: '1.0.0', pluginId: PLUGIN_ID, instanceId: INSTANCE_ID,
-    data: { getTree: (params) => callAPI('getTree', params), getNode: (params) => callAPI('getNode', params), search: (params) => callAPI('search', params) },
+    data: { getTree: (params) => callAPI('getTree', params), getNode: (params) => callAPI('getNode', params), search: (params) => callAPI('search', params), mutate: (params) => callAPI('data.mutate', params) },
+    notify: (params) => callAPI('notify', params),
+    calendar: { query: (params) => callAPI('calendar.query', params), create: (params) => callAPI('calendar.create', params) },
+    network: { fetch: (params) => callAPI('network.fetch', params) },
     on: (event, handler) => { const handlers = eventHandlers.get(event) || []; handlers.push(handler); eventHandlers.set(event, handlers); return () => eventHandlers.set(event, handlers.filter((item) => item !== handler)); },
     emit: (event, data) => post('event', 'event-' + nextId++, { event, data }), error: CanopyAPIError,
   };

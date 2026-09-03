@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildSandboxDoc, parseEmbeddedManifest, PluginSandboxHost, sha256Hex } from '../lib/pluginSandbox';
-import type { PluginDataApi } from '../lib/pluginApi';
+import type { PluginDataApi, PluginNotification } from '../lib/pluginApi';
 import { PluginApiHost } from '../lib/pluginApi';
 import type { PluginEventPayload, PluginManifest, PluginPermission } from '../lib/pluginTypes';
 
@@ -21,13 +21,21 @@ export default function PluginHost({ plugin, instanceId, grantedPermissions, dat
 	const [currentPlugin, setCurrentPlugin] = useState(plugin);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+	const [toasts, setToasts] = useState<Array<PluginNotification & { id: number }>>([]);
+	const nextToastId = useRef(0);
+	const notify = useCallback((value: PluginNotification) => {
+		const id = ++nextToastId.current;
+		setToasts((current) => [...current, { ...value, id }]);
+		onEvent?.({ event: 'notification', data: value });
+		if (!value.persistent) window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), Math.max(0, value.ttl_seconds) * 1000);
+	}, [onEvent]);
 	useEffect(() => setCurrentPlugin(plugin), [plugin]);
   const permissions = useMemo(() => [...(grantedPermissions ?? currentPlugin.manifest.permissions)], [grantedPermissions, currentPlugin.manifest.permissions]);
   const host = useMemo(() => new PluginSandboxHost({
 	pluginId: currentPlugin.id, instanceId, manifest: currentPlugin.manifest, grantedPermissions: permissions,
-    api: new PluginApiHost(permissions, dataApi), theme, onEvent,
+    api: new PluginApiHost(permissions, dataApi, notify), theme, onEvent,
     onError: (value) => { setError(value.message); onError?.(value); },
-	}), [currentPlugin.id, currentPlugin.manifest, instanceId, permissions, dataApi, theme, onEvent, onError]);
+	}), [currentPlugin.id, currentPlugin.manifest, instanceId, permissions, dataApi, theme, onEvent, onError, notify]);
   const doc = useMemo(() => buildSandboxDoc({
 	id: currentPlugin.id, instanceId, name: currentPlugin.name, manifest: currentPlugin.manifest,
 	sourceJS: currentPlugin.sourceJS, nonce: host.nonce, parentOrigin: window.location.origin,
@@ -69,6 +77,7 @@ export default function PluginHost({ plugin, instanceId, grantedPermissions, dat
   return (
     <div className={className} style={{ position: 'relative', width: '100%', height: '100%' }}>
       {!loaded && <div role="status">Loading plugin…</div>}
+	  {toasts.map((toast) => <div key={toast.id} role="alert" data-level={toast.level}><strong>{toast.title}</strong><div>{toast.body}</div></div>)}
       <iframe
         ref={iframeRef}
 		key={`${currentPlugin.id}-${currentPlugin.manifest.version}`}
