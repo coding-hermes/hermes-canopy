@@ -65,6 +65,10 @@ func TestRelayServiceLifecycle(t *testing.T) {
 		transport := &fakeTransport{sessions: 1}
 		cfg := DefaultConfig()
 		cfg.Mode, cfg.Enabled = ModeSelfHosted, true
+		// Rotation off (interval<=0): the rotation ticker shares r.clock with the
+		// drain backstop and can consume the single fake tick first, wedging the
+		// drain select forever (guard-caught hang, FTR05-P4 follow-up).
+		cfg.HMACKeyRotateInterval = 0
 		svc, _ := NewRelayService(cfg, transport, nil)
 		svc.clock = fakeClock{ch: make(chan time.Time, 1)}
 		svc.clock.(fakeClock).ch <- time.Now()

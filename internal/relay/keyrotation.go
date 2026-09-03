@@ -32,7 +32,10 @@ func (r *RelayService) startRotationLoopLocked() {
 	}
 	interval := r.config.HMACKeyRotateInterval
 	if interval <= 0 {
-		interval = 168 * time.Hour
+		// interval <= 0 disables auto-rotation (operator knob; rotation still
+		// available via RotateNow). Not defaulted here: lifecycle tests and
+		// operators that only want manual rotation must not spawn a ticker.
+		return
 	}
 	stop, done := make(chan struct{}), make(chan struct{})
 	r.rotationStop, r.rotationDone = stop, done
