@@ -37,6 +37,8 @@ type DeploymentConfig struct {
 	TLSMutual        bool       `json:"tls_mutual"`
 	HMACKeyRotatedAt *time.Time `json:"hmac_key_rotated_at"`
 	HMACKeyID        int        `json:"hmac_key_id"`
+	// HMACKeyRotateInterval defaults to 168 hours (7 days).
+	HMACKeyRotateInterval time.Duration `json:"-"`
 	// HMAC keys are runtime secrets and are deliberately not persisted in relay_config.
 	HMACKey       []byte `json:"-"`
 	HMACKeyPrev   []byte `json:"-"`
@@ -45,7 +47,7 @@ type DeploymentConfig struct {
 }
 
 func DefaultConfig() DeploymentConfig {
-	return DeploymentConfig{Mode: ModeAirGapped, MaxSessions: 500, HeartbeatSecs: 30, DrainTimeoutSecs: 30}
+	return DeploymentConfig{Mode: ModeAirGapped, MaxSessions: 500, HeartbeatSecs: 30, DrainTimeoutSecs: 30, HMACKeyRotateInterval: 168 * time.Hour}
 }
 
 // Validate rejects configuration that cannot safely start a relay.
@@ -57,6 +59,11 @@ func (c DeploymentConfig) Validate() error {
 	}
 	if c.MaxSessions <= 0 {
 		return errors.New("relay: max sessions must be greater than zero")
+	}
+	// The durable counter is uint32 by contract, but the shipped frame header is
+	// uint16. Refuse values that would wrap and reuse an on-wire key ID.
+	if c.HMACKeyID < 0 || c.HMACKeyID > 65535 {
+		return errors.New("relay: HMAC key ID exceeds uint16 frame limit")
 	}
 	if c.HeartbeatSecs <= 0 || c.DrainTimeoutSecs <= 0 {
 		return errors.New("relay: heartbeat and drain timeout must be greater than zero")
@@ -169,4 +176,19 @@ func (m *DeploymentConfigManager) Save(ctx context.Context, db *pgxpool.Pool, cf
 
 func (m *DeploymentConfigManager) Reload(ctx context.Context, db *pgxpool.Pool) (DeploymentConfig, error) {
 	return m.Load(ctx, db)
+}
+
+// PersistHMACRotation atomically records the non-secret rotation metadata.
+func (m *DeploymentConfigManager) PersistHMACRotation(ctx context.Context, db *pgxpool.Pool, rotatedAt time.Time, keyID uint32) error {
+	result, err := db.Exec(ctx, `UPDATE relay_config SET hmac_key_rotated_at=$1, hmac_key_id=$2`, rotatedAt, keyID)
+	if err != nil {
+		return fmt.Errorf("relay: persist HMAC rotation: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("relay: persist HMAC rotation: relay_config row not found")
+	}
+	m.mu.Lock()
+	m.current.HMACKeyRotatedAt, m.current.HMACKeyID = &rotatedAt, int(keyID)
+	m.mu.Unlock()
+	return nil
 }

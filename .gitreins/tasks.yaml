@@ -1949,3 +1949,20 @@ tasks:
   status: complete
   created_at: '2026-09-03T02:22:30.495497+00:00'
   completed_at: '2026-09-03T02:38:15.685700+00:00'
+- id: FTR05-P4
+  title: "FTR-05 Phase 4 HMAC key rotation (SPEC-FTR-05 \xA711-P4): rotateHMACKey\
+    \ with configurable interval (default 168h), 48h grace window, key-ID map validation,\
+    \ persistence to relay_config, background ticker + manual RotateNow, audit/SSE\
+    \ logging, race-clean"
+  criteria:
+  - '1) rotateHMACKey generates new key, increments key id, dual/multi-key map validation
+    with 48h grace (old valid within, rejected after); 2) persistence: hmac_key_rotated_at
+    + hmac_key_id updated in relay_config on rotation; 3) background ticker in RelayService
+    when enabled (fake-clock testable) + RotateNow(ctx); rotation logged (audit/SSE);
+    4) tests: interval honored, grace in/out, id increment, concurrency -race clean,
+    unknown/expired id rejected; 5) no new deps, no protocol/layout change (document
+    uint16 cap if applicable), no frontend, build/vet+relay+handler+cmd green, gofmt
+    clean'
+  status: complete
+  created_at: '2026-09-03T02:46:01.096128+00:00'
+  completed_at: '2026-09-03T03:18:38.837004+00:00'

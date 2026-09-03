@@ -55,7 +55,8 @@ func TestDeploymentConfigLoadSaveReload(t *testing.T) {
 	want := DeploymentConfig{
 		Mode: ModeSaaS, MaxSessions: 500, HeartbeatSecs: 15, DrainTimeoutSecs: 60,
 		TLSEnabled: true, TLSCertFile: &certFile, TLSKeyFile: &keyFile, TLSCAFile: &caFile,
-		TLSMutual: true, HMACKeyRotatedAt: &rotatedAt, HMACKeyID: 7, Enabled: true,
+		TLSMutual: true, HMACKeyRotatedAt: &rotatedAt, HMACKeyID: 7,
+		HMACKeyRotateInterval: DefaultConfig().HMACKeyRotateInterval, Enabled: true,
 	}
 	if err := mgr.Save(ctx, pool, want); err != nil {
 		t.Fatal(err)
@@ -70,6 +71,12 @@ func TestDeploymentConfigLoadSaveReload(t *testing.T) {
 }
 
 func configsEqual(a, b DeploymentConfig) bool {
+	// Runtime-only materialized fields (json:"-") are not part of the persisted
+	// config contract: HMACKey/HMACKeyPrev come from the live keyring, so blank
+	// them before comparing. Byte-slice nil vs empty would otherwise false-fail.
+	a.HMACKey, b.HMACKey = nil, nil
+	a.HMACKeyPrev, b.HMACKeyPrev = nil, nil
+	a.HMACKeyPrevID, b.HMACKeyPrevID = 0, 0
 	aTime, bTime := a.HMACKeyRotatedAt, b.HMACKeyRotatedAt
 	a.HMACKeyRotatedAt, b.HMACKeyRotatedAt = nil, nil
 	if !reflect.DeepEqual(a, b) {

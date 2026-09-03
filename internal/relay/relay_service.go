@@ -53,15 +53,24 @@ type RelayHealth struct {
 	ListenAddr string `json:"listen_addr"`
 	Status     string `json:"status"`
 	Sessions   int    `json:"sessions"`
+	HMACKeyID  uint32 `json:"hmac_key_id"`
+	Rotations  uint64 `json:"rotations"`
 }
 
 type RelayService struct {
-	mu        sync.RWMutex
-	config    DeploymentConfig
-	transport RelayTransport
-	hub       sse.SSEHub
-	clock     clock
-	status    string
+	mu              sync.RWMutex
+	rotationMu      sync.Mutex
+	config          DeploymentConfig
+	transport       RelayTransport
+	hub             sse.SSEHub
+	clock           clock
+	now             func() time.Time
+	status          string
+	keys            map[uint16]authenticationKey
+	rotations       uint64
+	rotationStop    chan struct{}
+	rotationDone    chan struct{}
+	persistRotation func(context.Context, time.Time, uint32) error
 }
 
 func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSEHub, registries ...*RelayRegistry) (*RelayService, error) {
@@ -79,7 +88,15 @@ func NewRelayService(cfg DeploymentConfig, transport RelayTransport, hub sse.SSE
 			transport = noopRelayTransport{}
 		}
 	}
-	return &RelayService{config: cfg, transport: transport, hub: hub, clock: realClock{}, status: StatusDisabled}, nil
+	keys := map[uint16]authenticationKey{uint16(cfg.HMACKeyID): {key: append([]byte(nil), cfg.HMACKey...)}}
+	if len(cfg.HMACKeyPrev) > 0 {
+		entry := authenticationKey{key: append([]byte(nil), cfg.HMACKeyPrev...)}
+		if cfg.HMACKeyRotatedAt != nil {
+			entry.expiresAt = cfg.HMACKeyRotatedAt.Add(hmacKeyGracePeriod)
+		}
+		keys[uint16(cfg.HMACKeyPrevID)] = entry
+	}
+	return &RelayService{config: cfg, transport: transport, hub: hub, clock: realClock{}, now: time.Now, status: StatusDisabled, keys: keys}, nil
 }
 
 func (r *RelayService) Start(ctx context.Context) error {
@@ -97,6 +114,7 @@ func (r *RelayService) Start(ctx context.Context) error {
 	}
 	r.status = StatusRunning
 	r.publishLocked()
+	r.startRotationLoopLocked()
 	return nil
 }
 
@@ -107,8 +125,19 @@ func (r *RelayService) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	r.status = StatusDraining
+	if r.rotationStop != nil {
+		close(r.rotationStop)
+		r.rotationStop = nil
+	}
+	rotationDone := r.rotationDone
 	r.publishLocked()
 	r.mu.Unlock()
+	if rotationDone != nil {
+		select {
+		case <-rotationDone:
+		case <-ctx.Done():
+		}
+	}
 
 	err := errors.Join(r.transport.StopAccepting(), r.transport.NotifyShutdown())
 	if r.transport.ActiveSessions() > 0 {
@@ -134,13 +163,13 @@ func (r *RelayService) Health() RelayHealth {
 	if r.status != StatusDisabled {
 		sessions = r.transport.ActiveSessions()
 	}
-	return RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: sessions}
+	return RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: sessions, HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations}
 }
 
 func (r *RelayService) publishLocked() {
 	if r.hub == nil {
 		return
 	}
-	b, _ := json.Marshal(RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: r.transport.ActiveSessions()})
+	b, _ := json.Marshal(RelayHealth{Mode: r.config.Mode, ListenAddr: r.config.ListenAddr, Status: r.status, Sessions: r.transport.ActiveSessions(), HMACKeyID: uint32(r.config.HMACKeyID), Rotations: r.rotations})
 	r.hub.Broadcast(uuid.Nil, sse.SSEEvent{Type: "relay_status", Data: b})
 }

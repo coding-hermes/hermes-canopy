@@ -47,11 +47,25 @@ func (h *RelayHub) SetHeartbeatHook(instanceID uuid.UUID, hook func(context.Cont
 }
 
 func NewRelayHub(cfg DeploymentConfig) *RelayHub {
+	auth := NewFrameAuthenticator(uint16(cfg.HMACKeyID), cfg.HMACKey, uint16(cfg.HMACKeyPrevID), cfg.HMACKeyPrev)
+	if len(cfg.HMACKeyPrev) > 0 && cfg.HMACKeyRotatedAt != nil {
+		auth.SetKeys(map[uint16]authenticationKey{
+			uint16(cfg.HMACKeyID):     {key: cfg.HMACKey},
+			uint16(cfg.HMACKeyPrevID): {key: cfg.HMACKeyPrev, expiresAt: cfg.HMACKeyRotatedAt.Add(hmacKeyGracePeriod)},
+		})
+	}
 	return &RelayHub{
 		sessions: make(map[string]*RelaySession), sessionLimit: cfg.MaxSessions,
-		auth:  NewFrameAuthenticator(uint16(cfg.HMACKeyID), cfg.HMACKey, uint16(cfg.HMACKeyPrevID), cfg.HMACKeyPrev),
+		auth:  auth,
 		keyID: uint16(cfg.HMACKeyID), drainDone: make(chan struct{}), closed: make(chan struct{}),
 	}
+}
+
+func (h *RelayHub) updateHMACKeys(currentID uint16, keys map[uint16]authenticationKey) {
+	h.auth.SetKeys(keys)
+	h.mu.Lock()
+	h.keyID = currentID
+	h.mu.Unlock()
 }
 
 func (h *RelayHub) Start(ctx context.Context, cfg DeploymentConfig) error {
@@ -198,7 +212,10 @@ func (h *RelayHub) writeSession(s *RelaySession, f Frame) error {
 }
 
 func (h *RelayHub) write(conn net.Conn, f Frame) error {
-	f.KeyID = h.keyID
+	h.mu.RLock()
+	keyID := h.keyID
+	h.mu.RUnlock()
+	f.KeyID = keyID
 	signed, err := h.auth.Sign(f)
 	if err != nil {
 		return err
