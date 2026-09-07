@@ -10823,3 +10823,13 @@ Promise: {"entry_point":"canopyd — a single Go binary (cmd/canopyd) that is bo
 - [P1] Documented E2E command 'cd frontend && npx playwright test' fails instantly — Reproduced live: TypeError reading VITE_API_BASE_URL at src/lib/api.ts:9 (import.meta.env undefined under bare playwright). playwright.config.ts has no testDir; the real E2E runner is vitest-based 'np
 - [P1] INTEGRATION.md §8.1 green probe uses snake_case payload → 400 INVALID_BODY — The documented probe sends root_message/content_format/node_type, but tree_handler.go:83-87 expects camelCase rootMessage/contentFormat/nodeType with DisallowUnknownFields (handler_util.go:34), so the
 - [P2] README quick-ref omits fork request body and topics tree_id param — both 400 on documented usage — POST /nodes/{nid}/fork with no body → 400 'request body must be valid JSON' (node_handler.go:361-363) but README line 231 shows no body; GET /api/v1/topics without ?tree_id= → 400 MISSING_TREE_ID (top
+
+## Dogfood Findings (2026-09-07)
+Verdict: PROMISING-BUT-ROUGH
+Promise: {"entry_point":"canopyd — a single Go binary (cmd/canopyd) that is both an HTTP server (REST + SSE API, default :8091 in dev, :8080 raw) and a CLI (subcommands: serve, tree create/list/navigate/delete); the React + TypeScript + Vite PWA frontend is served separately (Vite dev server :5173 or static 
+
+- [P1] Fresh-DB tree create 503s with misleading 'database unavailable' — Verified live at HEAD 3e34551: POST /api/v1/trees on a fresh postgres:16 (migrations 42/42) → 503 SERVICE_UNAVAILABLE 'database unavailable'. Root cause is a tree_members.user_id FK violation (no user
+- [P1] Topic create returns zero root_node_id despite valid rootNodeId — Verified live: POST /api/v1/topics with treeId+rootNodeId+title → 201 but body has root_node_id 00000000-0000-0000-0000-000000000000. topicToSummary (topic_service_impl.go:727-733) never copies RootNo
+- [P1] Topic create failure is a black box — 500 with zero server logs — Verified live: POST /api/v1/topics without rootNodeId → 500 TOPIC_CREATE_ERROR, and the canopyd log (LOG_LEVEL=debug) shows only the access line, no error line. log.Ctx(r.Context()) hits a disabled lo
+- [P2] README quick-ref gaps: topics body params missing, prod deep links 404 — Verified live: POST /api/v1/topics with 'name' → 400 INVALID_JSON 'unknown field name' (expects title); GET /api/v1/topics without ?tree_id= → 400 MISSING_TREE_ID — README table (lines 256-257) shows 
+- [P2] Report partially stale at HEAD: two frictions already fixed, one mechanism wrong — CLI usage line already shows 'tree create <name> [--content <text>]' (cli.go:104) and CANOPY_SERVER_URL/CANOPY_TOKEN are documented in README §Configuration (lines 503-505) — report frictions #7/#8 ar
