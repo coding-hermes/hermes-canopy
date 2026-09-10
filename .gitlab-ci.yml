@@ -11,12 +11,14 @@ variables:
   GO_VERSION: "1.25"
   GOPATH: $CI_PROJECT_DIR/.go
   GOMODCACHE: $CI_PROJECT_DIR/.go/pkg/mod
+  GOCACHE: $CI_PROJECT_DIR/.gocache
   NODE_VERSION: "22"
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .go/pkg/mod/
+    - .gocache/
     - frontend/.npm/
 
 default:
@@ -31,7 +33,7 @@ default:
 # ── Backend build ────────────────────────────────────────────────────
 backend-build:
   stage: build
-  image: golang:${GO_VERSION}-alpine
+  image: golang:${GO_VERSION}
   script:
     - go build ./...
   rules:
@@ -90,7 +92,7 @@ frontend-lint:
 # ── Backend lint (informational, non-blocking) ──────────────────────
 backend-lint:
   stage: lint
-  image: golangci/golangci-lint:v2.12.2-alpine
+  image: golangci/golangci-lint:v2.12.2
   allow_failure: true
   script:
     - golangci-lint run ./...
