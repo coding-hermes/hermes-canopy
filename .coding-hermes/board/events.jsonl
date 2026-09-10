@@ -358,3 +358,4 @@
 {"seq": 358, "ts": "2026-09-03 02:30:00", "kind": "task_complete", "task": "FTR05-P5", "commit": "2ed2812", "verdict": "ce8d73ce"}
 {"seq": 359, "ts": "2026-09-03 03:40:00", "kind": "task_complete", "task": "FTR05-P6", "commit": "cdde9f7", "verdict": "a17e8903"}
 {"seq": 360, "ts": "2026-09-03 05:00:00", "kind": "task_complete", "task": "FTR05-P7", "commit": "a7ad8b0", "verdict": "cf62453e", "note": "FTR-05 SPEC COMPLETE (7 phases)"}
+{"seq": null, "ts": null, "kind": null, "task": null, "commit": null, "verdict": null, "note": null, "id": 347, "timestamp": "2026-09-10T05:07:33.814363+00:00", "event_type": "task_created", "task_id": "DEPS-001", "actor": "foreman", "detail": "{\"id\":\"DEPS-001\",\"status\":\"pending\"}"}
