@@ -10833,3 +10833,22 @@ Promise: {"entry_point":"canopyd — a single Go binary (cmd/canopyd) that is bo
 - [P1] Topic create failure is a black box — 500 with zero server logs — Verified live: POST /api/v1/topics without rootNodeId → 500 TOPIC_CREATE_ERROR, and the canopyd log (LOG_LEVEL=debug) shows only the access line, no error line. log.Ctx(r.Context()) hits a disabled lo
 - [P2] README quick-ref gaps: topics body params missing, prod deep links 404 — Verified live: POST /api/v1/topics with 'name' → 400 INVALID_JSON 'unknown field name' (expects title); GET /api/v1/topics without ?tree_id= → 400 MISSING_TREE_ID — README table (lines 256-257) shows 
 - [P2] Report partially stale at HEAD: two frictions already fixed, one mechanism wrong — CLI usage line already shows 'tree create <name> [--content <text>]' (cli.go:104) and CANOPY_SERVER_URL/CANOPY_TOKEN are documented in README §Configuration (lines 503-505) — report frictions #7/#8 ar
+
+## Dogfood Findings (2026-09-10)
+
+Verdict: PROMISING-BUT-ROUGH. HEAD 1e3647b against a FRESH scratch DB (canopy_dogfood_0910, :8097) + live-stack regression probes + ephemeral-bunker fresh install (las-bunker-03, agent 1289ee6d). Two long-standing mysteries root-caused; canonical rows GAP-064..068 appended to board/tasks.jsonl.
+
+- [P1] GAP-064 — Fresh DB + quick start: every write 503s 'database unavailable'. ROOT-CAUSED: tree_members FK tree_members_user_id_fkey aborts the CreateTree tx because the dev user (JWT sub 00000000-…-0001) is never provisioned on a new DB; service wraps ANY tx error in ErrDatabaseUnavailable; handler logs via unwired log.Ctx() so the server log stays SILENT. Live :5437 only works because scripts/seed-demo-data.sql was run after the tick-416 wipe. Fix: dev-secret-guarded startup seed (INSERT users … ON CONFLICT DO NOTHING) + real error mapping.
+- [P1] GAP-065 — Documented reply route POST /trees/{t}/nodes/{n}/reply is a PHANTOM: registered only in never-mounted NodeHandler.Routes(); chi answers bare '404 page not found' at HEAD and on the 09-02 live binary; git log -S shows it was never reachable (bcc17b2). Real reply = tree-scoped node create with parent_id (what the PWA composer uses). Fix: mount in TreeRoutes() or purge from API.md/INTEGRATION.md.
+- [P2] GAP-066 — Topic create still returns zero-UUID root_node_id (09-07 class, re-verified at HEAD).
+- [P1] GAP-067 — Deploy staleness recurred (GAP-052 class): live binary 09-02 vs FTR-05 P7 landed 09-03 → /health/relay 404s while board says FTR-05 SPEC COMPLETE. Fix = automated staleness check (binary mtime vs last internal/ cmd/ commit), not memory.
+- [P2] GAP-068 — 'Docker (Recommended)' quick start fails on first command on a fresh clone: compose env_file .env is mandatory but gitignored; no doc says cp .env.example .env (bunker-verified verbatim error).
+- Install leg (las-bunker-03, agent 1289ee6d): clone from public GitHub OK @ 1e3647b;
+  `docker compose up -d --build` = **PASS in 356s** after two workarounds:
+  (1) `cp .env.example .env` — undocumented, compose hard-fails without it (GAP-068);
+  (2) DOCKER_HOST=/run/bunker/<id>/docker.sock — bunker rootless socket layout, an
+  environment quirk NOT counted against the project. Smoke: `/health` 200 (schema
+  42), `/version` 200, `/api/v1/trees` → 401 unauthenticated (auth enforced).
+  Docs drift found in the smoke: README says compose exposes **:8091**, actual
+  mapping is **:8092**→8080. Caveat: a compose user proceeding to the documented
+  first curl (tree create) would hit GAP-064 (fresh DB has no users row).

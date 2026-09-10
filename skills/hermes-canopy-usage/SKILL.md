@@ -3,10 +3,11 @@ name: hermes-canopy-usage
 description: >-
   How to actually USE Hermes Canopy (canopyd + PWA): entry points, run commands,
   working API paths, UI flows, CLI, the LIVE Hermes gateway surface (GAP-050),
-  and the pitfalls that waste time (stale deployed binary, camelCase-vs-snake_case
-  split, in-memory run registry, docs drift). Load this before touching the stack.
-  Written from the 2026-08-17 + 2026-08-27 deep dogfood runs.
-version: 2.0.0
+  and the pitfalls that waste time (fresh-DB 503 = missing users row, phantom
+  reply route, stale deployed binary, casing split, docs drift). Load this
+  before touching the stack. Written from the 2026-08-17, 08-27 and 09-10
+  deep dogfood runs.
+version: 2.1.0
 category: software-development
 ---
 
@@ -50,14 +51,18 @@ output appears. Zero console errors in the 2026-08-27 probe.
   `{"title","description","rootMessage":{"content","contentFormat":"markdown","nodeType":"message"}}`
   → 201 with `root_node_id`. **rootMessage is REQUIRED and must include nodeType.**
   **camelCase here.**
-- **Create node:** `POST /api/v1/trees/{id}/nodes` body
-  `{"parent_id","content","node_type":"message"}` → 201 `{node, edge}`.
-  **snake_case here.**
-- **Reply/fork/update/delete (tree-scoped):** `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply`,
-  `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork`,
-  `PATCH /api/v1/trees/{tree_id}/nodes/{node_id}`,
-  `DELETE /api/v1/trees/{tree_id}/nodes/{node_id}`. Fork only works on nodes that
-  already have ≥1 child (leaf fork → 400 VALIDATION_ERROR, documented).
+- **Create node (this is ALSO the reply path):** `POST /api/v1/trees/{id}/nodes`
+  body `{"parent_id","content","node_type":"message","edge_type":"reply"}`
+  → 201 `{node, edge}`. **snake_case here.** `parent_id` empty = root-level node.
+- **Fork (tree-scoped):** `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork`.
+  Fork only works on nodes that already have ≥1 child (leaf fork → 400
+  VALIDATION_ERROR, documented).
+- ⚠️ **`POST .../nodes/{node_id}/reply` (tree-scoped) is a PHANTOM ROUTE —
+  documented in API.md but never mounted** (GAP-065, found 2026-09-10: chi
+  answers bare `404 page not found`; only the unmounted `NodeHandler.Routes()`
+  registers it). The skill's v2.0 claim that it worked was wrong. Reply =
+  node-create with `parent_id` (that's what the PWA composer does).
+  `PATCH/DELETE /trees/{t}/nodes/{n}` ARE mounted and work.
 - **Context manifest (headline feature):** `GET /api/v1/context/{node_id}` →
   `{content, manifest:{tokenBudget, tokensUsed, ancestry:[...]}}`. In the UI: click a
   canvas node → "Context | N / 8,000 tokens" panel.
@@ -73,32 +78,53 @@ output appears. Zero console errors in the 2026-08-27 probe.
   `tree navigate <id>` (hierarchy output), `tree delete <id>`, `--help` works
   (GAP-042/045 FIXED).
 
-## Known pitfalls (checked 2026-08-27)
+## Known pitfalls (updated 2026-09-10)
 
-1. **The deployed binary may be STALE (GAP-052, P1):** the live stack runs
-   `/home/kara/bin/canopyd` via `systemctl --user canopy-canopyd` — NOT the repo
-   binary. If `GET /api/v1/gateway/status` 404s, the deployed binary predates
-   GAP-050: `stat /home/kara/bin/canopyd` vs `git log -1 --format=%ci` of the
-   gateway commits, then `make build && cp bin/canopyd /home/kara/bin/ &&
-   systemctl --user restart canopy-canopyd`. There is no deploy script and no
-   post-deploy smoke test.
-2. **camelCase vs snake_case split (GAP-053, P1):** tree-create + topics =
-   camelCase; ALL node endpoints = snake_case (`content_format`, `node_type`,
-   `parent_id`) with strict unknown-field rejection — camelCase on a node endpoint
-   returns 400 "request body must be valid JSON" even though the body IS valid.
-   When in doubt, read struct tags in `internal/handler/node_handler.go`.
-3. **contentFormat accepts only `markdown`** (default; GAP-055). `"text"` → 400.
-4. **Gateway run registry is in-memory (GAP-054):** canopyd restart wipes run
+1. **Fresh DB + first write = 503 "database unavailable" — root-caused
+   (GAP-064):** the tree-create tx's `tree_members` insert hits FK
+   `tree_members_user_id_fkey` because nothing provisions the dev user
+   (`00000000-…-0001`) for a NEW database. `/health` stays 200, server log
+   stays silent. Fix before first write on any fresh DB:
+   ```sql
+   INSERT INTO users (id, hermes_user_id, display_name)
+   VALUES ('00000000-0000-0000-0000-000000000001','dev','Dev User')
+   ON CONFLICT (id) DO NOTHING;
+   ```
+   (The live :5437 DB has the row — from `scripts/seed-demo-data.sql` after the
+   tick-416 wipe. `make test`/integration tests seed their own users, which is
+   why CI never caught this.)
+2. **The deployed binary may be STALE (GAP-052 class; recurred 09-10 as
+   GAP-067):** the live stack runs `/home/kara/bin/canopyd` via
+   `systemctl --user canopy-canopyd` — NOT the repo binary. On 09-10 it was 7
+   days old and 404'd `/health/relay` while the board said FTR-05 COMPLETE.
+   Probe: `curl -s :8091/health/relay -o /dev/null -w '%{http_code}'` (404 =
+   stale). Fix: `make deploy`. The skill's old advice (manual cp + restart) is
+   superseded — `make deploy` does build → atomic install → restart → /health
+   poll → gateway smoke.
+3. **camelCase vs snake_case (GAP-053, mostly fixed):** tree-create + topics =
+   camelCase; node endpoints accept BOTH casings now and unknown-field errors
+   name the field (`json: unknown field "title"`). Still: check struct tags in
+   `internal/handler/node_handler.go` when in doubt.
+4. **contentFormat accepts only `markdown`** (default; GAP-055). `"text"` → 400.
+5. **Gateway run registry is in-memory (GAP-054):** canopyd restart wipes run
    history; stop on a completed run → 404 run_not_found (misleading).
-5. **`make test` times out on healthy code (GAP-037):** handler package needs
+6. **`make test` times out on healthy code (GAP-037):** handler package needs
    >120s; use `go test ./internal/... -timeout 300s` or `make test-short`.
-6. **E2E battery has ZERO gateway coverage** — it passed while the gateway surface
-   404'd. Don't trust E2E green as proof the gateway works; probe it directly.
+7. **E2E battery has ZERO gateway coverage** — it passed while the gateway
+   surface 404'd. Don't trust E2E green as proof the gateway works; probe it
+   directly.
+8. **`docker compose up -d` fails without `.env` (GAP-068):** `env_file: .env`
+   is mandatory and .env is gitignored; no doc says `cp .env.example .env`.
+   Note: `.env.example` defaults `HTTP_ADDR=:8080` while compose expects the
+   container to listen on :8080 — check the compose env block before editing.
 
 ## Stack hygiene
 
 - Canonical E2E DB is the compose PG on **:5437** (NOT localhost:5432) — a fresh
-  local DB makes tree-create 503 and visual-regression drift.
+  local DB hits GAP-064 (503 on first write) unless you seed the dev user first
+  (see pitfalls #1).
+- Old hygiene note "a fresh local DB makes tree-create 503" is EXPLAINED by
+  GAP-064 (missing users row) — it is not a flake and not a port issue.
 - Dev user row must exist in `users` (INSERT ... ON CONFLICT, see INTEGRATION.md §8.1).
 - Don't restart the running stack during foreman ticks; the E2E loop owns it.
 - Clean up scratch trees/topics via API DELETE (204).

@@ -54,3 +54,51 @@
 
 2026-09-07 | PROMISING-BUT-ROUGH | 30s t2fs | friction 10 | 5 findings
 
+# Dogfood Log — Hermes Canopy
+
+## 2026-09-10 — Deep real-use run (cron dogfood) — fresh-DB forensics
+
+- **Verdict:** 🟡 PROMISING-BUT-ROUGH (5th consecutive — but two long-standing
+  mysteries are now root-caused, and the product's core loop works end-to-end)
+- **Promise:** "A user can run the local server + PWA, create a tree, branch
+  from any message, and see a visible, budgeted context manifest — resuming
+  work in <30 seconds."
+- **Time-to-first-success:** ~15 s API on a provisioned DB; ~25 min on a
+  genuinely fresh DB (blocked by GAP-064: undocumented dev-user seeding).
+- **Friction count:** 10 (see docs/dogfood/2026-09-10-integration.md).
+- **Top 3 findings:**
+  1. **GAP-064 (P1)** — fresh DB + documented quick start: every write 503s
+     "database unavailable" (tree_members FK on unprovisioned dev user) and
+     the error is logged to an unwired context logger = silent. The live
+     :5437 DB works only because seed-demo-data.sql was run manually after
+     the tick-416 wipe.
+  2. **GAP-065 (P1)** — the documented tree-scoped `/reply` route is a
+     phantom: registered only in the never-mounted `NodeHandler.Routes()`;
+     never reachable on ANY build (chi bare 404). Real reply = node-create
+     with `parent_id`. Usage skill v2.0's "verified" claim was wrong.
+  3. **GAP-067 (P1)** — deploy staleness recurred (GAP-052 class): live
+     binary 7 days behind HEAD, `/health/relay` 404s while the board says
+     FTR-05 SPEC COMPLETE. `make deploy` exists but nothing runs it.
+- **Also filed:** GAP-066 (topic zero-UUID root_node_id, re-verified),
+  GAP-068 (compose quick start fails without gitignored .env; bunker-verified).
+- **Verified working (fresh DB, real evidence):** tree create 201 → node
+  create+parent_id 201 → context manifest (79/8000 tokens, ancestry) → SSE
+  node_added live → fork (leaf rule enforced) → cards 201 (field-level
+  unknown-field errors now — GAP-053 fix works) → graph stats → export →
+  PWA + Vite proxy + JWT auto-inject.
+- **Install leg (bunker, PASSED in 356s):** clone from public GitHub OK @
+  1e3647b; `docker compose up -d --build` → both containers healthy, smoke
+  `/health` 200 (schema 42) + `/version` 200 + auth enforced (401). Two
+  workarounds were needed: `cp .env.example .env` (undocumented — GAP-068)
+  and DOCKER_HOST pointing at the bunker rootless socket (environment quirk,
+  not a project bug). Docs drift: README says compose exposes :8091, actual
+  mapping is :8092→8080. Caveat: the compose DB is fresh → the documented
+  first write would hit GAP-064's 503.
+- **Left behind:** docs/dogfood/2026-09-10-integration.md ·
+  docs/dogfood/diagnostics.md §7 · skills/hermes-canopy-usage/SKILL.md v2.1
+  (phantom-route + fresh-DB corrections) · board rows GAP-064..068 ·
+  tasks.md Dogfood Findings section.
+- **Foreman:** not woken — main foreman hermes-canopy at cooldown 7200s
+  (< 14400 threshold); 5 new pending rows will be picked up on its normal
+  cycle.
+

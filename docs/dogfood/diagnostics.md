@@ -134,3 +134,50 @@ gateway** (`hermes gateway run`, :8642). New architecture facts learned by pokin
 - **Data hygiene:** my scratch trees (dogfood-2026-08-27, UI-created tree,
   CLI-created tree) were deleted via API after the run; the canonical DB on :5437
   is the E2E/seed DB — don't leave scratch data in it.
+
+## 7. 2026-09-10 update — the two oldest mysteries solved
+
+Two long-standing "known quirks" turned out to be **one missing setup step and
+one never-mounted route**:
+
+- **"Fresh DB makes tree-create 503"** (recorded since the 09-04/09-07 runs as
+  a hygiene note) is now root-caused: the tree-create tx inserts
+  `tree_members`, whose FK needs a `users` row for the JWT subject
+  (`00000000-…-0001`). Nothing provisions that user at runtime — the live DB
+  has the row only because `scripts/seed-demo-data.sql` was run manually after
+  the tick-416 wipe. The service then flattens ANY tx error to
+  `503 SERVICE_UNAVAILABLE "database unavailable"` **and the handler's error
+  log line goes to a context logger that isn't wired, so the server log stays
+  silent** (that's also why DF-HERMES-CANOPY-3's "topic 500 with zero logs"
+  happened — same silent-logger family). Reproduced in psql by replaying the
+  tx statements: insert into `trees` works, insert into `tree_members` fails
+  with `tree_members_user_id_fkey`. → GAP-064.
+- **The tree-scoped `/reply` route never worked.** `NodeHandler.Routes()`
+  registers `POST /nodes/{node_id}/reply`; only `TreeRoutes()` is mounted
+  (server.go:164), and it has list/create/get/fork only. `git log -S
+  handleReply` shows reply was only ever added in `Routes()` (bcc17b2, BE-04).
+  Even the usage skill v2.0 "verified" it — that verification was wrong
+  (08-27 probably exercised the UI composer, which uses node-create +
+  `parent_id`, and the claim was copied into docs). The reply mechanism that
+  actually exists is good: `POST /trees/{t}/nodes` with `parent_id` +
+  `edge_type` → 201 `{node, edge}` + SSE broadcast. → GAP-065.
+- **Deploy drift is now structural, not incidental** (GAP-052's class):
+  `make deploy` exists and is good (build → atomic install → restart →
+  /health poll → gateway smoke), but it only runs when someone remembers.
+  The live binary sat 7 days behind HEAD again (09-02 vs 09-03 FTR-05 P7),
+  so `/health/relay` 404'd while the board said FTR-05 SPEC COMPLETE. The
+  systemic fix is a check, not a memory: a cron/board gate comparing
+  `stat -c %Y /home/kara/bin/canopyd` vs `git log -1 --format=%ct -- internal/ cmd/`
+  and flagging staleness >24h. → GAP-067.
+
+### The right way, updated
+
+- Writing Go: service tx errors collapse into `ErrDatabaseUnavailable` — when
+  you see a 503, suspect a constraint (FK/CHECK) inside the tx, not the DB
+  being down. Reproduce the tx SQL in psql before touching Go code.
+- Routing: **`internal/server/server.go` mounts are the only truth.** Handlers
+  can register routes that are unreachable (dead `Routes()`). Grep the mount
+  before trusting API.md — or `chi` route-print if it ever gets added.
+- Logging: `log.Ctx(r.Context())` produces SILENT logs in this codebase
+  (context logger not wired). Grep server logs after a failure — if your error
+  class never appears, it went through the context logger.
