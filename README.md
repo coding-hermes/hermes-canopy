@@ -301,6 +301,9 @@ Tree-scoped (primary, membership-gated):
 ### Docker (Recommended)
 
 ```bash
+# Optional but recommended: copy the env template (API_SERVER_KEY etc.)
+cp .env.example .env
+
 # Build and run with Docker Compose
 docker compose up -d
 

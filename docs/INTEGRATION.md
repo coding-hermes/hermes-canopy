@@ -17,7 +17,16 @@ and every Card is a graph node with structured data.
 ## 2. Docker Compose (Quick Start)
 
 The project ships a `docker-compose.yml` at the repo root that starts both
-PostgreSQL and the canopyd server:
+PostgreSQL and the canopyd server.
+
+The `.env` file is optional — the compose stack starts without it — but copying
+the template is recommended so the Hermes gateway key (`API_SERVER_KEY`) is
+picked up:
+
+```bash
+# Optional but recommended: copy the env template (API_SERVER_KEY etc.)
+cp .env.example .env
+```
 
 ```bash
 docker compose up -d
