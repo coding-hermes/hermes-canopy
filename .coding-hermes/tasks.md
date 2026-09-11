@@ -11006,8 +11006,11 @@ the judge re-verified both ACs live on its own fresh DB (gap064_fresh, :8099).
 submitted post-debug after the fix landed.
 
 **CI:** pre-tick check green — last two runs success (GAP-065 fix cc581a4 run
-34570281475, CI-004 lint fix); older failures were the triaged lint-debt class,
-already closed by CI-004. Post-push run for f96467a pending at tick close.
+34570281475, CI-004 lint fix). Post-push run 34590652370 for f96467a FAILED
+golangci-lint on one new line (ST1000 package-comment form in
+internal/db/bootstrap.go — staticcheck only runs the full repo in CI); foreman
+fixed directly (one-line comment reword, `golangci-lint run internal/db/` →
+0 issues local), follow-up commit **e116571**, run **34591485198 SUCCESS**.
 
 **Push health:** content commit f96467a pushed immediately after gates;
 `origin/master..HEAD` = 0. Bookkeeping commit follows this entry.
