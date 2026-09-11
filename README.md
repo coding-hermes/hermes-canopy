@@ -435,12 +435,54 @@ what systemd runs:
 make deploy
 ```
 
+#### Automated staleness detection (GAP-067)
+
+A deployed binary can silently lag repo HEAD (the live 2026-09-02 artifact was
+768,617s behind when this shipped). `scripts/check-deploy-staleness.sh`
+compares the installed binary's mtime against the newest commit touching
+`internal/`, `cmd/`, `migrations/`, `go.mod`, or `go.sum`:
+
+| Exit | Meaning | Notes |
+|------|---------|-------|
+| `0` | `CURRENT` | artifact within threshold |
+| `1` | `STALE` | over threshold, or binary missing |
+| `2` | `STALE_BLOCKED` | stale + `--deploy`, but the worktree has tracked/untracked changes — auto-deploy refused so half-written worker code is never shipped |
+| `3` | `ERROR` | operational failure (bad repo, unreadable paths, still stale after deploy) |
+
+Overrides: `CANOPYD_STALE_REPO_ROOT`, `CANOPYD_STALE_PATH`
+(default `/home/kara/bin/canopyd`), `CANOPYD_STALE_THRESHOLD_S`
+(default `86400`), `CANOPYD_DEPLOY_CMD` (default `make deploy`),
+`CANOPYD_DEPLOY_DIR`. `--deploy` only invokes the existing atomic
+`make deploy` path when stale, then re-checks and fails if still stale —
+manual `make deploy` behavior is unchanged.
+
+Install the daily systemd user timer (concrete unit names
+`canopy-deploy-check.service` / `canopy-deploy-check.timer` — templates cannot
+be enabled against `timers.target`; renders this checkout's path into
+`~/.config/systemd/user`, `daemon-reload`, `enable --now`):
+
+```bash
+make install-deploy-timer
+```
+
+The timer runs the checker with `--deploy` once per 24h (`OnBootSec=10min`,
+`OnUnitActiveSec=24h`, `Persistent=true`, units tracked under
+`deploy/systemd/`). It never deploys from a dirty worktree. Pre-flight
+verification without touching the live session:
+
+```bash
+tmp=$(mktemp -d); CANOPYD_UNIT_INSTALL_DIR="$tmp" bash scripts/install-deploy-timer.sh
+systemd-analyze --user verify "$tmp"/canopy-deploy-check.{service,timer}
+systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 required
+```
+
 ### Makefile Targets
 
 | Target | Description |
 |--------|-------------|
 | `build` | Build the canopyd binary |
 | `deploy` | Build, install to `/home/kara/bin/canopyd`, restart `canopy-canopyd`, run the gateway smoke test |
+| `install-deploy-timer` | Install + enable the daily deployed-binary staleness check timer (GAP-067) |
 | `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |

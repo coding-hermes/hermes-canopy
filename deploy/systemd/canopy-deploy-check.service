@@ -1,0 +1,11 @@
+[Unit]
+Description=Canopy: check deployed canopyd staleness against repo HEAD (GAP-067)
+Documentation=file://%h/hermes-canopy/docs/INTEGRATION.md
+
+[Service]
+Type=oneshot
+# Rendered by make install-deploy-timer (repo path baked in). Runs the checker
+# in --deploy mode: stale -> make deploy (atomic install + restart + smoke);
+# dirty tracked worktree -> STALE_BLOCKED, deploy refused (exit 2). Cheap
+# (exit 0) when the deployed binary is current.
+ExecStart=%h/hermes-canopy/scripts/check-deploy-staleness.sh --deploy

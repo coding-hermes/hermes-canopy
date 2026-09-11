@@ -1,0 +1,10 @@
+[Unit]
+Description=Canopy: daily deployed-binary staleness check with auto-remediation (GAP-067)
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

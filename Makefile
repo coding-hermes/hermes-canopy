@@ -21,7 +21,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy build-embed test test-short vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed test test-short vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -32,6 +32,14 @@ build:
 # atomically to the unit's exec path, restart, health-poll, gateway smoke.
 deploy:
 	bash scripts/deploy-canopyd.sh
+
+# Install + enable the daily staleness check timer (GAP-067): renders this
+# checkout's repo path into the user unit, daemon-reload, enable --now. The
+# timer runs scripts/check-deploy-staleness.sh --deploy once per 24h; it
+# refuses to auto-deploy from a dirty worktree (STALE_BLOCKED). Manual
+# `make deploy` behavior is unchanged. Does not restart the live service.
+install-deploy-timer:
+	bash scripts/install-deploy-timer.sh
 
 run: build
 	HTTP_ADDR=$(HTTP_ADDR) DB_PORT=$(DB_PORT) $(BIN_DIR)/$(BINARY)

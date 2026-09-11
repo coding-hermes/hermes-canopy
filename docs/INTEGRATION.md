@@ -507,7 +507,33 @@ cd frontend && npx playwright test
 cd frontend && npx vitest run --config vitest.integration.config.ts
 ```
 
-### 8.1 E2E Stack Prep (required once per fresh local PG)
+### 8.1 Deployed-binary staleness check (GAP-067)
+
+The deployed artifact (`/home/kara/bin/canopyd`) can silently lag repo HEAD.
+Hermetic regression coverage lives in
+`scripts/test-check-deploy-staleness.sh` (synthetic git repo + fake deploy
+command; never touches the real service):
+
+```bash
+bash scripts/test-check-deploy-staleness.sh   # 12 assertions, exit 0 = pass
+```
+
+Covered controls: current artifact → 0; stale → 1; missing → 1; stale +
+`--deploy` (clean repo) → fake deploy invoked then CURRENT; dirty worktree +
+`--deploy` → STALE_BLOCKED (2), deploy never invoked; untracked-only dirt →
+also blocked; no-op deploy that leaves the artifact stale → 3.
+
+Install the automation (daily timer, opt-in, concrete unit names —
+`canopy-deploy-check.timer` enables cleanly against `timers.target`, template
+units would not; refuses dirty worktrees). Pre-flight without touching the
+live session: render to a temp dir, then `systemd-analyze --user verify` and
+`systemctl --user enable --dry-run` the rendered concrete timer (must exit 0).
+
+```bash
+make install-deploy-timer
+```
+
+### 8.2 E2E Stack Prep (required once per fresh local PG)
 
 The E2E / visual-regression suites and the dev UI's tree-create flows need two
 things that a fresh local database does not have:
