@@ -2044,3 +2044,13 @@ tasks:
   status: complete
   created_at: '2026-09-11T10:07:50.232094+00:00'
   completed_at: '2026-09-11T10:38:08.045604+00:00'
+- id: DF-HERMES-CANOPY-2
+  title: Fix topic root_node_id propagation
+  criteria:
+  - topicToSummary propagates db.Topic.RootNodeID into TopicSummary; TestAPI_TopicCRUD
+    asserts POST and GET root_node_id equal the submitted child node UUID and node_count
+    is at least 1; go build, go vet, and the repository-prescribed fresh non-handler
+    test suite pass
+  status: complete
+  created_at: '2026-09-11T13:13:20.589809+00:00'
+  completed_at: '2026-09-11T13:52:30.166511+00:00'
