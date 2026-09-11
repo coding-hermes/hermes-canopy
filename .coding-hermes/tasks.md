@@ -11031,3 +11031,68 @@ root_node_id zero UUID, closes DF-HERMES-CANOPY-2), GAP-068 (P2 docker quick
 start .env). QA-HERMES-CANOPY-1 premise is the known tiny-pool class on
 bunker-las-02 (capacity 1, held by live agent) — board-close candidate after
 re-verification, not a code dispatch.
+
+## Tick 432 — 2026-09-11 ~11:45 local (WORK TICK: GAP-068 COMPLETE — compose .env optional + cp documented; GAP-066 stale-closed)
+
+**Verdict:** WORK TICK. Picked GAP-068 (P2, dogfood 2026-09-10, complexity 1,
+0 attempts) out of 18 unique pending rows (36 raw pending lines → keep-LAST
+dedupe). Chose it over GAP-067 (P1 deploy-staleness automation — deferred:
+needs service restart + cron wiring beyond one clean worker pass) as the most
+tractable P1/P2 with crisp testable AC: a first-command blocker on the ONLY
+fresh-machine install path.
+
+**Premise re-verified at HEAD cd9f190 before dispatch:** docker-compose.yml:47
+short-form `env_file: [.env]` (mandatory), `.env` gitignored (.gitignore:41),
+no `cp .env.example .env` step in README §Deployment or docs/INTEGRATION.md §2.
+`.env` carries the optional gateway `API_SERVER_KEY`, so optional-not-deleted
+is the correct fix shape.
+
+**Worker:** `glm-5.3-flash` @ `zai-glm-default`, brief
+`/tmp/canopy-t432-gap068-brief.txt`, background (~7 min), 1 attempt, commit
+**ce3e1dc** (3 files): docker-compose.yml → long-form `env_file:
+[{path: .env, required: false}]`; README.md:305 + docs/INTEGRATION.md:28 →
+`cp .env.example .env` step before `docker compose up -d`.
+
+**Acceptance (foreman re-ran every AC independently):**
+- AC1 fresh-clone: `/tmp/gap068-fresh` (compose + .env.example only, NO .env)
+  → `docker compose config` **exit 0**.
+- AC1 negative control: pre-fix short-form in `/tmp/gap068-old` → **exit 1**
+  (repro of the original failure — the fix is what flips it).
+- AC2 repo with `.env` present → `docker compose config` **exit 0**.
+- AC3 docs: grep hits at README.md:305 + docs/INTEGRATION.md:28.
+- AC4 scope: commit touches exactly the 3 briefed files.
+
+**GitReins:** task GAP-068 created+started pre-dispatch; Tier 1 PASS
+(secrets/build/lint/tests); Tier 2 **PASS** verdict **f8b7415c** — judge
+independently reproduced the fresh-clone test via `git archive` scratch and
+the old-form control (exit 1). `gitreins task complete` run post-commit.
+
+**Stale-row cleanup:** GAP-066 (P2, zero-UUID root_node_id, re-verified 09-10
+@1e3647b) closed as **fixed by 9604690** (DF-HERMES-CANOPY-2, tick 431) — same
+defect class named in its own detail; fix carries RootNodeID in
+`topicToSummary` + `RefreshNodeCount` after create + TestAPI_TopicCRUD
+assertions on create and GET; CI green on the fix commit (run 34608800232).
+
+**CI:** master green going in (tick-431 runs success); ce3e1dc pushed
+11:35 local, run appears 4-7 min later (reported as pending at closeout).
+
+**Off-by-one:** health ok; discover `docker-compose-env-file-mandatory-fresh-clone`
+→ not_found (pre-dispatch); submitted post-debug with the required:false fix +
+negative-control recipe.
+
+**Board/bookkeeping:** boardctl `update` GAP-068 + GAP-066 → complete
+(commit_hash, guard, summary, note); audit event id 365 (tick 432);
+header ticks_total 431→**432**, ticks_idle 0, last_commit ce3e1dc.
+tasks.jsonl diff = exactly the 2 target rows. `boardctl validate` FAILs with
+27 errors / 137 warnings — PRE-EXISTING (identical counts with this tick's
+writes stashed; legacy duplicate-id re-injection rows QA-*/DF-*, the
+keep-LAST doctrine's raison d'être; record, don't repair).
+
+**Push health:** ce3e1dc + board closeout pushed origin/master; parity
+`origin/master..HEAD` = 0 verified.
+
+**Next tick:** P1 backlog — GAP-067 (deploy-staleness automation),
+QA-HERMES-CANOPY-1 (bunker port-pool — likely misrouted; belongs to the
+bunker project, not canopy code), QA-HERMES-CANOPY-3 (INTEGRATION.md §8.1
+snake_case probe — one-file docs fix). boardctl-validate legacy-error cleanup
+is a candidate hygiene row if a future tick wants one.
