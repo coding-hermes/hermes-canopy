@@ -1,5 +1,5 @@
-// Dev-mode bootstrap: provision the well-known dev JWT user after
-// migration.
+// Package db provides dev-mode bootstrap: provision the well-known dev JWT
+// user after migration.
 //
 // GAP-064: on a fresh database the documented quick start (README.md
 // §"Authentication (dev mode)") authenticates with a FIXED subject UUID
