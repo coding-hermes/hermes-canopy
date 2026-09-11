@@ -563,7 +563,7 @@ DB_NAME=canopy ./bin/canopyd   # or: DB_PORT=5437 make run
 
 **Green probe:** `curl -s -X POST http://localhost:8091/api/v1/trees \
 -H 'Authorization: Bearer <dev-jwt>' -H 'Content-Type: application/json' \
--d '{"title":"E2E Probe","description":"","root_message":{"content":"hi","content_format":"markdown","node_type":"message"}}'`
+-d '{"title":"E2E Probe","description":"","rootMessage":{"content":"hi","contentFormat":"markdown","nodeType":"message"}}'`
 returns HTTP 201 (not 503).
 
 ## 9. Environment Variable Reference
