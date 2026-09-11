@@ -79,6 +79,130 @@ func New(
 	relayRegistry *relay.RelayRegistry,
 	cfg *config.Config,
 ) *Server {
+	deps := &routeDeps{
+		healthProbe:     healthProbe,
+		jwtSecret:       jwtSecret,
+		treeSvc:         treeSvc,
+		nodeSvc:         nodeSvc,
+		exportSvc:       exportSvc,
+		sseHub:          sseHub,
+		syncEngine:      syncEngine,
+		approvalSvc:     approvalSvc,
+		transportAdaper: transportAdaper,
+		connMgr:         connMgr,
+		configRepo:      configRepo,
+		eventRepo:       eventRepo,
+		membersRepo:     membersRepo,
+		userRepo:        userRepo,
+		profileRouter:   profileRouter,
+		mlsHandler:      mlsHandler,
+		topicSvc:        topicSvc,
+		cardSvc:         cardSvc,
+		graphSvc:        graphSvc,
+		collabSvc:       collabSvc,
+		metrics:         metrics,
+		ctxCompiler:     ctxCompiler,
+		pluginSvc:       pluginSvc,
+		topicSearchSvc:  topicSearchSvc,
+		referenceSvc:    referenceSvc,
+		federationSvc:   federationSvc,
+		relayRegistry:   relayRegistry,
+		cfg:             cfg,
+	}
+	r := newRouter(deps)
+
+	var relayCancel context.CancelFunc
+	if provider, ok := federationSvc.(interface {
+		Relay() *federation.RelayService
+	}); ok && provider.Relay() != nil {
+		var relayCtx context.Context
+		relayCtx, relayCancel = context.WithCancel(context.Background())
+		go provider.Relay().Run(relayCtx)
+	}
+	return &Server{
+		router:          r,
+		sseHub:          sseHub,
+		transportMgr:    connMgr,
+		transportAdaper: transportAdaper,
+		mlsHandler:      mlsHandler,
+		metrics:         metrics,
+		relayCancel:     relayCancel,
+		httpServer: &http.Server{
+			Addr:         addr,
+			Handler:      r,
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		},
+	}
+}
+
+// routeDeps carries every dependency the router wiring reads. New populates
+// it from its constructor parameters; tests build it directly (nil services
+// included) to walk the REAL production router without a database (GAP-065).
+type routeDeps struct {
+	healthProbe     HealthDB
+	jwtSecret       string
+	treeSvc         service.TreeService
+	nodeSvc         service.NodeService
+	exportSvc       service.ExportService
+	sseHub          sse.SSEHub
+	syncEngine      sync.SyncEngine
+	approvalSvc     service.ApprovalService
+	transportAdaper transport.TransportAdapter
+	connMgr         *transport.ConnectionManager
+	configRepo      db.TransportConfigRepo
+	eventRepo       db.TransportEventRepo
+	membersRepo     db.TreeMemberRepo
+	userRepo        db.UserRepo
+	profileRouter   *hermes.PGProfileRouter
+	mlsHandler      *handler.MLSHandler
+	topicSvc        service.TopicService
+	cardSvc         service.CardService
+	graphSvc        service.GraphService
+	collabSvc       collaboration.CollaborationService
+	metrics         *telemetry.Metrics
+	ctxCompiler     ctxpkg.Compiler
+	pluginSvc       service.PluginRegistryService
+	topicSearchSvc  search.TopicSearchService
+	referenceSvc    reference.ReferenceService
+	federationSvc   federation.FederationService
+	relayRegistry   *relay.RelayRegistry
+	cfg             *config.Config
+}
+
+// newRouter wires middleware and every route exactly as New always has.
+// Extracted verbatim from New (GAP-065) so route-parity tests exercise the
+// real production wiring; New calls this and must stay behavior-identical.
+func newRouter(deps *routeDeps) *chi.Mux {
+	healthProbe := deps.healthProbe
+	jwtSecret := deps.jwtSecret
+	treeSvc := deps.treeSvc
+	nodeSvc := deps.nodeSvc
+	exportSvc := deps.exportSvc
+	sseHub := deps.sseHub
+	syncEngine := deps.syncEngine
+	approvalSvc := deps.approvalSvc
+	transportAdaper := deps.transportAdaper
+	connMgr := deps.connMgr
+	configRepo := deps.configRepo
+	eventRepo := deps.eventRepo
+	membersRepo := deps.membersRepo
+	userRepo := deps.userRepo
+	profileRouter := deps.profileRouter
+	mlsHandler := deps.mlsHandler
+	topicSvc := deps.topicSvc
+	cardSvc := deps.cardSvc
+	graphSvc := deps.graphSvc
+	collabSvc := deps.collabSvc
+	metrics := deps.metrics
+	ctxCompiler := deps.ctxCompiler
+	pluginSvc := deps.pluginSvc
+	topicSearchSvc := deps.topicSearchSvc
+	referenceSvc := deps.referenceSvc
+	federationSvc := deps.federationSvc
+	relayRegistry := deps.relayRegistry
+	cfg := deps.cfg
 	r := chi.NewRouter()
 
 	// Stale-build visibility (DF-HERMES-CANOPY-1): /health reports the
@@ -162,6 +286,11 @@ func New(
 		treeNodes.Use(membershipMW)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
+
+		// Flat node surface (SPEC-API-03 §6) — update/delete/reply/fork by
+		// bare node id. JWT-authenticated via this router; per-node
+		// membership is enforced in the handlers.
+		r.Mount("/nodes", nodeHandler.FlatRoutes())
 
 		// Sync endpoints (SPEC-DM-02 §7) — tree-scoped, membership-gated.
 		r.With(membershipMW).Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
@@ -304,31 +433,7 @@ func New(
 	for _, tt := range transport.AllTransportTypes() {
 		r.Get("/health/transports/"+string(tt), transHandler.HealthProbe(string(tt)))
 	}
-
-	var relayCancel context.CancelFunc
-	if provider, ok := federationSvc.(interface {
-		Relay() *federation.RelayService
-	}); ok && provider.Relay() != nil {
-		var relayCtx context.Context
-		relayCtx, relayCancel = context.WithCancel(context.Background())
-		go provider.Relay().Run(relayCtx)
-	}
-	return &Server{
-		router:          r,
-		sseHub:          sseHub,
-		transportMgr:    connMgr,
-		transportAdaper: transportAdaper,
-		mlsHandler:      mlsHandler,
-		metrics:         metrics,
-		relayCancel:     relayCancel,
-		httpServer: &http.Server{
-			Addr:         addr,
-			Handler:      r,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  120 * time.Second,
-		},
-	}
+	return r
 }
 
 // Router returns the underlying chi router for registering routes.

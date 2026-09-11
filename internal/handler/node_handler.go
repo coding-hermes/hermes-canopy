@@ -69,15 +69,39 @@ func (h *NodeHandler) Routes() chi.Router {
 // The tree_id is provided by the mount point; routes use bare patterns without
 // duplicating the tree_id parameter.
 //
-//	GET    /              — list nodes in tree
-//	POST   /              — create node
-//	GET    /{node_id}     — get node by ID
-//	POST   /{node_id}/fork — fork from node
+//	GET    /                 — list nodes in tree
+//	POST   /                 — create node
+//	GET    /{node_id}        — get node by ID
+//	PATCH  /{node_id}        — update node
+//	DELETE /{node_id}        — soft-delete node
+//	POST   /{node_id}/reply  — reply to node
+//	POST   /{node_id}/fork   — fork from node
 func (h *NodeHandler) TreeRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.handleListByTree)
 	r.Post("/", h.handleCreate)
 	r.Get("/{node_id}", h.handleGetByID)
+	r.Patch("/{node_id}", h.handleUpdate)
+	r.Delete("/{node_id}", h.handleDelete)
+	r.Post("/{node_id}/reply", h.handleReply)
+	r.Post("/{node_id}/fork", h.handleFork)
+	return r
+}
+
+// FlatRoutes returns node routes for the flat spec surface (SPEC-API-03 §6),
+// mounted at /api/v1/nodes — patterns are bare, so no /nodes/ segment is
+// duplicated (unlike the deprecated Routes). FlatRoutes is the
+// non-duplicating successor of Routes.
+//
+//	PATCH  /{node_id}        — update node
+//	DELETE /{node_id}        — soft-delete node
+//	POST   /{node_id}/reply  — reply to node
+//	POST   /{node_id}/fork   — fork from node
+func (h *NodeHandler) FlatRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Patch("/{node_id}", h.handleUpdate)
+	r.Delete("/{node_id}", h.handleDelete)
+	r.Post("/{node_id}/reply", h.handleReply)
 	r.Post("/{node_id}/fork", h.handleFork)
 	return r
 }
