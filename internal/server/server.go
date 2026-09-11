@@ -217,6 +217,11 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	}
 
 	// === Global middleware (applied to every route) ===
+	// GAP-064: hlog.NewHandler must run FIRST (before RequestIDHandler)
+	// so log.Ctx(r.Context()) in handlers resolves to the server logger.
+	// Without it the context carries a disabled logger and handler error
+	// logs (e.g. writeServiceError's 503 path) vanish silently.
+	r.Use(hlog.NewHandler(log.Logger))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(hlog.RequestIDHandler("req_id", "X-Request-Id"))

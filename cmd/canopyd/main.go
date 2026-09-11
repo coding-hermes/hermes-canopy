@@ -151,6 +151,23 @@ func main() {
 		log.Fatal().Err(err).Msg("database migration failed")
 	}
 
+	// GAP-064: provision the well-known dev JWT user so the documented
+	// quick start (README §"Authentication (dev mode)") works on a fresh
+	// database — the fixed sub claim must satisfy the tree_members FK or
+	// the first tree create aborts the service tx (blanket 503). Only on
+	// the default dev secret; a production deployment provisions nothing.
+	if db.IsDevJWTSecret(cfg.JWTSecret) {
+		inserted, err := db.EnsureDevJWTUser(ctx, database.Pool)
+		if err != nil {
+			log.Fatal().Err(err).Msg("provision dev JWT user failed")
+		}
+		if inserted {
+			log.Info().Str("user_id", db.DevJWTUserID).Msg("dev JWT user provisioned")
+		} else {
+			log.Info().Str("user_id", db.DevJWTUserID).Msg("dev JWT user already present")
+		}
+	}
+
 	relayConfigManager := relaypkg.NewDeploymentConfigManager()
 	relayConfig, err := relayConfigManager.Load(ctx, database.Pool)
 	if err != nil {
