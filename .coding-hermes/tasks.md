@@ -10954,3 +10954,77 @@ QA-HERMES-CANOPY-3 (P1 INTEGRATION.md §8.1 snake_case probe → 400), GAP-066
 docker compose `.env` quick-start). Consider a board-close pass for stale
 pending duplicates (DF-HERMES-CANOPY-* / QA-* reappear with different
 priorities). Watch: `canopy-server` container restart-loop (INFRA-002 class).
+## Tick 430 — 2026-09-11 ~05:35 local (WORK TICK: GAP-064 COMPLETE — fresh-DB 503 fixed, request logger wired)
+
+**Verdict:** WORK TICK. Picked GAP-064 (P1, dogfood 2026-09-10, 0 attempts) out of
+22 unique pending rows (281 raw lines → 257 unique IDs after keep-LAST dedupe).
+Chose it over GAP-067 (P1 deploy staleness) because it was the primary friction
+of the dogfood run, fully root-caused, and its fix closes two stale duplicate
+board rows (DF-HERMES-CANOPY-1, DF-HERMES-CANOPY-3) in the same commit.
+
+**Defect (foreman-verified at HEAD 16f5ef7 before dispatch):** two halves.
+(a) `cmd/canopyd/main.go` called `database.Migrate(ctx)` and never seeded a
+users row — on a fresh DB the dev JWT sub
+`00000000-0000-0000-0000-000000000001` violates `tree_members_user_id_fkey`
+inside `TreeServiceImpl.CreateTree`, the tx aborts, and the caller gets a
+blanket 503 'database unavailable'. (b) `internal/server/server.go` wired only
+`hlog.RequestIDHandler` — never `hlog.NewHandler` — so every
+`log.Ctx(r.Context())` in handlers hit a disabled logger and the underlying pg
+error never reached the server log.
+
+**Worker:** `glm-5.3-flash` @ `zai-glm-default`, brief `/tmp/gap064_brief.txt`,
+background PID 899538 (~24 min), commit **f96467a** (4 files, +267):
+- `internal/db/bootstrap.go` (new, 61 lines) — `EnsureDevJWTUser`: inserts the
+  documented dev user ON CONFLICT (id) DO NOTHING, gated on
+  `JWTSecret == "dev-secret-change-me"` (production secrets never mint users),
+  fatal on insert error.
+- `cmd/canopyd/main.go` (+17) — calls `db.EnsureDevJWTUser` right after Migrate.
+- `internal/server/server.go` (+5) — wires `hlog.NewHandler` at :224.
+- `internal/service/gap064_test.go` (new, 184 lines) — 4 PG tests: provisioning
+  idempotency + CreateTree failure chain carries the pg FK error text.
+
+**Gates (foreman re-run, env-clean, post-commit):** `go build` ok, `go vet` ok,
+`go test -count=1 -p 1` (25 pkgs, handler excluded) ALL ok — db 83.2s,
+federation 32.3s, transport 24.5s, plugin 22.0s, service 6.1s (incl. new tests).
+No CANOPY_TEST_DB_URL set. PG on :5437 stable throughout (pg_isready checked).
+
+**Live proof (isolated stack, worker + judge independently):** fresh throwaway
+DB, HEAD binary, default dev config, verbatim README quick start — zero manual
+SQL: startup logs `INF dev JWT user provisioned`, `POST /api/v1/trees` →
+**201** (owner = dev user). AC2: dev user row deleted, repeat POST → 503 AND
+server log emits the full chain: `ERR tree db error error="tree service:
+database unavailable: insert tree_members: ERROR: insert or update on table
+\"tree_members\" violates foreign key constraint \"tree_members_user_id_fkey\"
+(SQLSTATE 23503)"`. Throwaway DBs dropped afterward.
+
+**GitReins:** task GAP-064 created+started pre-dispatch; Tier 1 PASS
+(secrets/build/lint/tests full); Tier 2 judge **PASS** verdict `b21c48da` —
+the judge re-verified both ACs live on its own fresh DB (gap064_fresh, :8099).
+
+**Off-by-one:** health ok (uptime 18h); discover
+`go-fresh-db-write-503-fk-missing-seed-user` → not_found (ran pre-dispatch);
+submitted post-debug after the fix landed.
+
+**CI:** pre-tick check green — last two runs success (GAP-065 fix cc581a4 run
+34570281475, CI-004 lint fix); older failures were the triaged lint-debt class,
+already closed by CI-004. Post-push run for f96467a pending at tick close.
+
+**Push health:** content commit f96467a pushed immediately after gates;
+`origin/master..HEAD` = 0. Bookkeeping commit follows this entry.
+
+**Bookkeeping:** tasks.jsonl — GAP-064 → complete (commit_hash f96467a,
+guard PASS); stale duplicates DF-HERMES-CANOPY-1 + DF-HERMES-CANOPY-3 →
+complete with resolution notes pointing at f96467a. events.jsonl += 4
+(dispatch id 356, task_completed ×3, audit id 360). board.jsonl header →
+ticks_total 430, last_commit f96467a. tasks.md remains the only
+tracked-markdown board file.
+
+**DuckBrain:** pre-write `/ticks/` contiguous through 429; wrote `/ticks/430`
++ `/project/hermes-canopy/status/2026-09-11` (ns hermes-canopy).
+
+**Next tick:** 19 pending rows. Top candidates: GAP-067 (P1 deploy-staleness
+automation — check premise: live binary vs HEAD), GAP-066 (P2 topic
+root_node_id zero UUID, closes DF-HERMES-CANOPY-2), GAP-068 (P2 docker quick
+start .env). QA-HERMES-CANOPY-1 premise is the known tiny-pool class on
+bunker-las-02 (capacity 1, held by live agent) — board-close candidate after
+re-verification, not a code dispatch.

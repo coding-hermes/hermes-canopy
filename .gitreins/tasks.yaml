@@ -2036,3 +2036,11 @@ tasks:
   status: complete
   created_at: '2026-09-11T05:50:03.293172+00:00'
   completed_at: '2026-09-11T06:17:06.881276+00:00'
+- id: GAP-064
+  title: Fresh-DB tree create 503s (FK on unprovisioned dev user) + silent tx logger
+  criteria:
+  - Fresh DB + verbatim README quick start (no manual SQL) yields tree create 201;
+    a failing tx logs the underlying pg error
+  status: complete
+  created_at: '2026-09-11T10:07:50.232094+00:00'
+  completed_at: '2026-09-11T10:38:08.045604+00:00'
