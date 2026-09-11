@@ -29,7 +29,11 @@ var connStateMu sync.Map // connID uuid.UUID -> *sync.RWMutex
 
 func stateMuFor(conn *Connection) *sync.RWMutex {
 	mu, _ := connStateMu.LoadOrStore(conn.ID, &sync.RWMutex{})
-	return mu.(*sync.RWMutex)
+	rmu, ok := mu.(*sync.RWMutex)
+	if !ok {
+		rmu = &sync.RWMutex{}
+	}
+	return rmu
 }
 
 type SSEAdapter struct {
@@ -49,7 +53,6 @@ type sseConnection struct {
 	token     string
 	lastID    string
 	lastMu    sync.RWMutex
-	stateMu   sync.RWMutex
 	closeOnce sync.Once
 }
 
@@ -296,7 +299,7 @@ func (a *SSEAdapter) consumeOnce(ctx context.Context, sc *sseConnection, timeout
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("transport: SSE status %s", resp.Status)
 	}

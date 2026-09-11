@@ -42,7 +42,7 @@ func (c *RelayPollClient) Poll(ctx context.Context, peerID string) ([]*RelayEnve
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("transport: relay poll status %d", resp.StatusCode)
 	}

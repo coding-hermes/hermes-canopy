@@ -37,7 +37,6 @@ import (
 type Server struct {
 	httpServer      *http.Server
 	router          *chi.Mux
-	healthDB        HealthDB
 	sseHub          sse.SSEHub
 	transportMgr    *transport.ConnectionManager
 	transportAdaper transport.TransportAdapter
@@ -372,9 +371,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 // healthHandler responds with a simple health check. schema_version and
-// embedded_migrations are reported so a stale binary (older embedded
-// migrations than the live DB) is visible from a single curl — the
-// diagnostic DF-HERMES-CANOPY-1 lacked.
+// healthHandler serves GET /health. embedded_migrations are reported so a
+// stale binary (older embedded migrations than the live DB) is visible from a
+// single curl — the diagnostic DF-HERMES-CANOPY-1 lacked.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	schemaV, embeddedV := int64(-1), int64(-1)
 	if dbh, ok := r.Context().Value(healthSchemaKey{}).(HealthDB); ok {
@@ -384,19 +383,21 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 			health := rh.RelayHealth()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d}}`,
-				schemaV, embeddedV, health.Mode, health.Status, health.Sessions)
+			if _, err := fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d}}`,
+				schemaV, embeddedV, health.Mode, health.Status, health.Sessions); err != nil {
+				return
+			}
 			return
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d}`,
+	_, _ = fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d}`,
 		schemaV, embeddedV)
 }
 
-// healthSchemaKey/healthDB let main() inject a read-only schema-version
-// probe into the health handler without widening the Server constructor.
+// healthSchemaKey lets main() inject a read-only schema-version probe into
+// the health handler without widening the Server constructor.
 type healthSchemaKey struct{}
 
 // HealthDB is the read-only probe surfaced on /health (implemented by

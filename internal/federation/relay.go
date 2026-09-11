@@ -316,7 +316,7 @@ func (s *RelayService) deliver(ctx context.Context, peer *FederationPeer, event 
 			return err
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 			Metrics().RecordError()
 			return fmt.Errorf("federation relay: peer ACK status %d", resp.StatusCode)

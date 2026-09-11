@@ -39,7 +39,11 @@ func newTokenSigner(legacyKey []byte, serverID uuid.UUID, serverURL string) *tok
 }
 
 func newTokenSignerWithIdentity(legacyKey []byte, privateKey ed25519.PrivateKey, serverID uuid.UUID, serverURL string) *tokenSigner {
-	publicKey := append(ed25519.PublicKey(nil), privateKey.Public().(ed25519.PublicKey)...)
+	pub, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		panic("federation: ed25519 PrivateKey.Public returned unexpected type")
+	}
+	publicKey := append(ed25519.PublicKey(nil), pub...)
 	return &tokenSigner{append([]byte(nil), legacyKey...), publicKey, append(ed25519.PrivateKey(nil), privateKey...), serverID, serverURL, func() time.Time { return time.Now().UTC() }}
 }
 

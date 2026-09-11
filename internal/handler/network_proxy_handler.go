@@ -70,7 +70,7 @@ func (h *NetworkProxyHandler) Proxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 502, "NETWORK_ERROR", err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, networkProxyBodyLimit+1))
 	if err != nil {
 		writeError(w, 502, "NETWORK_ERROR", err.Error())

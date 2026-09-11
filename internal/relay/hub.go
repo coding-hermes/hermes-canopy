@@ -184,7 +184,7 @@ func (h *RelayHub) acceptConn(conn net.Conn) (*RelaySession, error) {
 	h.mu.Lock()
 	if h.listener == nil || len(h.sessions) >= h.sessionLimit {
 		h.mu.Unlock()
-		h.write(conn, Frame{Type: FrameError, Payload: encodeCBORText("session limit reached")})
+		_ = h.write(conn, Frame{Type: FrameError, Payload: encodeCBORText("session limit reached")})
 		_ = conn.Close()
 		return nil, errors.New("relay: session limit reached")
 	}

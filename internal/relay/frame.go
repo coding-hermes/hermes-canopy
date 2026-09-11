@@ -35,6 +35,8 @@ type Frame struct {
 	HMAC    []byte
 }
 
+// EncodeFrame encodes f into the canonical wire frame.
+//
 // Header layout is magic[0:4], version[4], key ID[5:7], type[7], length[8:12].
 // T1.8's older table puts a one-byte opcode at 5 and has no key ID. FTR-05's
 // later key-rotation contract and canonical bytes 5-6 assignment require the
