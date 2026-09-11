@@ -542,6 +542,12 @@ func TestAPI_TopicCRUD(t *testing.T) {
 		t.Fatalf("topic.Title = %q, want %q", topic.Title, "Test Topic")
 	}
 	t.Logf("created topic: id=%s, title=%s", topic.ID, topic.Title)
+	if topic.RootNodeID != child.Node.ID {
+		t.Fatalf("topic.RootNodeID = %s, want submitted root node %s", topic.RootNodeID, child.Node.ID)
+	}
+	if topic.NodeCount < 1 {
+		t.Fatalf("topic.NodeCount = %d after creation, want at least 1 (root node)", topic.NodeCount)
+	}
 
 	// 2. GET /api/v1/topics/{topic_id} — get the topic.
 	req = apiRequest(t, srv.Server.URL, http.MethodGet,
@@ -562,6 +568,12 @@ func TestAPI_TopicCRUD(t *testing.T) {
 	if fetched.ID != topic.ID || fetched.Title != topic.Title {
 		t.Fatalf("topic mismatch: got %s/%s, want %s/%s",
 			fetched.ID, fetched.Title, topic.ID, topic.Title)
+	}
+	if fetched.RootNodeID != child.Node.ID {
+		t.Fatalf("fetched.RootNodeID = %s, want submitted root node %s", fetched.RootNodeID, child.Node.ID)
+	}
+	if fetched.NodeCount < 1 {
+		t.Fatalf("fetched.NodeCount = %d on retrieval, want at least 1 (root node)", fetched.NodeCount)
 	}
 
 	// 3. GET /api/v1/topics?tree_id=... — list topics.

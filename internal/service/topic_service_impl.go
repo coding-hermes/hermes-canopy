@@ -134,6 +134,14 @@ func (s *TopicServiceImpl) CreateTopic(ctx context.Context, treeID, rootNodeID u
 	if err != nil {
 		return nil, fmt.Errorf("service: create topic: %w", err)
 	}
+	// node_count defaults to 0 on insert; the root node is always in the
+	// topic scope (topic_member_nodes seeds from root_node_id), so refresh
+	// and persist the count immediately so summaries report at least 1.
+	if count, err := s.repo.RefreshNodeCount(ctx, t.ID); err != nil {
+		log.Ctx(ctx).Warn().Err(err).Str("topic_id", t.ID.String()).Msg("topic: refresh node count after create failed")
+	} else {
+		t.NodeCount = count
+	}
 	return topicToSummary(t), nil
 }
 
@@ -726,7 +734,8 @@ func dbProposalToService(p *db.TopicProposal) *TopicProposal {
 // topicToSummary converts a Topic to a TopicSummary.
 func topicToSummary(t *db.Topic) *TopicSummary {
 	return &TopicSummary{
-		ID: t.ID, TreeID: t.TreeID, Title: t.Title, Slug: t.Slug,
+		ID: t.ID, TreeID: t.TreeID, RootNodeID: t.RootNodeID,
+		Title: t.Title, Slug: t.Slug,
 		Description: t.Description, Status: t.Status,
 		NodeCount: int(t.NodeCount), CreatedAt: t.CreatedAt,
 	}
