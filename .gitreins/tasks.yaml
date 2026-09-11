@@ -2063,3 +2063,17 @@ tasks:
   status: complete
   created_at: '2026-09-11T16:30:47.238899+00:00'
   completed_at: '2026-09-11T16:37:34.473320+00:00'
+- id: GAP-067
+  title: Automate canopyd deploy-staleness detection
+  criteria:
+  - A deterministic staleness checker compares the deployed canopyd artifact with
+    the newest relevant source commit, returns non-zero with actionable evidence when
+    stale beyond its threshold, passes on a current artifact, and is covered by hermetic
+    tests. Repository-owned systemd user timer/service units run the checker daily
+    and trigger the existing atomic deploy path when stale. After installing/enabling
+    the timer, the live /home/kara/bin/canopyd is rebuilt from HEAD, /health is 200,
+    /health/relay is not 404, and the deployed artifact is less than 24 hours behind
+    relevant HEAD. Existing build, vet, lint, tests, and deploy smoke remain green.
+  status: complete
+  created_at: '2026-09-11T19:17:14.101143+00:00'
+  completed_at: '2026-09-11T20:12:23.228402+00:00'

@@ -11096,3 +11096,78 @@ QA-HERMES-CANOPY-1 (bunker port-pool — likely misrouted; belongs to the
 bunker project, not canopy code), QA-HERMES-CANOPY-3 (INTEGRATION.md §8.1
 snake_case probe — one-file docs fix). boardctl-validate legacy-error cleanup
 is a candidate hygiene row if a future tick wants one.
+
+## Tick 433 — 2026-09-11 ~15:40 local (WORK TICK: GAP-067 COMPLETE — deployed-binary staleness automation live)
+
+**Verdict:** WORK TICK / OK. Picked GAP-067, the highest-value actionable P1
+with no dependencies. Premise was re-verified before dispatch: the live
+`/home/kara/bin/canopyd` was **768,617s** behind the newest relevant source
+commit, `/health` returned 200, but `/health/relay` returned 404 even though the
+route existed at HEAD. Root cause: `make deploy` was correct but remained
+manual-only; GAP-052 closed the command, not the recurrence class.
+
+**Worker:** one worker, `glm-5.3-flash` @ `zai-glm-default`; initial brief
+`/tmp/hermes-canopy-gap067-brief.txt`; 2 implementation attempts; final commit
+**ceb4e68eb752052b301b6a62979c56b084a4af5b** (+553/-2, 8 files):
+- deterministic `scripts/check-deploy-staleness.sh` comparing installed artifact
+  mtime with the newest commit touching `internal/`, `cmd/`, `migrations/`,
+  `go.mod`, or `go.sum` (CURRENT=0, STALE=1, STALE_BLOCKED=2, ERROR=3);
+- 12-case hermetic suite, including current/stale/missing, successful fake
+  deploy, dirty and untracked safety blocks, and still-stale post-deploy failure;
+- concrete `canopy-deploy-check.service` + `.timer`, installer, Make target, and
+  README/INTEGRATION documentation.
+
+**Adversarial rework:** attempt 1 was REJECTED. The suite returned 10/11 and
+`systemctl --user enable --dry-run` rejected the instance-less `@` template
+unit. Attempt 2 replaced templates with concrete units and made the default
+threshold assertion pipefail/SIGPIPE-safe. Fresh foreman proof: hermetic suite
+**12/12**, `systemd-analyze --user verify` 0, concrete timer enable proof 0.
+The worker amended the unpushed rejected commit to ceb4e68.
+
+**Gates:** GitReins Tier 1 PASS (secrets/build/lint/tests). Independent gates:
+`go build`, `go vet`, fresh `go test -count=1 -p 1` over all 25 non-handler
+packages, frontend Vitest **744/744 (42 files)**, and gitleaks **no leaks**.
+Gateway smoke passed during live deployment.
+
+**Live rollout:** `make deploy` built and atomically installed canopyd, restarted
+`canopy-canopyd`, health-polled, and passed gateway smoke. Then
+`make install-deploy-timer` rendered and enabled the tracked daily user timer.
+Read-back: timer **enabled + active/waiting**, one-shot `Result=success`, checker
+**CURRENT** with lag **-24,423s**, `/health` **200**, `/health/relay` **200**, and
+`canopy-canopyd` active/running.
+
+**GitReins:** lifecycle create → start → complete ran. The first judge correctly
+returned INCOMPLETE before the foreman-owned live rollout (`b87c497`). After
+rollout, Tier 2 independently returned **PASS / COMPLETE**, verdict
+**8972da4**.
+
+**CI:** GitHub Actions run **34645172764 SUCCESS** for ceb4e68: tidy, build,
+vet, golangci-lint, short tests, integration tests, frontend build/type-check,
+gitleaks, Docker build, and deploy all green. The previous two master runs were
+also success; no CI failure row was required.
+
+**Off-by-one:** pre-debug discovers returned not_found for
+`deployed-binary-staleness-automation`,
+`systemd-template-timer-missing-instance`, and
+`gitreins-task-complete-judge-timeout`. Post-debug submissions:
+`systemd-template-timer-missing-instance` = `sub_e4d3c3` (solver in progress),
+`bash-pipefail-grep-sigpipe-flake` = `sub_d693ba` (queued).
+
+**Board/bookkeeping:** GAP-067 → complete, worker complete, attempts=2,
+exit_code=0, commit/8 files/+553/-2/guard PASS/CI GREEN recorded. Events 366–370
+record in-progress, dispatch, completion/enrichment, and audit; header
+`ticks_total` → **433**, `last_commit` → ceb4e68. GitReins completed task kept
+for audit.
+
+**DuckBrain:** wrote and disk-verified `/ticks/433`
+(`b947f213-004c-4d2d-8938-b6653ff1b9e0`) and refreshed
+`/project/hermes-canopy/status/2026-09-11`
+(`24a132e7-5e59-45a6-93df-9ab7f660befb`).
+
+**Push:** content commit ceb4e68 pushed with `origin/master..HEAD = 0` before
+bookkeeping. This tick's board commit follows this entry and is pushed in the
+same tick.
+
+**Next tick:** re-read the keep-LAST board. QA-HERMES-CANOPY-1 remains likely a
+bunker capacity/misrouting row rather than canopy code; QA-HERMES-CANOPY-3 is a
+small docs-probe candidate after premise verification.
