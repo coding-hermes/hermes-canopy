@@ -2017,3 +2017,22 @@ tasks:
   status: complete
   created_at: '2026-09-03T06:10:37.631832+00:00'
   completed_at: '2026-09-03T06:23:30.352677+00:00'
+- id: CI-004
+  title: Fix CI golangci-lint failures on master
+  criteria:
+  - golangci-lint run --timeout 5m ./... exits 0 with no lint-rule disablement, no
+    nolint suppressions added, and go build/vet/tests remain green
+  status: complete
+  created_at: '2026-09-11T02:33:21.283550+00:00'
+  completed_at: '2026-09-11T02:52:04.032344+00:00'
+- id: GAP-065
+  title: Mount the never-mounted node reply/update/delete routes on the real canopyd
+    router
+  criteria:
+  - chi route-parity test over the real server router proves POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply,
+    PATCH /api/v1/trees/{tree_id}/nodes/{node_id}, DELETE /api/v1/trees/{tree_id}/nodes/{node_id}
+    and POST /api/v1/nodes/{node_id}/reply are registered; go build/vet/tests green;
+    golangci-lint 0 issues
+  status: complete
+  created_at: '2026-09-11T05:50:03.293172+00:00'
+  completed_at: '2026-09-11T06:17:06.881276+00:00'

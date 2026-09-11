@@ -3,6 +3,8 @@
 .vfs/graph/graph.db.wal
 .vfs/graph/graph.duckdb
 .vfs/graph/.last_warm
+.vfs/graph/.last_reconcile
+.vfs/graph/.parse_cache.json
 
 # Local development
 .pytest_cache/

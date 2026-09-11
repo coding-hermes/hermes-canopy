@@ -10852,3 +10852,105 @@ Verdict: PROMISING-BUT-ROUGH. HEAD 1e3647b against a FRESH scratch DB (canopy_do
   Docs drift found in the smoke: README says compose exposes **:8091**, actual
   mapping is **:8092**→8080. Caveat: a compose user proceeding to the documented
   first curl (tree create) would hit GAP-064 (fresh DB has no users row).
+
+## Tick 429 — 2026-09-11 ~01:32 local (WORK TICK: GAP-065 COMPLETE — documented reply/update/delete routes mounted on the real router)
+
+**Verdict:** WORK TICK. Picked GAP-065 (P1, dogfood 2026-09-10) out of 23 unique
+pending rows (tasks.jsonl 280 raw lines → 257 unique IDs → 238 complete /
+23 pending after keep-LAST dedupe; raw `"status":"pending"` line count 42
+because of duplicate DF/QA rows). Chose it over GAP-064/066 and the QA/DF
+duplicates because the defect is fully root-caused, one-surface, and its fix
+closes the whole class (update/delete/reply were *all* unreachable).
+
+**Defect (foreman-verified at HEAD 1919570 before dispatch):**
+`internal/server/server.go` mounted only `NodeHandler.TreeRoutes()`
+(list/create/get/fork). `NodeHandler.Routes()` — the **only** registrar of
+`handleReply`, `handleUpdate`, `handleDelete` — was never mounted anywhere in
+production wiring, so the documented tree-scoped
+`PATCH|DELETE /api/v1/trees/{tree_id}/nodes/{node_id}` and
+`POST .../nodes/{node_id}/reply` (docs/API.md) plus the flat
+`POST /api/v1/nodes/{node_id}/reply` (SPEC-API-03 §6) had **never** been
+reachable over HTTP. Hidden because every handler integration test hand-builds
+its own chi router (`api_integration_test.go:100-111` mounts `Routes()` itself)
+— phantom coverage that drifts from production wiring.
+
+**Worker:** `glm-5.3-flash` @ `zai-glm`, brief `/tmp/hermes-canopy-gap065-brief.md`,
+background PID 7389, commit **cc581a4** (3 files, +280/-29):
+- `internal/handler/node_handler.go` — `TreeRoutes()` += `PATCH /{node_id}`,
+  `DELETE /{node_id}`, `POST /{node_id}/reply` (existing handlers; `parseNodeID`
+  reads only `node_id`, so no handler changes); new `FlatRoutes()` with bare
+  patterns (mounts at `/api/v1/nodes` without the deprecated `/nodes/` doubling).
+- `internal/server/server.go` — `New()`'s route-wiring block moved **verbatim**
+  into `newRouter(deps *routeDeps)`; `r.Mount("/nodes", nodeHandler.FlatRoutes())`
+  added inside the authenticated `/api/v1` group (tree-scoped mount and
+  `membershipMW` unchanged).
+- `internal/server/route_parity_test.go` (new, 122 lines) — DB-free `chi.Walk`
+  parity over the **real** router from the new seam; asserts the 5 documented
+  node patterns with parameter names normalized.
+
+**Red → green (captured):** `/tmp/hermes-canopy-gap065-red.log` — pre-fix walk
+enumerated 110 routes and failed on exactly the 5 missing patterns
+(`PATCH|DELETE /api/v1/trees/{}/nodes/{}`, `POST /api/v1/trees/{}/nodes/{}/reply`,
+`POST /api/v1/nodes/{}/reply`, `POST /api/v1/nodes/{}/fork`); control
+(tree-scoped fork) present throughout. `-green.log` PASS.
+
+**Off-by-one oracle note (the real lesson):** an HTTP status probe **cannot**
+prove a route is absent — chi runs a matched route-group's middleware chain
+before its NotFound handler, so an unmatched path under the gated `/api/v1`
+answers `401 TOKEN_MISSING` (unauthenticated) or `403 NOT_TREE_MEMBER`
+(authenticated, non-member) exactly like a registered-but-forbidden route. The
+live :8091 binary answered `403 NOT_TREE_MEMBER` on the phantom path. Oracle =
+route-table assertion (`chi.Walk`), not status codes. Submitted post-debug as
+`chi-route-registered-but-never-mounted` (sub_7831be).
+
+**Independent foreman gates (fresh, at cc581a4):**
+- `go build ./...` → 0 · `go vet ./...` → 0
+- `go test -count=1 -p 1` on all 22 packages except `/internal/handler` → **all ok, exit 0**
+  (one earlier run FAILED with `SQLSTATE 57P03 database system is shutting down`:
+  the `canopy-pg` container cycled at 06:24:00Z and `canopy-server` went into a
+  restart loop — infrastructure, re-run green after `pg_isready` recovered;
+  same class as the CI-004 judge's PG outage)
+- `npx vitest run` (frontend) → **744/744 passed, 42 files** (suite grew 710 → 744)
+- `golangci-lint run --timeout 5m ./...` → **0 issues**
+- `gofmt -l internal/server internal/handler` → clean for changed files;
+  3 pre-existing drift files flagged (`topic_detection_handler.go`,
+  `topic_search_handler.go`, `wire006_integration_test.go`) — blob-identical to
+  HEAD, go1.26.5 host vs CI 1.25 pin, left untouched per `quality-gate-version-drift`
+
+**Live end-to-end proof (foreman-run, isolated):** throwaway DB
+`canopy_gap065` + seeded fixture + HEAD binary on `:8099`:
+`POST /api/v1/trees/{t}/nodes/{n}/reply` → **201 `{node,edge}`**;
+`POST /api/v1/nodes/{n}/reply` → **201**; `PATCH` tree-scoped → **200**;
+`DELETE` tree-scoped → **200** (cleaned up the 2 proof nodes). Probe server
+stopped, probe DB dropped; live `canopy` DB untouched (0 users/0 trees/0 nodes
+before and after — post-GAP-051 fixture lifecycle respected).
+
+**CI:** run `34570281475` for cc581a4 `in_progress` at tick close (GitHub runs
+appear ~4-7 min after push). Previous two failures (ed850ea 09-10 dogfood,
+452f48c 09-10 qa-cron) are the pre-CI-004 golangci-lint debt already closed by
+25d7617 + green run 34556243158 → **no new CI row filed**.
+
+**Push:** `origin/master` = cc581a4 (`origin/master..HEAD` = 0). ⚠️ `gitlab`
+remote is 4 commits behind (`gitlab/master..HEAD` = 4 — pre-existing drift from
+ticks 428 and earlier, not introduced this tick); flagged, not pushed.
+
+**GitReins:** `task create GAP-065` → `task start` → `task complete` (Tier 2
+evaluator launched; verdict arrives async — Tier 2 is advisory, Tier 1
+secrets/build/lint/tests PASS inside the worker commit). Statuses:
+`grep '^  status:' .gitreins/tasks.yaml | sort | uniq -c`.
+
+**Bookkeeping:** events 353 (`task_completed`) + 354 (`audit`) appended;
+tasks.jsonl GAP-065 row appended with `status:complete` + commit hash + worker
+stats (keep-LAST dedupe); `board.jsonl` `ticks_total` 428 → **429**,
+`last_commit` → cc581a4. `.gitignore` gains the two hilo runtime caches
+(`.vfs/graph/.last_reconcile`, `.vfs/graph/.parse_cache.json`) so future
+`git status` strays stop surfacing them (QA-HERMES-CANOPY-6 class).
+
+**Next tick:** next highest-value pending = GAP-064 (P1 fresh-DB 503: missing
+`users` row + unwired context logger — root cause documented in
+references/fresh-db-503-*; note DF-HERMES-CANOPY-1 is the same defect); then
+QA-HERMES-CANOPY-3 (P1 INTEGRATION.md §8.1 snake_case probe → 400), GAP-066
+(P2 zero `root_node_id`), GAP-067 (P1 deploy staleness check), GAP-068 (P2
+docker compose `.env` quick-start). Consider a board-close pass for stale
+pending duplicates (DF-HERMES-CANOPY-* / QA-* reappear with different
+priorities). Watch: `canopy-server` container restart-loop (INFRA-002 class).
