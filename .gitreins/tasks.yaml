@@ -2077,3 +2077,17 @@ tasks:
   status: complete
   created_at: '2026-09-11T19:17:14.101143+00:00'
   completed_at: '2026-09-11T20:12:23.228402+00:00'
+- id: DF-HERMES-CANOPY-4
+  title: Fix topics quick reference and SPA deep-link serving
+  criteria:
+  - README topics GET visibly requires tree_id and lists optional status/limit/offset
+  - README topics POST lists exact camelCase treeId/rootNodeId/title/optional description
+    keys
+  - All active npx serve examples in README.md, docs/INTEGRATION.md, and docs/SELF_HOST.md
+    use SPA fallback
+  - Fresh frontend build served with the documented SPA form returns index HTML and
+    HTTP 200 for /trees and /tree/test-id
+  - Implementation commit changes only README.md, docs/INTEGRATION.md, and docs/SELF_HOST.md
+  status: complete
+  created_at: '2026-09-12T01:28:19.278127+00:00'
+  completed_at: '2026-09-12T01:36:52.480582+00:00'

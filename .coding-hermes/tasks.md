@@ -11171,3 +11171,74 @@ same tick.
 **Next tick:** re-read the keep-LAST board. QA-HERMES-CANOPY-1 remains likely a
 bunker capacity/misrouting row rather than canopy code; QA-HERMES-CANOPY-3 is a
 small docs-probe candidate after premise verification.
+
+## Tick 435 — 2026-09-12 ~01:46Z (WORK TICK: DF-HERMES-CANOPY-4 COMPLETE — topics contract + SPA deep links)
+
+**Verdict:** OK / WORK TICK. The keep-LAST board closed with 257 unique IDs:
+244 complete and 13 pending (P1=1, P2=2, P3=10). Picked
+DF-HERMES-CANOPY-4, the highest-value project-owned tractable P2 after the
+newer P1 QA row proved to be external bunker capacity already held by another
+agent. Repo status, recent commits, task premise, dependencies, and recent CI
+were checked before selection.
+
+**Design/blast radius:** documentation-only correction in README.md,
+docs/INTEGRATION.md, and docs/SELF_HOST.md. Source inspection confirmed
+BrowserRouter history routes and the handler's required `tree_id` plus exact
+camelCase create fields. Hilo was read-only and grep independently verified
+all import/usage sites. Acceptance required a fresh frontend build, exact
+three-file commit scope, and live deep-link requests returning index HTML.
+
+**Worker:** one worker lane, `glm-5.3-flash` @ `zai-glm-default`; attempt 1
+produced the correct non-zero three-file diff but exited before commit. Attempt
+2 continued the existing tree and committed **46b356d27f9673c34f2a1fd7c0cc79df30e7c9e2**
+(3 files, +20/-5). No second independent worker was dispatched; this was
+rework by the same routed lane.
+
+**Acceptance / gates:**
+- README topics GET now visibly requires `tree_id` and lists optional
+  `status`, `limit`, and `offset`.
+- README topics POST now lists exact `treeId`, `rootNodeId`, `title`, and
+  optional `description` body keys.
+- All active production examples in the three scoped files use
+  `npx serve -s` history fallback.
+- Fresh `npm run build` PASS; live probes against the documented serve form:
+  `/trees` = HTTP 200 + index root, `/tree/test-id` = HTTP 200 + index root.
+- Foreman `gitreins guard` Tier 1 PASS (secrets/build/lint/full tests).
+- GitReins Tier 2 **PASS / COMPLETE**, verdict file
+  `.gitreins/history/2026-09-12/dd66a044/verdict.json`; all 5 criteria PASS.
+
+**CI:** GitHub Actions run **34665447852 SUCCESS** for 46b356d: tidy, build,
+vet, golangci-lint, short tests, integration tests, frontend install/build/
+type-check, gitleaks, Docker build, and deploy all green. The previous two
+master runs were also successful; no CI repair row was required.
+
+**GitReins:** the logical task already existed in the legacy duplicate-ID
+JSONL board, so `task create` correctly refused an ambiguous duplicate rather
+than creating another row. The effective keep-LAST row was moved to
+in_progress before implementation; mandatory `gitreins task complete
+DF-HERMES-CANOPY-4` ran after the worker commit and returned PASS. Completed
+task retained for audit; tasks.yaml now contains 133 complete entries.
+
+**Off-by-one:** pre-fix discovery for
+`spa-static-server-history-fallback-and-api-doc-parameter-drift` and board
+duplicate-ID handling both returned `not_found`. Post-debug submissions queued:
+`sub_7281b0` and `sub_67e632`. Health remained OK.
+
+**Board/bookkeeping:** effective DF-HERMES-CANOPY-4 row closed with reasoning,
+commit_hash, worker_summary, 2 attempts, exact file/diff scope, Tier 1 PASS,
+and CI success. Events 373/374 record initial dispatch and same-lane rework;
+event 375 records completion. Header ticks_total remains **435**, ticks_idle 0,
+last_commit 46b356d. Legacy duplicate IDs were preserved; no unrelated board
+history was rewritten.
+
+**DuckBrain:** wrote and disk-verified `/ticks/435`
+(`e5a50b4f-d522-4f9e-a2ee-3caf33f6515a`) and
+`/project/hermes-canopy/status/2026-09-12`
+(`30a1c343-6d99-4c55-9bc7-3cd5cf121ef6`).
+
+**Push health:** content commit 46b356d pushed to origin/master and parity
+verified at 0. This board closeout commit follows this entry and is pushed in
+the same tick.
+
+**Next tick:** re-read the keep-LAST board. One external bunker-capacity P1 and
+two P2 rows remain; premise-check project ownership before dispatch.
