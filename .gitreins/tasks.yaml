@@ -2100,3 +2100,14 @@ tasks:
   status: complete
   created_at: '2026-09-12T10:35:13.415178+00:00'
   completed_at: '2026-09-12T10:47:02.200344+00:00'
+- id: QA-HERMES-CANOPY-4
+  title: Harden relay shutdown regression after FTR05-P4 hang
+  criteria:
+  - A focused regression test proves HMACKeyRotateInterval<=0 does not arm the rotation
+    loop or consume the drain clock; Shutdown with one active session completes deterministically;
+    manual RotateNow remains available; gofmt, go build, go vet, relay tests, and
+    the fresh non-handler sweep pass; production code remains unchanged unless a verified
+    defect requires it.
+  status: complete
+  created_at: '2026-09-12T16:03:04.364363+00:00'
+  completed_at: '2026-09-12T16:34:48.400368+00:00'
