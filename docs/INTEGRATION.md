@@ -215,10 +215,14 @@ the frontend. The PWA must be served separately:
 
 ```bash
 # Option A — any static file server
-npx serve -l 3000 frontend/dist
+npx serve -s -l 3000 frontend/dist        # SPA fallback → http://localhost:3000
 
 # Option B — nginx / Caddy / your CDN pointed at frontend/dist/
 ```
+
+The `-s` flag (single-page fallback) matters: the PWA uses `BrowserRouter`,
+so deep links such as `/trees` or `/tree/<id>` must return `index.html`,
+not 404.
 
 The deployed PWA talks to the API through a reverse proxy or by setting the
 API base URL at build time (`VITE_API_URL`, see §5 Configuration above). The

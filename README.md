@@ -253,11 +253,14 @@ Tree-scoped (primary, membership-gated):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/topics` | List topics |
-| `POST` | `/api/v1/topics` | Create a topic |
+| `GET` | `/api/v1/topics?tree_id={tree_id}` | List topics — `tree_id` required; optional `status`, `limit`, `offset` |
+| `POST` | `/api/v1/topics` | Create a topic — body: `treeId`, `rootNodeId`, `title` (required), `description` (optional) |
 | `GET` | `/api/v1/topics/{topic_id}` | Get topic details |
 | `PATCH` | `/api/v1/topics/{topic_id}` | Update topic |
 | `DELETE` | `/api/v1/topics/{topic_id}` | Delete a topic |
+
+> GET requires the `tree_id` query parameter; the create body uses camelCase
+> keys. Full request/response contract: docs/API.md § Topics.
 
 ### Cards
 
@@ -343,8 +346,12 @@ METRICS_ENABLED=true \
 > ```bash
 > cd frontend && npm ci && npm run build   # produces frontend/dist/
 > # serve the static build with any static server, e.g.:
-> npx serve -l 3000 frontend/dist           # → http://localhost:3000
+> npx serve -s -l 3000 frontend/dist        # SPA fallback → http://localhost:3000
 > ```
+>
+> The `-s` flag (single-page fallback) matters: the PWA uses `BrowserRouter`,
+> so deep links such as `/trees` or `/tree/<id>` must return `index.html`,
+> not 404.
 >
 > Point the deployed PWA at the API base URL (`VITE_API_URL` at build time, or
 > the Vite proxy target in dev). See docs/INTEGRATION.md §5 for details.
