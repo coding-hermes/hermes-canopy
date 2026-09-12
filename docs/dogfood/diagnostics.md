@@ -145,13 +145,18 @@ one never-mounted route**:
   `tree_members`, whose FK needs a `users` row for the JWT subject
   (`00000000-…-0001`). Nothing provisions that user at runtime — the live DB
   has the row only because `scripts/seed-demo-data.sql` was run manually after
-  the tick-416 wipe. The service then flattens ANY tx error to
+  the tick-416 wipe. The service then flattened ANY tx error to
   `503 SERVICE_UNAVAILABLE "database unavailable"` **and the handler's error
-  log line goes to a context logger that isn't wired, so the server log stays
-  silent** (that's also why DF-HERMES-CANOPY-3's "topic 500 with zero logs"
-  happened — same silent-logger family). Reproduced in psql by replaying the
-  tx statements: insert into `trees` works, insert into `tree_members` fails
-  with `tree_members_user_id_fkey`. → GAP-064.
+  log line went to a context logger that wasn't wired, so the server log
+  stayed silent** (that's also why DF-HERMES-CANOPY-3's "topic 500 with zero
+  logs" happened — same silent-logger family). Reproduced in psql by
+  replaying the tx statements: insert into `trees` works, insert into
+  `tree_members` fails with `tree_members_user_id_fkey`. → GAP-064.
+  **Both halves are FIXED as of 2026-09-12 (f96467a):** the dev JWT user is
+  provisioned at startup when `JWT_SECRET` is the dev default, and
+  `hlog.NewHandler(log.Logger)` is wired as the first global middleware
+  (`internal/server/server.go:224`) — handler/tx errors now reach the server
+  log.
 - **The tree-scoped `/reply` route never worked.** `NodeHandler.Routes()`
   registers `POST /nodes/{node_id}/reply`; only `TreeRoutes()` is mounted
   (server.go:164), and it has list/create/get/fork only. `git log -S
@@ -178,6 +183,41 @@ one never-mounted route**:
 - Routing: **`internal/server/server.go` mounts are the only truth.** Handlers
   can register routes that are unreachable (dead `Routes()`). Grep the mount
   before trusting API.md — or `chi` route-print if it ever gets added.
-- Logging: `log.Ctx(r.Context())` produces SILENT logs in this codebase
-  (context logger not wired). Grep server logs after a failure — if your error
-  class never appears, it went through the context logger.
+- Logging: `log.Ctx(r.Context())` now resolves to the server logger —
+  `hlog.NewHandler(log.Logger)` is the first global middleware
+  (`internal/server/server.go:224`, wired by GAP-064 / f96467a), so handler
+  error logs DO appear. The mechanism was absent before GAP-064: logs from
+  before that fix are silent for handler-level errors, so when reading OLD
+  server logs, an error class that never appears went through the
+  then-unwired context logger.
+
+### 2026-09-12 update — dogfood rows closed
+
+Every friction reported by the 2026-09-10 dogfood run (and the older "known
+quirks" above) is now fixed at HEAD. Symptom → fix commit → what a user
+sees today:
+
+- **Fresh-DB 503 on every write + silent server log** (trap #1) → f96467a
+  (GAP-064, closed tick 430): the dev JWT user is provisioned at startup
+  when `JWT_SECRET` is the dev default and `hlog.NewHandler` is wired first
+  — a fresh clone now works out of the box, and handler/tx errors show up
+  in the server log.
+- **Topic create returned a zero-UUID `root_node_id` despite valid input**
+  (DF-HERMES-CANOPY-2 / GAP-066) → 9604690 (closed tick 431): the root node
+  is preserved in summaries — `POST /api/v1/topics` now returns the real
+  root node id.
+- **The documented `/reply` route 404'd — never mounted** (trap #2,
+  GAP-065) → cc581a4 (closed tick 429): the route is mounted on the real
+  router, guarded by `route_parity_test.go` — the documented path answers
+  201.
+- **Compose quick start failed: `env file .../.env not found`** (trap #3,
+  GAP-068) → ce3e1dc (closed tick 432): `env_file` is optional and the docs
+  carry `cp .env.example .env` — `docker compose up -d --build` works on a
+  fresh clone.
+- **Deploy drift: the live binary sat days behind HEAD while the board said
+  complete** (GAP-067) → ceb4e68 (closed tick 433): stale-canopyd detection
+  and remediation is automated — staleness is caught by a check, not a
+  memory.
+- **Topics quick-reference drift + SPA deep links not serving** → 46b356d
+  (DF-HERMES-CANOPY-4, closed tick 435): the topics quick reference matches
+  the API and SPA deep links serve the PWA.

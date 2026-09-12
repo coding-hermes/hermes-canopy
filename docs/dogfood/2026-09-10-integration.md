@@ -8,6 +8,13 @@ install** on las-bunker-03 (agent 1289ee6d).
 
 **Verdict:** 🟡 PROMISING-BUT-ROUGH — see `.coding-hermes/dogfood-log.md`.
 
+> **Resolved (2026-09-12):** three of this run's traps have since been fixed
+> at HEAD — the fresh-DB 503 / silent logger (GAP-064, f96467a), the
+> never-mounted reply route (GAP-065, cc581a4), and the mandatory compose
+> `.env` (GAP-068, ce3e1dc). Friction-by-friction resolutions:
+> `docs/dogfood/diagnostics.md` §7. The observations below were true when
+> observed on build `1e3647b` and are kept as history.
+
 ## Promise statement
 
 "A user can run the local server + PWA, create a tree, branch from any
@@ -54,6 +61,10 @@ the service maps ANY tx error to `SERVICE_UNAVAILABLE "database unavailable"`.
   (live DB already has the row — that's why the deployed stack works;
   `scripts/seed-demo-data.sql` also inserts it but is not referenced from
   README/INTEGRATION).
+- **Resolved (2026-09-12):** the dev user is now provisioned automatically
+  at startup when `JWT_SECRET` is the dev default (f96467a), and
+  request-context error logs now reach the server log
+  (`hlog.NewHandler`, `internal/server/server.go:224`).
 - Filed as **GAP-064 (P1)**.
 
 **2. The documented reply route does not exist — never has.**
@@ -64,12 +75,16 @@ registers it and `Routes()` is never mounted; the mounted `TreeRoutes()`
 has list/create/get/fork only. chi therefore answers `404 page not found`.
 The real reply is tree-scoped node-create with `parent_id` in the body
 (that's what the PWA composer does). Filed as **GAP-065 (P1)**.
+**Resolved (2026-09-12):** GAP-065 fixed by cc581a4 — the route is now
+mounted on the real router, guarded by `route_parity_test.go`.
 
 **3. Compose quick start fails at the first command (bunker-verified).**
 
 `docker compose up -d --build` → `env file .../.env not found`. `.env` is
 gitignored, `env_file: .env` is mandatory in docker-compose.yml, and no doc
 says `cp .env.example .env`. Filed as **GAP-068 (P2)**.
+**Resolved (2026-09-12):** GAP-068 fixed by ce3e1dc — `env_file` is
+optional in compose and the docs carry `cp .env.example .env`.
 
 ## Bunker fresh-install result (las-bunker-03, agent 1289ee6d)
 
@@ -113,21 +128,29 @@ curl -X POST localhost:8091/api/v1/trees/$TREE/nodes \
 
 1. README troubleshooting example says `schema_version:38`; HEAD ships 42 (trivial drift).
 2. `POST /api/v1/trees` → 503 on fresh DB, zero log output (trap #1) — 25 min lost.
+   — RESOLVED f96467a (GAP-064).
 3. Retry loop gave VALIDATION_ERROR before 503 on one attempt → misleading (looks flaky, is deterministic).
 4. `POST .../reply` → chi `404 page not found` while fork on the same path matched (trap #2) — 10 min lost.
+   — RESOLVED cc581a4 (GAP-065).
 5. Topic create returns `root_node_id: 00000000-…-0000` despite valid input (GAP-066, regressed from 09-07).
+   — RESOLVED 9604690 (DF-HERMES-CANOPY-2).
 6. `POST /api/v1/cards` with a `title` field → 400 "unknown field" — my error, but the
    field-level message (vs GAP-053's old "must be valid JSON") is a real UX improvement.
 7. `GET /health/relay` 404 on the live :8091 binary (deployed 09-02 predates FTR-05 P7, GAP-067).
+   — RESOLVED ceb4e68 (GAP-067).
 8. Bunker install: compose fails without `.env` (trap #3).
+   — RESOLVED ce3e1dc (GAP-068).
 9. Bunker agent has no Go/npm — only the compose path is viable there; README's
    prerequisites assume a dev machine (acceptable, but worth a note in SELF_HOST).
 10. SSE + nested reply + fork + manifest all worked first try — zero friction.
 
-## What I'd fix first with 1 hour of maintainer time
+## What I'd fix first (all three shipped by 2026-09-12)
 
 1. Seed the dev user at startup when `JWT_SECRET` is the dev default (one
    `INSERT ... ON CONFLICT DO NOTHING` behind an env guard). Kills trap #1 forever.
+   **Shipped:** f96467a.
 2. Mount `handleReply` in `TreeRoutes()` (one line) or fix API.md. Kills trap #2.
+   **Shipped:** cc581a4.
 3. `env_file` optional in docker-compose.yml (or `required: false`), plus one
    README line: `cp .env.example .env`. Kills trap #3.
+   **Shipped:** ce3e1dc.
