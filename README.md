@@ -503,7 +503,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 - **Go vet:** zero-warning policy
 - **golangci-lint:** configured in CI workflow
 - **TypeScript:** strict mode, tsc --noEmit clean
-- **Hilo:** dependency graph tracking for architecture drift detection
+- **Hilo:** dependency graph tracking for architecture drift detection. Its local cache lives in `.vfs/` (`.gitignore`d, fully rebuildable); regenerate the dependency graph after a fresh clone with `hilo graph warm`.
 
 ### Project Structure
 
@@ -541,7 +541,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 │   └── transport/           — Multi-transport adapters
 ├── migrations/              — SQL migration files
 ├── specs/                   — Architecture specifications
-└── .vfs/                    — Hilo dependency graph
+└── .vfs/                    — Local Hilo metadata (generated, rebuildable — not tracked; see Development)
 ```
 
 ## Configuration

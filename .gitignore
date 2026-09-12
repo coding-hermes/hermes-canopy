@@ -1,10 +1,11 @@
-# Hilo — local cache files (rebuildable)
+# Hilo — local cache files (rebuildable). edges.jsonl is a generated edge snapshot: `hilo graph warm` rebuilds it.
 .vfs/graph/graph.db
 .vfs/graph/graph.db.wal
 .vfs/graph/graph.duckdb
 .vfs/graph/.last_warm
 .vfs/graph/.last_reconcile
 .vfs/graph/.parse_cache.json
+.vfs/graph/edges.jsonl
 
 # Local development
 .pytest_cache/
