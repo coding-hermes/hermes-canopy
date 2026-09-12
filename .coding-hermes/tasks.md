@@ -11487,8 +11487,13 @@ read-only `hilo graph impact` rewrites (reproduced twice this tick; restored wit
 **Push health:** `8e895fd..1dfb691 master -> master` on origin; `git rev-list --count
 origin/master..HEAD` = **0**. The GitLab remote is the known stale fast-forwarder (untouched).
 
-**DuckBrain:** see the tick report's narration-key section (writes queued this tick:
-`/ticks/441` and `/project/hermes-canopy/status/2026-09-12`).
+**DuckBrain:** wrote and disk-verified both keys. `/ticks/441` ->
+`0fcf83c5-3c9c-4b4d-b644-7e0942c9f30c` (event/2026-09/current.jsonl) and
+`/project/hermes-canopy/status/2026-09-12` ->
+`8c17206e-c8dc-4a54-9677-b8762e54537c` (config/2026-09/current.jsonl); both UUIDs grepped
+back on disk, not just echoed by the API. Note: auth.json is keyHash-only, so the writes used
+the sidecar token `~/.duckbrain/foreman-status.token` - a jq-`.key` extraction returns null
+and surfaces as a bare NO_KEY, not a daemon fault.
 
 **Next tick:** unique pending = 6 rows: FTR-06, PL-02..PL-06 (P3 post-MVP spec corpora, need
 slicing first) and **QA-HERMES-CANOPY-7** (P3, `.vfs` tracked cache — the one tractable,
