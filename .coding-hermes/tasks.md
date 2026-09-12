@@ -11295,3 +11295,87 @@ the same tick.
 **Next tick:** re-read the keep-LAST board. The remaining P1 is external bunker
 capacity; QA-HERMES-CANOPY-4 is a stale-already-fixed closure candidate before
 choosing the remaining P3 maintenance/features.
+
+## Tick 439 — 2026-09-12 ~14:20Z (WORK TICK: DEPS-001 dependency refresh + CI-005 RealIP/CI repair)
+
+**Verdict:** OK / WORK TICK, two landings. The keep-LAST board began with 257 unique
+IDs: 246 complete and 11 pending. The sole P1 (QA-HERMES-CANOPY-1) is external
+bunker-las-02 one-range capacity with a live holder and cannot be fixed from this repo;
+the P2 QA-HERMES-CANOPY-4 describes a defect already fixed by 4862be6; QA-HERMES-CANOPY-6
+(working-tree strays) was already clean at HEAD. DEPS-001 was the highest-value tractable
+project-owned row: seven direct Go modules behind upstream, one verifiable commit.
+The CI repair (CI-005) was filed and closed inside the same tick because the DEPS-001
+push turned master red.
+
+**Dispatch / worker (DEPS-001):** one worker lane, `glm-5.3-flash` @ `zai-glm-default`.
+Attempt 1 completed the seven-module bump in the working tree but exited before
+committing, and the test sweep it had launched in the background died with the process —
+no evidence, no commit. Attempt 2 continued the existing tree (no re-`go get`), ran the
+sweep in the FOREGROUND, and committed **a56b85180dbf997905e4cb116bc90f27c6df1879**
+(go.mod + go.sum, +127/-149). Final pins: chi v5.3.2, golang-migrate v4.20.1, pgx v5.11.0,
+zerolog v1.35.1, testify v1.12.1, modernc.org/sqlite v1.58.0, pion/webrtc v4.2.20. The
+`go` directive moved 1.25.0 -> 1.25.11 because golang-migrate v4.20.1 declares 1.25.11
+(verified with `go list -m -f '{{.GoVersion}}'`); local toolchain is go1.26.5 and CI's
+`setup-go: "1.25"` resolves to the newest 1.25 patch, so the directive is satisfied.
+
+**Dispatch / worker (CI-005):** one `glm-5.3-flash` @ `zai-glm-default` attempt, commit
+**8302c4fac4542e433f071282b4847cbec5ac8907** (6 files, +176/-3): the chi v5.3.2 bump
+deprecated `middleware.RealIP`, so CI run 34696530188 failed on staticcheck SA1019 at
+`internal/server/server.go:226`. The fix replaces it with chi's replacement API —
+`middleware.ClientIPFromXFF(cfg.TrustedProxies...)` installed only when
+`CANOPY_TRUSTED_PROXIES` is set (env-parsed, CIDR-validated, empty by default =
+fail-closed), with the rate limiter keyed on `middleware.GetClientIP` and an
+`r.RemoteAddr` fallback so direct deployments keep today's behaviour.
+`Validate()` is already called from `cmd/canopyd/main.go:94`, so a malformed CIDR fails
+loud instead of panicking inside chi.
+
+**Acceptance / gates (verified by the foreman, not the worker):**
+- DEPS-001: `go list -m` confirms all seven pins; `go mod verify` -> "all modules
+  verified"; `go build ./...` exit 0; `go vet ./...` exit 0; fresh
+  `go test -count=1 -p 1` over the 25 non-handler packages **exit 0** (22 ok, 3 no-test-file,
+  2m26s) with no 57P03 re-run needed.
+- CI-005: `golangci-lint run ./...` with the **exact CI version v2.12.2** -> **0 issues**
+  (SA1019 gone); `grep -rn RealIP internal/` shows no `middleware.RealIP` usage;
+  `go build`/`go vet` exit 0; fresh non-handler sweep exit 0; new
+  `TestRateLimitBucketsByXFFClientIP` PASS and the pre-existing peer-keyed rate-limit
+  tests unchanged and PASS; frontend untouched (vitest 42 files / 744 tests PASS, run on
+  the DEPS-001 tree); gitleaks PASS over 358.13 MB, no leaks.
+- GitReins: **Tier 1 PASS** for both commits; **Tier 2 PASS** for DEPS-001 (verdict
+  **3a0a14bb**) and for CI-005 (verdict **5ef4409a**). Note the post-commit Tier 1 run is
+  diff-scoped to a clean tree (0.1s), so the load-bearing gate evidence is the
+  foreman-run lint + fresh sweep above.
+
+**CI:** run **34696530188** (a56b851) **FAILED** — golangci-lint SA1019
+`middleware.RealIP` deprecated, i.e. debt the dependency bump pulled in and the
+diff-scoped guard could not see because the diff contains no source files. Repaired by
+CI-005 and confirmed green: run **34697402468** (8302c4f) **SUCCESS**. This is the
+failure I created and closed in-tick; no board row was left open for it (CI-005 is
+closed complete).
+
+**Board / GitReins:** both rows closed with reasoning, commit_hash, worker_summary,
+guard/CI results and foreman notes; DEPS-001 attempts=2, CI-005 attempts=1. Events
+383-386 record DEPS-001 completion, CI-005 dispatch, completion and the rich audit.
+Header `ticks_total=439`, `ticks_idle=0`, `last_commit=8302c4f`. The closeout touched
+exactly two rows (line count unchanged, compact JSONL separators preserved); the
+inherited 27-error/137-warning board validation baseline was not increased.
+
+**Off-by-one:** health `ok`. Discovery for
+`chi-realip-deprecation-staticcheck-sa1019` and
+`dependency-bump-unmasks-staticcheck-deprecation-sa1019` both returned `not_found` before
+the fix was designed. Post-debug submission queued:
+`dependency-bump-unmasks-staticcheck-deprecation-sa1019` -> **sub_e57273** (queued).
+
+**DuckBrain:** wrote and disk-verified `/ticks/439`
+(`2d54f8c1-737a-40c0-bef5-eafb0c84dbe4`, event/2026-09/current.jsonl) and refreshed
+`/project/hermes-canopy/status/2026-09-12`
+(`f5584a6b-1663-4361-a43c-6b780e3fffe4`, config/2026-09/current.jsonl).
+
+**Push health:** a56b851 and 8302c4f both pushed to origin/master with
+`git rev-list --count origin/master..HEAD` = 0. The GitLab remote is a stale
+fast-forwarder (0 unique commits, 25 behind) — pre-existing, untouched this tick.
+
+**Next tick:** re-read the keep-LAST board. Remaining P1 is external bunker capacity;
+QA-HERMES-CANOPY-2 (get.docker.com dependency) and QA-HERMES-CANOPY-6 (working-tree
+strays) are premise-check candidates for closure rather than dispatch; the P3 feature rows
+(PL-02..PL-06, FTR-06) carry spec corpora far larger than one tick and need slicing first.
+Watch item: whether `setup-go: "1.25"` keeps satisfying the `go 1.25.11` directive.
