@@ -6,16 +6,18 @@ Where run evidence for end-to-end and integration suites lives, and how to produ
 
 | Suite | Command | Evidence location | Contents |
 |---|---|---|---|
-| Playwright E2E (frontend) | `cd frontend && npx playwright test` | `frontend/playwright-report/` | Per-run HTML report (auto-generated, git-ignored) |
+| E2E / integration suite (frontend) | `cd frontend && npm run test:integration` | terminal + CI logs | vitest + Playwright browser suites under `frontend/tests/` (needs PostgreSQL on :5437, canopyd, vite dev server on :5173) |
 | Vitest unit/component (frontend) | `cd frontend && npx vitest run` | terminal + CI logs | 522/522 as of 2026-08-09 |
 | Go integration (backend, PG) | `make test` (or `go test ./...` with PG on 5437) | terminal + CI logs | 46/46 as of 2026-08-09 |
 | GitReins judge verdicts | `gitreins judge <task>` | `.gitreins/history/<YYYY-MM-DD>/<verdict-id>/` | Tier-1 guard + tier-2 AI evaluation with per-AC evidence, committed to git |
-| Visual-regression goldens | `cd frontend && npx playwright test visual-regression` | `docs/screenshots/visual-regression/` | `golden/` (app captures), `pairs/` (mockup-vs-app 2880x900), `README.md` |
+| Visual-regression goldens | `cd frontend && npm run test:integration -- visual-regression` | `docs/screenshots/visual-regression/` | `golden/` (app captures), `pairs/` (mockup-vs-app 2880x900), `README.md` |
 | Per-tick summaries | foreman tick | `e2e-output/tickNNN.md` | Dated notes with pass/fail summary + links |
 
 ## Conventions
 
-- **Playwright runs** always regenerate `frontend/playwright-report/` — the dated
+- **Playwright toolchain smoke runs** (`cd frontend && npx playwright test`;
+  collects `frontend/e2e/*.pw.ts` only — this is NOT the E2E suite) always
+  regenerate `frontend/playwright-report/` — the dated
   run can be inspected from the HTML report's index. A run that exits non-zero
   means a failing test; the report names it.
 - **Judge verdicts are the authoritative acceptance evidence.** Every completed

@@ -423,11 +423,9 @@ make test-short
 # Frontend tests
 cd frontend && npm test
 
-# E2E tests (requires running server)
-cd frontend && npx playwright test
-
-# Integration tests (requires PG on :5437)
-cd frontend && npx vitest run --config vitest.integration.config.ts
+# E2E / integration tests (requires PostgreSQL on :5437, canopyd,
+# and the vite dev server on :5173)
+cd frontend && npm run test:integration
 ```
 
 ### Deploying

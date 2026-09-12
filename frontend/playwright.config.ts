@@ -1,13 +1,23 @@
 /**
- * Playwright configuration for Hermes Canopy integration tests.
+ * Playwright configuration for the frontend toolchain smoke specs.
  *
- * Used by vitest-based integration tests (see vitest.integration.config.ts).
- * The vitest test runner orchestrates Playwright browser automation through
- * the `playwright` / `@playwright/test` packages.
+ * Scope is pinned to frontend/e2e/*.pw.ts (testDir/testMatch) so
+ * `npx playwright test` never falls back to default whole-tree discovery,
+ * which collects the vitest suites (src/__tests__/**, tests/**) and crashes
+ * at collection time (import.meta.env is undefined outside vitest).
+ *
+ * The real E2E / integration suite is vitest-based (see
+ * vitest.integration.config.ts): `npm run test:integration` orchestrates
+ * Playwright browser automation through the `playwright` /
+ * `@playwright/test` packages.
  */
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  /** Only ever collect the Playwright smoke specs under e2e/ */
+  testDir: './e2e',
+  testMatch: '**/*.pw.ts',
+
   /** Base URL for the Vite dev server */
   use: {
     baseURL: 'http://localhost:5173',
