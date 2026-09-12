@@ -299,6 +299,31 @@ server {
 }
 ```
 
+### Reverse-proxy client IP (CANOPY_TRUSTED_PROXIES)
+
+Behind the nginx setup above, the TCP peer address canopyd sees is the proxy
+itself (e.g. `127.0.0.1`), so by default every visitor would share a single
+rate-limit bucket. To fix that, tell canopyd which proxies it may trust:
+
+```bash
+# Comma-separated CIDR prefixes of your reverse proxy / proxy chain.
+CANOPY_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+When set, canopyd resolves the real client from the `X-Forwarded-For` header
+(`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` above), but
+only trusts entries added by proxies within those CIDRs — anything else is
+treated as untrusted and ignored. The resolved client IP is used for
+rate-limit bucketing; it never overwrites the connection peer address.
+
+When `CANOPY_TRUSTED_PROXIES` is **unset** (the default), `X-Forwarded-For`
+is **ignored entirely** (fail-closed) and rate limiting keys on the peer
+address. This is deliberate: chi v5.3.2 deprecated its old `middleware.RealIP`
+because it trusted spoofable `X-Forwarded-For` / `True-Client-IP` / `X-Real-IP`
+headers from anyone, letting clients evade or poison rate limiting
+(see GHSA-3fxj-6jh8-hvhx, GHSA-rjr7-jggh-pgcp, GHSA-9g5q-2w5x-hmxf). Entries
+must be valid CIDRs — an invalid value fails loudly at startup.
+
 ### Caddy (Simplest)
 
 Caddy auto-provisions Let's Encrypt certificates with zero configuration:

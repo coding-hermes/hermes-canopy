@@ -155,3 +155,52 @@ func TestFromEnvGatewayAPIKeyFallsBackToAPIServerKey(t *testing.T) {
 		t.Fatalf("GatewayAPIKey = %q, want API_SERVER_KEY fallback", c.GatewayAPIKey)
 	}
 }
+
+func TestDefaultTrustedProxiesEmpty(t *testing.T) {
+	// Fail-closed: no trusted proxies by default, XFF is ignored.
+	if got := Default().TrustedProxies; len(got) != 0 {
+		t.Fatalf("Default().TrustedProxies = %v, want empty", got)
+	}
+}
+
+func TestFromEnvTrustedProxiesUnsetIsEmpty(t *testing.T) {
+	t.Setenv("CANOPY_TRUSTED_PROXIES", "")
+	c := FromEnv()
+	if len(c.TrustedProxies) != 0 {
+		t.Fatalf("FromEnv().TrustedProxies = %v, want empty when env unset", c.TrustedProxies)
+	}
+}
+
+func TestFromEnvTrustedProxiesParsesListAndTrimsWhitespace(t *testing.T) {
+	t.Setenv("CANOPY_TRUSTED_PROXIES", " 10.0.0.0/8 , 192.168.0.0/16 ,,")
+	c := FromEnv()
+	want := []string{"10.0.0.0/8", "192.168.0.0/16"}
+	if len(c.TrustedProxies) != len(want) {
+		t.Fatalf("FromEnv().TrustedProxies = %v, want %v", c.TrustedProxies, want)
+	}
+	for i, w := range want {
+		if c.TrustedProxies[i] != w {
+			t.Fatalf("TrustedProxies[%d] = %q, want %q", i, c.TrustedProxies[i], w)
+		}
+	}
+}
+
+func TestValidateTrustedProxies(t *testing.T) {
+	valid := Default()
+	valid.TrustedProxies = []string{"10.0.0.0/8", "192.168.0.0/16", "2001:db8::/32"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() with valid CIDRs = %v, want nil", err)
+	}
+
+	for _, bad := range []string{"10.0.0.0/99", "not-a-cidr"} {
+		c := Default()
+		c.TrustedProxies = []string{"10.0.0.0/8", bad}
+		err := c.Validate()
+		if err == nil {
+			t.Fatalf("Validate() with %q = nil, want error", bad)
+		}
+		if !strings.Contains(err.Error(), bad) {
+			t.Fatalf("Validate() error %q does not name offending entry %q", err, bad)
+		}
+	}
+}

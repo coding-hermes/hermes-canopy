@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
@@ -108,7 +110,15 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			ip := r.RemoteAddr
+			// Bucket by the client IP resolved by chi's ClientIPFrom*
+			// middleware (set only when CANOPY_TRUSTED_PROXIES is
+			// configured). GetClientIP returns "" when no client-IP
+			// middleware ran — direct deployments and untrusted XFF keep
+			// the peer-address behaviour.
+			ip := middleware.GetClientIP(r.Context())
+			if ip == "" {
+				ip = r.RemoteAddr
+			}
 			if !rl.Allow(ip) {
 				writeError(w, http.StatusTooManyRequests, "RATE_LIMITED",
 					"too many requests — try again later")

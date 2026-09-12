@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+
 	"github.com/google/uuid"
 )
 
@@ -137,6 +139,51 @@ func TestRateLimitConcurrentSafe(t *testing.T) {
 	}
 	wg.Wait()
 	// If Allow panics, the test fails. No deadlock means concurrent access is safe.
+}
+
+func TestRateLimitBucketsByXFFClientIP(t *testing.T) {
+	// With ClientIPFromXFF in front of the limiter (as NewServer wires it
+	// when CANOPY_TRUSTED_PROXIES is set), the bucket key is the XFF client
+	// IP, not the proxy's peer address: an exhausted bucket for one client
+	// must not throttle a different client behind the same proxy.
+	rl := NewRateLimiter(0.0, 1) // rate = 0, burst = 1 → only first request per bucket passes
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	chiIP := chiMiddleware.ClientIPFromXFF("10.0.0.0/8")
+	h := chiIP(RateLimit(rl)(next))
+
+	// First client exhausts its bucket.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trees", nil)
+	req.RemoteAddr = "10.0.0.1:50000" // the proxy's peer address — same for both clients
+	req.Header.Set("X-Forwarded-For", "203.0.113.7")
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("first client should pass; status=%d", rr.Code)
+	}
+
+	// Same peer (proxy), different XFF client — must NOT be throttled by
+	// the first client's exhausted bucket.
+	rr2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/trees", nil)
+	req2.RemoteAddr = "10.0.0.1:50001"
+	req2.Header.Set("X-Forwarded-For", "203.0.113.9")
+	h.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusNoContent {
+		t.Fatalf("second XFF client behind same proxy should pass (independent bucket); status=%d", rr2.Code)
+	}
+
+	// The first client's bucket is exhausted — a repeat request is throttled.
+	rr3 := httptest.NewRecorder()
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/trees", nil)
+	req3.RemoteAddr = "10.0.0.1:50002"
+	req3.Header.Set("X-Forwarded-For", "203.0.113.7")
+	h.ServeHTTP(rr3, req3)
+	if rr3.Code != http.StatusTooManyRequests {
+		t.Fatalf("exhausted XFF client bucket should return 429; got %d", rr3.Code)
+	}
 }
 
 // --- TreeMembershipMiddleware tests ----------------------------------------

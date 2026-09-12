@@ -223,7 +223,18 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	// logs (e.g. writeServiceError's 503 path) vanish silently.
 	r.Use(hlog.NewHandler(log.Logger))
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// chi v5.3.2 deprecated middleware.RealIP (IP-spoofing advisories
+	// GHSA-3fxj-6jh8-hvhx, GHSA-rjr7-jggh-pgcp, GHSA-9g5q-2w5x-hmxf: it
+	// mutates r.RemoteAddr from untrusted XFF/True-Client-IP headers).
+	// XFF is trusted only when CANOPY_TRUSTED_PROXIES is configured, and
+	// only for those proxy CIDRs; the resolved client IP travels in the
+	// request context (read via middleware.GetClientIP) and never
+	// overwrites r.RemoteAddr. With no trusted proxies configured, no
+	// client-IP middleware runs (fail-closed): headers are ignored and the
+	// peer address remains authoritative.
+	if len(cfg.TrustedProxies) > 0 {
+		r.Use(middleware.ClientIPFromXFF(cfg.TrustedProxies...))
+	}
 	r.Use(hlog.RequestIDHandler("req_id", "X-Request-Id"))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)

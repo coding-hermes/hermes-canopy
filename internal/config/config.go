@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +49,14 @@ type Config struct {
 	GatewayAPIKey  string // HERMES_WEBUI_GATEWAY_API_KEY, fallback API_SERVER_KEY
 	NATSURL        string
 	NATSCreds      string
+
+	// TrustedProxies lists the CIDR prefixes of reverse proxies whose
+	// X-Forwarded-For header may be trusted when deriving the client IP.
+	// Empty (the default) means trust no proxy: XFF is ignored and the TCP
+	// peer address is authoritative. Required for rate limiting to bucket
+	// real clients when canopyd runs behind a reverse proxy
+	// (CANOPY_TRUSTED_PROXIES, comma-separated).
+	TrustedProxies []string
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -223,15 +232,37 @@ func FromEnv() *Config {
 	}
 	c.NATSURL = os.Getenv("CANOPY_NATS_URL")
 	c.NATSCreds = os.Getenv("CANOPY_NATS_CREDS")
+
+	// Trusted proxies: comma-separated CIDR prefixes of reverse proxies
+	// whose X-Forwarded-For may be trusted. Empty (unset) = trust no proxy
+	// (fail-closed). Entries are validated in Validate(), which fails loud
+	// at startup instead of panicking inside chi's ClientIPFromXFF.
+	if v := os.Getenv("CANOPY_TRUSTED_PROXIES"); v != "" {
+		var proxies []string
+		for _, item := range strings.Split(v, ",") {
+			item = strings.TrimSpace(item)
+			if item != "" {
+				proxies = append(proxies, item)
+			}
+		}
+		c.TrustedProxies = proxies
+	}
 	return c
 }
 
 // Validate checks configuration invariants that must fail fast at startup.
 // A negative PLUGIN_MAX_SIZE is a hard error (GAP-002 §4.1); zero falls back
-// to the 1MB default in FromEnv.
+// to the 1MB default in FromEnv. TrustedProxies entries must each parse as a
+// valid CIDR — a malformed entry is a startup error rather than a panic
+// inside chi's ClientIPFromXFF (which panics on invalid prefixes).
 func (c *Config) Validate() error {
 	if c.PluginMaxSize < 0 {
 		return fmt.Errorf("config: PLUGIN_MAX_SIZE must not be negative (got %d)", c.PluginMaxSize)
+	}
+	for _, p := range c.TrustedProxies {
+		if _, _, err := net.ParseCIDR(p); err != nil {
+			return fmt.Errorf("config: CANOPY_TRUSTED_PROXIES entry %q is not a valid CIDR: %w", p, err)
+		}
 	}
 	return nil
 }
