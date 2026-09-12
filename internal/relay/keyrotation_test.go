@@ -18,6 +18,33 @@ func (c *rotationClock) After(d time.Duration) <-chan time.Time {
 	return c.ticks
 }
 
+// countingClock records every After call so a test can prove WHICH consumer
+// subscribed to the clock, and hands each caller a channel chosen by the test.
+type countingClock struct {
+	mu    sync.Mutex
+	calls []time.Duration
+	next  <-chan time.Time
+}
+
+func (c *countingClock) After(d time.Duration) <-chan time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, d)
+	return c.next
+}
+
+func (c *countingClock) armNext(ch <-chan time.Time) {
+	c.mu.Lock()
+	c.next = ch
+	c.mu.Unlock()
+}
+
+func (c *countingClock) afterCalls() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Duration(nil), c.calls...)
+}
+
 func TestKeyRotation(t *testing.T) {
 	t.Run("persists increment and grace expiry", func(t *testing.T) {
 		now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
@@ -110,5 +137,66 @@ func TestKeyRotation(t *testing.T) {
 			t.Fatal(err)
 		}
 		wg.Wait()
+	})
+
+	t.Run("disabled interval never consumes drain clock", func(t *testing.T) {
+		// Regression for 4862be6 (FTR05-P4): with HMACKeyRotateInterval <= 0,
+		// Start must NOT arm the rotation loop — before the fix it defaulted to
+		// 168h and its goroutine shared r.clock with Shutdown's drain backstop,
+		// so a single preloaded fake tick could be eaten by rotation and park
+		// the drain select forever. Prove the invariant directly: zero clock
+		// subscriptions from Start, and Shutdown's drain backstop is the ONLY
+		// After caller, consuming exactly the one buffered drain tick.
+		transport := &fakeTransport{sessions: 1}
+		cfg := DefaultConfig()
+		cfg.Mode, cfg.Enabled, cfg.HMACKeyRotateInterval = ModeSelfHosted, true, 0
+		drainTick := make(chan time.Time, 1)
+		drainTick <- time.Now()
+		clock := &countingClock{}
+		svc, err := NewRelayService(cfg, transport, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc.clock = clock
+		if err := svc.Start(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if svc.rotationStop != nil || svc.rotationDone != nil {
+			t.Fatalf("rotation loop armed with disabled interval: stop=%v done=%v", svc.rotationStop, svc.rotationDone)
+		}
+		if calls := clock.afterCalls(); len(calls) != 0 {
+			t.Fatalf("Start subscribed to clock with disabled interval: %v", calls)
+		}
+		if got := svc.Health(); got.Status != StatusRunning {
+			t.Fatalf("health = %+v, want running", got)
+		}
+
+		// Automatic rotation is off, but manual RotateNow must still work.
+		if err := svc.RotateNow(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := svc.Health(); got.HMACKeyID != 1 || got.Rotations != 1 {
+			t.Fatalf("manual rotation health = %+v", got)
+		}
+		if calls := clock.afterCalls(); len(calls) != 0 {
+			t.Fatalf("RotateNow subscribed to clock: %v", calls)
+		}
+
+		// Drain path is the sole clock consumer: arm it just before Shutdown so
+		// even a hypothetical subscriber could not win the single tick.
+		clock.armNext(drainTick)
+		if err := svc.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		want := []time.Duration{time.Duration(cfg.DrainTimeoutSecs) * time.Second}
+		if calls := clock.afterCalls(); len(calls) != 1 || calls[0] != want[0] {
+			t.Fatalf("clock calls = %v, want exactly %v (drain backstop)", calls, want)
+		}
+		if !transport.stopped || !transport.notified || !transport.closed {
+			t.Fatalf("transport lifecycle = %+v", transport)
+		}
+		if got := svc.Health(); got.Status != StatusDisabled || got.Sessions != 0 {
+			t.Fatalf("post-shutdown health = %+v", got)
+		}
 	})
 }
