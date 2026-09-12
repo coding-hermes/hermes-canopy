@@ -2111,3 +2111,17 @@ tasks:
   status: complete
   created_at: '2026-09-12T16:03:04.364363+00:00'
   completed_at: '2026-09-12T16:34:48.400368+00:00'
+- id: QA-HERMES-CANOPY-2
+  title: Scope Playwright to real e2e specs and document the working E2E command
+  criteria:
+  - The documented E2E command 'cd frontend && npx playwright test' must exit 0 at
+    HEAD+diff by collecting only frontend/e2e/*.pw.ts specs (no vitest files collected,
+    no TypeError). README.md, docs/INTEGRATION.md and docs/E2E-EVIDENCE.md must document
+    the real E2E entry point 'cd frontend && npm run test:integration' with its real
+    prerequisites, and must label any remaining native playwright command as a toolchain
+    smoke, not the E2E suite. Frontend unit suite (npx vitest run) must stay green
+    at the recorded baseline count; npm run build and npx tsc --noEmit must exit 0;
+    no Go files changed.
+  status: complete
+  created_at: '2026-09-12T18:54:54.818574+00:00'
+  completed_at: '2026-09-12T19:15:54.993115+00:00'

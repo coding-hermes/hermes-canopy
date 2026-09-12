@@ -11379,3 +11379,124 @@ QA-HERMES-CANOPY-2 (get.docker.com dependency) and QA-HERMES-CANOPY-6 (working-t
 strays) are premise-check candidates for closure rather than dispatch; the P3 feature rows
 (PL-02..PL-06, FTR-06) carry spec corpora far larger than one tick and need slicing first.
 Watch item: whether `setup-go: "1.25"` keeps satisfying the `go 1.25.11` directive.
+
+## Tick 440 — 2026-09-12 ~16:42Z (WORK TICK: QA-HERMES-CANOPY-4 COMPLETE) — backfilled from events 387/388
+
+**Note:** tick 440's closeout commit (8e895fd) touched only board files and
+`.gitreins/tasks.yaml`, so no tasks.md entry was written at the time. This entry is
+backfilled verbatim from the board records, not from memory.
+
+**Verdict:** OK / WORK TICK. Row QA-HERMES-CANOPY-4 (Harden relay shutdown regression after
+FTR05-P4 hang) closed complete; the P1 rows pending at that time were external bunker
+capacity, not project-owned.
+
+**Dispatch / worker:** `glm-5.3-flash` @ `zai-glm-default`, 1 attempt. Commit
+**6f475c03c5794a4419da301a57916e6731c3cd6c** — `internal/relay/keyrotation_test.go`
+(+88/-0, test-only).
+
+**Acceptance (per board event 388):** disabled rotation (`HMACKeyRotateInterval<=0`) arms no
+rotation loop and consumes zero fake-clock subscriptions ✅; `RotateNow` still rotates with
+zero clock subscriptions ✅; one active session drains from exactly one backstop tick with
+transport stop/notify/close asserted ✅; no non-test files changed ✅; red-proof by swapping
+the pre-fix `keyrotation.go` (regression failed at the armed-loop assertion) ✅.
+
+**Gates / CI / GitReins:** focused repeat PASS 25x, race PASS 3x, GitReins Tier 1 PASS,
+Tier 2 PASS (**e048ca0e**); CI run **34705663896** SUCCESS for 6f475c0; pushed, parity 0.
+Board baseline note: `boardctl` validation stayed red on the inherited 27 duplicate/order
+errors and 141 legacy warnings — no new validation class was introduced.
+
+## Tick 441 — 2026-09-12 ~19:20Z (WORK TICK: QA-HERMES-CANOPY-2 COMPLETE — documented E2E command made real, scoped and non-destructive)
+
+**Verdict: OK / WORK TICK.** keep-LAST board at start: 258 unique IDs, 249 complete,
+**9 pending**. Six of the nine are P3 post-MVP spec rows (PL-02..PL-06, FTR-06), one is
+external bunker one-range capacity (QA-HERMES-CANOPY-1, not project-owned), one is the
+get.docker.com dependency that lives in the bunker spawn harness
+(`~/.hermes/scripts/bunker-qa.sh`; zero references in this repo), one is the strays row.
+The picked row, **QA-HERMES-CANOPY-2 (P1) "Documented E2E command `cd frontend && npx
+playwright test` fails instantly"**, was the only tractable project-owned defect — and it was
+REPRODUCED at HEAD before any dispatch: exit 1, `TypeError: Cannot read properties of
+undefined (reading 'VITE_API_BASE_URL')` at `src/lib/api.ts:9`, because `playwright.config.ts`
+declared no `testDir`/`testMatch`, so Playwright's default discovery collected the **vitest**
+suites (`src/__tests__/**`, `tests/**`) and they threw at collection time.
+
+**Dispatch / worker:** `glm-5.3-flash` @ `zai-glm-default`. Briefs
+`/tmp/canopy-qa-can-2-brief.md` (attempt 1) and `/tmp/canopy-qa-can-2-brief-r2.md` (rework).
+- **361ef5fd4ca534c3c8c96a9a749e6dc0b10b8dc8** (+84/-17): `frontend/playwright.config.ts`
+  scoped with `testDir: './e2e'` + `testMatch: '**/*.pw.ts'`; new
+  `frontend/e2e/toolchain.pw.ts` (3 server-independent specs: chromium renders a document,
+  the documented integration entry point is unchanged, and Playwright cannot collect vitest
+  files); `README.md`, `docs/INTEGRATION.md`, `docs/E2E-EVIDENCE.md` now document the real
+  entry point `cd frontend && npm run test:integration` with its real prerequisites
+  (PostgreSQL :5437, canopyd, vite :5173).
+- **1dfb69137eef99323f5128eea588ed1dde52ac79** (+14/-0): attempt 1 only made the command
+  *run* — which exposed the other half of the same defect. Playwright's default `outputDir`
+  **is** `frontend/test-results/`, and that directory holds **tracked** audit files
+  (`accessibility-audit*.json/.md`, `run-a11y-audit.*`, `.last-run.json`), so every run deleted
+  four of them and modified the fifth; `frontend/playwright-report/` was never git-ignored
+  (docs claimed it was), leaving a ~500KB untracked tree per run. Fixed with
+  `outputDir: './playwright-artifacts'` + `frontend/.gitignore` entries. The worker rejected
+  the brief's suggested nested path with live evidence (Playwright: *"HTML reporter output
+  folder clashes with the tests output folder"* — the HTML reporter clears its folder first),
+  a correct deviation that was kept.
+
+**Acceptance verified by the foreman, independently of the worker (raw output captured):**
+| Criterion | Result |
+|---|---|
+| `npx playwright test` | **3 passed, exit 0** (was exit 1 TypeError) |
+| `npx playwright test --list` | 3 tests in 1 file, only `e2e/toolchain.pw.ts`; zero `src/__tests__`/`tests/` entries |
+| `npx vitest run` | **42 files / 744 tests PASS** — identical to the baseline recorded pre-edit |
+| `npm run build` / `npx tsc --noEmit` | exit 0 / exit 0 (CI parity) |
+| Docs truth | `grep -rn 'npx playwright test' --include='*.md' .` leaves only the label-corrected toolchain-smoke line |
+| No clobber | after a full run `git status --porcelain` shows no `frontend/test-results/` change and no untracked report dir; `git check-ignore frontend/playwright-report/index.html` exits 0 |
+| Documented filter | `npx vitest list --config vitest.integration.config.ts visual-regression` collects exactly `tests/visual-regression.test.ts` (4 tests) |
+
+**Gates (fresh, post-commit):** `go build` 0 · `go vet` 0 · `golangci-lint run ./...`
+**0 issues** · `gitleaks detect --no-git` **0 leaks** over 360.07 MB · frontend `npm run build`
+0 · `npx tsc --noEmit` 0 · vitest 42/744. No Go files in either commit, so no handler sweep
+was run; the guard's diff-scoped PASS is not treated as evidence.
+
+**CI:** run **34713660636** (1dfb691) was **in_progress** at write time; the two most recent
+completed runs at HEAD are **34706143740** (board tick 440) and **34705663896** (6f475c0),
+both SUCCESS. The only recent failure in the window (34696530188, a56b851) was created and
+closed in-tick at tick 439 as CI-005 — no pre-existing red run was left unflagged.
+
+**GitReins:** `task create QA-HERMES-CANOPY-2` + `task start` ran BEFORE implementation;
+Tier 1 PASS; `gitreins task complete` fired the Tier 2 judge immediately after the commit
+landed (verdict in flight at write time; the judge was started before board work per the
+lifecycle rule). `tasks.yaml`: 136 complete.
+
+**Off-by-one:** health `ok` (`{"status":"ok","uptime":...}`). Discover for
+`playwright-default-testdir-collects-vitest-suites` → `not_found` (run for real, not copied).
+Two post-debug submissions queued: **sub_f28274**
+(`playwright-default-testdir-collects-vitest-suites`) and **sub_fd47bf**
+(`test-tool-outputdir-points-at-a-tracked-directory`).
+
+**Board / Bookkeeping:** events **389** (task_completed) + **390** (rich audit) appended.
+Closed the picked row with commit hashes, attempts=2, acceptance map, gates and CI;
+closed two **stale duplicate** guard-budget rows (both carried the same finding as
+QA-HERMES-CANOPY-5, closed complete at tick 438 with commit 744693d — verified at HEAD:
+`.gitreins/config.yaml` has the restored `test_timeout: 900` / `hook_timeout: 1200`, not the
+inflated 2400/2520); closed **QA-HERMES-CANOPY-6** root-caused rather than merely re-cleaned
+(the strays were this toolchain's own side effects); filed **QA-HERMES-CANOPY-7 (P3)** for the
+remaining half of that row — `.vfs/graph/edges.jsonl` is a **tracked** hilo cache that any
+read-only `hilo graph impact` rewrites (reproduced twice this tick; restored with
+`git checkout --` both times). Header `ticks_total` 440 → **441**, `ticks_idle` 0,
+`last_commit` 1dfb691. Unique pending fell 9 → **6**. Compact JSONL separators preserved;
+`jq -e` validated both files.
+
+**Push health:** `8e895fd..1dfb691 master -> master` on origin; `git rev-list --count
+origin/master..HEAD` = **0**. The GitLab remote is the known stale fast-forwarder (untouched).
+
+**DuckBrain:** see the tick report's narration-key section (writes queued this tick:
+`/ticks/441` and `/project/hermes-canopy/status/2026-09-12`).
+
+**Next tick:** unique pending = 6 rows: FTR-06, PL-02..PL-06 (P3 post-MVP spec corpora, need
+slicing first) and **QA-HERMES-CANOPY-7** (P3, `.vfs` tracked cache — the one tractable,
+project-owned row left). QA-HERMES-CANOPY-2's other two rows ("leak fix not deployed",
+"get.docker.com dependency") and all QA-HERMES-CANOPY-1 rows are **fleet-infra claims about
+bunker-las-03 and `~/.hermes/scripts/`**, not this repo — premise-check before any dispatch.
+**Watch:** (1) E2E-001 cadence — the tasks.md tail records the 428-433 window as the last
+scheduled battery and no battery entry appears for ticks 434+; confirm whether a window is due
+(and load `canopy-e2e-testing`) before dispatching anything else; (2) CI for 1dfb691 and for
+this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302c4f — the
+`canopy-deploy-check.timer` is armed and will flag it, so do not treat it as an unflagged rot.
