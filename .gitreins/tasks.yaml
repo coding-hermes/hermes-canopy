@@ -2091,3 +2091,12 @@ tasks:
   status: complete
   created_at: '2026-09-12T01:28:19.278127+00:00'
   completed_at: '2026-09-12T01:36:52.480582+00:00'
+- id: QA-HERMES-CANOPY-5
+  title: Restore evidence-backed GitReins guard budgets
+  criteria:
+  - Reduce test_timeout and hook_timeout from their emergency-inflated values to measured
+    ceilings that still pass a fresh full GitReins Tier 1 guard; preserve hang detection
+    and avoid unrelated production changes.
+  status: complete
+  created_at: '2026-09-12T10:35:13.415178+00:00'
+  completed_at: '2026-09-12T10:47:02.200344+00:00'

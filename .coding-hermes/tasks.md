@@ -11242,3 +11242,56 @@ the same tick.
 
 **Next tick:** re-read the keep-LAST board. One external bunker-capacity P1 and
 two P2 rows remain; premise-check project ownership before dispatch.
+
+## Tick 438 — 2026-09-12 ~10:53Z (WORK TICK: QA-HERMES-CANOPY-5 COMPLETE — bounded GitReins timeouts)
+
+**Verdict:** OK / WORK TICK. The keep-LAST board began with 257 unique IDs:
+245 complete and 12 pending. QA-HERMES-CANOPY-1, the sole P1, is external
+bunker-las-02 one-range capacity and not canopy-owned. QA-HERMES-CANOPY-4,
+the P2 shutdown row, describes a defect already fixed by 4862be6. The selected
+QA-HERMES-CANOPY-5 was the highest-value tractable project-owned row.
+
+**Design / blast radius:** restore bounded fail-hard guard ordering in
+`.gitreins/config.yaml` only. The emergency 4862be6 commit had left
+`test_timeout=2400` and `hook_timeout=2520` after fixing the real relay hang.
+Hilo correctly refused YAML as non-indexable; repository search found no
+consumer beyond GitReins and historical records. Off-by-One discovery for
+`gitreins-guard-timeout-inflation-masks-test-hang` returned `not_found`.
+
+**Worker:** one `glm-5.3-flash` @ `zai-glm-default` worker, one attempt,
+committed **744693da8e57ad9bc1d68cb67b9e4d26814234e7** (+2/-2, one file).
+The final values are `test_timeout=900` and `hook_timeout=1200`, preserving
+`test_timeout < hook_timeout` so a stuck test fails before the outer wrapper.
+
+**Acceptance / gates:**
+- Commit scope exactly `.gitreins/config.yaml`; production, relay, tests,
+  Makefile, and board files absent from the content commit.
+- Go build PASS (1.38s); go vet PASS (0.25s).
+- Fresh non-handler Go sweep PASS: 25 packages, 152.78s.
+- Frontend vitest PASS: 42 files / 744 tests (6.72s).
+- Relay lifecycle regression PASS 25/25; gitleaks PASS over 357.53MB.
+- GitReins Tier 1 PASS and Tier 2 PASS / COMPLETE, verdict **aea08b2f**.
+
+**CI:** GitHub Actions run **34689190846 SUCCESS** for 744693d. The prior two
+master runs were also successful, so no CI repair row was required.
+
+**Board / GitReins:** QA-HERMES-CANOPY-5 lifecycle was created, started, and
+completed; the completed GitReins record remains tracked for audit. The
+effective task row now carries status/worker/commit/guard/CI/summary/note and
+completion time. Events 380-382 record dispatch, completion, and rich audit.
+Header `ticks_total=438`, `ticks_idle=0`, `last_commit=744693d`. Validation
+baseline was inherited red at 27 errors / 137 warnings from duplicate/order/
+vocabulary debt; closeout must not increase either count.
+
+**DuckBrain:** wrote and disk-verified `/ticks/438`
+(`f50e81d8-dfb0-4fc7-94c0-f79ae66674cb`) and refreshed
+`/project/hermes-canopy/status/2026-09-12`
+(`c1e8b271-68e0-49b0-8e23-ec66976dde3c`).
+
+**Push health:** content commit 744693d was pushed and verified at zero
+origin/master divergence. This board closeout commit follows and is pushed in
+the same tick.
+
+**Next tick:** re-read the keep-LAST board. The remaining P1 is external bunker
+capacity; QA-HERMES-CANOPY-4 is a stale-already-fixed closure candidate before
+choosing the remaining P3 maintenance/features.
