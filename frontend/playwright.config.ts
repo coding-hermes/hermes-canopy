@@ -49,4 +49,14 @@ export default defineConfig({
 
   /** Reporter: list for terminal, html for CI artifacts */
   reporter: [['list'], ['html', { open: 'never' }]],
+
+  /**
+   * Artifacts (traces, screenshots, .last-run.json) must NEVER land in
+   * frontend/test-results/ — that directory holds TRACKED audit files
+   * (accessibility-audit*.json/.md, run-a11y-audit.*) that a default run
+   * deletes or overwrites. Keep generated artifacts in a git-ignored
+   * sibling of the HTML report dir (nesting inside playwright-report/
+   * makes the HTML reporter wipe them, since it clears its folder first).
+   */
+  outputDir: './playwright-artifacts',
 });

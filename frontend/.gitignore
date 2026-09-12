@@ -25,3 +25,7 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Playwright report + generated artifacts (test-results/ is TRACKED - never ignore it)
+playwright-report/
+playwright-artifacts/
