@@ -11603,3 +11603,39 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 **Bookkeeping:** `tasks.jsonl` carries PL02-P4 create/attempt/complete keep-last rows; `events.jsonl` 407-413 cover create, dispatch, failed attempt, rework, completion, and audit; `board.jsonl` `ticks_total` 445 → **446**, `last_commit` = `ca17bf0`. Compact separators preserved.
 
 **Next tick:** continue PL-02 with the next bounded viewer phase or wire ViewerHost into the §8.1 right-panel selection flow. QA-HERMES-CANOPY-1/2 remain bunker-owned. E2E window 446-451 is open; last full battery was tick 444, so it was not due in this work tick.
+
+## Tick 448 — 2026-09-13 ~18:05Z (WORK: QA-CAN-004)
+
+### Verdict
+- **OK.** The canonical board contained 294 readable rows / 265 unique IDs. After closure, keep-LAST status is 257 complete and 8 pending (1 P1 external bunker-capacity row; 7 P3 rows).
+- Selected QA-CAN-004 as the highest-value tractable project-owned task. QA-HERMES-CANOPY-1 was not selected because the exhausted allocator range belongs to bunker infrastructure, not this repository.
+- Premise verified before dispatch: `make test-short` passed in 6.41s, while the row documented that the full non-short suite exceeds the QA harness's 120s disconnect window.
+
+### Dispatch / worker
+- One worker, one attempt: `glm-5.3-flash` @ `zai-glm-default`, skill `coding-hermes-worker`.
+- Brief: `/tmp/hermes-canopy-qa-can-004-brief.md`.
+- Worker commit: `5a33baa8a27d8a55960e7cac0e3f2260b82e613c`.
+- Changed only `Makefile`, `README.md`, and `docs/E2E-EVIDENCE.md` (+38/-1): added phony `test-chaos-disconnect`, kept `make test` full/non-short, and documented the distinction.
+
+### Acceptance and gates
+- `make -n test-chaos-disconnect` resolves to `go test ./... -short -count=1 -timeout=480s`.
+- Dead-proxy execution passed in 5.65s, below the 120s acceptance bound.
+- `make -n test` remains `go test ./... -count=1 -timeout=600s`.
+- Foreman verification: `go build -o /dev/null ./cmd/canopyd` PASS; `go vet ./...` PASS; `git diff --check` PASS.
+- GitReins Tier 1 full: PASS (`secrets`, `go_build`, `go_lint`, `go_tests`).
+- GitReins Tier 2: COMPLETE / PASS, verdict `be95026a`.
+
+### CI and push
+- Content CI: GitHub Actions run `34773164960` SUCCESS in 2m16s (build, vet, lint, short tests, integration tests, frontend checks, gitleaks, Docker build, deploy).
+- The three recent completed pre-closeout runs were green; no unrelated failed CI required a new board row.
+- Dispatch commit `a662b2870e6749a03ac53d27eb4f997c2fb2113e` and content commit `5a33baa8a27d8a55960e7cac0e3f2260b82e613c` were pushed; remote parity was 0 unpushed commits before closeout.
+
+### Board / GitReins / Off-by-One
+- QA-CAN-004 closed with `status=complete`, `worker_status=complete`, `guard_result=PASS`, `ci_result=GREEN`, content commit, worker summary, and completion timestamp.
+- Events 417/418 record selection and dispatch; events 419/420 record closure and the evidence payload. Header `ticks_total=448`; `last_commit` points to the content commit.
+- GitReins lifecycle was completed and retained for audit in `.gitreins/tasks.yaml`.
+- Off-by-One discovery for `go-test-chaos-disconnect-timeout-false-hang` returned `not_found`. No non-trivial debugging was needed, so no post-debug submission was appropriate.
+- `boardctl validate` remains at the known baseline of 32 legacy duplicate/order errors and 146 legacy warnings; this tick introduced no new validation class.
+
+### Next tick
+- Re-read the keep-LAST board after CI closeout. The next project-owned sequence candidate is PL02-P5 if its dependencies remain complete; do not pick the external bunker allocator-capacity row from this repository.

@@ -2189,5 +2189,6 @@ tasks:
     make test remains the full non-short 600s suite; docs/E2E-EVIDENCE.md documents
     the canonical chaos-disconnect command and full-suite distinction; build and vet
     pass with no production/dependency/board scope drift
-  status: in_progress
+  status: complete
   created_at: '2026-09-13T17:52:40.912521+00:00'
+  completed_at: '2026-09-13T17:58:10.849260+00:00'
