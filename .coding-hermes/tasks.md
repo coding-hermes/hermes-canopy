@@ -11639,3 +11639,41 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 
 ### Next tick
 - Re-read the keep-LAST board after CI closeout. The next project-owned sequence candidate is PL02-P5 if its dependencies remain complete; do not pick the external bunker allocator-capacity row from this repository.
+
+## Tick 449 — 2026-09-13 ~20:50Z (WORK — PL02-P5 markdown viewer body)
+
+### Verdict
+- Board: 265 unique rows, 8 pending after keep-LAST. External bunker rows skipped per precedent; QA-CAN-001..004 complete. Pick: PL02-P5 (next sequence candidate named by tick 448's next-tick line; deps PL02-P1..P4 all complete).
+- Rationale: continuation of the PL-02 built-in file-viewer phase chain; zero-dependency markdown body is the smallest complete user-visible slice next.
+
+### Dispatch / Worker
+- 1 worker, 1 attempt: glm-5.3-flash @ zai-glm-default, skill coding-hermes-worker, brief /tmp/pl02-p5-brief.md, pid 1098188 (dispatched 15:13 -05).
+- Worker commit c178c4a: `feat(viewers): SPEC-PL-02 phase 5 — markdown viewer body. Addresses PL02-P5.` Co-author trailer intact; author totalwindupflightsystems.
+- Diff: 5 files, +1334/-13: markdownViewerLogic.ts (526L new), markdownViewerBody.ts (257L new), markdownViewerLogic.test.ts (342L new), viewerBodies.ts wired (+registry entry + header), viewerBodies.test.ts extended (+209).
+- Worker process committed then hung (~34 min elapsed, log empty, session disk write stopped); all gates had already been verified by foreman — terminated post-verification, work intact.
+
+### Acceptance verification (adversarial, in working tree)
+1. `grep -n markdownViewerBody frontend/src/lib/viewerBodies.ts` — import L16, registry L24. PASS.
+2. markdownViewerLogic.ts + markdownViewerBody.ts exist, follow phase-3/4 pattern (helpers bundle, serialized script, frame-local canopy.__handlers emit only; no postMessage invention). PASS.
+3. Sanitizer tests present: script-in-fence + loose-in-prose, iframe/object/embed/style/form, on* attrs, javascript: + obfuscated `java\tscript:` hrefs — markdownViewerLogic.test.ts L42-44, 78-80, 164-174, 219-227+. PASS.
+4. GFM subset tests: 3-col + alignment tables, task lists, fenced code w/ language, heading levels. PASS.
+5. Event names in body: markdown_rendered/markdown_link_clicked/markdown_error ×5 hits. PASS.
+6. Fresh foreman gates: `npx vitest run` 940/940 across 51 files (6.9s), `npm run build` exit 0, `go build -o /dev/null ./cmd/canopyd` + `go vet ./...` exit 0, `npx oxlint` on changed pkgs = warnings only (no-control-regex ×2 in new file, same class as pre-existing no-unused-vars in image/json bodies; 0 errors). PASS.
+7. Honest deferral: body header names KaTeX/mermaid/syntax-highlight/footnotes/host-side-event-transport as later-phase (lines 28-29). PASS.
+
+### GitReins
+- PL02-P5 created/started pre-dispatch; `task complete` post-commit: Tier1 PASS (secrets/go_build/go_lint/go_tests full), Tier2 COMPLETE, verdict cd786740 (judge ran empirical render+sanitize probes). Lifecycle commit 7181b60.
+
+### CI / Push
+- Pushed: c178c4a (content, worker) + 7181b60 (gitreins lifecycle) + e2aa71b (board closeout). Remote parity verified 0 unpushed twice.
+- CI: 2 runs triggered (7181b60, e2aa71b), in_progress at closeout-write; prior runs all green.
+
+### Board / bookkeeping
+- tasks.jsonl: PL02-P5 appended complete (commit c178c4a, guard PASS, worker summary, files/lines). events.jsonl: task_dispatched / task_completed / audit (ids 421-423). board.jsonl: ticks_total 448→449, last_commit=c178c4a. tasks.md = this entry is the only other board-file write.
+
+### Off-by-one
+- Health: ok (uptime 18h59m at probe). Discover `react-markdown-viewer-sandbox-component` → not_found BEFORE dispatch, as required. No non-trivial debugging this tick (worker hang was post-commit ops, not a defect), so no post-debug submission.
+
+### Next tick
+- Pending: FTR-06, PL-02 (parent), PL-03/04/05/06 (P3 chains), QA-HERMES-CANOPY-1 (P1 external-infra — never pick), QA-HERMES-CANOPY-2 (P3). Next PL02 candidates: pdf / code / csv bodies (heavier — pdf.js and code-editor are host-bundle candidates; csv may be zero-dep).
+- QA-HERMES-CANOPY-1 row hygiene: the keep-LAST row is an external bunker allocator claim; earlier same-ID rows carry a RESOLVED fresh-DB 503 finding (GAP-064) that should be closed-out as stale-with-citation by a docs/maintenance pass when no work pick exists.
