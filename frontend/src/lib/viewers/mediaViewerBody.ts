@@ -123,6 +123,7 @@ function mediaViewerBodyScript(H: MediaHelpers): void {
     emit('media_error', payload);
     safeLog('error', {
       code: code,
+      errorCode: code,
       message: message,
       fileId: fileMeta.id || (canopy && canopy.fileId) || '',
       mediaKind: mediaKind || 'unsupported',

@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import ViewerHost, { VIEWER_SANDBOX_CSP, buildViewerDoc, viewerIframeName } from '../ViewerHost.tsx';
+import ViewerHost, { VIEWER_SANDBOX_CSP, buildViewerDoc, viewerIframeName, type ViewerHostProps } from '../ViewerHost.tsx';
 import type { FileMetadata, ViewerRegistration } from '../../types/fileviewer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -85,7 +85,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 function mountViewer(props: {
   file: FileMetadata;
   viewer: ViewerRegistration | null;
-  fetchRange?: (fileId: string, start: number | null, end?: number) => Promise<{ blob: Blob; status: number; contentRange: string | null }>;
+  fetchRange?: ViewerHostProps['fetchRange'];
+  postAccess?: ViewerHostProps['postAccess'];
 }) {
   act(() => {
     root.render(createElement(ViewerHost, props));
@@ -309,6 +310,140 @@ describe('ViewerHost — message validation', () => {
 
     const msg = responses[0].m as Record<string, unknown>;
     expect((msg.result as Record<string, unknown>).metadata).toEqual({ pageCount: 7 });
+  });
+
+  it('serves viewer.log_access through the API seam with host-authoritative identity and mapped §3.3 metadata', async () => {
+    const postAccess = vi.fn().mockResolvedValue({ accepted: true });
+    mountViewer({ file: makeFile(), viewer: makeViewer(), postAccess });
+    const responses = interceptFrame(q('iframe') as HTMLIFrameElement);
+
+    dispatchMessage({
+      data: validCall({
+        id: 'access-call-1',
+        payload: {
+          method: 'viewer.log_access',
+          params: {
+            action: 'stream_end',
+            fileId: 'spoofed-top-level-file',
+            viewerSlug: 'spoofed_top_level_viewer',
+            metadata: {
+              fileId: 'spoofed-metadata-file',
+              viewerSlug: 'spoofed_metadata_viewer',
+              treeId: PROFILE_ID,
+              nodeId: VIEWER_ID,
+              durationMs: 1234,
+              byteOffset: 4096,
+              errorCode: 'MEDIA_ERR_DECODE',
+              ignoredField: 'not forwarded',
+            },
+          },
+        },
+      }),
+    });
+    await settle();
+
+    expect(postAccess).toHaveBeenCalledTimes(1);
+    expect(postAccess).toHaveBeenCalledWith({
+      fileId: FILE_ID,
+      action: 'stream_end',
+      viewerSlug: 'pdf',
+      treeId: PROFILE_ID,
+      nodeId: VIEWER_ID,
+      durationMs: 1234,
+      byteOffset: 4096,
+      errorCode: 'MEDIA_ERR_DECODE',
+    });
+    expect(responses).toHaveLength(1);
+    expect(responses[0].m).toMatchObject({
+      type: 'viewer_api_response',
+      id: 'access-call-1',
+      target: `viewer:pdf:${FILE_ID}`,
+      result: { accepted: true },
+    });
+  });
+
+  it('uses postFileAccess by default for a validated viewer.log_access call', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: VIEWER_ID,
+          fileId: FILE_ID,
+          profileId: PROFILE_ID,
+          viewerSlug: 'pdf',
+          action: 'open',
+          clientInfo: {},
+          createdAt: '2026-09-01T12:00:00Z',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+    const responses = interceptFrame(q('iframe') as HTMLIFrameElement);
+
+    dispatchMessage({
+      data: validCall({
+        id: 'default-access-call',
+        payload: { method: 'viewer.log_access', params: { action: 'open', metadata: {} } },
+      }),
+    });
+    await settle();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/v1/files/${FILE_ID}/access`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      action: 'open',
+      viewer_slug: 'pdf',
+    });
+    expect(responses).toHaveLength(1);
+    expect(responses[0].m).toMatchObject({
+      id: 'default-access-call',
+      result: { fileId: FILE_ID, viewerSlug: 'pdf', action: 'open' },
+    });
+  });
+
+  it('rejects unsupported viewer.log_access actions without calling the API', async () => {
+    const postAccess = vi.fn().mockResolvedValue({ accepted: true });
+    mountViewer({ file: makeFile(), viewer: makeViewer(), postAccess });
+    const responses = interceptFrame(q('iframe') as HTMLIFrameElement);
+
+    dispatchMessage({
+      data: validCall({
+        id: 'invalid-action',
+        payload: { method: 'viewer.log_access', params: { action: 'delete', metadata: {} } },
+      }),
+    });
+    await settle();
+
+    expect(postAccess).not.toHaveBeenCalled();
+    expect(responses).toHaveLength(1);
+    expect((responses[0].m as Record<string, unknown>).error).toMatchObject({
+      code: 'VIEWER_INVALID_ACCESS_ACTION',
+    });
+  });
+
+  it.each([
+    ['negative durationMs', { durationMs: -1 }],
+    ['fractional byteOffset', { byteOffset: 1.5 }],
+  ])('rejects malformed numeric access metadata: %s', async (_name, metadata) => {
+    const postAccess = vi.fn().mockResolvedValue({ accepted: true });
+    mountViewer({ file: makeFile(), viewer: makeViewer(), postAccess });
+    const responses = interceptFrame(q('iframe') as HTMLIFrameElement);
+
+    dispatchMessage({
+      data: validCall({
+        id: 'invalid-number',
+        payload: { method: 'viewer.log_access', params: { action: 'open', metadata } },
+      }),
+    });
+    await settle();
+
+    expect(postAccess).not.toHaveBeenCalled();
+    expect(responses).toHaveLength(1);
+    expect((responses[0].m as Record<string, unknown>).error).toMatchObject({
+      code: 'VIEWER_INVALID_ACCESS_METADATA',
+    });
   });
 
   it('refuses unserved methods with an error response', async () => {

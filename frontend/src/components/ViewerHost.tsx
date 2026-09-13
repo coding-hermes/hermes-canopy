@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchFileRange, streamUrl } from '../lib/fileApi';
+import { fetchFileRange, postFileAccess, streamUrl } from '../lib/fileApi';
 import { viewerBodyForSlug } from '../lib/viewerBodies';
 import { DEFAULT_FILE_VIEWER_CONFIG, FileViewerConfigSchema, type FileMetadata, type ViewerRegistration } from '../types/fileviewer';
 
@@ -44,6 +44,7 @@ export interface ViewerHostProps {
    * connect-src for the API surface, so content moves through the host.
    */
   fetchRange?: typeof fetchFileRange;
+  postAccess?: typeof postFileAccess;
 }
 
 export interface ViewerMessage {
@@ -61,6 +62,7 @@ const SERVED_METHODS = new Set([
   'viewer.get_text_content',
   'viewer.get_binary_content',
   'viewer.get_stream_url',
+  'viewer.log_access',
   'viewer.get_config',
   'viewer.ready',
 ]);
@@ -115,6 +117,7 @@ const shimTemplate = `(function() {
       getTextContent: function() { return callAPI('viewer.get_text_content', {}); },
       getBinaryContent: function() { return callAPI('viewer.get_binary_content', {}); },
       getStreamUrl: function(range) { return callAPI('viewer.get_stream_url', { range: range || null }); },
+      logAccess: function(action, metadata) { return callAPI('viewer.log_access', { action: action, metadata: metadata }); },
       getConfig: function() { return callAPI('viewer.get_config', {}); },
       ready: function() { return callAPI('viewer.ready', {}); },
       on: function(event, handler) {
@@ -190,6 +193,57 @@ async function blobToText(blob: Blob): Promise<string> {
   return blob.text();
 }
 
+type PostAccessParams = Parameters<typeof postFileAccess>[0];
+type AccessMetadata = Pick<PostAccessParams, 'treeId' | 'nodeId' | 'durationMs' | 'byteOffset' | 'errorCode'>;
+
+const ACCESS_ACTIONS = new Set<PostAccessParams['action']>([
+  'open',
+  'download',
+  'thumbnail_fetch',
+  'preview_text',
+  'stream_start',
+  'stream_end',
+  'error',
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function viewerValidationError(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
+function mapAccessMetadata(raw: unknown): AccessMetadata {
+  if (raw === undefined) return {};
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw viewerValidationError('VIEWER_INVALID_ACCESS_METADATA', 'access metadata must be an object');
+  }
+  const metadata = raw as Record<string, unknown>;
+  const mapped: AccessMetadata = {};
+
+  for (const key of ['treeId', 'nodeId'] as const) {
+    const value = metadata[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+      throw viewerValidationError('VIEWER_INVALID_ACCESS_METADATA', `${key} must be a UUID`);
+    }
+    mapped[key] = value;
+  }
+  for (const key of ['durationMs', 'byteOffset'] as const) {
+    const value = metadata[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+      throw viewerValidationError('VIEWER_INVALID_ACCESS_METADATA', `${key} must be a non-negative safe integer`);
+    }
+    mapped[key] = value;
+  }
+  if (metadata.errorCode !== undefined) {
+    if (typeof metadata.errorCode !== 'string') {
+      throw viewerValidationError('VIEWER_INVALID_ACCESS_METADATA', 'errorCode must be a string');
+    }
+    mapped.errorCode = metadata.errorCode;
+  }
+  return mapped;
+}
+
 // ── Component ───────────────────────────────────────────────
 
 export default function ViewerHost({
@@ -199,6 +253,7 @@ export default function ViewerHost({
   className,
   onClose,
   fetchRange = fetchFileRange,
+  postAccess = postFileAccess,
 }: ViewerHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [nonce] = useState(() => crypto.randomUUID());
@@ -276,6 +331,25 @@ export default function ViewerHost({
           case 'viewer.get_stream_url':
             apiResponse(id, { result: { url: streamUrl(currentFile.id) } });
             break;
+          case 'viewer.log_access': {
+            if (p.params === null || typeof p.params !== 'object' || Array.isArray(p.params)) {
+              throw viewerValidationError('VIEWER_INVALID_ACCESS_PARAMS', 'access-log params must be an object');
+            }
+            const params = p.params as Record<string, unknown>;
+            const action = params.action;
+            if (typeof action !== 'string' || !ACCESS_ACTIONS.has(action as PostAccessParams['action'])) {
+              throw viewerValidationError('VIEWER_INVALID_ACCESS_ACTION', `unsupported access action: ${String(action)}`);
+            }
+            const metadata = mapAccessMetadata(params.metadata);
+            const result = await postAccess({
+              fileId: currentFile.id,
+              action: action as PostAccessParams['action'],
+              viewerSlug: currentViewer.viewerSlug,
+              ...metadata,
+            });
+            apiResponse(id, { result });
+            break;
+          }
           case 'viewer.get_config':
             apiResponse(id, { result: parsedConfig });
             break;
@@ -289,7 +363,7 @@ export default function ViewerHost({
         apiResponse(id, { error: { code, message } });
       }
     },
-    [apiResponse, fetchRange, parsedConfig],
+    [apiResponse, fetchRange, parsedConfig, postAccess],
   );
 
   useEffect(() => {

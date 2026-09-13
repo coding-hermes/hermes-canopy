@@ -9,7 +9,7 @@
  *   - no __PLACEHOLDER__ survives substitution in either script
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { VIEWER_SANDBOX_CSP, buildViewerDoc } from '../ViewerHost.tsx';
 import type { FileMetadata, ViewerRegistration } from '../../types/fileviewer';
 
@@ -111,11 +111,59 @@ describe('buildViewerDoc — phase 3 body injection', () => {
     const doc = buildFor('audio_video');
     expect(doc).toContain(`var NONCE = "${NONCE}"`);
     expect(doc).toContain('getStreamUrl');
+    expect(doc).toContain("logAccess: function(action, metadata) { return callAPI('viewer.log_access', { action: action, metadata: metadata }); }");
     expect(doc).toContain('mediaKindForMime');
     expect(doc).toContain('data-media-controls');
     expect(doc).toContain('media_loaded');
     expect(doc).toContain('requestPictureInPicture');
     expect(doc.match(/<script>/g)).toHaveLength(2);
+  });
+
+  it('routes real audio_video body open/stream_start/error logs through the injected shim', () => {
+    vi.useFakeTimers();
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.appendChild(root);
+    const doc = buildViewerDoc({
+      file: makeFile({ filename: 'sample.mp4', mimeType: 'video/mp4' }),
+      viewer: makeViewer('audio_video'),
+      nonce: NONCE,
+      parentOrigin: ORIGIN,
+      streamUrl: `/api/v1/files/${FILE_ID}/stream`,
+      config: {},
+    });
+    const parsed = new DOMParser().parseFromString(doc, 'text/html');
+    const scripts = Array.from(parsed.querySelectorAll('script')).map((script) => script.textContent ?? '');
+    const posts: Array<Record<string, unknown>> = [];
+    const postSpy = vi.spyOn(window, 'postMessage').mockImplementation((message: unknown) => {
+      posts.push(message as Record<string, unknown>);
+    });
+
+    try {
+      expect(scripts).toHaveLength(2);
+      new Function(scripts[0])();
+      new Function(scripts[1])();
+      const media = document.querySelector('video') as HTMLVideoElement;
+      expect(media).not.toBeNull();
+      media.dispatchEvent(new window.Event('play'));
+      Object.defineProperty(media, 'error', {
+        value: { code: 3, message: 'decoder stopped' },
+        configurable: true,
+      });
+      media.dispatchEvent(new window.Event('error'));
+
+      const logCalls = posts
+        .filter((message) => (message.payload as { method?: string } | undefined)?.method === 'viewer.log_access')
+        .map((message) => (message.payload as { params: { action: string; metadata: Record<string, unknown> } }).params);
+      expect(logCalls.map((call) => call.action)).toEqual(['open', 'stream_start', 'error']);
+      expect(logCalls[2].metadata).toMatchObject({ errorCode: 'MEDIA_ERR_DECODE' });
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      postSpy.mockRestore();
+      root.remove();
+      delete (window as unknown as { canopy?: unknown }).canopy;
+    }
   });
 
   it("slug 'pdf' (no body shipped) → unchanged shim-only doc", () => {
