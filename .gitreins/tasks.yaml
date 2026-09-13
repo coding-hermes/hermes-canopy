@@ -2144,3 +2144,13 @@ tasks:
   status: complete
   created_at: '2026-09-13T00:17:26.056286+00:00'
   completed_at: '2026-09-13T01:41:11.072377+00:00'
+- id: PL02-P2
+  title: "PL-02 phase 2: frontend file-viewer client + ViewerHost shell (SPEC-PL-02\
+    \ \xA75/\xA76/\xA78)"
+  criteria:
+  - "frontend/src contains SPEC-PL-02 \xA75 types+zod, a /files+/viewers API client,\
+    \ viewer dispatch registry, and ViewerHost iframe shell per \xA78.2/\xA78.3; npx\
+    \ vitest run green incl. new unit tests; oxlint + tsc clean; no backend changes"
+  status: complete
+  created_at: '2026-09-13T04:34:22.752669+00:00'
+  completed_at: '2026-09-13T05:08:49.858709+00:00'
