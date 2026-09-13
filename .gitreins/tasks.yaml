@@ -2181,3 +2181,13 @@ tasks:
   status: complete
   created_at: '2026-09-13T15:33:02.681012+00:00'
   completed_at: '2026-09-13T15:35:39.847765+00:00'
+- id: QA-CAN-004
+  title: Add disconnect-safe QA test target
+  criteria:
+  - make test-chaos-disconnect is phony and resolves to go test ./... -short -count=1
+    with a bounded timeout; the command exits 0 under dead-proxy env within 120s;
+    make test remains the full non-short 600s suite; docs/E2E-EVIDENCE.md documents
+    the canonical chaos-disconnect command and full-suite distinction; build and vet
+    pass with no production/dependency/board scope drift
+  status: in_progress
+  created_at: '2026-09-13T17:52:40.912521+00:00'
