@@ -1,5 +1,5 @@
 /**
- * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–5).
+ * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–6).
  * Pins: registry mapping (image/json/markdown non-null with expected hooks,
  * unknown → null), serialization validity (the bodies PARSE and EXECUTE
  * against a jsdom + stubbed canopy shim, exercising the load/error paths),
@@ -11,6 +11,7 @@ import { viewerBodyForSlug } from '../../viewerBodies';
 import { imageHelpers, imageViewerBody } from '../imageViewerBody';
 import { jsonViewerBody } from '../jsonViewerBody';
 import { markdownViewerBody } from '../markdownViewerBody';
+import { csvViewerBody, csvHelpers } from '../csvViewerBody';
 import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
 
 describe('viewerBodyForSlug registry', () => {
@@ -19,6 +20,7 @@ describe('viewerBodyForSlug registry', () => {
     expect(viewerBodyForSlug('json')).toBe(jsonViewerBody);
     expect(viewerBodyForSlug('audio_video')).toBe(mediaViewerBody);
     expect(viewerBodyForSlug('markdown')).toBe(markdownViewerBody);
+    expect(viewerBodyForSlug('csv')).toBe(csvViewerBody);
   });
 
   it('image body carries the stream-URL + zoom/rotate/pan hooks', () => {
@@ -60,7 +62,6 @@ describe('viewerBodyForSlug registry', () => {
   it('returns null for unknown slugs and the remaining built-ins', () => {
     expect(viewerBodyForSlug('pdf')).toBeNull();
     expect(viewerBodyForSlug('code')).toBeNull();
-    expect(viewerBodyForSlug('csv')).toBeNull();
     expect(viewerBodyForSlug('nonexistent')).toBeNull();
     expect(viewerBodyForSlug('Image')).toBeNull(); // case-sensitive
   });
@@ -927,5 +928,138 @@ describe('markdown body serialization and sandbox contract', () => {
     expect(article.innerHTML).not.toContain('onerror=');
     // javascript: hrefs are dropped at render time.
     expect(article.innerHTML).not.toContain('javascript:');
+  });
+});
+
+describe('csv body serialization and sandbox contract', () => {
+  type HandlerMap = Record<string, Array<(payload: unknown) => void>>;
+
+  function installCsvShim(
+    text: () => Promise<string>,
+    config: Record<string, unknown> = {},
+  ): { handlers: HandlerMap; getTextContent: ReturnType<typeof vi.fn>; logAccess: ReturnType<typeof vi.fn>; ready: ReturnType<typeof vi.fn> } {
+    const handlers: HandlerMap = {};
+    const getTextContent = vi.fn(text);
+    const logAccess = vi.fn(() => Promise.resolve({ ok: true }));
+    const ready = vi.fn(() => Promise.resolve({ ok: true }));
+    (window as unknown as { canopy: unknown }).canopy = {
+      version: '1.0.0',
+      fileId: 'csv-1',
+      __handlers: handlers,
+      __bootstrap: { fileMeta: { id: 'csv-1', filename: 'people.csv', mimeType: 'text/csv' }, config },
+      viewer: { getTextContent, logAccess, ready },
+    };
+    return { handlers, getTextContent, logAccess, ready };
+  }
+
+  function ensureCsvRoot(): void {
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.appendChild(root);
+  }
+
+  async function flushCsvPromises(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  afterEach(() => {
+    document.getElementById('root')?.remove();
+    delete (window as unknown as { canopy?: unknown }).canopy;
+    vi.restoreAllMocks();
+  });
+
+  it('parses and executes the shipped serialized body without free identifiers', () => {
+    expect(csvHelpers.clampRowHeight(999)).toBe(80);
+    expect(() => new Function(csvViewerBody)).not.toThrow();
+    ensureCsvRoot();
+    installCsvShim(() => Promise.resolve('Name,Age\nAda,36'));
+    expect(() => new Function(csvViewerBody)()).not.toThrow();
+  });
+
+  it('renders an accessible table through getTextContent and emits ready/log/ready hooks', async () => {
+    ensureCsvRoot();
+    const shim = installCsvShim(() => Promise.resolve('Name,Age\nAda,36\nGrace,28'));
+    const readyEvents: unknown[] = [];
+    shim.handlers.csv_ready = [(payload: unknown) => readyEvents.push(payload)];
+    new Function(csvViewerBody)();
+    await flushCsvPromises();
+
+    expect(shim.getTextContent).toHaveBeenCalledTimes(1);
+    const table = document.querySelector('[data-csv-table]');
+    expect(table).not.toBeNull();
+    expect(table!.querySelectorAll('th')).toHaveLength(4);
+    expect(table!.querySelector('th button')!.textContent).toContain('Name');
+    expect(table!.querySelectorAll('[data-csv-cell]')).toHaveLength(4);
+    expect((table!.querySelector('[data-csv-cell]') as HTMLElement).tabIndex).toBe(0);
+    expect(readyEvents).toEqual([{ rowCount: 2, colCount: 2 }]);
+    expect(shim.logAccess).toHaveBeenCalledWith('view', expect.objectContaining({ fileId: 'csv-1' }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('sorts, filters, and selects cells with exact frame-local payloads', async () => {
+    ensureCsvRoot();
+    const shim = installCsvShim(() => Promise.resolve('Name,Age\nAda,36\nGrace,28'));
+    const sorted: unknown[] = [];
+    const filtered: unknown[] = [];
+    const selected: unknown[] = [];
+    shim.handlers.csv_sorted = [(payload: unknown) => sorted.push(payload)];
+    shim.handlers.csv_filtered = [(payload: unknown) => filtered.push(payload)];
+    shim.handlers.csv_cell_selected = [(payload: unknown) => selected.push(payload)];
+    new Function(csvViewerBody)();
+    await flushCsvPromises();
+
+    (document.querySelector('[data-csv-sort="1"]') as HTMLButtonElement).click();
+    expect(sorted).toEqual([{ column: 1, direction: 'asc' }]);
+    const filter = document.querySelector('[data-csv-filter="0"]') as HTMLInputElement;
+    filter.value = 'ada';
+    filter.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(filtered).toEqual([{ visibleRows: 1, totalRows: 2 }]);
+    const cell = document.querySelector('[data-csv-cell]') as HTMLElement;
+    cell.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(selected).toEqual([{ row: 0, col: 0, value: 'Ada' }]);
+    cell.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(selected).toHaveLength(2);
+  });
+
+  it('honors header, filter, row-height, and render-cap config', async () => {
+    ensureCsvRoot();
+    installCsvShim(
+      () => Promise.resolve('1,alpha\n2,beta\n3,gamma'),
+      { csvFirstRowIsHeader: false, showFilters: false, rowHeights: 99, maxRowsForInlineRender: 1 },
+    );
+    new Function(csvViewerBody)();
+    await flushCsvPromises();
+
+    expect(document.querySelectorAll('[data-csv-header]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-csv-filter]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-csv-cell]')).toHaveLength(2);
+    expect(document.querySelector('[data-csv-style]')!.textContent).toContain('height:80px');
+    expect(document.querySelector('[data-csv-truncated]')!.textContent).toContain('Showing 1 of 3');
+  });
+
+  it('renders parse and fetch failures as alerts and emits csv_error with location when available', async () => {
+    ensureCsvRoot();
+    const shim = installCsvShim(() => Promise.resolve('a,b\n"unclosed'));
+    const errors: unknown[] = [];
+    shim.handlers.csv_error = [(payload: unknown) => errors.push(payload)];
+    new Function(csvViewerBody)();
+    await flushCsvPromises();
+    expect(document.querySelector('[data-csv-error]')!.getAttribute('role')).toBe('alert');
+    expect(document.querySelector('[data-csv-error]')!.textContent).toContain('Unterminated');
+    expect(errors).toEqual([expect.objectContaining({ code: 'CSV_PARSE_ERROR', row: 2, col: 10 })]);
+    expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code: 'CSV_PARSE_ERROR' }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+
+    document.getElementById('root')?.remove();
+    ensureCsvRoot();
+    const rejected = installCsvShim(() => Promise.reject(new Error('storage failed')));
+    const fetchErrors: unknown[] = [];
+    rejected.handlers.csv_error = [(payload: unknown) => fetchErrors.push(payload)];
+    new Function(csvViewerBody)();
+    await flushCsvPromises();
+    expect(fetchErrors).toEqual([{ code: 'TEXT_CONTENT_ERROR', message: 'storage failed' }]);
   });
 });
