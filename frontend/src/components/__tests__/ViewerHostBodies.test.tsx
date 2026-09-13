@@ -107,6 +107,17 @@ describe('buildViewerDoc — phase 3 body injection', () => {
     expect(doc.match(/<script>/g)).toHaveLength(2);
   });
 
+  it("slug 'audio_video' → shim + native media body with custom controls", () => {
+    const doc = buildFor('audio_video');
+    expect(doc).toContain(`var NONCE = "${NONCE}"`);
+    expect(doc).toContain('getStreamUrl');
+    expect(doc).toContain('mediaKindForMime');
+    expect(doc).toContain('data-media-controls');
+    expect(doc).toContain('media_loaded');
+    expect(doc).toContain('requestPictureInPicture');
+    expect(doc.match(/<script>/g)).toHaveLength(2);
+  });
+
   it("slug 'pdf' (no body shipped) → unchanged shim-only doc", () => {
     const doc = buildFor('pdf');
     expect(doc).toContain(`var NONCE = "${NONCE}"`);
@@ -118,7 +129,7 @@ describe('buildViewerDoc — phase 3 body injection', () => {
   });
 
   it('CSP meta is present exactly once and byte-identical in every variant', () => {
-    for (const slug of ['image', 'json', 'pdf']) {
+    for (const slug of ['image', 'json', 'audio_video', 'pdf']) {
       const doc = buildFor(slug);
       expect(doc.split(VIEWER_SANDBOX_CSP)).toHaveLength(2); // exactly once
       expect(doc).toContain(`<meta http-equiv="Content-Security-Policy" content="${VIEWER_SANDBOX_CSP}"`);

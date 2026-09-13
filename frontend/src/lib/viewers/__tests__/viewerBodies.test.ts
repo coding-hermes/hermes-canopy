@@ -10,11 +10,13 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { viewerBodyForSlug } from '../../viewerBodies';
 import { imageHelpers, imageViewerBody } from '../imageViewerBody';
 import { jsonViewerBody } from '../jsonViewerBody';
+import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
 
 describe('viewerBodyForSlug registry', () => {
-  it('returns non-null bodies for the two shipped slugs', () => {
+  it('returns non-null bodies for the three shipped slugs', () => {
     expect(viewerBodyForSlug('image')).toBe(imageViewerBody);
     expect(viewerBodyForSlug('json')).toBe(jsonViewerBody);
+    expect(viewerBodyForSlug('audio_video')).toBe(mediaViewerBody);
   });
 
   it('image body carries the stream-URL + zoom/rotate/pan hooks', () => {
@@ -44,7 +46,6 @@ describe('viewerBodyForSlug registry', () => {
     expect(viewerBodyForSlug('code')).toBeNull();
     expect(viewerBodyForSlug('csv')).toBeNull();
     expect(viewerBodyForSlug('markdown')).toBeNull();
-    expect(viewerBodyForSlug('audio_video')).toBeNull();
     expect(viewerBodyForSlug('nonexistent')).toBeNull();
     expect(viewerBodyForSlug('Image')).toBeNull(); // case-sensitive
   });
@@ -364,5 +365,374 @@ describe('json body serialization contract', () => {
     // Esc closes.
     input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(searchBar.style.display).toBe('none');
+  });
+});
+
+describe('media body serialization and sandbox contract', () => {
+  type HandlerMap = Record<string, Array<(payload: unknown) => void>>;
+
+  function installMediaShim(options: {
+    mimeType?: string;
+    filename?: string;
+    streamUrl?: string;
+    config?: Record<string, unknown>;
+    authoritativeUrl?: string;
+    rejectStream?: boolean;
+    includeStreamApi?: boolean;
+  } = {}) {
+    const handlers: HandlerMap = {};
+    const getStreamUrl = vi.fn(() =>
+      options.rejectStream
+        ? Promise.reject(new Error('stream signing failed'))
+        : Promise.resolve({ url: options.authoritativeUrl ?? options.streamUrl ?? '' }),
+    );
+    const logAccess = vi.fn(() => Promise.resolve({ ok: true }));
+    const ready = vi.fn(() => Promise.resolve({ ok: true }));
+    const viewer: Record<string, unknown> = {
+      logAccess,
+      ready,
+      on: function (event: string, handler: (payload: unknown) => void) {
+        (handlers[event] = handlers[event] || []).push(handler);
+        return function () {
+          handlers[event] = handlers[event].filter(function (candidate) {
+            return candidate !== handler;
+          });
+        };
+      },
+    };
+    if (options.includeStreamApi !== false) viewer.getStreamUrl = getStreamUrl;
+    (window as unknown as { canopy: unknown }).canopy = {
+      version: '1.0.0',
+      fileId: 'media-1',
+      __handlers: handlers,
+      __bootstrap: {
+        fileMeta: {
+          id: 'media-1',
+          filename: options.filename ?? 'sample.mp4',
+          mimeType: options.mimeType ?? 'video/mp4',
+        },
+        streamUrl: options.streamUrl ?? '/stream/bootstrap',
+        config: options.config ?? {},
+      },
+      viewer,
+    };
+    return { handlers, getStreamUrl, logAccess, ready };
+  }
+
+  function ensureMediaRoot(): HTMLElement {
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.appendChild(root);
+    return root;
+  }
+
+  async function flushMediaPromises(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  afterEach(() => {
+    document.getElementById('root')?.remove();
+    delete (window as unknown as { canopy?: unknown }).canopy;
+    vi.restoreAllMocks();
+  });
+
+  it('serializes the tested helper bundle into syntactically valid executable JavaScript', () => {
+    expect(mediaHelpers.mediaKindForMime('audio/ogg')).toBe('audio');
+    expect(mediaHelpers.clampSeekTarget(150, 100)).toBe(100);
+    expect(mediaHelpers.normalizePlaybackRate(Number.NaN)).toBe(1);
+    expect(mediaHelpers.keyboardJumpPercentage('7')).toBe(0.7);
+    expect(() => new Function(mediaViewerBody)).not.toThrow();
+  });
+
+  it('renders audio with bootstrap-first URL, authoritative reconciliation, config, controls, ready, and open logging', async () => {
+    ensureMediaRoot();
+    const shim = installMediaShim({
+      mimeType: 'audio/mpeg',
+      filename: 'interview.mp3',
+      streamUrl: '/stream/bootstrap-audio',
+      authoritativeUrl: '/stream/signed-audio',
+      config: {
+        autoPlayMedia: true,
+        loopMedia: true,
+        preloadMedia: 'auto',
+        audioVolume: 0.35,
+        playbackRate: 0.75,
+      },
+    });
+    const plays: unknown[] = [];
+    shim.handlers.media_play = [(payload: unknown) => plays.push(payload)];
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new window.Event('play'));
+      return Promise.resolve();
+    });
+
+    expect(() => new Function(mediaViewerBody)()).not.toThrow();
+    const media = document.querySelector('audio');
+    expect(media).not.toBeNull();
+    expect(document.querySelector('video')).toBeNull();
+    expect(media!.getAttribute('src')).toBe('/stream/bootstrap-audio');
+    expect(media!.getAttribute('aria-label')).toContain('interview.mp3');
+    expect(media!.autoplay).toBe(true);
+    expect(media!.loop).toBe(true);
+    expect(media!.preload).toBe('auto');
+    expect(media!.volume).toBeCloseTo(0.35, 12);
+    expect(media!.playbackRate).toBeCloseTo(0.75, 12);
+
+    const controls = document.querySelector('[data-media-controls]');
+    expect(controls).not.toBeNull();
+    expect(controls!.getAttribute('role')).toBe('group');
+    expect(document.querySelector('[data-media-play]')!.getAttribute('aria-label')).toBe('Play');
+    expect(document.querySelector('[data-media-seek]')!.getAttribute('aria-label')).toBe('Seek');
+    expect(document.querySelector('[data-media-volume]')!.getAttribute('aria-label')).toBe('Volume');
+    expect(document.querySelector('[data-media-mute]')!.getAttribute('aria-label')).toBe('Mute');
+    const rates = Array.from(document.querySelectorAll<HTMLSelectElement>('[data-media-rate] option')).map(
+      (option) => option.value,
+    );
+    expect(rates).toEqual(expect.arrayContaining(['0.5', '1', '1.5', '2']));
+    expect(rates).toContain('0.75');
+    expect(document.querySelector('[data-media-fullscreen]')).toBeNull();
+    expect(document.querySelector('[data-media-pip]')).toBeNull();
+
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', code: 'Space', cancelable: true }));
+    await flushMediaPromises();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(plays).toEqual([{ currentTime: 0 }]);
+
+    await flushMediaPromises();
+    expect(media!.getAttribute('src')).toBe('/stream/signed-audio');
+    expect(shim.getStreamUrl).toHaveBeenCalledWith(null);
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+    expect(shim.logAccess).toHaveBeenCalledWith(
+      'open',
+      expect.objectContaining({ fileId: 'media-1', mediaKind: 'audio' }),
+    );
+  });
+
+  it('renders video controls, subtitle/poster/PiP config, lifecycle payloads, and every §9.7 keyboard action', async () => {
+    ensureMediaRoot();
+    const originalPipEnabled = Object.getOwnPropertyDescriptor(document, 'pictureInPictureEnabled');
+    Object.defineProperty(document, 'pictureInPictureEnabled', { value: true, configurable: true });
+    const requestPip = vi.fn(() => Promise.resolve({}));
+    Object.defineProperty(HTMLVideoElement.prototype, 'requestPictureInPicture', {
+      value: requestPip,
+      configurable: true,
+    });
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new window.Event('play'));
+      return Promise.resolve();
+    });
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new window.Event('pause'));
+    });
+    const shim = installMediaShim({
+      mimeType: 'video/mp4',
+      filename: 'launch.mp4',
+      config: {
+        subtitleUrl: '/captions/launch.vtt',
+        showSubtitles: true,
+        videoPoster: '/posters/launch.jpg',
+        playbackRate: 1,
+      },
+    });
+    const eventPayloads: Record<string, Array<Record<string, unknown>>> = {};
+    for (const eventName of [
+      'media_loaded',
+      'media_play',
+      'media_pause',
+      'media_ended',
+      'media_seek',
+      'media_rate_change',
+      'media_error',
+    ]) {
+      eventPayloads[eventName] = [];
+      shim.handlers[eventName] = [function (payload: unknown) {
+        eventPayloads[eventName].push(payload as Record<string, unknown>);
+      }];
+    }
+
+    new Function(mediaViewerBody)();
+    const video = document.querySelector('video') as HTMLVideoElement;
+    expect(video).not.toBeNull();
+    expect(video.autoplay).toBe(false);
+    expect(video.loop).toBe(false);
+    expect(video.preload).toBe('metadata');
+    expect(video.volume).toBe(1);
+    expect(video.playbackRate).toBe(1);
+    expect(video.poster).toContain('/posters/launch.jpg');
+    const track = video.querySelector('track');
+    expect(track).not.toBeNull();
+    expect(track!.kind).toBe('subtitles');
+    expect(track!.src).toContain('/captions/launch.vtt');
+    expect(track!.default).toBe(true);
+
+    Object.defineProperty(video, 'duration', { value: 200, configurable: true });
+    Object.defineProperty(video, 'currentTime', { value: 20, writable: true, configurable: true });
+    Object.defineProperty(video, 'videoWidth', { value: 1920, configurable: true });
+    Object.defineProperty(video, 'videoHeight', { value: 1080, configurable: true });
+    const fullscreen = vi.fn(() => Promise.resolve());
+    Object.defineProperty(video, 'requestFullscreen', { value: fullscreen, configurable: true });
+    video.dispatchEvent(new window.Event('loadedmetadata'));
+    expect(eventPayloads.media_loaded).toEqual([
+      { duration: 200, width: 1920, height: 1080, hasAudio: false, hasVideo: true },
+    ]);
+    expect((document.querySelector('[data-media-time]') as HTMLElement).textContent).toBe('0:20 / 3:20');
+
+    (document.querySelector('[data-media-play]') as HTMLButtonElement).click();
+    await flushMediaPromises();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(eventPayloads.media_play).toEqual([{ currentTime: 20 }]);
+    expect(shim.logAccess).toHaveBeenCalledWith(
+      'stream_start',
+      expect.objectContaining({ currentTime: 20, mediaKind: 'video' }),
+    );
+
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }));
+    expect(video.currentTime).toBe(25);
+    expect(eventPayloads.media_seek.at(-1)).toEqual({ from: 20, to: 25 });
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }));
+    expect(video.currentTime).toBe(20);
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '5', cancelable: true }));
+    expect(video.currentTime).toBe(100);
+    expect(eventPayloads.media_seek.at(-1)).toEqual({ from: 20, to: 100 });
+
+    const beforeEditableShortcut = video.currentTime;
+    const beforeEditableSeeks = eventPayloads.media_seek.length;
+    const volumeInput = document.querySelector('[data-media-volume]') as HTMLInputElement;
+    const rateControl = document.querySelector('[data-media-rate]') as HTMLSelectElement;
+    const playControl = document.querySelector('[data-media-play]') as HTMLButtonElement;
+    const textarea = document.createElement('textarea');
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    document.body.append(textarea, editable);
+    for (const target of [volumeInput, rateControl, playControl, textarea, editable]) {
+      target.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    }
+    expect(video.currentTime).toBe(beforeEditableShortcut);
+    expect(eventPayloads.media_seek).toHaveLength(beforeEditableSeeks);
+    textarea.remove();
+    editable.remove();
+
+    volumeInput.value = '0.2';
+    volumeInput.dispatchEvent(new window.Event('input'));
+    expect(video.volume).toBeCloseTo(0.2, 12);
+
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm' }));
+    expect(video.muted).toBe(true);
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'f' }));
+    expect(fullscreen).toHaveBeenCalledTimes(1);
+
+    const rateSelect = document.querySelector('[data-media-rate]') as HTMLSelectElement;
+    rateSelect.value = '1.5';
+    rateSelect.dispatchEvent(new window.Event('change'));
+    expect(video.playbackRate).toBe(1.5);
+    expect(eventPayloads.media_rate_change.at(-1)).toEqual({ rate: 1.5 });
+
+    const seek = document.querySelector('[data-media-seek]') as HTMLInputElement;
+    seek.value = '999';
+    seek.dispatchEvent(new window.Event('change'));
+    expect(video.currentTime).toBe(200);
+    expect(eventPayloads.media_seek.at(-1)).toEqual({ from: 100, to: 200 });
+
+    (document.querySelector('[data-media-pip]') as HTMLButtonElement).click();
+    await flushMediaPromises();
+    expect(requestPip).toHaveBeenCalledTimes(1);
+    video.dispatchEvent(new window.Event('pause'));
+    video.dispatchEvent(new window.Event('ended'));
+    expect(eventPayloads.media_pause.at(-1)).toEqual({ currentTime: 200 });
+    expect(eventPayloads.media_ended).toEqual([{}]);
+
+    if (originalPipEnabled) Object.defineProperty(document, 'pictureInPictureEnabled', originalPipEnabled);
+    else delete (document as { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled;
+    delete (HTMLVideoElement.prototype as { requestPictureInPicture?: unknown }).requestPictureInPicture;
+  });
+
+  it('keeps a working bootstrap URL when authoritative reconciliation rejects', async () => {
+    ensureMediaRoot();
+    const shim = installMediaShim({ mimeType: 'audio/ogg', streamUrl: '/stream/working', rejectStream: true });
+    new Function(mediaViewerBody)();
+    const media = document.querySelector('audio')!;
+    expect(media.getAttribute('src')).toBe('/stream/working');
+    await flushMediaPromises();
+    expect(media.getAttribute('src')).toBe('/stream/working');
+    expect(shim.getStreamUrl).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[data-media-error]')!.getAttribute('data-visible')).toBe('false');
+  });
+
+  it('honors subtitle and PiP opt-outs while retaining safe media defaults', () => {
+    ensureMediaRoot();
+    installMediaShim({
+      mimeType: 'video/quicktime',
+      includeStreamApi: false,
+      config: {
+        subtitleUrl: '/captions/hidden.vtt',
+        showSubtitles: false,
+        pipEnabled: false,
+        preloadMedia: 'invalid',
+      },
+    });
+    new Function(mediaViewerBody)();
+    const video = document.querySelector('video') as HTMLVideoElement;
+    expect(video.querySelector('track')).toBeNull();
+    expect(document.querySelector('[data-media-pip]')).toBeNull();
+    expect(video.preload).toBe('metadata');
+    expect(video.autoplay).toBe(false);
+    expect(video.loop).toBe(false);
+  });
+
+  it.each([
+    {
+      name: 'unsupported MIME',
+      options: { mimeType: 'application/pdf', streamUrl: '/stream/file', includeStreamApi: false },
+      code: 'UNSUPPORTED_MEDIA_MIME',
+    },
+    {
+      name: 'missing stream URL',
+      options: { mimeType: 'audio/wav', streamUrl: '', includeStreamApi: false },
+      code: 'STREAM_URL_MISSING',
+    },
+  ])('renders an honest visible error for $name and still notifies ready', ({ options, code }) => {
+    ensureMediaRoot();
+    const shim = installMediaShim(options);
+    const errors: unknown[] = [];
+    shim.handlers.media_error = [(payload: unknown) => errors.push(payload)];
+    expect(() => new Function(mediaViewerBody)()).not.toThrow();
+    const errorBox = document.querySelector('[data-media-error]')!;
+    expect(errorBox.getAttribute('data-visible')).toBe('true');
+    expect(errorBox.textContent).toContain(code);
+    expect(errors).toEqual([expect.objectContaining({ code })]);
+    expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports rejected play promises and native media errors without a false media_play event', async () => {
+    ensureMediaRoot();
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(new Error('autoplay denied'));
+    const shim = installMediaShim({ mimeType: 'video/webm' });
+    const plays: unknown[] = [];
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.media_play = [(payload: unknown) => plays.push(payload)];
+    shim.handlers.media_error = [(payload: unknown) => errors.push(payload as Record<string, unknown>)];
+    new Function(mediaViewerBody)();
+    const video = document.querySelector('video') as HTMLVideoElement;
+    (document.querySelector('[data-media-play]') as HTMLButtonElement).click();
+    await flushMediaPromises();
+    expect(plays).toHaveLength(0);
+    expect(errors.at(-1)).toEqual(expect.objectContaining({ code: 'MEDIA_PLAY_REJECTED' }));
+    expect(document.querySelector('[data-media-error]')!.textContent).toContain('autoplay denied');
+
+    Object.defineProperty(video, 'error', {
+      value: { code: 3, message: 'decoder stopped' },
+      configurable: true,
+    });
+    video.dispatchEvent(new window.Event('error'));
+    expect(errors.at(-1)).toEqual(expect.objectContaining({ code: 'MEDIA_ERR_DECODE' }));
+    expect(document.querySelector('[data-media-error]')!.textContent).toContain('decoder stopped');
+    expect(shim.logAccess).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ code: 'MEDIA_ERR_DECODE' }),
+    );
   });
 });
