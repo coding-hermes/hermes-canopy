@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -49,6 +50,11 @@ type Config struct {
 	GatewayAPIKey  string // HERMES_WEBUI_GATEWAY_API_KEY, fallback API_SERVER_KEY
 	NATSURL        string
 	NATSCreds      string
+
+	// File viewer storage (SPEC-PL-02 §7.6). CANOPY_FILE_ROOT, default
+	// ~/.canopy/files. Uploaded file bytes live at <root>/files/<aa>/<sha256>
+	// where <aa> is the first two hex chars of the content SHA-256.
+	FileRoot string
 
 	// TrustedProxies lists the CIDR prefixes of reverse proxies whose
 	// X-Forwarded-For header may be trusted when deriving the client IP.
@@ -232,6 +238,20 @@ func FromEnv() *Config {
 	}
 	c.NATSURL = os.Getenv("CANOPY_NATS_URL")
 	c.NATSCreds = os.Getenv("CANOPY_NATS_CREDS")
+
+	// File viewer storage root (SPEC-PL-02 §7.6): CANOPY_FILE_ROOT, default
+	// ~/.canopy/files. Resolved eagerly so the effective path is visible in
+	// logs and validation.
+	if v := os.Getenv("CANOPY_FILE_ROOT"); v != "" {
+		c.FileRoot = v
+	} else {
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			c.FileRoot = filepath.Join(home, ".canopy", "files")
+		} else {
+			c.FileRoot = ".canopy/files"
+		}
+	}
 
 	// Trusted proxies: comma-separated CIDR prefixes of reverse proxies
 	// whose X-Forwarded-For may be trusted. Empty (unset) = trust no proxy

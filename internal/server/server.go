@@ -18,8 +18,10 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
+	"github.com/google/uuid"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
+	"github.com/coding-hermes/hermes-canopy/internal/fileviewer"
 	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
@@ -73,6 +75,7 @@ func New(
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
 	pluginSvc service.PluginRegistryService,
+	fileViewerSvc fileviewer.FileViewerService,
 	topicSearchSvc search.TopicSearchService,
 	referenceSvc reference.ReferenceService,
 	federationSvc federation.FederationService,
@@ -103,6 +106,7 @@ func New(
 		metrics:         metrics,
 		ctxCompiler:     ctxCompiler,
 		pluginSvc:       pluginSvc,
+		fileViewerSvc:   fileViewerSvc,
 		topicSearchSvc:  topicSearchSvc,
 		referenceSvc:    referenceSvc,
 		federationSvc:   federationSvc,
@@ -164,6 +168,7 @@ type routeDeps struct {
 	metrics         *telemetry.Metrics
 	ctxCompiler     ctxpkg.Compiler
 	pluginSvc       service.PluginRegistryService
+	fileViewerSvc   fileviewer.FileViewerService
 	topicSearchSvc  search.TopicSearchService
 	referenceSvc    reference.ReferenceService
 	federationSvc   federation.FederationService
@@ -198,6 +203,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	metrics := deps.metrics
 	ctxCompiler := deps.ctxCompiler
 	pluginSvc := deps.pluginSvc
+	fileViewerSvc := deps.fileViewerSvc
 	topicSearchSvc := deps.topicSearchSvc
 	referenceSvc := deps.referenceSvc
 	federationSvc := deps.federationSvc
@@ -392,6 +398,19 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Get("/plugins/{tree_id}/events", sse.NewHandler(sseHub).HandleTreeEvents)
 		r.Post("/plugins/network-proxy", handler.NewNetworkProxyHandler().Proxy)
 		r.Mount("/plugins", handler.NewPluginHandler(pluginSvc, sseHub).Routes())
+
+		// Built-in file viewers (SPEC-PL-02 phase 1) — upload/resolve/list/
+		// stream/delete + viewer registry/dispatch. Mounts are guarded so
+		// route-parity wiring (nil services, no DB) still walks the router.
+		if fileViewerSvc != nil {
+			filesHandler := fileviewer.NewHandler(fileViewerSvc)
+			r.Mount("/files", filesHandler.Files())
+			r.Mount("/viewers", filesHandler.Viewers())
+			// Authenticated-actor extraction for the file handlers.
+			fileviewer.SetActorLookup(func(req *http.Request) uuid.UUID {
+				return handler.UserIDFromContext(req.Context())
+			})
+		}
 
 		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
 		// gateway api_server (hermes-webui pattern). The service is constructed

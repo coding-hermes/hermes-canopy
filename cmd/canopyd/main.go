@@ -25,6 +25,7 @@ import (
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
+	"github.com/coding-hermes/hermes-canopy/internal/fileviewer"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/mls"
@@ -373,6 +374,20 @@ func main() {
 	pluginRepo := db.NewPGPluginRegistryRepo(database.Pool)
 	pluginSvc := service.NewPluginRegistryService(pluginRepo)
 
+	// Built-in file viewers (SPEC-PL-02 phase 1). The version injected at
+	// build time (-ldflags) pins viewer_registry versions; the viewer
+	// registry is seeded (idempotent) on boot below.
+	fileviewer.BuildVersion = version
+	fvFilesRepo := fileviewer.NewPGFileMetadataRepo(database.Pool)
+	fvViewersRepo := fileviewer.NewPGViewerRegistryRepo(database.Pool)
+	fvAccessRepo := fileviewer.NewPGFileAccessLogRepo(database.Pool)
+	fvStore := fileviewer.NewFileStore(cfg.FileRoot)
+	fileViewerSvc := fileviewer.NewService(fvFilesRepo, fvViewersRepo, fvAccessRepo, fvStore)
+	if err := fileViewerSvc.SeedViewerRegistry(ctx); err != nil {
+		log.Fatal().Err(err).Msg("seed built-in viewer registry")
+	}
+	log.Info().Str("file_root", cfg.FileRoot).Msg("file viewer storage ready")
+
 	// Federation identity is a singleton Ed25519 keypair persisted in PostgreSQL.
 	federationURL := cfg.HTTPAddr
 	if !strings.HasPrefix(federationURL, "http://") && !strings.HasPrefix(federationURL, "https://") {
@@ -389,7 +404,7 @@ func main() {
 		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
-		ctxCompiler, pluginSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg)
+		ctxCompiler, pluginSvc, fileViewerSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg)
 	if natsBus != nil {
 		srv.SetTransportDrain(natsBus.Drain)
 	}
