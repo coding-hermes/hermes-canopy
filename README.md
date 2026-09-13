@@ -491,6 +491,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 | `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |
+| `test-chaos-disconnect` | QA chaos-disconnect probe — bounded window; runs the `test-short` suite (see `docs/E2E-EVIDENCE.md`) |
 | `vet` | Run go vet |
 | `lint` | Run golangci-lint |
 | `clean` | Remove build artifacts |

@@ -38,3 +38,30 @@ Where run evidence for end-to-end and integration suites lives, and how to produ
 - Playwright: 48/48
 - Go integration (PG): 46/46
 - Visual regression: 4 mockup pairs, goldens unchanged since 2026-08-02
+
+## QA chaos-disconnect probe (QA-CAN-004)
+
+The canonical, stable command for the external QA chaos-disconnect cell
+(`go-test-chaos-disconnect-timeout-false-hang`) is:
+
+```bash
+make test-chaos-disconnect
+```
+
+This target runs the bounded, DB-independent short-mode suite: it is a pure
+prerequisite alias for `make test-short` (`go test ./... -short -count=1
+-timeout=480s`), so the flags live in exactly one place.
+
+The cell runs under a 120s disconnect window. The full non-short suite is
+invalid for that window: `internal/db` alone was measured at 135.3s and
+`TestINT05_2000NodeTree` documents a 2.5–3+ minute full run, so a healthy
+tree reads as a disconnect-induced false hang and the harness mis-files a
+finding. `-short` skips the PostgreSQL-backed and performance integration
+work (which is what pushes the full suite past the window); the target
+completes well inside 120s and needs no database.
+
+For the full integration suite — which remains the acceptance evidence for
+Go work — use `make test` (`go test ./... -count=1 -timeout=600s`) with
+PostgreSQL on :5437, as documented in the table above. The disconnect cell
+does not replace it; it only needs a deterministic, fast, disconnect-safe
+selection to distinguish "suite healthy and green" from "connection lost."

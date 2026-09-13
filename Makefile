@@ -5,6 +5,7 @@
 #   build-embed        — Build with ldflags version injection
 #   test               — Run tests
 #   test-short         — Run tests skipping integration
+#   test-chaos-disconnect — QA chaos-disconnect probe (runs test-short)
 #   vet                — Run go vet
 #   lint               — Run golangci-lint
 #   tidy               — Tidy go.mod/go.sum
@@ -21,7 +22,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed test test-short vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed test test-short test-chaos-disconnect vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -67,6 +68,14 @@ test:
 
 test-short:
 	$(GO) test ./... -short -count=1 -timeout=480s
+
+# QA chaos-disconnect probe (QA-CAN-004): explicit, stable target name for the
+# disconnect-safety cell. That cell runs under a 120s disconnect window; the
+# full non-short suite exceeds it (internal/db alone measured 135.3s), so the
+# harness must drive the short-mode suite. Delegates to test-short as a pure
+# prerequisite — single source of truth for the flags, no drift. The full
+# suite remains `make test`.
+test-chaos-disconnect: test-short
 
 vet:
 	$(GO) vet ./...
