@@ -2192,3 +2192,13 @@ tasks:
   status: complete
   created_at: '2026-09-13T17:52:40.912521+00:00'
   completed_at: '2026-09-13T17:58:10.849260+00:00'
+- id: PL02-P5
+  title: 'SPEC-PL-02 phase 5: markdown viewer body (GFM zero-dep render, sanitization,
+    config, lifecycle events, wired into viewerBodies)'
+  criteria:
+  - viewerBodyForSlug('markdown') resolves to a sandboxed body that renders GFM markdown
+    (headings/tables/task lists/code blocks) with script/iframe tags stripped; vitest
+    suite green; focused tests cover render + sanitization + config + events
+  status: complete
+  created_at: '2026-09-13T20:12:37.230767+00:00'
+  completed_at: '2026-09-13T20:48:14.165546+00:00'
