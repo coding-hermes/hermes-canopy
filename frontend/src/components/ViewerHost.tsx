@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchFileRange, streamUrl } from '../lib/fileApi';
+import { viewerBodyForSlug } from '../lib/viewerBodies';
 import { DEFAULT_FILE_VIEWER_CONFIG, FileViewerConfigSchema, type FileMetadata, type ViewerRegistration } from '../types/fileviewer';
 
 export const VIEWER_SANDBOX_CSP = [
@@ -158,6 +159,11 @@ export function buildViewerDoc(input: {
     .replaceAll('__FILE_META_JSON__', inlinedJson(input.file))
     .replaceAll('__STREAM_URL__', js(input.streamUrl))
     .replaceAll('__VIEWER_CONFIG_JSON__', inlinedJson(input.config));
+  // Phase 3: built-in viewer bodies run inside the frame AFTER the shim,
+  // against the canopy.viewer surface. Unknown / not-yet-shipped slugs keep
+  // the phase-2 shim-only doc (no body <script>).
+  const bodySource = viewerBodyForSlug(input.viewer.viewerSlug);
+  const bodyScript = bodySource === null ? '' : `\n  <script>\n    ${bodySource}\n  </script>`;
   return `<!doctype html>
 <html>
 <head>
@@ -169,7 +175,7 @@ export function buildViewerDoc(input: {
   <div id="root"></div>
   <script>
     ${shim}
-  </script>
+  </script>${bodyScript}
 </body>
 </html>`;
 }
