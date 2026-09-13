@@ -1,22 +1,24 @@
 /**
- * Unit tests — viewer body sources & registry (SPEC-PL-02 phase 3).
- * Pins: registry mapping (image/json non-null with expected hooks, unknown
- * → null), serialization validity (both bodies PARSE and EXECUTE against a
- * jsdom + stubbed canopy shim, exercising the load/error paths), and
- * config plumbing (collapse depth default from config).
+ * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–5).
+ * Pins: registry mapping (image/json/markdown non-null with expected hooks,
+ * unknown → null), serialization validity (the bodies PARSE and EXECUTE
+ * against a jsdom + stubbed canopy shim, exercising the load/error paths),
+ * and config plumbing (collapse depth default from config).
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { viewerBodyForSlug } from '../../viewerBodies';
 import { imageHelpers, imageViewerBody } from '../imageViewerBody';
 import { jsonViewerBody } from '../jsonViewerBody';
+import { markdownViewerBody } from '../markdownViewerBody';
 import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
 
 describe('viewerBodyForSlug registry', () => {
-  it('returns non-null bodies for the three shipped slugs', () => {
+  it('returns non-null bodies for the four shipped slugs', () => {
     expect(viewerBodyForSlug('image')).toBe(imageViewerBody);
     expect(viewerBodyForSlug('json')).toBe(jsonViewerBody);
     expect(viewerBodyForSlug('audio_video')).toBe(mediaViewerBody);
+    expect(viewerBodyForSlug('markdown')).toBe(markdownViewerBody);
   });
 
   it('image body carries the stream-URL + zoom/rotate/pan hooks', () => {
@@ -41,11 +43,24 @@ describe('viewerBodyForSlug registry', () => {
     expect(body).toContain('buildJsonPath');
   });
 
-  it('returns null for unknown slugs and the other built-ins', () => {
+  it('markdown body carries the render/sanitize/link hooks and §9.5 events', () => {
+    const body = viewerBodyForSlug('markdown') ?? '';
+    expect(body).toContain('getTextContent');
+    expect(body).toContain('renderMarkdown');
+    expect(body).toContain('sanitizeHtml');
+    expect(body).toContain('countWords');
+    expect(body).toContain('countBlocks');
+    expect(body).toContain('markdown_rendered');
+    expect(body).toContain('markdown_link_clicked');
+    expect(body).toContain('markdown_error');
+    expect(body).toContain('logAccess');
+    expect(body).toContain('ready');
+  });
+
+  it('returns null for unknown slugs and the remaining built-ins', () => {
     expect(viewerBodyForSlug('pdf')).toBeNull();
     expect(viewerBodyForSlug('code')).toBeNull();
     expect(viewerBodyForSlug('csv')).toBeNull();
-    expect(viewerBodyForSlug('markdown')).toBeNull();
     expect(viewerBodyForSlug('nonexistent')).toBeNull();
     expect(viewerBodyForSlug('Image')).toBeNull(); // case-sensitive
   });
@@ -734,5 +749,183 @@ describe('media body serialization and sandbox contract', () => {
       'error',
       expect.objectContaining({ code: 'MEDIA_ERR_DECODE' }),
     );
+  });
+});
+
+describe('markdown body serialization and sandbox contract', () => {
+  type HandlerMap = Record<string, Array<(payload: unknown) => void>>;
+
+  function installMarkdownShim(options: {
+    text?: () => Promise<string>;
+    config?: Record<string, unknown>;
+    omitTextApi?: boolean;
+  } = {}) {
+    const handlers: HandlerMap = {};
+    const logAccess = vi.fn(() => Promise.resolve({ ok: true }));
+    const ready = vi.fn(() => Promise.resolve({ ok: true }));
+    const viewer: Record<string, unknown> = { logAccess, ready };
+    if (!options.omitTextApi) {
+      viewer.getTextContent = vi.fn(options.text ?? (() => Promise.resolve('# Hello\n\nWorld body.')));
+    }
+    (window as unknown as { canopy: unknown }).canopy = {
+      version: '1.0.0',
+      fileId: 'md-1',
+      __handlers: handlers,
+      __bootstrap: {
+        fileMeta: { id: 'md-1', filename: 'notes.md', mimeType: 'text/markdown' },
+        config: options.config ?? {},
+      },
+      viewer,
+    };
+    return { handlers, logAccess, ready };
+  }
+
+  function ensureMarkdownRoot(): HTMLElement {
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.appendChild(root);
+    return root;
+  }
+
+  async function flushMarkdownPromises(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  afterEach(() => {
+    document.getElementById('root')?.remove();
+    delete (window as unknown as { canopy?: unknown }).canopy;
+    vi.restoreAllMocks();
+  });
+
+  it('body source is syntactically valid JS (parses with new Function)', () => {
+    expect(() => new Function(markdownViewerBody)).not.toThrow();
+  });
+
+  it('renders a document via getTextContent and emits markdown_rendered with source-based counters', async () => {
+    ensureMarkdownRoot();
+    const shim = installMarkdownShim({
+      text: () => Promise.resolve('# Title\n\nFirst para here.\n\n- [x] task\n- plain\n'),
+    });
+    const rendered: Array<Record<string, unknown>> = [];
+    shim.handlers.markdown_rendered = [(p: unknown) => rendered.push(p as Record<string, unknown>)];
+
+    expect(() => new Function(markdownViewerBody)()).not.toThrow();
+    await flushMarkdownPromises();
+
+    const article = document.querySelector('[data-markdown-content]');
+    expect(article).not.toBeNull();
+    expect(article!.querySelector('h1')!.textContent).toBe('Title');
+    expect(article!.querySelector('p')!.textContent).toBe('First para here.');
+    // Task list rendered as a disabled checkbox through the shipped helpers.
+    expect(article!.querySelector('input[type="checkbox"][disabled]')).not.toBeNull();
+    // Counters are source-based and token-shaped: #, Title, First, para,
+    // here., -, [x], task, -, plain = 10 words; exactly 1 top-level paragraph.
+    expect(rendered).toEqual([{ wordCount: 10, paragraphCount: 1 }]);
+    // Shim surface exercised: log_access('view', …) then viewer.ready().
+    expect(shim.logAccess).toHaveBeenCalledWith('view', expect.objectContaining({ fileId: 'md-1' }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors config: fontSize clamp, maxWidth, task-list and linkTarget opt-outs', async () => {
+    ensureMarkdownRoot();
+    installMarkdownShim({
+      text: () => Promise.resolve('[x](/internal)\n\n- [ ] a task'),
+      config: { fontSize: 99, maxWidth: '40rem', renderTaskLists: false, linkTarget: '_self' },
+    });
+    new Function(markdownViewerBody)();
+    await flushMarkdownPromises();
+
+    const article = document.querySelector('[data-markdown-content]') as HTMLElement;
+    const style = article.querySelector('style, [data-markdown-style]');
+    const styleEl =
+      style ?? (document.querySelector('[data-markdown-style]') as HTMLStyleElement | null);
+    expect(styleEl).not.toBeNull();
+    const css = styleEl!.textContent ?? '';
+    expect(css).toContain('font-size: 20px;'); // clamped from 99 into 12–20
+    expect(css).toContain('max-width: 40rem;');
+    expect(article.querySelector('input[type="checkbox"]')).toBeNull(); // task rendering off
+    expect(article.textContent).toContain('[ ] a task');
+    expect(article.querySelector('a')!.getAttribute('target')).toBe('_self');
+  });
+
+  it('emits markdown_link_clicked with internal classification and preventDefaults internal hrefs', async () => {
+    ensureMarkdownRoot();
+    const shim = installMarkdownShim({
+      text: () => Promise.resolve('[ext](https://example.com) and [int](#anchor)'),
+    });
+    const clicks: Array<Record<string, unknown>> = [];
+    shim.handlers.markdown_link_clicked = [(p: unknown) => clicks.push(p as Record<string, unknown>)];
+    new Function(markdownViewerBody)();
+    await flushMarkdownPromises();
+
+    const anchors = Array.from(document.querySelectorAll('[data-markdown-content] a')) as HTMLAnchorElement[];
+    expect(anchors).toHaveLength(2);
+
+    const extClick = new window.MouseEvent('click', { bubbles: true, cancelable: true });
+    anchors[0].dispatchEvent(extClick);
+    expect(extClick.defaultPrevented).toBe(false);
+    expect(clicks).toEqual([{ href: 'https://example.com', internal: false }]);
+
+    const intClick = new window.MouseEvent('click', { bubbles: true, cancelable: true });
+    anchors[1].dispatchEvent(intClick);
+    expect(intClick.defaultPrevented).toBe(true);
+    expect(clicks[1]).toEqual({ href: '#anchor', internal: true });
+  });
+
+  it.each([
+    {
+      name: 'getTextContent rejects',
+      text: () => Promise.reject(new Error('storage read failed')),
+      code: 'TEXT_CONTENT_ERROR',
+      message: 'storage read failed',
+    },
+    {
+      name: 'shim lacks getTextContent',
+      text: undefined,
+      code: 'SHIM_MISSING',
+      message: 'getTextContent',
+    },
+  ])('renders an honest markdown_error for $name and still notifies ready', async ({ text, code, message }) => {
+    ensureMarkdownRoot();
+    const shim = installMarkdownShim({ text, omitTextApi: text === undefined });
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.markdown_error = [(p: unknown) => errors.push(p as Record<string, unknown>)];
+
+    expect(() => new Function(markdownViewerBody)()).not.toThrow();
+    await flushMarkdownPromises();
+
+    const errorBox = document.querySelector('[data-markdown-error]')!;
+    expect(errorBox.getAttribute('data-visible')).toBe('true');
+    expect(errorBox.textContent).toContain('markdown_error');
+    expect(errorBox.textContent).toContain(code);
+    expect(errors).toEqual([expect.objectContaining({ code: code, message: expect.stringContaining(message) })]);
+    expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code: code }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('sanitizes rendered output: script/iframe/onerror/javascript: never reach the DOM', async () => {
+    ensureMarkdownRoot();
+    installMarkdownShim({
+      text: () =>
+        Promise.resolve(
+          '```\n<script>alert(1)</script>\n```\n\n<script>alert(2)</script> plain after',
+        ),
+    });
+    new Function(markdownViewerBody)();
+    await flushMarkdownPromises();
+
+    const article = document.querySelector('[data-markdown-content]')!;
+    // The fence content renders as ESCAPED code text.
+    expect(article.querySelector('pre code')!.textContent).toContain('<script>');
+    // No live script/iframe element exists anywhere in the rendered doc.
+    expect(article.querySelector('script')).toBeNull();
+    expect(article.querySelector('iframe')).toBeNull();
+    expect(article.innerHTML).not.toMatch(/<script(?![a-z-])/i);
+    expect(article.innerHTML).not.toContain('onerror=');
+    // javascript: hrefs are dropped at render time.
+    expect(article.innerHTML).not.toContain('javascript:');
   });
 });
