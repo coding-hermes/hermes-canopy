@@ -11505,3 +11505,34 @@ scheduled battery and no battery entry appears for ticks 434+; confirm whether a
 (and load `canopy-e2e-testing`) before dispatching anything else; (2) CI for 1dfb691 and for
 this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302c4f — the
 `canopy-deploy-check.timer` is armed and will flag it, so do not treat it as an unflagged rot.
+
+## Tick 443 — 2026-09-13 ~00:11Z (WORK TICK: PL02-P1 COMPLETE)
+
+**Verdict: OK.** One worker task landed: **PL02-P1** (SPEC-PL-02 phase 1 — built-in file viewers, backend foundation). Commit **4ac2f15**, pushed (`7846c4b..4ac2f15`, remote parity 0).
+
+**Pick rationale:** unique pending = 7 rows after the pre-dispatch scan. QA-HERMES-CANOPY-1 (P1) and QA-HERMES-CANOPY-2 (P3) are **fleet-infra claims about bunker hosts / `~/.hermes/scripts/`**, not this repo (re-confirmed: port-pool exhaustion on bunker-las-02, get.docker.com dependency in the spawn path). The remaining project-owned rows are the P3 post-MVP corpus (FTR-06, PL-02..PL-06), all giant specs needing phasing first. PL-02 is next in dependency order (dep PL-01 complete) and was sliced into phases the same way FTR-04/FTR-05/PL-01 were: **P1 = storage + API foundation** (migrations, `internal/fileviewer`, `/files` + `/viewers`), later phases = frontend viewer host, thumbnails/previews, bundles, overrides, SSE.
+
+**Attempts: 2 (1 dead worker + 1 rework).**
+1. glm-5.3-flash @ zai-glm-default, first dispatch: produced the whole package (4,443 lines across migrations + 13 Go files + 4 test files, wired into server.go/main.go/config.go) but **died at ~45 min with exit 130 before committing and before any verification**.
+2. Foreman verified the uncommitted tree itself (build OK, vet OK, lint 0 issues, `internal/fileviewer` tests ok 17.9s, migrations 000043-000046 up **and** down clean on a scratch DB, `/viewers` = 7 seeded built-ins) and proved live that dedup, Range streaming, list/recents, access-log roundtrip, resolve-by-hash and viewer dispatch all work **only when a `profiles` row exists whose id equals the actor id**.
+3. **REJECTED for rework — the one blocking defect:** the handlers used the JWT `sub` (a **users.id**) as `profiles.id`. With the standard dev JWT, `POST /files/upload` 404'd `PROFILE_NOT_FOUND` and resolve/dispatch failed the same way — the API was unusable with a real Canopy JWT. Continuation worker re-dispatched with the evidence folded in (rework, not restart).
+
+**Rework fix (in 4ac2f15):** one acting-profile seam (`Handler.actingProfile` -> `serviceImpl.ResolveActorProfile` -> `PGFileMetadataRepo.ResolveActorProfile`): profile with `id == actorID` wins, else the actor's newest owned live profile (`profiles.owner_id`), else `PROFILE_NOT_FOUND`; explicit `profile_id` in resolve bodies still honored, omitted no longer means the zero UUID. `actor_resolution_test.go` (218 lines) covers the mismatched-actor shape.
+
+**Foreman verification (independent, not the worker's self-report):**
+- `go build ./...`, `go vet ./...` clean; `golangci-lint run ./internal/fileviewer/...` = **0 issues**.
+- `go test -p 1 -count=1 ./internal/fileviewer/...` = **ok 21.0s** (36 tests, 0 skip).
+- Migrations up + down clean on a scratch DB (`canopy_pl02_check`); all four tables present, then 0 after rollback.
+- **Live smoke with a deliberately mismatched actor** (JWT `sub` = user `...aa01`, owning profile `...bb01`): upload 201 x2 -> **same file id (dedup PASS)**, `profileId` = `...bb01` (the owned profile, not the actor id), `Range: bytes=0-5` -> **206 + `Content-Range: bytes 0-5/33`**, metadata 200, `resolve` by sha256 **without** `profile_id` -> 200, list 200, recents 200, access POST 201 + GET 200, dispatch 200, DELETE 200, `GET /viewers` -> **7 built-ins**.
+- Frontend untouched: `cd frontend && npx vitest run` = **42 files / 744 tests passed**.
+- append-only guard on `file_access_log` proven incidentally (DELETE rejected by trigger, matching SPEC-PL-02 §3).
+
+**GitReins:** Tier 1 guard **PASS** (test mode: full — secrets/build/lint/tests). Tier 2 judge **PASS**, verdict **c99f475c** (judge independently re-applied the migrations on a fresh DB, re-ran the suite, re-verified dedup + the 7 built-ins).
+
+**CI:** run for 4ac2f15 created 2026-09-13T01:58:49Z (in progress at write time; prior three runs on master all `success`). No pre-existing failure needed filing.
+
+**DuckBrain:** `/ticks/443` (id 6a975248-90c5-4a8d-a571-3aac34d62e10, domain event) + `/project/hermes-canopy/status` (id bdb2ab43-67a6-4c5a-9098-5f65299a3ea2, domain config) — both verified by fs-grep in the 2026-09 partition JSONL. Pre-write contiguity recall of `/ticks/442` clean (id 903c678d).
+
+**Artifacts/notes:** dev-DB rows created by foreman verification under profile `...0001` (temp profile seeded then blocked from deletion by the append-only `file_access_log` RESTRICT FK — left in place, harmless) and the rework actor `aa01`/`bb01` pair; smoke files under `/tmp/canopy-pl02p1-files`. No source strays: `git status` clean apart from board files.
+
+**Next tick:** (1) **E2E-001 is overdue** — last satisfied window recorded is 416-421; no battery entry exists for 434+ (and 422-433 appear unrun). Run the 61-test battery (13 files) before or alongside the next work pick; load `canopy-e2e-testing` first. (2) PL-02 phase 2 (frontend viewer host / file fetch client) or PL-03 as the next code pick. (3) QA-HERMES-CANOPY-1/2 remain fleet-infra claims — do not dispatch them here. (4) Live `canopyd` binary and the `/tmp/canopy-pl02p1-files` root are dev-local only.
