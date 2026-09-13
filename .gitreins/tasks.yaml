@@ -2172,3 +2172,12 @@ tasks:
   status: complete
   created_at: '2026-09-13T12:32:02.736495+00:00'
   completed_at: '2026-09-13T13:16:50.106860+00:00'
+- id: QA-CAN-003
+  title: Make PostgreSQL host port overridable in Docker Compose
+  criteria:
+  - docker-compose.yml publishes PostgreSQL as ${CANOPY_PG_HOST_PORT:-5437}:5432;
+    docker compose config validates the default as 5437 and an explicit CANOPY_PG_HOST_PORT=55437
+    override as 55437; no unrelated runtime defaults or files change
+  status: complete
+  created_at: '2026-09-13T15:33:02.681012+00:00'
+  completed_at: '2026-09-13T15:35:39.847765+00:00'
