@@ -2154,3 +2154,11 @@ tasks:
   status: complete
   created_at: '2026-09-13T04:34:22.752669+00:00'
   completed_at: '2026-09-13T05:08:49.858709+00:00'
+- id: PL02-P3
+  title: 'Built-in viewer bodies: image + json viewers in sandboxed srcDoc'
+  criteria:
+  - frontend vitest suite green incl. new viewer-body tests; buildViewerDoc injects
+    image/json bodies; no new npm deps; gitleaks clean
+  status: complete
+  created_at: '2026-09-13T09:30:29.144727+00:00'
+  completed_at: '2026-09-13T10:20:02.575833+00:00'

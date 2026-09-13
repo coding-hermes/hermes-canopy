@@ -11562,3 +11562,21 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 **Bookkeeping:** `tasks.jsonl` — PL02-P2 row appended (created) then closed (complete, `commit_hash 2b34f37`, `guard_result PASS`); `events.jsonl` — 399/400 (`task_created`/`task_dispatched`), 401/402 (`task_completed` + `audit`); `board.jsonl` header `ticks_total` 443 → **444**, `last_commit` = `2b34f37`.
 
 **Next tick:** (1) PL-02 phase 3 candidates — the individual viewer implementations (SPEC-PL-02 §9: image/PDF/code/markdown) on top of the P2 ViewerHost, or wiring ViewerHost into the right panel (§8.1 mount) so a selected file node opens a viewer; (2) CI for `2b34f37` + this board commit; (3) do NOT dispatch QA-HERMES-CANOPY-1 (bunker port pool — fleet-infra) ; (4) E2E-001 next window 446-451; (5) `canopy-server` container left STOPPED (INFRA-002 — stale image crash-loops against schema v46; needs a rebuild before it can serve :8091 again).
+
+## Tick 445 — 2026-09-13 ~10:25Z (WORK — PL02-P3 viewer bodies)
+
+**Verdict:** Board scan (direct tasks.jsonl read, keep-last dedupe): 261 unique ids, 8 pending. QA-HERMES-CANOPY-1 (keep-last, P1) = bunker-las-02 port-pool exhaustion — bunker-project allocator, NOT fixable from this repo (named in dispatch pick_rationale, per ops-skill rule). QA-HERMES-CANOPY-2 (keep-last, P3) = bunker get.docker.com spawn path — same. Remaining pending = P3 feature rows. Picked **PL02-P3**: continue the PL-02 phase chain (P1 backend tick 443 / P2 frontend shell tick 444) with the first real viewer bodies — image + json, the two zero-npm-dependency viewers (SPEC-PL-02 §9.2/§9.6) — on top of the P2 ViewerHost srcDoc shell (§8.2/§8.3). Blast radius grep-verified: buildViewerDoc/ViewerHost imported only by ViewerHost.tsx + its test.
+
+**Dispatch/Worker:** glm-5.3-flash @ zai-glm-default, brief /tmp/pl02-p3-brief.md, background hermes chat, ~46 min, exit 0, one attempt (no rework). Worker commit `c9b9411` feat(viewers): SPEC-PL-02 phase 3 — image + json built-in viewer bodies (+2310/-1, 10 files, frontend/src only). Notable worker finding: bodies ship the exact vitest-tested helpers serialized via Function.toString into the srcDoc; 3 serialization pitfalls (this-binding for sibling helpers, inlined literals, method-shorthand vs name:fn assembly) pinned by tests.
+
+**Gates (fresh, foreman-run):** vitest **859/859 (49 files), SWEEP_EXIT=0** (was 794 — +65 new viewer-body tests across 4 files); `tsc -b` exit 0; `go build ./cmd/canopyd` + `go vet ./...` clean (no Go changes); `gitleaks detect --no-git -c .gitleaks.toml` 0 leaks (367.85 MB); diff confinement verified — no package.json/lockfile changes (no new npm deps), pdf/code/csv/markdown/audio_video slugs stay shim-only.
+
+**GitReins:** PL02-P3 created+started pre-dispatch; guard --full Tier 1 PASS (secrets/go_build/go_lint/go_tests); `task complete` → Tier 2 judge COMPLETE, verdict `0809919c`. Task kept in tasks.yaml for audit.
+
+**Off-by-one:** health/discover ran (`sandboxed-iframe-srcdoc-viewer-implementation` → not_found); worker hit a real debugging class (Function.toString srcDoc serialization pitfalls) — submitted post-debug.
+
+**Push health:** `c9b9411` + board commit pushed; `git rev-list --count origin/master..HEAD` = 0 after push.
+
+**Bookkeeping:** `tasks.jsonl` — PL02-P3 pending row + complete row appended (commit_hash c9b9411, guard_result PASS); `events.jsonl` — 403/404 (task_created/task_dispatched), 405/406 (task_completed + audit); `board.jsonl` header `ticks_total` 444 → **445**, `last_commit` = `c9b9411`. Compact-JSONL separators preserved (grep-verified `"status":"pending"` count post-write).
+
+**Next tick:** (1) PL02-P4 candidates — markdown viewer (needs react-markdown/KaTeX dep decision), audio_video (zero-dep), or wiring ViewerHost into the right-panel mount (§8.1) so selecting a file node opens a viewer; (2) CI for `c9b9411` + board commit; (3) QA-HERMES-CANOPY-1/2 remain bunker-owned — do NOT dispatch; (4) E2E-001 window 446-451 (demo seed lifecycle applies); (5) `canopy-server` container stays STOPPED (INFRA-002).
