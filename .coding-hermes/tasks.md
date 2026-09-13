@@ -11580,3 +11580,26 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 **Bookkeeping:** `tasks.jsonl` — PL02-P3 pending row + complete row appended (commit_hash c9b9411, guard_result PASS); `events.jsonl` — 403/404 (task_created/task_dispatched), 405/406 (task_completed + audit); `board.jsonl` header `ticks_total` 444 → **445**, `last_commit` = `c9b9411`. Compact-JSONL separators preserved (grep-verified `"status":"pending"` count post-write).
 
 **Next tick:** (1) PL02-P4 candidates — markdown viewer (needs react-markdown/KaTeX dep decision), audio_video (zero-dep), or wiring ViewerHost into the right-panel mount (§8.1) so selecting a file node opens a viewer; (2) CI for `c9b9411` + board commit; (3) QA-HERMES-CANOPY-1/2 remain bunker-owned — do NOT dispatch; (4) E2E-001 window 446-451 (demo seed lifecycle applies); (5) `canopy-server` container stays STOPPED (INFRA-002).
+
+
+## Tick 446 — 2026-09-13 ~13:20Z (WORK — PL02-P4 native media viewer)
+
+**Verdict:** Direct compact-JSONL board read (keep-last): 262 unique ids, 8 pending before selection. QA-HERMES-CANOPY-1 (P1) is bunker port-pool capacity, not project-owned; QA-HERMES-CANOPY-2 is the bunker installer path. Picked **PL02-P4**, the next tractable PL-02 slice after P1/P2/P3: native audio/video uses browser media APIs with no dependency addition. Hilo said no dependents for `viewerBodies.ts`, but grep proved `ViewerHost.tsx` imports it, so blast radius was treated as all file-viewer mounts.
+
+**Dispatch/Worker:** Attempt 1 (`glm-5.3-flash @ zai-glm-default`) stayed live for >15m but produced zero code diff/commit and was terminated as failed-dispatch. Attempt 2 (`gpt-5.6-sol @ openai-codex`) landed `6e5959a` (+1159/-7, 6 files): audio/video body, pure helpers, controls, keyboard/config/events/errors/tests. Foreman adversarial review **REJECTED** it because `logAccess` existed only in test stubs; production `ViewerHost` omitted the shim/allowlist/dispatch path. Attempt 3 rework landed `ca17bf0` (+263/-5, 4 files), wiring `viewer.log_access` to `postFileAccess` with host-authoritative file/viewer identity, validation, DI, and six regression tests.
+
+**Gates (fresh, foreman-run):** focused media/ViewerHost suite **62/62** (4 files); full vitest **888/888** (50 files); oxlint exit 0 (pre-existing warnings only, no errors); `npm run build` exit 0 (client + service worker); `go build -o /dev/null ./cmd/canopyd` + `go vet ./...` clean; `git diff --check 18f13ea..HEAD` clean; scope = 8 frontend files, +1422/-12, no package/lock/backend changes.
+
+**GitReins:** PL02-P4 created+started before implementation. Attempt-2 completion exposed the production logging gap despite returning PASS (`28714e25`); task reopened, reworked, and completed again. Final Tier 1 PASS + Tier 2 COMPLETE, verdict **31d14461**. Task kept in tasks.yaml for audit.
+
+**Off-by-one:** pre-debug discover `gateway-command-filter-false-positive` returned not_found. Post-debug learning submitted as `iframe-host-api-test-stub-wiring-gap`, submission `sub_a1dca5` (queued).
+
+**DuckBrain:** `/ticks/446` written and read back as `0b6fecd6-f16c-4544-8161-3e7def5eaca2`; `/project/hermes-canopy/status/2026-09-13` written and read back as `6ce07239-00a1-4e3c-acc6-7b7a5b63de72`.
+
+**CI:** Pre-dispatch latest 3 GitHub runs were green. Content run **34759505348** for `ca17bf0` was in_progress at closeout time; no recent unowned failure existed, so no INT-CI row was needed.
+
+**Push health:** content commits `6e5959a` + `ca17bf0` pushed; `git fetch origin && git rev-list --count origin/master..HEAD` = 0 before board closeout. Board closeout commit is pushed after this entry with the same verification.
+
+**Bookkeeping:** `tasks.jsonl` carries PL02-P4 create/attempt/complete keep-last rows; `events.jsonl` 407-413 cover create, dispatch, failed attempt, rework, completion, and audit; `board.jsonl` `ticks_total` 445 → **446**, `last_commit` = `ca17bf0`. Compact separators preserved.
+
+**Next tick:** continue PL-02 with the next bounded viewer phase or wire ViewerHost into the §8.1 right-panel selection flow. QA-HERMES-CANOPY-1/2 remain bunker-owned. E2E window 446-451 is open; last full battery was tick 444, so it was not due in this work tick.
