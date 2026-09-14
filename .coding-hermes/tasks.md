@@ -11706,3 +11706,33 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 
 ### Next tick
 - Re-open PL02-P7 only after the Hermes worker-dispatch liveness path is healthy; do not treat the no-op Tier 1 result as implementation evidence.
+
+## Tick 452 — 2026-09-14 ~05:33Z (WORK — PL02-P7 code viewer recovery)
+
+### Verdict
+- **OK.** Tick 451's failed PL02-P7 worker-liveness result is superseded by a verified implementation. The canonical board now has 297 readable rows / 268 unique IDs: 260 complete and 8 pending.
+- Selected the same dependency-ready PL-02 phase because P1-P6 were complete and the worker lane was healthy again. The P1 allocator-capacity row remains external bunker infrastructure, not project-owned.
+
+### Dispatch / Worker
+- One worker, one attempt: `gpt-5.6-luna` @ `openai-codex`, skill `coding-hermes-worker`; brief `/tmp/hermes-canopy-pl02-code-viewer-brief.md`.
+- Worker commit `bc1403c6a51ff27c20e70d913f0fbc02dbf770ab`: 5 frontend files, +984/-6. Added `codeViewerLogic.ts`, `codeViewerBody.ts`, focused tests, and registry/test integration.
+- Scope remained dependency-free and read-only. Monaco-grade semantic services and the PDF viewer remain explicit later host-bundle phases.
+
+### Acceptance / Gates
+- Language detection follows extension → filename → first 4 KiB content; safe line rendering uses DOM/text content; config covers line numbers, tabs, wrapping, font size/family; search and go-to-line keyboard navigation are wired; `code_ready`, `code_language_detected`, `code_cursor_moved`, and honest `code_error` frame-local events are covered.
+- Focused Vitest: **43/43**. Full frontend: **972/972 across 53 files**. Frontend build and lint: PASS.
+- Go build, vet, and fresh non-handler package tests: PASS. Gitleaks scanned 373,996,256 bytes with no leaks; golangci-lint: 0 issues; `gitreins guard --full`: PASS.
+
+### GitReins / CI / Push
+- GitReins lifecycle task `PL-02` completed after worker commit. Tier 1 PASS; Tier 2 **COMPLETE**, verdict `b29153c7`; evidence `.gitreins/history/2026-09-14/b29153c7/verdict.json`.
+- Content CI run `34809583949` for `bc1403c` completed **GREEN** in 2m27s, including build, vet, golangci-lint, short/integration tests, frontend checks, Gitleaks, Docker build, and deploy.
+- Content commit was pushed to `origin/master`; fetch parity was 0 ahead / 0 behind before closeout. The closeout commit follows this entry and is pushed/verified separately.
+
+### Board / DuckBrain / Off-by-One
+- PL02-P7 is complete with content commit, worker summary, green guard/CI, stale blocked reason cleared, and honest host-bundle deferrals. Events 442-444 record status closure, evidence, and audit. Header `ticks_total` 451 → **452** and `last_commit` → `bc1403c`.
+- DuckBrain `/ticks/452` → `db7bdbb3-3a11-4220-a6b8-d9a26cb39cd2`; status key → `eeedcc15-7574-4f9f-ad3c-056c082b26a7`; both UUIDs verified once in the namespace JSONL partitions. The automatic `s3daily` push warned that `master` matches multiple destination refs; local canonical writes are intact.
+- Off-by-One discover `sandboxed-code-viewer-body-function-tostring` returned `not_found` before design. No non-trivial implementation debugging was required, so no post-debug submission was appropriate.
+- Board validation remains at its known legacy baseline of 32 errors / 146 warnings; this tick introduced no new validation class.
+
+### Next tick
+- Continue PL-02 with the remaining PDF/host-bundle phase. Preserve the dependency-free code viewer contract and keep Monaco semantic editing explicit rather than silently broadening P7.

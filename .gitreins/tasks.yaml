@@ -2212,3 +2212,18 @@ tasks:
   status: complete
   created_at: '2026-09-14T02:18:49.330233+00:00'
   completed_at: '2026-09-14T02:33:58.963669+00:00'
+- id: PL-02
+  title: "Built-in file viewers \u2014 continue code viewer phase"
+  criteria:
+  - 'Code slug resolves to a tested dependency-free serialized sandbox body implementing
+    SPEC-PL-02 section 9.3 zero-dependency read-only subset: extension then filename
+    then first-4KB content language detection; safe line-numbered rendering; showLineNumbers/tabSize/wordWrap/fontSize/fontFamily
+    config; Ctrl/Cmd+F search with Enter/Shift+Enter/Escape navigation and Ctrl/Cmd+G
+    line navigation; code_ready, code_language_detected, code_cursor_moved, and honest
+    code_error frame-local events; production getTextContent/logAccess/ready wiring;
+    focused tests, full frontend tests, build, lint, and unchanged Go build/vet pass;
+    pdf remains null; worker commits with Addresses PL-02 and the required co-author
+    trailer.'
+  status: complete
+  created_at: '2026-09-14T05:05:21.606682+00:00'
+  completed_at: '2026-09-14T05:23:45.494495+00:00'
