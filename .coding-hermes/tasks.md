@@ -11736,3 +11736,36 @@ this closeout commit; (3) the live `canopyd` binary (Sep 11 15:33) predates 8302
 
 ### Next tick
 - Continue PL-02 with the remaining PDF/host-bundle phase. Preserve the dependency-free code viewer contract and keep Monaco semantic editing explicit rather than silently broadening P7.
+
+## Tick 453 — 2026-09-14 ~10:22Z (WORK — PL02-P8 pdf viewer body)
+
+### Verdict
+- Board at tick start: 297 readable rows / 268 unique IDs; 260 complete, 8 pending. Pick: **PL-02 → PL02-P8** (the last unshipped built-in viewer body, §9.1 pdf). QA-HERMES-CANOPY-1 (bunker port-pool exhaustion) and -2 (get.docker.com mirror) are not project-owned (bunker host/infra), per established doctrine; FTR-06/PL-03/PL-04/PL-05/PL-06 remain the P3 feature backlog.
+
+### Dispatch / Worker
+- Brief `/tmp/pl02-p8-brief.txt`; worker `glm-5.3-flash @ zai-glm-default` (project-proven lane), PID 2154542, first attempt, WORKER_EXIT=0 at ~22 min uptime. Worker commit **43776b0** `feat(viewers): SPEC-PL-02 phase 8 — pdf viewer body. Addresses PL02-P8.` (+924/−13, 6 files; co-author trailer intact).
+
+### Gates (fresh, foreman-run post-commit)
+- `npx tsc --noEmit` → exit 0
+- `npx vitest run` → **995/995 (54 files)**, SWEEP green
+- `npx oxlint` on touched files → 0 warnings (no eslint config in repo; oxlint is the package lint gate — worker substitution verified and accepted)
+- No Go delta this tick (frontend-only task).
+
+### GitReins
+- PL02-P8 created/started pre-dispatch; `task complete` post-commit: **Tier 1 full PASS** (secrets/go_build/go_lint/go_tests), **Tier 2 COMPLETE** verdict **92cd41fd** — judge re-ran focused pdfViewerLogic tests (13/13) and the full suite (995/995) empirically and confirmed the deferral headers.
+
+### Off-by-one
+- Health probe up; discover `tick-startup` → not_found. No non-trivial debugging this tick (clean first-attempt land) → no submission.
+
+### Push health
+- Content commit 43776b0 pushed; `origin/master..HEAD` = 0. Closeout commit follows in this entry.
+
+### Bookkeeping
+- tasks.jsonl: PL02-P8 appended complete (compact JSONL, 0-space separators preserved; `"status":"pending"` grep = 25 = 8 live + 17 recycled/stale rows). events.jsonl ids 445-447: task_dispatched / task_completed / audit (tick 453). board.jsonl: ticks_total 452→**453**, last_commit → `43776b0c…`. tasks.md = this entry.
+- Worker honesty note: `ViewerHostBodies.test.tsx` pinned the pre-phase "pdf → shim-only" behavior; worker re-pinned it to shipped-body coverage and preserved the unknown-slug null-path case.
+
+### DuckBrain
+- /ticks/453 narration key written post-commit this tick.
+
+### Next tick
+- Remaining project-ownable backlog: PL-03 (app card system), PL-04 (thinking interface), PL-06 (multi-message references), FTR-06 (WebUI packaging) — all P3. PL-02 umbrella row stays pending: pdf.js host-bundle realization is the explicitly deferred follow-up. QA-HERMES-CANOPY-1/2 remain not project-owned (bunker infra).
