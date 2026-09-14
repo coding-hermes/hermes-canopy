@@ -71,6 +71,7 @@ func main() {
 
 	// Server mode: parse server flags.
 	showVersion := flag.Bool("version", false, "print version and exit")
+	printSchemaVersion := flag.Bool("print-schema-version", false, "print the max migration version embedded in this binary and exit (GAP-069 pre-deploy check)")
 	relayMode := flag.String("relay-mode", relaypkg.ModeAirGapped, "relay mode: air_gapped, self_hosted, or saas")
 	relayListen := flag.String("relay-listen", "", "relay listener address (tcp:// or quic://)")
 	relayConnect := flag.String("relay-connect", "", "upstream relay address (tcp:// or quic://)")
@@ -87,6 +88,24 @@ func main() {
 
 	if *showVersion {
 		fmt.Println(version)
+		os.Exit(0)
+	}
+
+	// -print-schema-version (GAP-069): print the max migration version
+	// EMBEDDED in this exact binary and exit 0. Pre-deploy tooling
+	// (scripts/deploy-canopyd.sh step 0 via check-deploy-staleness.sh
+	// --check-schema) compares it against the target database's
+	// schema_migrations max so a stale binary is refused BEFORE it is
+	// installed or restarted — the 2026-09-12 outage was exactly a schema-46
+	// DB meeting a schema-42 binary that then crash-looped on its own
+	// stale-build guard. Print-only: no config load, no DB connection.
+	if *printSchemaVersion {
+		embedded, err := db.EmbeddedMaxVersion()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "canopyd: embedded schema version unavailable: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(embedded)
 		os.Exit(0)
 	}
 

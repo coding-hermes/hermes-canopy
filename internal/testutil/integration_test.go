@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,6 +135,191 @@ func TestResolveAdminURL(t *testing.T) {
 			t.Fatalf("resolveAdminURL() = %q, want %q", got, defaultAdminURL)
 		}
 	})
+}
+
+// TestSharedDBRefused exercises the GAP-069 shared-DB gate decision table.
+// Pure unit test — no PostgreSQL, no network.
+func TestSharedDBRefused(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		wantRef bool
+	}{
+		{
+			name:    "clean env refuses the implicit shared default",
+			env:     map[string]string{},
+			wantRef: true,
+		},
+		{
+			name:    "explicit opt-in allows shared DB",
+			env:     map[string]string{"CANOPY_TEST_ALLOW_SHARED_DB": "1"},
+			wantRef: false,
+		},
+		{
+			name:    "opt-in set to anything but 1 still refuses",
+			env:     map[string]string{"CANOPY_TEST_ALLOW_SHARED_DB": "true"},
+			wantRef: true,
+		},
+		{
+			name:    "CI-style CANOPY_REQUIRE_DB=1 allows the default",
+			env:     map[string]string{"CANOPY_REQUIRE_DB": "1"},
+			wantRef: false,
+		},
+		{
+			name:    "explicit admin URL always wins",
+			env:     map[string]string{"CANOPY_ADMIN_DB_URL": "postgres://u:p@dedicated:5432/postgres"},
+			wantRef: false,
+		},
+		{
+			name:    "explicit test URL always wins",
+			env:     map[string]string{"CANOPY_TEST_DB_URL": "postgres://u:p@dedicated:5432/canopy"},
+			wantRef: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CANOPY_ADMIN_DB_URL", "")
+			t.Setenv("CANOPY_TEST_DB_URL", "")
+			t.Setenv("CANOPY_TEST_ALLOW_SHARED_DB", "")
+			t.Setenv("CANOPY_REQUIRE_DB", "")
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			if got := sharedDBRefused(); got != tt.wantRef {
+				t.Fatalf("sharedDBRefused() with %v = %v, want %v", tt.env, got, tt.wantRef)
+			}
+		})
+	}
+}
+
+// clearDBGateEnv pins every gate-relevant env var to its neutral value and
+// returns restore handles via t.Setenv cleanup. Use at the top of any
+// subtest that drives evaluateDBGate.
+func clearDBGateEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("CANOPY_SKIP_INTEGRATION", "")
+	t.Setenv("CANOPY_ADMIN_DB_URL", "")
+	t.Setenv("CANOPY_TEST_DB_URL", "")
+	t.Setenv("CANOPY_TEST_ALLOW_SHARED_DB", "")
+	t.Setenv("CANOPY_REQUIRE_DB", "")
+}
+
+// TestEvaluateDBGate_NoEnv_GateBeforeProbe proves the core GAP-069 behavior:
+// with a clean environment the gate skips with the opt-in message BEFORE any
+// reachability probing. pgReachable is stubbed via the package seam so the
+// assertion "the gate fires before I/O" is structural — if the gate ever
+// moves back behind the probe, pgReachableCallCount != 0 fails the test.
+func TestEvaluateDBGate_NoEnv_GateBeforeProbe(t *testing.T) {
+	clearDBGateEnv(t)
+	restore := StubPGReachable(false)
+	defer restore()
+
+	for _, short := range []bool{false, true} {
+		d := evaluateDBGate(short)
+		if !d.Skip || d.Fail {
+			t.Fatalf("short=%v: gate did not skip: %+v", short, d)
+		}
+		if d.Message != sharedDBGateMessage {
+			t.Fatalf("short=%v: message = %q, want the GAP-069 gate message", short, d.Message)
+		}
+		for _, tok := range []string{"GAP-069", "CANOPY_TEST_ALLOW_SHARED_DB=1", "CANOPY_ADMIN_DB_URL", "CANOPY_REQUIRE_DB=1"} {
+			if !strings.Contains(d.Message, tok) {
+				t.Fatalf("message %q missing token %q", d.Message, tok)
+			}
+		}
+	}
+	if n := ProbeCallCount(); n != 0 {
+		t.Fatalf("gate probed the shared server %d time(s) before refusing — zero-IO contract broken", n)
+	}
+}
+
+// TestEvaluateDBGate_OptIn allows the implicit default again and exercises
+// the reachability branches with a stubbed probe (DB down → skip in short
+// mode / skip in full mode; DB up → pass through).
+func TestEvaluateDBGate_OptIn(t *testing.T) {
+	t.Run("opt-in with DB down skips via reachability, not the gate", func(t *testing.T) {
+		clearDBGateEnv(t)
+		t.Setenv("CANOPY_TEST_ALLOW_SHARED_DB", "1")
+		restore := StubPGReachable(false)
+		defer restore()
+
+		d := evaluateDBGate(true) // short mode
+		if !d.Skip || d.Fail {
+			t.Fatalf("short mode with DB down must skip: %+v", d)
+		}
+		if strings.Contains(d.Message, "GAP-069") {
+			t.Fatalf("gate fired despite explicit opt-in: %q", d.Message)
+		}
+		if !strings.Contains(d.Message, "short mode") {
+			t.Fatalf("expected reachability-branch message, got %q", d.Message)
+		}
+
+		d = evaluateDBGate(false) // full mode
+		if !d.Skip || d.Fail {
+			t.Fatalf("full mode with DB down (no REQUIRE_DB) must skip: %+v", d)
+		}
+		if strings.Contains(d.Message, "GAP-069") {
+			t.Fatalf("gate fired despite explicit opt-in: %q", d.Message)
+		}
+	})
+
+	t.Run("opt-in with DB up passes through", func(t *testing.T) {
+		clearDBGateEnv(t)
+		t.Setenv("CANOPY_TEST_ALLOW_SHARED_DB", "1")
+		restore := StubPGReachable(true)
+		defer restore()
+
+		for _, short := range []bool{false, true} {
+			if d := evaluateDBGate(short); d.Skip || d.Fail {
+				t.Fatalf("short=%v: gate/reachability refused an opted-in, reachable DB: %+v", short, d)
+			}
+		}
+	})
+}
+
+// TestEvaluateDBGate_ExplicitOverride proves CANOPY_ADMIN_DB_URL is honoured:
+// the gate passes it through and the reachability branch probes THAT URL.
+func TestEvaluateDBGate_ExplicitOverride(t *testing.T) {
+	clearDBGateEnv(t)
+	t.Setenv("CANOPY_ADMIN_DB_URL", "postgres://canopy:canopy@127.0.0.1:1/postgres?sslmode=disable")
+	restore := StubPGReachable(false)
+	defer restore()
+
+	d := evaluateDBGate(false)
+	if !d.Skip || d.Fail {
+		t.Fatalf("unreachable explicit override must skip: %+v", d)
+	}
+	if strings.Contains(d.Message, "GAP-069") {
+		t.Fatalf("explicit override was refused by the shared-DB gate: %q", d.Message)
+	}
+	if !strings.Contains(d.Message, "127.0.0.1:1") {
+		t.Fatalf("skip message %q does not name the overridden URL", d.Message)
+	}
+}
+
+// TestEvaluateDBGate_RequireDB_CIPath proves CANOPY_REQUIRE_DB=1 (CI) keeps
+// working: the gate passes the implicit default, and with the DB down the
+// decision is a loud FAIL (never a silent skip).
+func TestEvaluateDBGate_RequireDB_CIPath(t *testing.T) {
+	clearDBGateEnv(t)
+	t.Setenv("CANOPY_REQUIRE_DB", "1")
+	restore := StubPGReachable(false)
+	defer restore()
+
+	d := evaluateDBGate(false)
+	if !d.Fail || d.Skip {
+		t.Fatalf("CANOPY_REQUIRE_DB=1 with DB down must FAIL loudly: %+v", d)
+	}
+	if strings.Contains(d.Message, "GAP-069") {
+		t.Fatalf("CI path was refused by the shared-DB gate: %q", d.Message)
+	}
+
+	// And with the DB up, CI passes through untouched.
+	restore2 := StubPGReachable(true)
+	defer restore2()
+	if d := evaluateDBGate(false); d.Skip || d.Fail {
+		t.Fatalf("CANOPY_REQUIRE_DB=1 with DB up must pass: %+v", d)
+	}
 }
 
 // TestStaleTestDBs exercises the stale-database decision logic of the

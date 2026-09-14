@@ -8,7 +8,16 @@
 # live stack 404'd the entire /api/v1/gateway surface for ~7h because of it).
 #
 # Steps:
-#   1. make build            (repo root → bin/canopyd)
+#   0. make build            (repo root → bin/canopyd)
+#   1. PRE-DEPLOY SCHEMA GATE (GAP-069): check-deploy-staleness.sh
+#                            --check-schema compares bin/canopyd's embedded
+#                            migration version against the live DB's
+#                            schema_migrations max (read-only SELECT). A stale
+#                            binary would fail its own in-process stale-build
+#                            guard AFTER restart and crash-loop the service
+#                            (2026-09-12: schema-46 DB + schema-42 binary =
+#                            ~37h outage) — so the mismatch aborts the deploy
+#                            HERE, before install or restart.
 #   2. install atomically    (cp to temp next to target, then mv — mv within
 #                            the same filesystem is atomic, so systemd never
 #                            execs a half-written binary)
@@ -19,7 +28,8 @@
 # Idempotent: safe to re-run any number of times.
 # Environment overrides: INSTALL_PATH (default /home/kara/bin/canopyd),
 # SERVICE_NAME (default canopy-canopyd), CANOPY_BASE_URL / CANOPY_JWT_SECRET
-# (passed through to the smoke test).
+# (passed through to the smoke test), CANOPYD_SCHEMA_DB_URL (schema-gate
+# target DB, default the shared :5437 canopy-pg).
 #
 # Exit non-zero on any failure.
 
@@ -37,11 +47,23 @@ fail() {
 
 echo "Deploying canopyd from $REPO_ROOT"
 
-# ── 1. Build from HEAD ────────────────────────────────────────────────────
+# ── 0. Build from HEAD ────────────────────────────────────────────────────
 cd "$REPO_ROOT"
-echo "[1/5] make build"
+echo "[0/5] make build"
 make build || fail "make build failed"
 [[ -x bin/canopyd ]] || fail "build did not produce an executable bin/canopyd"
+
+# ── 1. Pre-deploy schema gate (GAP-069, read-only) ────────────────────────
+# Compare the JUST-BUILT binary's embedded migration version against the
+# live DB. embedded < db ⇒ the binary predates the schema it would serve;
+# its own stale-build guard would kill it after restart (crash-loop). Abort
+# here instead — nothing has been installed or restarted yet.
+echo "[1/5] schema gate: check-deploy-staleness.sh --check-schema"
+rc=0
+bash "$REPO_ROOT/scripts/check-deploy-staleness.sh" --check-schema || rc=$?
+if ((rc != 0)); then
+	fail "pre-deploy schema check failed (rc=$rc) — refusing to deploy a binary that predates the database schema (GAP-069)"
+fi
 
 # ── 2. Atomic install to the systemd unit's exec path ────────────────────
 echo "[2/5] install bin/canopyd -> $INSTALL_PATH"

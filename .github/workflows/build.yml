@@ -57,6 +57,14 @@ jobs:
 
       - name: Test (short)
         run: go test ./... -short -count=1 -timeout=300s
+        # GAP-069: the testutil shared-DB gate skips PG tests on the implicit
+        # :5437 default unless an opt-in or CI-context var is set. Short-mode
+        # tests never touch PG anyway (pools skip in -short), but setting the
+        # CI var here keeps that behavior pinned and preserves coverage if
+        # non-short tests are ever added to this step. The Integration step
+        # below keeps its explicit CANOPY_TEST_DB_URL (override always wins).
+        env:
+          CANOPY_REQUIRE_DB: "1"
 
       - name: Integration tests
         run: go test ./... -count=1 -run 'TestIntegration' -timeout=180s

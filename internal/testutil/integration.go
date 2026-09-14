@@ -3,8 +3,15 @@
 //
 //	docker compose up -d
 //
-// The test helpers expect the environment variable CANOPY_TEST_DB_URL
-// (default: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable).
+// The test helpers honor the environment variable CANOPY_TEST_DB_URL and
+// CANOPY_ADMIN_DB_URL (explicit overrides). When neither is set, the
+// implicit default points at the docker-compose PostgreSQL — but because
+// that same server (:5437, container canopy-pg) is also the PRODUCTION
+// database of the deployed canopyd, the implicit default is gated
+// (GAP-069): PG-backed tests SKIP unless CANOPY_TEST_ALLOW_SHARED_DB=1 is
+// set (explicit opt-in acknowledging the shared-DB risk) or
+// CANOPY_REQUIRE_DB=1 is set (CI, which owns its own database). See
+// SkipIfNoDB for the gate.
 package testutil
 
 import (
@@ -79,6 +86,10 @@ func dropTestDBByName(ctx context.Context, adminURL, dbName string) error {
 // defaultAdminURL is the fallback admin database URL used when neither
 // CANOPY_ADMIN_DB_URL nor CANOPY_TEST_DB_URL is set. It points at the
 // docker-compose PostgreSQL (canopy-pg, host port 5437 → container 5432).
+//
+// GAP-069: that same server also backs the PRODUCTION canopyd, so this
+// default is only usable through the SkipIfNoDB gate — see
+// sharedDBGateMessage / sharedDBRefused.
 const defaultAdminURL = "postgres://canopy:canopy@localhost:5437/postgres?sslmode=disable"
 
 // probeTimeout bounds the short-mode TCP reachability check. Half a second is
@@ -98,6 +109,34 @@ func resolveAdminURL() string {
 		return u
 	}
 	return defaultAdminURL
+}
+
+// sharedDBGateMessage is the skip message emitted when the GAP-069 gate
+// refuses the implicit shared :5437 default. It names every env var that
+// unlocks the tests and WHY the gate exists.
+const sharedDBGateMessage = "GAP-069: implicit default points at the PRODUCTION-shared PostgreSQL on :5437 " +
+	"(canopy-pg — the same server backs the live canopyd, and test runs create/migrate/drop fresh databases there). " +
+	"Set CANOPY_TEST_ALLOW_SHARED_DB=1 to opt in to the shared server, " +
+	"CANOPY_ADMIN_DB_URL=<url> to point tests at a dedicated server, or run under CI (CANOPY_REQUIRE_DB=1)."
+
+// sharedDBRefused reports whether the resolved admin URL is the implicit
+// production-shared default while no env var that acknowledges that risk is
+// set. Explicit overrides (CANOPY_ADMIN_DB_URL / CANOPY_TEST_DB_URL) always
+// win — the caller CHOSE a target. The default is allowed when
+// CANOPY_TEST_ALLOW_SHARED_DB=1 (explicit opt-in) or CANOPY_REQUIRE_DB=1
+// (CI-style context: the caller has demanded a real database, and CI
+// provisions its own service container — the pipeline sets this var today).
+func sharedDBRefused() bool {
+	if os.Getenv("CANOPY_ADMIN_DB_URL") != "" || os.Getenv("CANOPY_TEST_DB_URL") != "" {
+		return false // explicit user intent wins
+	}
+	if os.Getenv("CANOPY_TEST_ALLOW_SHARED_DB") == "1" {
+		return false
+	}
+	if os.Getenv("CANOPY_REQUIRE_DB") == "1" {
+		return false // CI path keeps working unchanged
+	}
+	return true
 }
 
 // hostPortFromURL extracts the "host:port" to probe from a Postgres URL. It
@@ -150,8 +189,100 @@ func pgReachable() bool {
 	return true
 }
 
+// PGReachableFn is the reachability-probe seam used by evaluateDBGate. It
+// defaults to pgReachable; tests replace it (see StubPGReachable) to drive
+// reachability branches without network I/O and to prove the GAP-069 gate
+// fires BEFORE any probing (zero I/O against the production-shared server).
+var PGReachableFn = pgReachable
+
+var (
+	probeMu    sync.Mutex
+	probeCalls int
+)
+
+// probeReachable reads the seam under the mutex (StubPGReachable may swap it
+// concurrently) and counts the call for ProbeCallCount.
+func probeReachable() bool {
+	probeMu.Lock()
+	fn := PGReachableFn
+	probeMu.Unlock()
+	ok := fn()
+	probeMu.Lock()
+	probeCalls++
+	probeMu.Unlock()
+	return ok
+}
+
+// ProbeCallCount reports how many reachability probes evaluateDBGate has
+// performed through PGReachableFn since the last StubPGReachable call (or
+// process start).
+func ProbeCallCount() int {
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	return probeCalls
+}
+
+// StubPGReachable replaces the PGReachableFn seam with a constant-result
+// probe and resets the probe counter. The returned func restores the
+// original seam. Test-only helper.
+func StubPGReachable(reachable bool) (restore func()) {
+	probeMu.Lock()
+	probeCalls = 0
+	fn := PGReachableFn
+	probeMu.Unlock()
+	PGReachableFn = func() bool { return reachable }
+	return func() { PGReachableFn = fn }
+}
+
+// dbGateDecision is what SkipIfNoDB should do for the current environment.
+// Splitting the decision from the acting keeps the gate testable as a pure
+// function (no testing.T construction gymnastics in tests).
+type dbGateDecision struct {
+	Skip    bool
+	Fail    bool
+	Message string
+}
+
+// evaluateDBGate classifies the current environment for SkipIfNoDB.
+// short mirrors testing.Short() and is a parameter so tests can drive both
+// modes deterministically.
+//
+// Order matters (GAP-069): the shared-DB gate fires BEFORE any reachability
+// probing, so a gated run performs zero I/O against the production-shared
+// server. Explicit URL overrides (CANOPY_ADMIN_DB_URL / CANOPY_TEST_DB_URL)
+// always pass the gate — the caller chose a target.
+func evaluateDBGate(short bool) dbGateDecision {
+	if os.Getenv("CANOPY_SKIP_INTEGRATION") != "" {
+		return dbGateDecision{Skip: true, Message: "CANOPY_SKIP_INTEGRATION is set"}
+	}
+	if sharedDBRefused() {
+		return dbGateDecision{Skip: true, Message: sharedDBGateMessage}
+	}
+	reachable := probeReachable()
+	if short && !reachable {
+		return dbGateDecision{Skip: true, Message: "short mode: PostgreSQL not reachable"}
+	}
+	if !short && !reachable {
+		if os.Getenv("CANOPY_REQUIRE_DB") == "" {
+			return dbGateDecision{Skip: true, Message: "PostgreSQL not reachable at " + resolveAdminURL() + " — skipping integration tests (set CANOPY_REQUIRE_DB=1 to fail instead)"}
+		}
+		return dbGateDecision{Fail: true, Message: "CANOPY_REQUIRE_DB=1: PostgreSQL not reachable at " + resolveAdminURL() + " — failing as requested"}
+	}
+	return dbGateDecision{}
+}
+
 // SkipIfNoDB skips the test if integration tests are disabled.
 // Set CANOPY_SKIP_INTEGRATION=1 to always skip.
+//
+// GAP-069 shared-DB gate (FIRST, before any probing): when neither
+// CANOPY_ADMIN_DB_URL nor CANOPY_TEST_DB_URL is set, the implicit default
+// points at the production-shared PostgreSQL on :5437, and PG-backed tests
+// create/migrate/drop fresh databases there — which is exactly how a 2026-09
+// E2E run advanced the LIVE database's schema version and crash-looped the
+// deployed canopyd for ~37h. The implicit default is therefore refused
+// unless CANOPY_TEST_ALLOW_SHARED_DB=1 (explicit opt-in) or
+// CANOPY_REQUIRE_DB=1 (CI-style context) is set; the skip message names the
+// env vars. Explicit URL overrides always win (the caller chose a target).
 //
 // PostgreSQL reachability is probed in both modes: under -short the guard
 // does a fast TCP probe (probeTimeout) of the admin DB host:port and skips if
@@ -167,14 +298,12 @@ func pgReachable() bool {
 // when the DB is down — CI sets it so integration tests never silently skip.
 func SkipIfNoDB(t *testing.T) {
 	t.Helper()
-	if os.Getenv("CANOPY_SKIP_INTEGRATION") != "" {
-		t.Skip("CANOPY_SKIP_INTEGRATION is set")
+	d := evaluateDBGate(testing.Short())
+	if d.Skip {
+		t.Skip(d.Message)
 	}
-	if testing.Short() && !pgReachable() {
-		t.Skip("short mode: PostgreSQL not reachable")
-	}
-	if !testing.Short() && !pgReachable() && os.Getenv("CANOPY_REQUIRE_DB") == "" {
-		t.Skip("PostgreSQL not reachable at " + resolveAdminURL() + " — skipping integration tests (set CANOPY_REQUIRE_DB=1 to fail instead)")
+	if d.Fail {
+		t.Fatalf("%s", d.Message)
 	}
 }
 
