@@ -2202,3 +2202,12 @@ tasks:
   status: complete
   created_at: '2026-09-13T20:12:37.230767+00:00'
   completed_at: '2026-09-13T20:48:14.165546+00:00'
+- id: PL02-P7
+  title: "SPEC-PL-02 phase 7 \u2014 dependency-free code viewer body"
+  criteria:
+  - "Code slug resolves to a tested dependency-free serialized sandbox body with \xA7\
+    9.3 language detection, safe read-only rendering, config/search/navigation, code\
+    \ events, access logging, ready lifecycle, full frontend gates green, and a committed\
+    \ clean tree; pdf remains null."
+  status: in_progress
+  created_at: '2026-09-14T02:18:49.330233+00:00'
