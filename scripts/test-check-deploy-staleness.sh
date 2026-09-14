@@ -14,7 +14,13 @@
 #   3. missing artifact                    -> non-zero, STALE evidence
 #   4. stale + --deploy (clean repo)       -> fake deploy invoked, then CURRENT
 #   5. dirty repo + --deploy               -> deploy NOT invoked, STALE_BLOCKED
-#   6. stale + --deploy, no-op fake deploy -> still stale after deploy -> fail
+#  6. stale + --deploy, no-op fake deploy -> still stale after deploy -> fail
+#  7-11. --check-schema: embedded ==/>/< DB, missing probe binary, psql failure
+# 12-13. STALE / STALE_BLOCKED append exactly one board alert line
+# 14+. GAP-069 criterion 4: crash-loop restart-counter alert — baseline on
+#      first run, below-threshold and counter-reset silence, >= threshold
+#      alert with exact delta fields, corrupt state file, env threshold
+#      override, and alert-on-the-stale-path.
 #
 # Exit 0 only when every scenario passes.
 
@@ -50,6 +56,11 @@ mkrepo() {
 	git -C "$repo" config user.email tester@test
 	mkdir -p "$repo/internal/x" "$repo/cmd" "$repo/migrations"
 	echo "v1" >"$repo/internal/x/a.go"
+	# Mirror the production .gitignore for the checker's own runtime state
+	# (the crash-loop baseline). Without it that file counts as untracked dirt
+	# and the --deploy scenarios could never succeed — exactly why the real
+	# repo ignores it too.
+	printf '%s\n' ".coding-hermes/deploy-check-state.json" >"$repo/.gitignore"
 	git -C "$repo" add -A
 	git -C "$repo" commit -q -m init
 }
@@ -366,6 +377,214 @@ if [[ "$blocked_rc" == "2" ]] && grep -q "reason=STALE_BLOCKED" <<<"$BLOCKED_OUT
 	ok "STALE_BLOCKED appended a board alert (rc=2)"
 else
 	bad "STALE_BLOCKED did not append a board alert (rc=$blocked_rc)" "$BLOCKED_OUT"
+fi
+
+# ── GAP-069 criterion 4: crash-loop restart-counter alert ───────────────────
+# fake systemctl: prints the NRestarts value recorded in a file, so a test can
+# move the counter between runs with no real service anywhere in sight. Same
+# stubbing idea as mk_fake_psql above: match the argv the checker uses.
+mk_fake_systemctl() {
+	local path="$1" nrfile="$2"
+	cat >"$path" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+	if [[ "\$a" == "NRestarts" ]]; then
+		cat "$nrfile" 2>/dev/null || echo 0
+		exit 0
+	fi
+done
+echo "fake systemctl: unrecognized invocation: \$*" >&2
+exit 17
+EOF
+	chmod +x "$path"
+}
+
+# crashloop_run <repo> <artifact> <nrestarts> [extra env assignments...]
+# One checker run (staleness mode) with a stub systemctl reporting <nrestarts>;
+# prints combined output, caller captures rc from the assignment.
+CRASHLOOP_NRFILE="$WORK/fake-nrestarts"
+FAKE_SYSTEMCTL="$WORK/fake-systemctl"
+mk_fake_systemctl "$FAKE_SYSTEMCTL" "$CRASHLOOP_NRFILE"
+crashloop_run() {
+	local repo="$1" art="$2" n="$3"
+	shift 3
+	echo "$n" >"$CRASHLOOP_NRFILE"
+	env CANOPYD_STALE_REPO_ROOT="$repo" \
+		CANOPYD_STALE_PATH="$art" \
+		CANOPYD_STALE_THRESHOLD_S=86400 \
+		CANOPYD_SYSTEMCTL="$FAKE_SYSTEMCTL" \
+		CANOPYD_SERVICE_NAME=canopy-canopyd \
+		CANOPYD_SCHEMA_PSQL="$FAKE_PSQL" \
+		"$@" \
+		bash "$CHECKER" 2>&1
+}
+
+# crashloop_events <repo>: number of crash-loop alert lines on that board.
+crashloop_events() {
+	local f="$1/.coding-hermes/board/events.jsonl"
+	if [[ ! -f "$f" ]]; then
+		echo 0
+		return
+	fi
+	grep -c 'deploy_crashloop_alert' "$f" || true
+}
+
+# state_nrestarts <repo>: baseline value the checker persisted (or ERROR:...).
+state_nrestarts() {
+	python3 - "$1/.coding-hermes/deploy-check-state.json" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        print(json.load(f).get("nrestarts"))
+except Exception as e:
+    print("ERROR:%s" % e)
+PY
+}
+
+# mk_crashloop_repo <dir>: fresh synthetic repo + empty board, artifact CURRENT
+# (created after the last commit, so staleness is NOT in play).
+mk_crashloop_repo() {
+	local repo="$1" art="$2"
+	mkrepo "$repo"
+	mkdir -p "$repo/.coding-hermes/board"
+	: >"$repo/.coding-hermes/board/events.jsonl"
+	: >"$art"
+}
+
+# 14. First run with NO state file -> baseline recorded, no alert, rc 0.
+REPO="$WORK/cl-fresh"
+CL_ART="$WORK/artifacts/cl-fresh-canopyd"
+mk_crashloop_repo "$REPO" "$CL_ART"
+OUT="$(crashloop_run "$REPO" "$CL_ART" 7)"
+rc=$?
+if [[ "$rc" == "0" ]] && grep -q "no usable prior state" <<<"$OUT"; then
+	ok "crashloop: first run records baseline, rc unchanged (rc=0)"
+else
+	bad "crashloop: first run did not record a baseline cleanly (rc=$rc)" "$OUT"
+fi
+if [[ "$(crashloop_events "$REPO")" == "0" ]] && [[ "$(state_nrestarts "$REPO")" == "7" ]]; then
+	ok "crashloop: no prior state -> zero alerts, baseline persisted as 7"
+else
+	bad "crashloop: no-prior-state run alerted or mis-persisted (events=$(crashloop_events "$REPO") state=$(state_nrestarts "$REPO"))" "$OUT"
+fi
+
+# 15. Climb below threshold, then an unchanged counter -> still silent, state
+#     tracks reality both times.
+OUT="$(crashloop_run "$REPO" "$CL_ART" 20)" # delta 13 < 50
+rc=$?
+OUT2="$(crashloop_run "$REPO" "$CL_ART" 20)" # delta 0
+rc2=$?
+if [[ "$rc" == "0" ]] && [[ "$rc2" == "0" ]] && grep -q "delta 13 < threshold 50" <<<"$OUT"; then
+	ok "crashloop: below-threshold climb is silent and rc unchanged (rc=0)"
+else
+	bad "crashloop: below-threshold climb misbehaved (rc=$rc rc2=$rc2)" "$OUT"
+fi
+if [[ "$(crashloop_events "$REPO")" == "0" ]] && [[ "$(state_nrestarts "$REPO")" == "20" ]]; then
+	ok "crashloop: sub-threshold runs keep zero alerts and a current baseline (20)"
+else
+	bad "crashloop: sub-threshold run alerted or stale baseline (events=$(crashloop_events "$REPO") state=$(state_nrestarts "$REPO"))" "$OUT2"
+fi
+
+# 16. Counter RESET (systemd restarted the unit) -> no alert, re-baseline.
+OUT="$(crashloop_run "$REPO" "$CL_ART" 3)" # delta -17
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(crashloop_events "$REPO")" == "0" ]] && [[ "$(state_nrestarts "$REPO")" == "3" ]]; then
+	ok "crashloop: counter reset (20 -> 3) re-baselines silently"
+else
+	bad "crashloop: counter reset misbehaved (rc=$rc events=$(crashloop_events "$REPO") state=$(state_nrestarts "$REPO"))" "$OUT"
+fi
+
+# 17. Climb >= threshold -> exactly ONE deploy_crashloop_alert, rc unchanged,
+#     baseline advanced, detail carries the exact delta fields.
+OUT="$(crashloop_run "$REPO" "$CL_ART" 75)" # delta 72 >= 50
+rc=$?
+if [[ "$rc" == "0" ]] && grep -q "CRASHLOOP" <<<"$OUT" && grep -q "board alert appended" <<<"$OUT"; then
+	ok "crashloop: climb >= threshold alerts on stdout and rc unchanged (rc=0)"
+else
+	bad "crashloop: climb >= threshold did not alert (rc=$rc)" "$OUT"
+fi
+if [[ "$(crashloop_events "$REPO")" == "1" ]] && [[ "$(state_nrestarts "$REPO")" == "75" ]]; then
+	ok "crashloop: exactly one alert line appended, baseline advanced to 75"
+else
+	bad "crashloop: alert count/baseline wrong (events=$(crashloop_events "$REPO") state=$(state_nrestarts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, re, sys
+lines = [l for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+evs = [json.loads(l) for l in lines]
+crashes = [e for e in evs if e.get("event_type") == "deploy_crashloop_alert"]
+assert len(crashes) == 1, f"expected exactly 1 crash-loop event, got {len(crashes)}: {evs}"
+ev = crashes[0]
+assert ev["task_id"] == "GAP-069", ev
+assert ev["actor"] == "deploy-staleness-check", ev
+assert isinstance(ev["id"], int), ev
+assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", ev["timestamp"]), ev
+d = json.loads(ev["detail"])
+assert d["restart_before"] == 3, d
+assert d["restart_after"] == 75, d
+assert d["delta"] == 72, d
+assert d["service"] == "canopy-canopyd", d
+assert re.match(r"^[0-9a-f]{40}$", d["source_commit"]), d
+assert d["threshold"] == 50, d
+print("PASS: crash-loop alert line is well-formed JSONL with exact delta fields")
+PY
+[[ $? == 0 ]] && ok "crashloop: alert line carries restart_before/after, delta, service, src commit" \
+	|| bad "crashloop: alert line failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+# 18. Missing/corrupt state file -> baseline recorded, no alert, rc unchanged.
+REPO="$WORK/cl-corrupt"
+CL_ART2="$WORK/artifacts/cl-corrupt-canopyd"
+mk_crashloop_repo "$REPO" "$CL_ART2"
+printf 'this is not json{{{\n' >"$REPO/.coding-hermes/deploy-check-state.json"
+OUT="$(crashloop_run "$REPO" "$CL_ART2" 99)"
+rc=$?
+if [[ "$rc" == "0" ]] && grep -q "no usable prior state" <<<"$OUT" && [[ "$(crashloop_events "$REPO")" == "0" ]]; then
+	ok "crashloop: corrupt state file re-baselines with no alert, rc unchanged (rc=0)"
+else
+	bad "crashloop: corrupt state file misbehaved (rc=$rc)" "$OUT"
+fi
+[[ "$(state_nrestarts "$REPO")" == "99" ]] && ok "crashloop: corrupt state replaced by a valid baseline (99)" \
+	|| bad "crashloop: corrupt state was not replaced (state=$(state_nrestarts "$REPO"))" ""
+
+# 19. CANOPYD_CRASHLOOP_THRESHOLD overrides the default.
+REPO="$WORK/cl-thresh"
+CL_ART3="$WORK/artifacts/cl-thresh-canopyd"
+mk_crashloop_repo "$REPO" "$CL_ART3"
+OUT="$(crashloop_run "$REPO" "$CL_ART3" 1000)"
+OUT="$(crashloop_run "$REPO" "$CL_ART3" 1003 CANOPYD_CRASHLOOP_THRESHOLD=5)" # delta 3 < 5
+rc=$?
+OUT2="$(crashloop_run "$REPO" "$CL_ART3" 1009 CANOPYD_CRASHLOOP_THRESHOLD=5)" # delta 6 >= 5
+rc2=$?
+if [[ "$rc" == "0" ]] && [[ "$rc2" == "0" ]] \
+	&& [[ "$(crashloop_events "$REPO")" == "1" ]] \
+	&& grep -q "delta 6 >= threshold 5" <<<"$OUT2"; then
+	ok "crashloop: CANOPYD_CRASHLOOP_THRESHOLD=5 gates a delta-6 climb (rc unchanged)"
+else
+	bad "crashloop: threshold override misbehaved (rc=$rc rc2=$rc2 events=$(crashloop_events "$REPO"))" "$OUT2"
+fi
+
+# 20. A crash-loop is reported even on the STALE exit path, alongside the
+#     staleness alert, with the exit code unchanged (rc=1).
+REPO="$WORK/cl-stale"
+mkrepo "$REPO"
+mkdir -p "$REPO/.coding-hermes/board"
+: >"$REPO/.coding-hermes/board/events.jsonl"
+touch_new_commit "$REPO"
+CL_ART4="$WORK/artifacts/cl-stale-canopyd"
+: >"$CL_ART4"
+make_stale "$CL_ART4"
+OUT="$(crashloop_run "$REPO" "$CL_ART4" 0)"
+OUT="$(crashloop_run "$REPO" "$CL_ART4" 60)" # delta 60 >= 50, artifact still stale
+rc=$?
+types_seen="$(python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+print(",".join(sorted({json.loads(l)["event_type"] for l in open(sys.argv[1], encoding="utf-8") if l.strip()})))
+PY
+)"
+if [[ "$rc" == "1" ]] && [[ "$types_seen" == "deploy_crashloop_alert,deploy_stale_alert" ]]; then
+	ok "crashloop: stale run emits BOTH alerts and keeps rc=1"
+else
+	bad "crashloop: stale run alert set wrong (rc=$rc types='$types_seen')" "$OUT"
 fi
 
 echo ""

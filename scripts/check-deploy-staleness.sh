@@ -48,6 +48,26 @@
 #                             mode (default: the freshly built bin/canopyd —
 #                             callers build BEFORE calling; deploy-canopyd.sh
 #                             does exactly that)
+#   CANOPYD_SYSTEMCTL         systemctl binary (default: systemctl)
+#   CANOPYD_SERVICE_NAME      user service whose NRestarts counter is read
+#                             (default: canopy-canopyd)
+#   CANOPYD_CRASHLOOP_THRESHOLD
+#                             crash-loop alert threshold: number of restarts
+#                             the service counter may climb between two runs
+#                             before a board alert is written (default: 50)
+#
+# Crash-loop alert (GAP-069 criterion 4): on EVERY staleness run the checker
+# compares the unit's NRestarts counter against a baseline persisted in
+# $REPO_ROOT/.coding-hermes/deploy-check-state.json (git-ignored runtime state
+# kept alongside the board) and appends a deploy_crashloop_alert event to
+# $REPO_ROOT/.coding-hermes/board/events.jsonl when the counter climbed by
+# >= the threshold since the previous run. That covers a canopyd that
+# crash-loops for ANY reason — not only a stale artifact (bad config, port
+# taken, database down) — which is exactly the 2026-09-12 failure mode: the
+# service restarted ~37k times over ~37h and produced zero alerts. The
+# baseline file is rewritten on every run (alert or not) so it tracks reality;
+# a missing, corrupt or unparseable file simply re-baselines with no alert.
+# This path never changes the script's exit code.
 #
 # --deploy mode: only when stale, run the deploy command (the existing atomic
 # `make deploy` path — build → install → restart → health poll → smoke), then
@@ -92,23 +112,37 @@ SCHEMA_PSQL="${CANOPYD_SCHEMA_PSQL:-psql}"
 SCHEMA_PROBE_BIN="${CANOPYD_SCHEMA_PROBE_BIN:-$REPO_ROOT/bin/canopyd}"
 SYSTEMCTL_BIN="${CANOPYD_SYSTEMCTL:-systemctl}"
 CANOPYD_SERVICE="${CANOPYD_SERVICE_NAME:-canopy-canopyd}"
+DEFAULT_CRASHLOOP_THRESHOLD=50
+CRASHLOOP_THRESHOLD="${CANOPYD_CRASHLOOP_THRESHOLD:-$DEFAULT_CRASHLOOP_THRESHOLD}"
+[[ "$CRASHLOOP_THRESHOLD" =~ ^[0-9]+$ ]] \
+	|| fail_error "CANOPYD_CRASHLOOP_THRESHOLD not a non-negative integer: '$CRASHLOOP_THRESHOLD'"
 BOARD_EVENTS="$REPO_ROOT/.coding-hermes/board/events.jsonl"
+# Baseline for the crash-loop counter. Local runtime state (git-ignored — see
+# .gitignore) rather than a tracked file: the checker must never make the
+# worktree dirty, or its own --deploy gate would refuse to deploy.
+DEPLOY_STATE_FILE="$REPO_ROOT/.coding-hermes/deploy-check-state.json"
 
-# ── Board alert (GAP-069 / AC2): STALE must be VISIBLE ──────────────────────
-# The 2026-09-12 crash-loop (~37h, ~27k restarts) was invisible because no
+# ── Board alerts (GAP-069 / AC2): staleness AND crash-loops must be VISIBLE ─
+# The 2026-09-12 crash-loop (~37h, ~37k restarts) was invisible because no
 # surface anyone watches reported it. The foreman tick scans events.jsonl
-# every run, so every STALE / STALE_BLOCKED detection appends ONE
-# machine-readable event line there (never rewrites the file, never touches
-# tasks.jsonl, never changes this script's exit code). Best-effort: a missing
-# or unreadable board file degrades to a NOTE on stderr.
-append_stale_event() {
-	local reason="$1" # STALE | STALE_BLOCKED
-	local lag="$2"   # seconds behind source ("" for missing artifact)
+# every run, so this script appends ONE machine-readable event line there for
+# each condition it detects — staleness (STALE / STALE_BLOCKED) and a
+# crash-looping service (restart counter climbing between runs). It never
+# rewrites the file, never touches tasks.jsonl, never changes an exit code.
+# Best-effort: a missing or unreadable board file degrades to a NOTE on stderr.
+#
+# append_board_event <event_type> <detail_json> [context]
+# The single writer for every board event this script emits: derives the next
+# id from the file itself, renders the canonical line, appends it, and prints
+# one stdout confirmation. Both alert paths below route through it — never add
+# a second, divergent JSON writer.
+append_board_event() {
+	local event_type="$1" detail_json="$2" context="${3:-}"
 	[[ -f "$BOARD_EVENTS" ]] || {
-		echo "NOTE: board events file missing ($BOARD_EVENTS) — stale alert NOT recorded" >&2
+		echo "NOTE: board events file missing ($BOARD_EVENTS) — alert NOT recorded" >&2
 		return 0
 	}
-	local next_id ts nrestarts embedded_v="null" db_v="null" probe_bin detail_src
+	local next_id ts line
 	next_id="$(python3 - "$BOARD_EVENTS" <<'PY'
 import json, sys
 mx = 0
@@ -127,10 +161,35 @@ print(mx + 1)
 PY
 )" || next_id=""
 	[[ "$next_id" =~ ^[0-9]+$ ]] || {
-		echo "NOTE: could not derive next board event id — stale alert NOT recorded" >&2
+		echo "NOTE: could not derive next board event id — alert NOT recorded" >&2
 		return 0
 	}
 	ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	line="$(python3 - "$next_id" "$ts" "$event_type" "$detail_json" <<'PY'
+import json, sys
+print(json.dumps({
+    "id": int(sys.argv[1]),
+    "timestamp": sys.argv[2],
+    "event_type": sys.argv[3],
+    "task_id": "GAP-069",
+    "actor": "deploy-staleness-check",
+    "detail": sys.argv[4],
+}))
+PY
+)" || {
+		echo "NOTE: could not render board event JSON — alert NOT recorded" >&2
+		return 0
+	}
+	printf '%s\n' "$line" >>"$BOARD_EVENTS"
+	echo "board alert appended: $BOARD_EVENTS (event_type=$event_type${context:+ $context})"
+}
+
+# append_stale_event <reason:STALE|STALE_BLOCKED> <lag_seconds or "">
+# Staleness-specific detail, rendered and handed to the shared writer above.
+append_stale_event() {
+	local reason="$1" # STALE | STALE_BLOCKED
+	local lag="$2"    # seconds behind source ("" for missing artifact)
+	local nrestarts embedded_v="null" db_v="null" probe_bin v w lag_json detail
 	nrestarts="$("$SYSTEMCTL_BIN" --user show "$CANOPYD_SERVICE" -p NRestarts --value 2>/dev/null)"
 	[[ "$nrestarts" =~ ^[0-9]+$ ]] || nrestarts="unknown"
 	# Opportunistic schema context: probe the deployed binary (what the live
@@ -146,42 +205,112 @@ PY
 		fi
 	done
 	if command -v "$SCHEMA_PSQL" >/dev/null 2>&1; then
-		local w
 		w="$("$SCHEMA_PSQL" "$SCHEMA_DB_URL" -t -A -c "SELECT COALESCE((SELECT max(version) FROM schema_migrations), 0)" 2>/dev/null)"
 		[[ "$w" =~ ^[0-9]+$ ]] && db_v="$w"
 	fi
-	local lag_json
 	if [[ "$lag" =~ ^[0-9]+$ ]]; then
 		lag_json="$lag"
 	else
 		lag_json="null"
 	fi
-	detail_src="$(python3 - "$next_id" "$ts" "$reason" "$lag_json" "$SRC_COMMIT" "$DEPLOYED_PATH" "$embedded_v" "$db_v" "$nrestarts" <<'PY'
+	detail="$(python3 - "$reason" "$lag_json" "$SRC_COMMIT" "$DEPLOYED_PATH" "$embedded_v" "$db_v" "$nrestarts" <<'PY'
 import json, sys
 detail = {
-    "reason": sys.argv[3],
-    "lag_seconds": int(sys.argv[4]) if sys.argv[4] != "null" else None,
+    "reason": sys.argv[1],
+    "lag_seconds": int(sys.argv[2]) if sys.argv[2] != "null" else None,
+    "source_commit": sys.argv[3],
+    "deployed_binary": sys.argv[4],
+    "embedded_schema_version": int(sys.argv[5]) if sys.argv[5] != "null" else None,
+    "db_schema_version": int(sys.argv[6]) if sys.argv[6] != "null" else None,
+    "service_restarts": sys.argv[7],
+}
+print(json.dumps(detail))
+PY
+)" || {
+		echo "NOTE: could not render board event detail — alert NOT recorded" >&2
+		return 0
+	}
+	append_board_event "deploy_stale_alert" "$detail" "reason=$reason"
+}
+
+# ── Crash-loop alert (GAP-069 criterion 4) ──────────────────────────────────
+# A canopyd that dies and restarts in a loop is an outage even when the
+# deployed binary is NOT stale — and every other crash cause (bad config, port
+# taken, database down) looks identical from the outside: systemd keeps
+# restarting it and nothing watches NRestarts. So EVERY staleness run compares
+# the unit's restart counter against the baseline persisted in
+# $DEPLOY_STATE_FILE and appends ONE board event when it climbed by at least
+# the threshold since the previous run.
+#   * No readable counter (no systemd session, unknown unit) -> skip, note.
+#   * No/corrupt/unparseable baseline -> record it, never alert.
+#   * Counter equal, lower (systemd reset it on restart) or below threshold
+#     -> just re-baseline.
+# Never changes an exit code; never writes anywhere but the state file and the
+# board event log.
+check_crashloop() {
+	local nrestarts prev delta detail
+	nrestarts="$("$SYSTEMCTL_BIN" --user show "$CANOPYD_SERVICE" -p NRestarts --value 2>/dev/null)"
+	if [[ ! "$nrestarts" =~ ^[0-9]+$ ]]; then
+		echo "NOTE: no restart counter from $SYSTEMCTL_BIN for $CANOPYD_SERVICE — crash-loop baseline NOT updated" >&2
+		return 0
+	fi
+	prev="$(python3 - "$DEPLOY_STATE_FILE" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        v = json.load(f).get("nrestarts")
+    if isinstance(v, int) and v >= 0:
+        print(v)
+except Exception:
+    pass
+PY
+)"
+	# Persist the counter observed NOW, before any early return: the baseline
+	# must track reality even when the climb is below threshold. Atomic
+	# replace so a concurrent reader never sees a half-written file.
+	python3 - "$DEPLOY_STATE_FILE" "$nrestarts" "$CANOPYD_SERVICE" <<'PY' || echo "NOTE: could not write crash-loop state file $DEPLOY_STATE_FILE" >&2
+import json, os, sys, time
+path, n, svc = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+parent = os.path.dirname(path)
+if parent:
+    os.makedirs(parent, exist_ok=True)
+tmp = "%s.tmp.%d" % (path, os.getpid())
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump({
+        "nrestarts": n,
+        "service": svc,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }, f)
+    f.write("\n")
+os.replace(tmp, path)
+PY
+	if [[ ! "$prev" =~ ^[0-9]+$ ]]; then
+		echo "crash-loop baseline: $CANOPYD_SERVICE at $nrestarts restarts (no usable prior state) — no alert"
+		return 0
+	fi
+	delta=$((nrestarts - prev))
+	if ((delta < CRASHLOOP_THRESHOLD)); then
+		echo "crash-loop: $CANOPYD_SERVICE restarts $prev -> $nrestarts (delta $delta < threshold $CRASHLOOP_THRESHOLD) — no alert"
+		return 0
+	fi
+	detail="$(python3 - "$prev" "$nrestarts" "$delta" "$CANOPYD_SERVICE" "$SRC_COMMIT" "$DEPLOYED_PATH" "$CRASHLOOP_THRESHOLD" <<'PY'
+import json, sys
+print(json.dumps({
+    "restart_before": int(sys.argv[1]),
+    "restart_after": int(sys.argv[2]),
+    "delta": int(sys.argv[3]),
+    "service": sys.argv[4],
     "source_commit": sys.argv[5],
     "deployed_binary": sys.argv[6],
-    "embedded_schema_version": int(sys.argv[7]) if sys.argv[7] != "null" else None,
-    "db_schema_version": int(sys.argv[8]) if sys.argv[8] != "null" else None,
-    "service_restarts": sys.argv[9],
-}
-print(json.dumps({
-    "id": int(sys.argv[1]),
-    "timestamp": sys.argv[2],
-    "event_type": "deploy_stale_alert",
-    "task_id": "GAP-069",
-    "actor": "deploy-staleness-check",
-    "detail": json.dumps(detail),
+    "threshold": int(sys.argv[7]),
 }))
 PY
 )" || {
-		echo "NOTE: could not render board event JSON — stale alert NOT recorded" >&2
+		echo "NOTE: could not render crash-loop alert detail — alert NOT recorded" >&2
 		return 0
 	}
-	printf '%s\n' "$detail_src" >>"$BOARD_EVENTS"
-	echo "board alert appended: $BOARD_EVENTS (event_type=deploy_stale_alert reason=$reason)"
+	append_board_event "deploy_crashloop_alert" "$detail" "delta=$delta"
+	echo "CRASHLOOP: $CANOPYD_SERVICE restarts climbed $prev -> $nrestarts (delta $delta >= threshold $CRASHLOOP_THRESHOLD)"
 }
 
 # ── --check-schema: embedded schema vs live DB schema (read-only) ───────────
@@ -225,6 +354,15 @@ SRC_COMMIT="$(git -C "$REPO_ROOT" log -1 --format=%H -- "${WATCH_PATHS[@]}")"
 SRC_TS="$(git -C "$REPO_ROOT" log -1 --format=%ct -- "${WATCH_PATHS[@]}")"
 [[ "$SRC_TS" =~ ^[0-9]+$ ]] || fail_error "cannot parse commit timestamp for $SRC_COMMIT"
 SRC_HUMAN="$(date -u -d "@$SRC_TS" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$SRC_TS" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "epoch=$SRC_TS")"
+
+# ── Crash-loop check (GAP-069 criterion 4) ──────────────────────────────────
+# Runs on EVERY staleness run, before and independently of the staleness
+# verdict, so it covers all three exit paths below — deliberately including
+# the CURRENT one: a crash-looping service is an outage even when the deployed
+# binary is up to date. It reports on stdout and may append a board event; it
+# never changes this script's exit code. --check-schema returns earlier and is
+# left untouched (it is a pre-deploy gate, not a health watch).
+check_crashloop
 
 # ── Deployed artifact ────────────────────────────────────────────────────────
 LAG="" # seconds behind source; "" when the artifact is missing (set -u safe)

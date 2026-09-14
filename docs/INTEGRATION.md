@@ -525,6 +525,17 @@ Covered controls: current artifact → 0; stale → 1; missing → 1; stale +
 `--deploy` → STALE_BLOCKED (2), deploy never invoked; untracked-only dirt →
 also blocked; no-op deploy that leaves the artifact stale → 3.
 
+**Crash-loop alert (GAP-069).** Every staleness run also watches the service's
+restart counter: if `systemctl --user show canopy-canopyd -p NRestarts` climbed
+by `CANOPYD_CRASHLOOP_THRESHOLD` (default 50) since the previous run, the
+checker appends a `deploy_crashloop_alert` event to
+`.coding-hermes/board/events.jsonl` — so a canopyd that crash-loops for *any*
+reason (not only a stale binary) becomes visible within one timer interval,
+even when the artifact is current. The baseline lives in the local, git-ignored
+`.coding-hermes/deploy-check-state.json` and is rewritten every run; a missing
+or corrupt file simply re-baselines with no alert. This path never changes the
+checker's exit code.
+
 Install the automation (daily timer, opt-in, concrete unit names —
 `canopy-deploy-check.timer` enables cleanly against `timers.target`, template
 units would not; refuses dirty worktrees). Pre-flight without touching the

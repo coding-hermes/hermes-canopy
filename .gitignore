@@ -48,6 +48,12 @@ Thumbs.db
 .coding-hermes/e2e-deep.py
 .coding-hermes/e2e-screenshots/
 
+# Deploy-staleness checker runtime state (crash-loop restart baseline).
+# Local, machine-specific, rewritten on every run — and if it were untracked
+# dirt, the checker's own --deploy gate (git status --porcelain) would refuse
+# to deploy forever after the first run.
+.coding-hermes/deploy-check-state.json
+
 # GitReins judge token telemetry (per-run usage logs)
 .gitreins/usage.jsonl
 
