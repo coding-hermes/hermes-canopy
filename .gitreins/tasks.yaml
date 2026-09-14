@@ -2237,3 +2237,13 @@ tasks:
   status: complete
   created_at: '2026-09-14T12:37:37.702002+00:00'
   completed_at: '2026-09-14T14:17:18.684052+00:00'
+- id: GAP-069
+  title: 'P0 outage root-cause: isolate E2E/test runs from shared live :5437 DB +
+    deploy-time schema-mismatch regression test + crash-loop alerting'
+  criteria:
+  - (1) testutil/test runs cannot mutate the shared live canopy DB (dedicated/throwaway
+    DB hard gate); (2) pre-deploy check compares embedded-vs-DB schema versions; (3)
+    test asserting embedded version vs latest deployed schema; (4) crash-loop restart
+    counter produce a visible alert
+  status: in_progress
+  created_at: '2026-09-14T17:47:10.114816+00:00'
