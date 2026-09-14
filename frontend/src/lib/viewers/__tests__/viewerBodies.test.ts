@@ -1,5 +1,5 @@
 /**
- * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–6).
+ * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–7).
  * Pins: registry mapping (image/json/markdown non-null with expected hooks,
  * unknown → null), serialization validity (the bodies PARSE and EXECUTE
  * against a jsdom + stubbed canopy shim, exercising the load/error paths),
@@ -13,6 +13,7 @@ import { jsonViewerBody } from '../jsonViewerBody';
 import { markdownViewerBody } from '../markdownViewerBody';
 import { csvViewerBody, csvHelpers } from '../csvViewerBody';
 import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
+import { codeViewerBody, codeHelpers } from '../codeViewerBody';
 
 describe('viewerBodyForSlug registry', () => {
   it('returns non-null bodies for the four shipped slugs', () => {
@@ -21,6 +22,7 @@ describe('viewerBodyForSlug registry', () => {
     expect(viewerBodyForSlug('audio_video')).toBe(mediaViewerBody);
     expect(viewerBodyForSlug('markdown')).toBe(markdownViewerBody);
     expect(viewerBodyForSlug('csv')).toBe(csvViewerBody);
+    expect(viewerBodyForSlug('code')).toBe(codeViewerBody);
   });
 
   it('image body carries the stream-URL + zoom/rotate/pan hooks', () => {
@@ -45,6 +47,21 @@ describe('viewerBodyForSlug registry', () => {
     expect(body).toContain('buildJsonPath');
   });
 
+  it('code body carries the read-only detection, DOM, and event hooks', () => {
+    expect(codeHelpers.detectCodeLanguage('x.py', '').language).toBe('python');
+    const body = viewerBodyForSlug('code') ?? '';
+    expect(body).toBe(codeViewerBody);
+    expect(body).toContain('getTextContent');
+    expect(body).toContain('detectCodeLanguage');
+    expect(body).toContain('code_language_detected');
+    expect(body).toContain('code_cursor_moved');
+    expect(body).toContain('code_ready');
+    expect(body).toContain('code_error');
+    expect(body).toContain('logAccess');
+    expect(body).toContain('ready');
+    expect(() => new Function(body)).not.toThrow();
+  });
+
   it('markdown body carries the render/sanitize/link hooks and §9.5 events', () => {
     const body = viewerBodyForSlug('markdown') ?? '';
     expect(body).toContain('getTextContent');
@@ -61,7 +78,6 @@ describe('viewerBodyForSlug registry', () => {
 
   it('returns null for unknown slugs and the remaining built-ins', () => {
     expect(viewerBodyForSlug('pdf')).toBeNull();
-    expect(viewerBodyForSlug('code')).toBeNull();
     expect(viewerBodyForSlug('nonexistent')).toBeNull();
     expect(viewerBodyForSlug('Image')).toBeNull(); // case-sensitive
   });

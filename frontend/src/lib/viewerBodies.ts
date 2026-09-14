@@ -6,10 +6,10 @@
  * SECOND <script> (after the §8.3 shim). Phase 3 ships `image` (§9.2)
  * and `json` (§9.6 zero-dep subset); phase 4 adds `audio_video` (§9.7);
  * phase 5 adds `markdown` (§9.5 zero-dep GFM subset); phase 6 adds `csv`
- * (§9.4 zero-dep table subset). The remaining
- * built-ins (pdf, code) resolve null → shim-only doc (the phase-2
- * behavior) until their phases land — a null here is the "no body shipped
- * for this slug" signal, not an error.
+ * (§9.4 zero-dep table subset); phase 7 adds `code` (§9.3 read-only,
+ * dependency-free source viewer). The remaining built-in `pdf` resolves null
+ * → shim-only doc (the phase-2 behavior) until its phase lands — a null here
+ * is the "no body shipped for this slug" signal, not an error.
  */
 
 import { imageViewerBody } from './viewers/imageViewerBody';
@@ -17,6 +17,7 @@ import { jsonViewerBody } from './viewers/jsonViewerBody';
 import { markdownViewerBody } from './viewers/markdownViewerBody';
 import { mediaViewerBody } from './viewers/mediaViewerBody';
 import { csvViewerBody } from './viewers/csvViewerBody';
+import { codeViewerBody } from './viewers/codeViewerBody';
 
 /** Body sources for the built-in slugs that have shipped. */
 const BODIES: Readonly<Record<string, string>> = {
@@ -25,6 +26,7 @@ const BODIES: Readonly<Record<string, string>> = {
   audio_video: mediaViewerBody,
   markdown: markdownViewerBody,
   csv: csvViewerBody,
+  code: codeViewerBody,
 };
 
 /**
