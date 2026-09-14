@@ -1,6 +1,6 @@
 /**
- * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–7).
- * Pins: registry mapping (image/json/markdown non-null with expected hooks,
+ * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–8).
+ * Pins: registry mapping (all built-in slugs non-null with expected hooks,
  * unknown → null), serialization validity (the bodies PARSE and EXECUTE
  * against a jsdom + stubbed canopy shim, exercising the load/error paths),
  * and config plumbing (collapse depth default from config).
@@ -14,15 +14,18 @@ import { markdownViewerBody } from '../markdownViewerBody';
 import { csvViewerBody, csvHelpers } from '../csvViewerBody';
 import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
 import { codeViewerBody, codeHelpers } from '../codeViewerBody';
+import { pdfHelpers, pdfViewerBody } from '../pdfViewerBody';
+import { isPdfFile } from '../pdfViewerLogic';
 
 describe('viewerBodyForSlug registry', () => {
-  it('returns non-null bodies for the four shipped slugs', () => {
+  it('returns non-null bodies for every shipped built-in slug', () => {
     expect(viewerBodyForSlug('image')).toBe(imageViewerBody);
     expect(viewerBodyForSlug('json')).toBe(jsonViewerBody);
     expect(viewerBodyForSlug('audio_video')).toBe(mediaViewerBody);
     expect(viewerBodyForSlug('markdown')).toBe(markdownViewerBody);
     expect(viewerBodyForSlug('csv')).toBe(csvViewerBody);
     expect(viewerBodyForSlug('code')).toBe(codeViewerBody);
+    expect(viewerBodyForSlug('pdf')).toBe(pdfViewerBody);
   });
 
   it('image body carries the stream-URL + zoom/rotate/pan hooks', () => {
@@ -76,10 +79,26 @@ describe('viewerBodyForSlug registry', () => {
     expect(body).toContain('ready');
   });
 
-  it('returns null for unknown slugs and the remaining built-ins', () => {
-    expect(viewerBodyForSlug('pdf')).toBeNull();
+  it('pdf body carries the native-embed, fallback, and event hooks', () => {
+    const body = viewerBodyForSlug('pdf') ?? '';
+    expect(body).toBe(pdfViewerBody);
+    expect(body).toContain('getStreamUrl');
+    expect(body).toContain('application/pdf');
+    expect(body).toContain('normalizePdfConfig');
+    expect(body).toContain('buildPdfRenderPlan');
+    expect(body).toContain('buildPdfEmbedUrl');
+    expect(body).toContain('pdf_ready');
+    expect(body).toContain('pdf_error');
+    expect(body).toContain('download');
+    expect(body).toContain('logAccess');
+    expect(body).toContain('ready');
+    expect(() => new Function(body)).not.toThrow();
+  });
+
+  it('returns null for unknown slugs and case variants of known ones', () => {
     expect(viewerBodyForSlug('nonexistent')).toBeNull();
     expect(viewerBodyForSlug('Image')).toBeNull(); // case-sensitive
+    expect(viewerBodyForSlug('PDF')).toBeNull(); // case-sensitive
   });
 });
 
@@ -1079,3 +1098,195 @@ describe('csv body serialization and sandbox contract', () => {
     expect(fetchErrors).toEqual([{ code: 'TEXT_CONTENT_ERROR', message: 'storage failed' }]);
   });
 });
+
+describe('pdf body serialization and sandbox contract', () => {
+  type HandlerMap = Record<string, Array<(payload: unknown) => void>>;
+
+  let pdfViewerEnabledRestore: (() => void) | null = null;
+
+  function installPdfShim(
+    options: {
+      filename?: string;
+      mimeType?: string;
+      byteSize?: number;
+      streamUrl?: string;
+      config?: Record<string, unknown>;
+      authoritativeUrl?: string;
+      pluginAvailable?: boolean;
+      includeStreamApi?: boolean;
+    } = {},
+  ) {
+    const handlers: HandlerMap = {};
+    const getStreamUrl = vi.fn(() => Promise.resolve({ url: options.authoritativeUrl ?? '' }));
+    const logAccess = vi.fn(() => Promise.resolve({ ok: true }));
+    const ready = vi.fn(() => Promise.resolve({ ok: true }));
+    const viewer: Record<string, unknown> = { logAccess, ready };
+    if (options.includeStreamApi !== false) viewer.getStreamUrl = getStreamUrl;
+    (window as unknown as { canopy: unknown }).canopy = {
+      version: '1.0.0',
+      fileId: 'pdf-1',
+      __handlers: handlers,
+      __bootstrap: {
+        fileMeta: {
+          id: 'pdf-1',
+          filename: options.filename ?? 'report.pdf',
+          mimeType: options.mimeType ?? 'application/pdf',
+          byteSize: options.byteSize ?? 2_400_000,
+        },
+        streamUrl: options.streamUrl ?? '/stream/report.pdf',
+        config: options.config ?? {},
+      },
+      viewer,
+    };
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'pdfViewerEnabled');
+    Object.defineProperty(navigator, 'pdfViewerEnabled', {
+      value: options.pluginAvailable ?? true,
+      configurable: true,
+    });
+    pdfViewerEnabledRestore = () => {
+      if (descriptor) Object.defineProperty(navigator, 'pdfViewerEnabled', descriptor);
+      else delete (navigator as { pdfViewerEnabled?: boolean }).pdfViewerEnabled;
+      pdfViewerEnabledRestore = null;
+    };
+    return { handlers, getStreamUrl, logAccess, ready };
+  }
+
+  function ensurePdfRoot(): HTMLElement {
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.appendChild(root);
+    return root;
+  }
+
+  afterEach(() => {
+    document.getElementById('root')?.remove();
+    delete (window as unknown as { canopy?: unknown }).canopy;
+    if (pdfViewerEnabledRestore) pdfViewerEnabledRestore();
+    vi.restoreAllMocks();
+  });
+
+  it('serializes the helper bundle and executes the body without free identifiers', () => {
+    expect(pdfHelpers.formatByteSize(1536)).toBe('1.5 KB');
+    expect(isPdfFile({ mimeType: 'application/pdf' })).toBe(true);
+    expect(() => new Function(pdfViewerBody)).not.toThrow();
+    ensurePdfRoot();
+    installPdfShim();
+    expect(() => new Function(pdfViewerBody)()).not.toThrow();
+  });
+
+  it('renders the native embed from the bootstrap URL and emits pdf_ready on load', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim({ config: { initialPage: 2 } });
+    const readyEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_ready = [(payload: unknown) => readyEvents.push(payload as Record<string, unknown>)];
+
+    new Function(pdfViewerBody)();
+    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
+    expect(embed).not.toBeNull();
+    expect(embed.type).toBe('application/pdf');
+    expect(embed.getAttribute('data')).toBe('/stream/report.pdf#page=2');
+    expect(document.querySelector('[data-pdf-fallback]')).toBeNull();
+    expect((document.querySelector('[data-pdf-status]') as HTMLElement).textContent).toContain('report.pdf');
+    expect((document.querySelector('[data-pdf-status]') as HTMLElement).textContent).toContain('2.3 MB');
+    expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('native-embed');
+
+    shim.handlers.pdf_error = [() => {
+      throw new Error('no error expected on the load path');
+    }];
+    embed.dispatchEvent(new window.Event('load'));
+    expect(readyEvents).toEqual([{ nativePlugin: true }]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(shim.getStreamUrl).toHaveBeenCalledWith(null);
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+    expect(shim.logAccess).toHaveBeenCalledWith(
+      'open',
+      expect.objectContaining({ fileId: 'pdf-1', filename: 'report.pdf' }),
+    );
+  });
+
+  it('adopts the authoritative stream URL with a re-render when it differs from bootstrap', async () => {
+    ensurePdfRoot();
+    installPdfShim({ authoritativeUrl: '/stream/signed-report.pdf' });
+    new Function(pdfViewerBody)();
+    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
+    expect(embed.getAttribute('data')).toBe('/stream/report.pdf');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.querySelector('[data-pdf-embed]')!.getAttribute('data')).toBe(
+      '/stream/signed-report.pdf',
+    );
+  });
+
+  it('swaps to the fallback card when the embed fires an error event', () => {
+    ensurePdfRoot();
+    const shim = installPdfShim();
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_error = [(payload: unknown) => errors.push(payload as Record<string, unknown>)];
+    new Function(pdfViewerBody)();
+    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
+    embed.dispatchEvent(new window.Event('error'));
+    const card = document.querySelector('[data-pdf-fallback]');
+    expect(card).not.toBeNull();
+    expect(card!.getAttribute('role')).toBe('alert');
+    expect((card!.querySelector('[data-pdf-fallback-message]') as HTMLElement).textContent).toContain(
+      'download',
+    );
+    expect(errors).toEqual([expect.objectContaining({ code: 'PDF_EMBED_ERROR' })]);
+    expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('fallback');
+  });
+
+  it.each([
+    {
+      name: 'missing plugin',
+      options: { pluginAvailable: false },
+      code: 'PDF_PLUGIN_UNAVAILABLE',
+    },
+    {
+      name: 'missing stream URL',
+      options: { streamUrl: '', includeStreamApi: false },
+      code: 'STREAM_URL_MISSING',
+    },
+    {
+      name: 'non-PDF metadata',
+      options: { filename: 'notes.txt', mimeType: 'text/plain' },
+      code: 'NOT_A_PDF_FILE',
+    },
+  ])('renders an honest fallback card for $name and still notifies ready', ({ options, code }) => {
+    ensurePdfRoot();
+    const shim = installPdfShim(options);
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_error = [(payload: unknown) => errors.push(payload as Record<string, unknown>)];
+
+    new Function(pdfViewerBody)();
+    expect(document.querySelector('[data-pdf-embed]')).toBeNull();
+    const card = document.querySelector('[data-pdf-fallback]')!;
+    expect(card).not.toBeNull();
+    expect(card.getAttribute('role')).toBe('alert');
+    expect((card.querySelector('[data-pdf-fallback-meta]') as HTMLElement).textContent).toContain(
+      options.filename ?? 'report.pdf',
+    );
+    expect((card.querySelector('[data-pdf-fallback-message]') as HTMLElement).textContent).toBeTruthy();
+    // The effective stream URL is the test default unless the case overrides it.
+    const effectiveUrl = options.streamUrl !== undefined ? options.streamUrl : '/stream/report.pdf';
+    const download = card.querySelector('[data-pdf-download]') as HTMLAnchorElement | null;
+    expect(download === null).toBe(effectiveUrl.length === 0);
+    if (download) expect(download.getAttribute('download')).toBe(options.filename ?? 'report.pdf');
+    expect(errors).toEqual([expect.objectContaining({ code })]);
+    expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code }));
+    expect(shim.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits download actions when no stream URL exists at all', () => {
+    ensurePdfRoot();
+    installPdfShim({ streamUrl: '', pluginAvailable: false, includeStreamApi: false });
+    new Function(pdfViewerBody)();
+    const card = document.querySelector('[data-pdf-fallback]')!;
+    expect(card.querySelector('[data-pdf-download]')).toBeNull();
+    expect(card.querySelector('[data-pdf-open]')).toBeNull();
+  });
+});
+

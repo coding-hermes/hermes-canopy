@@ -166,14 +166,29 @@ describe('buildViewerDoc — phase 3 body injection', () => {
     }
   });
 
-  it("slug 'pdf' (no body shipped) → unchanged shim-only doc", () => {
+  it("slug 'pdf' (phase 8 body shipped) → shim + native-embed body injected", () => {
     const doc = buildFor('pdf');
     expect(doc).toContain(`var NONCE = "${NONCE}"`);
     expect(doc).toContain('window.canopy');
+    // The phase-8 pdf body ships: shim + body, body after the shim.
+    expect(doc.match(/<script>/g)).toHaveLength(2);
+    const shimAt = doc.indexOf('window.canopy');
+    const bodyAt = doc.indexOf('buildPdfRenderPlan');
+    expect(shimAt).toBeGreaterThan(-1);
+    expect(bodyAt).toBeGreaterThan(shimAt);
+    expect(doc).toContain('application/pdf');
+    expect(doc).toContain('pdf_error');
+  });
+
+  it('unknown slug (no body shipped) → unchanged shim-only doc', () => {
+    const doc = buildFor('definitely-not-a-slug');
+    expect(doc).toContain(`var NONCE = "${NONCE}"`);
+    expect(doc).toContain('window.canopy');
     expect(doc.match(/<script>/g)).toHaveLength(1);
-    // No phase-3 body hooks leaked in.
+    // No built-in body hooks leaked in.
     expect(doc).not.toContain('getStreamUrl(null)');
     expect(doc).not.toContain('parseJsonc');
+    expect(doc).not.toContain('buildPdfRenderPlan');
   });
 
   it('CSP meta is present exactly once and byte-identical in every variant', () => {
