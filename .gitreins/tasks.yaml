@@ -2227,3 +2227,13 @@ tasks:
   status: complete
   created_at: '2026-09-14T05:05:21.606682+00:00'
   completed_at: '2026-09-14T05:23:45.494495+00:00'
+- id: PL02-P9
+  title: "SPEC-PL-02 phase 9 \u2014 PDF.js host-bundle foundation"
+  criteria:
+  - Add a local pdfjs-dist 4.x host-asset bridge for the pdf viewer; make PDF.js canvas
+    rendering the primary PDF path with worker configuration, signed stream URL loading,
+    page/zoom events, and an honest fallback; focused tests, full frontend vitest,
+    TypeScript build, and oxlint pass.
+  status: complete
+  created_at: '2026-09-14T12:37:37.702002+00:00'
+  completed_at: '2026-09-14T14:17:18.684052+00:00'
