@@ -2,12 +2,12 @@
 name: hermes-canopy-usage
 description: >-
   How to actually USE Hermes Canopy (canopyd + PWA): entry points, run commands,
-  working API paths, UI flows, CLI, the LIVE Hermes gateway surface (GAP-050),
-  and the pitfalls that waste time (fresh-DB 503 = missing users row, phantom
-  reply route, stale deployed binary, casing split, docs drift). Load this
-  before touching the stack. Written from the 2026-08-17, 08-27 and 09-10
-  deep dogfood runs.
-version: 2.1.0
+  working API paths, UI flows, CLI, the file-viewer subsystem, the LIVE Hermes
+  gateway surface (GAP-050), and the pitfalls that waste time (stale deployed
+  binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
+  GAP-071, casing split, docs drift). Load this before touching the stack.
+  Written from the 2026-08-17, 08-27, 09-10 and 09-14 deep dogfood runs.
+version: 2.2.0
 category: software-development
 ---
 
@@ -53,16 +53,16 @@ output appears. Zero console errors in the 2026-08-27 probe.
   **camelCase here.**
 - **Create node (this is ALSO the reply path):** `POST /api/v1/trees/{id}/nodes`
   body `{"parent_id","content","node_type":"message","edge_type":"reply"}`
-  → 201 `{node, edge}`. **snake_case here.** `parent_id` empty = root-level node.
+  → 201 `{node, edge}`. **snake_case here.** NOTE: `parent_id: ""` (empty
+  string) is accepted as absent → silently creates a ROOT-level node
+  (GAP-072: should 400). Don't pass empty strings.
 - **Fork (tree-scoped):** `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork`.
   Fork only works on nodes that already have ≥1 child (leaf fork → 400
   VALIDATION_ERROR, documented).
-- ⚠️ **`POST .../nodes/{node_id}/reply` (tree-scoped) is a PHANTOM ROUTE —
-  documented in API.md but never mounted** (GAP-065, found 2026-09-10: chi
-  answers bare `404 page not found`; only the unmounted `NodeHandler.Routes()`
-  registers it). The skill's v2.0 claim that it worked was wrong. Reply =
-  node-create with `parent_id` (that's what the PWA composer does).
-  `PATCH/DELETE /trees/{t}/nodes/{n}` ARE mounted and work.
+- ✅ **`POST .../nodes/{node_id}/reply` (tree-scoped) is REAL since tick 429
+  (GAP-065 FIXED, commit cc581a4):** mounted on the production router and
+  guarded by `route_parity_test.go`. The 2026-09-10 phantom-route finding is
+  historical. Node-create with `parent_id` remains the PWA composer path.
 - **Context manifest (headline feature):** `GET /api/v1/context/{node_id}` →
   `{content, manifest:{tokenBudget, tokensUsed, ancestry:[...]}}`. In the UI: click a
   canvas node → "Context | N / 8,000 tokens" panel.
@@ -77,6 +77,25 @@ output appears. Zero console errors in the 2026-08-27 probe.
 - **CLI:** `tree create <name> --content <text>` (content mandatory), `tree list`,
   `tree navigate <id>` (hierarchy output), `tree delete <id>`, `--help` works
   (GAP-042/045 FIXED).
+
+## File-viewer subsystem quick reference (verified 2026-09-14, HEAD 9bbe3dc)
+
+Source of truth `internal/fileviewer/handlers.go` (UNDOCUMENTED elsewhere — GAP-071).
+All require auth AND an acting profile (fresh DBs: see pitfall #9 seed).
+
+| Method | Path | Verified behavior |
+|---|---|---|
+| POST | `/api/v1/files/upload` | multipart `file` (+optional `filename`,`declaredMime`,`sourceMessageId`) → 201 `{file:{id,sha256,mimeType,viewerHint,…}, was_deduped, stream_url, expires_at}`; re-upload of identical bytes → `was_deduped:true` |
+| POST | `/api/v1/files/resolve` | JSON `{hash_ref:{profile_id,sha256}}` or upload variant |
+| POST | `/api/v1/files/resolve/batch` | batch of the above |
+| GET | `/api/v1/files` | list (empty DB without profile seed → 404 PROFILE_NOT_FOUND) |
+| GET | `/api/v1/files/recents` | ONLY populated by access-log POSTs, not uploads |
+| GET | `/api/v1/files/{id}` | 200 metadata |
+| GET | `/api/v1/files/{id}/stream` | 200 bytes; `Range: bytes=0-9` → 206 + `Content-Range` |
+| GET/POST | `/api/v1/files/{id}/access` | POST body `{action:"open\|download\|…", viewer_slug:"code"}` → 201; GET = log |
+| GET | `/api/v1/viewers` | built-in registry (audio_video, code, image, json, …) with `supportsMime`/`supportsExtensions` |
+| GET | `/api/v1/viewers/{slug}` | one viewer |
+| POST | `/api/v1/viewers/dispatch` | JSON `{"file_id":"…","tree_id":"…"}` → 200 `{viewerSlug, renderType, bundlePath, isBuiltIn,…}` |
 
 ## Known pitfalls (updated 2026-09-10)
 
@@ -113,19 +132,52 @@ output appears. Zero console errors in the 2026-08-27 probe.
 7. **E2E battery has ZERO gateway coverage** — it passed while the gateway
    surface 404'd. Don't trust E2E green as proof the gateway works; probe it
    directly.
-8. **`docker compose up -d` fails without `.env` (GAP-068):** `env_file: .env`
-   is mandatory and .env is gitignored; no doc says `cp .env.example .env`.
-   Note: `.env.example` defaults `HTTP_ADDR=:8080` while compose expects the
-   container to listen on :8080 — check the compose env block before editing.
+8. **✅ compose works without `.env` since ce3e1dc (GAP-068 FIXED, verified
+   09-14 on a fresh bunker clone):** `docker compose up -d --build` comes up
+   clean; `cp .env.example .env` is now optional (docs still recommend it).
+9. **File-viewer subsystem is UNDOCUMENTED and bricks on fresh DBs
+   (GAP-071, 09-14):** the 12 `/api/v1/files` + `/api/v1/viewers` routes are
+   in NO doc (source of truth: `internal/fileviewer/handlers.go`). Every
+   call needs an ACTING PROFILE: JWT sub → `profiles` row +
+   `profile_route` row tied to a `workspaces` row. Fresh DBs have none →
+   404 PROFILE_NOT_FOUND everywhere; `POST /workspaces/{ws}/profiles`
+   500s (`fk_profile_route_workspace`) because the workspaces row is never
+   created. Until GAP-071 is fixed, seed by hand:
+   ```sql
+   INSERT INTO workspaces (id, name, slug)
+     VALUES ('<uuid>','ws','ws') ON CONFLICT DO NOTHING;
+   INSERT INTO profiles (id, owner_id, name, display_name)
+     VALUES ('<uuid>','00000000-0000-0000-0000-000000000001','dev','Dev')
+     ON CONFLICT DO NOTHING;
+   INSERT INTO profile_route (workspace_id, profile_name, is_active)
+     VALUES ('<uuid>','dev',true) ON CONFLICT DO NOTHING;
+   ```
+   Then it works: upload → 201 (sha256 dedup, viewerHint), dispatch → 200,
+   stream → 200/206 Range, access-log POST → recents populates (uploads
+   alone do NOT appear in /files/recents).
+10. **STALE BUILD can take the service DOWN (GAP-069 outage, 09-12→09-14):**
+    canopyd embeds its migrations and REFUSES to start if the DB schema is
+    newer than the binary. Migrations 43–46 (file-viewer, 4ac2f15) were
+    applied to the SHARED live :5437 DB by the E2E/foreman run; the deployed
+    binary (embeds 42) then crash-looped ~37h, silently, ≈27k restarts.
+    Diagnosis: `systemctl --user status canopy-canopyd` +
+    `journalctl --user -u canopy-canopyd -n 20` (STALE BUILD names both
+    versions). Fix: clean worktree → `make deploy`. NEVER roll the DB back.
 
-## Stack hygiene
+## Stack hygiene (updated 2026-09-14 — the :5437 advice below was REVOKED)
 
-- Canonical E2E DB is the compose PG on **:5437** (NOT localhost:5432) — a fresh
-  local DB hits GAP-064 (503 on first write) unless you seed the dev user first
-  (see pitfalls #1).
-- Old hygiene note "a fresh local DB makes tree-create 503" is EXPLAINED by
-  GAP-064 (missing users row) — it is not a flake and not a port issue.
-- Dev user row must exist in `users` (INSERT ... ON CONFLICT, see INTEGRATION.md §8.1).
+- 🚨 **NEVER point E2E/foreman/test runs at the LIVE :5437 DB.** The old
+  advice ("canonical E2E DB is the compose PG on :5437") caused the GAP-069
+  outage: a test run migrated it to schema 46 and the deployed binary
+  refused to start for ~37h. Stand up a throwaway postgres instead:
+  `docker run -d --name canopy-test-pg -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy -e POSTGRES_DB=canopy -p 127.0.0.1:5438:5432 postgres:16`
+  Fresh DBs now work out of the box for the core flows (GAP-064 fixed:
+  dev user auto-seeded when JWT_SECRET is the dev default). The file-viewer
+  surface still needs the GAP-071 hand-seed on fresh DBs.
+- After ANY change touching `internal/`, `cmd/`, `migrations/`: run
+  `scripts/check-deploy-staleness.sh`; deploy with `make deploy` (clean
+  worktree only — it refuses dirty trees). Check
+  `systemctl --user is-active canopy-canopyd` afterward.
 - Don't restart the running stack during foreman ticks; the E2E loop owns it.
 - Clean up scratch trees/topics via API DELETE (204).
 - The demo tree is E2E-only (GAP-051); the live DB should show real Hermes data.

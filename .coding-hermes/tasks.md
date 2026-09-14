@@ -10853,6 +10853,59 @@ Verdict: PROMISING-BUT-ROUGH. HEAD 1e3647b against a FRESH scratch DB (canopy_do
   mapping is **:8092**→8080. Caveat: a compose user proceeding to the documented
   first curl (tree create) would hit GAP-064 (fresh DB has no users row).
 
+## Dogfood Findings (2026-09-14)
+
+Verdict: PROMISING-BUT-ROUGH (6th consecutive — but the first run that found the
+service fully DOWN). HEAD 9bbe3dc exercised end-to-end against a throwaway DB
+(canopy-pg-dogfood, :5438, binary on :8092) + ephemeral-bunker fresh install
+(las-bunker-03, agent 73a4ebd4). Canonical rows GAP-069..072 appended to
+board/tasks.jsonl.
+
+- [P0] GAP-069 — PRODUCTION OUTAGE: the live `canopy-canopyd.service` has been
+  crash-looping since 2026-09-12 ~20:32 (restart counter ≈27,000 ≈ 37h at
+  discovery, ~5s/restart). ROOT CAUSE: migrations 43–46 (file-viewer subsystem,
+  commit 4ac2f15 2026-09-12 20:27) were applied to the SHARED live DB
+  (docker `canopy-pg` on :5437) — schema_migrations = 46 — by the E2E battery /
+  foreman run that same night, while the deployed `/home/kara/bin/canopyd`
+  (built 09-11 15:33) embeds schema 42 → `STALE BUILD` refuse-to-start forever,
+  no alert anywhere. The STALE BUILD guard did its job; what's missing is (a)
+  E2E/foreman isolation from the live :5437 DB and (b) crash-loop alerting.
+  Recovery once seen = `make deploy` (HEAD embeds 46, verified starting clean).
+- [P1] GAP-070 — The GAP-067 deploy-check timer DETECTED this class a day
+  early and stayed silent: `canopy-deploy-check.service` exited 2
+  (STALE_BLOCKED, dirty worktree) at 09-13 15:34 — daily oneshot, no
+  OnFailure hook, no retry, no notify. Fix: hourly cadence + STALE → board
+  row/notify instead of a silent exit code.
+- [P1] GAP-071 — File-viewer subsystem shipped with zero docs and a fresh-DB
+  brick: none of the /api/v1/files + /viewers routes (12 of them) appear in
+  docs/API.md/README/INTEGRATION.md; every call needs an acting profile +
+  profile_route workspace row that nothing provisions on a clean install →
+  404 PROFILE_NOT_FOUND (files) / 500 fk_profile_route_workspace
+  (set-active-profile). Reproduced on bunker fresh install AND scratch DB.
+  Verified working after hand-seeding: upload 201 (sha256 dedup), dispatch
+  200, stream 200 + Range 206, recents after access-log POST. GAP-064 class
+  resurfacing on the new subsystem.
+- [P2] GAP-072 — API rough edges: node create accepts `parent_id:""` as
+  absent (silently creates a ROOT node); envelope split (tree/topic create
+  bare vs node create `{node:…}`); fork empty body → generic INVALID_BODY
+  instead of "content is required"; /files/recents ignores uploads (only
+  /access POSTs count).
+- Install leg (las-bunker-03, agent 73a4ebd4): clone @ 9bbe3dc OK;
+  `docker compose up -d --build` = **PASS in 174s**, both containers healthy;
+  smoke `/health` 200 (schema 46 = embedded 46), `/version` 200, unauth
+  `/api/v1/trees` → 401. GAP-068 **verified FIXED** (compose works without a
+  hand-made .env). Bunker note: use the platform socket
+  `/run/bunker/<agent>/docker.sock` (the per-user rootless unit lock-fights
+  the platform daemon).
+- Verified working this run: JWT auth (401 unauth), tree create/list, node
+  create + parent_id, fork with leaf rule enforced (exact 400 message),
+  context manifest (61/4000 tokens, ancestry), graph stats/ancestors/subtree,
+  topic create with VALID root_node_id (**GAP-066 verified FIXED**), SSE live
+  (node_added mid-stream), export, CLI create/list/navigate.
+- Foreman: NOT woken (fleet cooldown law ≥21600s). GAP-069/070 are actionable
+  without the scheduler: recovery is `make deploy` on a clean worktree; E2E
+  isolation lands with the next foreman tick that picks up GAP-069.
+
 ## Tick 429 — 2026-09-11 ~01:32 local (WORK TICK: GAP-065 COMPLETE — documented reply/update/delete routes mounted on the real router)
 
 **Verdict:** WORK TICK. Picked GAP-065 (P1, dogfood 2026-09-10) out of 23 unique

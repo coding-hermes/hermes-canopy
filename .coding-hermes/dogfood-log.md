@@ -56,6 +56,51 @@
 
 # Dogfood Log — Hermes Canopy
 
+## 2026-09-14 — Deep real-use run (cron dogfood) — OUTAGE DISCOVERY
+
+- **Verdict:** 🟡 PROMISING-BUT-ROUGH (6th consecutive) — but the first run
+  that found the service fully DOWN (crash-loop ~37h, ≈27k restarts) and the
+  first with a P0.
+- **Promise:** "A user can run the local server + PWA, create a tree, branch
+  from any message, and see a visible, budgeted context manifest — resuming
+  work in <30 seconds."
+- **Time-to-first-success:** ~55s on HEAD built from source vs a scratch DB
+  (build + JWT + tree + node + context); ∞ on the deployed service at run
+  start (GAP-069 outage — binary embeds schema 42, live DB migrated to 46 by
+  the E2E/foreman run on shared :5437).
+- **Friction count:** 7 (see docs/dogfood/2026-09-14-integration.md).
+- **Top 3 findings:**
+  1. **GAP-069 (P0)** — production outage: migrations 43–46 applied to the
+     shared live DB by a test run; deployed binary refuses to start forever,
+     no alert anywhere. Fix = E2E isolation from :5437 + crash-loop alerting;
+     recovery = `make deploy`.
+  2. **GAP-070 (P1)** — the GAP-067 deploy-checker DETECTED the condition
+     (exit 2 STALE_BLOCKED 09-13 15:34) and stayed silent for 24h (daily
+     oneshot, no OnFailure/notify/retry).
+  3. **GAP-071 (P1)** — file-viewer subsystem (SPEC-PL-02, migrations 43–46)
+     shipped with ZERO docs and a fresh-DB brick (acting-profile +
+     workspaces/profile_route provisioning): 404 PROFILE_NOT_FOUND /
+     500 fk_profile_route_workspace on any clean install. Reproduced twice
+     (scratch DB + bunker install). Verified fully working after hand-seed
+     (upload/dedup/dispatch/stream+Range/access/recents).
+- **Also filed:** GAP-072 (P2 API rough edges: empty parent_id creates ROOT
+  node silently; envelope split; fork empty-body error; recents ignores
+  uploads).
+- **Verified working (scratch DB, real evidence):** JWT auth 401; tree
+  create/list; node create + parent_id; fork + leaf rule (exact message);
+  context manifest 61/4000 tokens with ancestry; graph stats/ancestors/
+  subtree; topic create with VALID root_node_id (GAP-066 verified FIXED);
+  SSE node_added mid-stream; export; CLI create/list/navigate.
+- **Install leg (bunker, PASSED in 174s):** clone @ 9bbe3dc; compose up
+  healthy; /health schema 46=46; 401 unauth. GAP-068 verified FIXED (no .env
+  needed). Bunker note: platform socket /run/bunker/<agent>/docker.sock.
+- **Left behind:** docs/dogfood/2026-09-14-integration.md ·
+  docs/dogfood/diagnostics.md (2026-09-14 update) ·
+  skills/hermes-canopy-usage/SKILL.md v2.2 (file-viewer quick-ref, revoked
+  dangerous :5437 advice, GAP-065 un-marked phantom) · board rows
+  GAP-069..072 · tasks.md Dogfood Findings section.
+- **Foreman:** not woken (fleet cooldown law ≥21600s, no wake PUTs).
+
 ## 2026-09-10 — Deep real-use run (cron dogfood) — fresh-DB forensics
 
 - **Verdict:** 🟡 PROMISING-BUT-ROUGH (5th consecutive — but two long-standing

@@ -221,3 +221,48 @@ sees today:
 - **Topics quick-reference drift + SPA deep links not serving** → 46b356d
   (DF-HERMES-CANOPY-4, closed tick 435): the topics quick reference matches
   the API and SPA deep links serve the PWA.
+
+### 2026-09-14 update — the outage dogfood (GAP-069..072)
+
+The 09-12 update above closed every prior trap, and the board shipped the
+file-viewer subsystem (SPEC-PL-02 phases 1–9, migrations 43–46). This run —
+the first that found the service fully DOWN — shows how the *class* survives
+even when each *instance* is fixed:
+
+- **How the system is built:** `canopyd` embeds its migrations
+  (`migrations/embed.go`); on start it compares `binary_embedded_version`
+  with the DB's `schema_migrations.version` and REFUSES to start on a newer
+  DB (STALE BUILD). Any process that runs migrations against a DB therefore
+  controls which binaries may serve it.
+- **How it broke:** migrations 43–46 landed in 4ac2f15 (09-12 20:27); the
+  E2E battery / foreman run that night pointed at the SHARED live DB (docker
+  `canopy-pg`, host :5437) and migrated it to 46. The deployed binary
+  (/home/kara/bin/canopyd, built 09-11, embeds 42) then refused every start
+  — forever, silently, ~5s cycle, ≈27k restarts over ~37h.
+- **Why nobody saw it:** (1) the GAP-067 deploy-checker is a daily oneshot;
+  it DID exit 2 (STALE_BLOCKED, dirty worktree) on 09-13 15:34 — correct
+  refusal, zero follow-through, next attempt 24h later (GAP-070); (2) no
+  OnFailure/alerting on the service unit; (3) the "deploy" mental model in
+  the fleet ("ExecStartPre rebuilds from HEAD" elsewhere) does not apply
+  here — canopyd ships via `make deploy` only, so staleness is a real
+  failure mode, not a self-heal.
+- **The right way (for future agents):**
+  - E2E/foreman NEVER touch :5437. Stand up a throwaway postgres
+    (`docker run … -p 127.0.0.1:<port>:5432 postgres:16`) or a dedicated
+    test DB; the compose file already shows the pattern.
+  - After any change touching `internal/`, `cmd/`, `migrations/`: run
+    `scripts/check-deploy-staleness.sh` and, when the live service matters,
+    `make deploy` (clean worktree; it builds → atomic-installs → restarts →
+    polls /health → runs scripts/smoke-gateway.sh).
+  - Diagnosing "service down": `systemctl --user status canopy-canopyd` +
+    `journalctl --user -u canopy-canopyd -n 20`; STALE BUILD names both
+    versions (`binary_embedded_version=42 db_schema_version=46`) — the fix
+    is a current binary, never a DB rollback.
+  - New subsystem checklist (learned from GAP-071): routes → docs/API.md +
+    README quick-ref BEFORE merge; anything keyed to an acting profile needs
+    a fresh-DB story (dev-seed or auto-provision), because tree-create only
+    provisions `users`, and `profiles`/`profile_route`/`workspaces` rows do
+    not exist on clean installs.
+- **Verified-fixed confirmations from this run:** GAP-068 (compose without
+  .env) and GAP-066 (topic root_node_id) re-tested at HEAD 9bbe3dc — both
+  hold on a fresh clone + fresh DB.
