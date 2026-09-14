@@ -26,6 +26,10 @@ npm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# pdf.js host-bundle assets — copied from node_modules/pdfjs-dist at every
+# vite dev/build start (vite.config.ts); never vendored into the repo.
+public/pdfjs/
+
 # Playwright report + generated artifacts (test-results/ is TRACKED - never ignore it)
 playwright-report/
 playwright-artifacts/

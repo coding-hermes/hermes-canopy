@@ -1,17 +1,22 @@
 /**
- * Unit tests — dependency-free PDF viewer logic (SPEC-PL-02 §9.1, phase 8).
- * These exact helpers are serialized into pdfViewerBody.ts, so boundary
- * behavior here also pins the sandboxed viewer's render decisions.
+ * Unit tests — PDF viewer logic (SPEC-PL-02 §9.1, phase 9 pdf.js host
+ * bundle). These exact helpers are serialized into pdfViewerBody.ts, so
+ * boundary behavior here also pins the sandboxed viewer's render decisions.
  */
 
 import { describe, expect, it } from 'vitest';
 import {
-  buildPdfEmbedUrl,
   buildPdfRenderPlan,
   buildPdfViewerState,
+  classifyPdfjsError,
+  clampPdfPage,
+  clampPdfZoom,
   formatByteSize,
   isPdfFile,
   normalizePdfConfig,
+  readPdfjsAssets,
+  resolvePdfScale,
+  stepPdfZoom,
 } from '../pdfViewerLogic';
 
 describe('isPdfFile', () => {
@@ -128,48 +133,129 @@ describe('buildPdfViewerState', () => {
 describe('buildPdfRenderPlan', () => {
   const pdfMeta = { filename: 'doc.pdf', mimeType: 'application/pdf' };
 
-  it('chooses the native embed only when every condition agrees', () => {
+  it('chooses the pdf.js path only when every condition agrees', () => {
     expect(
-      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '/stream/doc.pdf', pluginAvailable: true }),
-    ).toEqual({ mode: 'native-embed', reason: 'PDF_PLUGIN_AVAILABLE' });
+      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '/stream/doc.pdf', assetsAvailable: true }),
+    ).toEqual({ mode: 'pdfjs', reason: 'PDFJS_ASSETS_READY' });
   });
 
-  it('falls back when the plugin is unavailable, the URL is missing, or the file is not a PDF', () => {
+  it('falls back when assets are missing, the URL is missing, or the file is not a PDF', () => {
     expect(
-      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '/stream/doc.pdf', pluginAvailable: false }),
-    ).toEqual({ mode: 'fallback', reason: 'PDF_PLUGIN_UNAVAILABLE' });
+      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '/stream/doc.pdf', assetsAvailable: false }),
+    ).toEqual({ mode: 'fallback', reason: 'PDFJS_ASSETS_MISSING' });
     expect(
-      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '', pluginAvailable: true }),
+      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: '', assetsAvailable: true }),
     ).toEqual({ mode: 'fallback', reason: 'STREAM_URL_MISSING' });
     expect(
-      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: undefined, pluginAvailable: true }),
+      buildPdfRenderPlan({ fileMeta: pdfMeta, streamUrl: undefined, assetsAvailable: true }),
     ).toEqual({ mode: 'fallback', reason: 'STREAM_URL_MISSING' });
     expect(
       buildPdfRenderPlan({
         fileMeta: { filename: 'notes.txt', mimeType: 'text/plain' },
         streamUrl: '/stream/notes.txt',
-        pluginAvailable: true,
+        assetsAvailable: true,
       }),
     ).toEqual({ mode: 'fallback', reason: 'NOT_A_PDF_FILE' });
   });
 });
 
-describe('buildPdfEmbedUrl', () => {
-  it('appends the #page fragment for pages beyond the first', () => {
-    expect(buildPdfEmbedUrl('/stream/doc.pdf', { ...normalizePdfConfig({ initialPage: 3 }) })).toBe(
-      '/stream/doc.pdf#page=3',
-    );
+describe('readPdfjsAssets', () => {
+  it('accepts relative and absolute same-origin module/worker URL pairs', () => {
+    expect(
+      readPdfjsAssets({
+        pdfjs: { moduleUrl: '/assets/pdf.min-abc123.mjs', workerUrl: '/assets/pdf.worker.min-def456.mjs' },
+      }),
+    ).toEqual({ moduleUrl: '/assets/pdf.min-abc123.mjs', workerUrl: '/assets/pdf.worker.min-def456.mjs' });
+    // Absolute URLs on the frame's own origin are equally acceptable.
+    const origin = window.location.origin;
+    expect(
+      readPdfjsAssets({
+        pdfjs: { moduleUrl: `${origin}/assets/pdf.min.mjs`, workerUrl: '/assets/w.mjs' },
+      }),
+    ).toEqual({ moduleUrl: `${origin}/assets/pdf.min.mjs`, workerUrl: '/assets/w.mjs' });
   });
 
-  it('leaves URLs unchanged for page 1, invalid pages, existing fragments, and empty input', () => {
-    const defaults = normalizePdfConfig(undefined);
-    expect(buildPdfEmbedUrl('/stream/doc.pdf', defaults)).toBe('/stream/doc.pdf');
-    expect(buildPdfEmbedUrl('/stream/doc.pdf', { ...defaults, initialPage: 0 })).toBe('/stream/doc.pdf');
-    expect(buildPdfEmbedUrl('/stream/doc.pdf', undefined)).toBe('/stream/doc.pdf');
-    expect(buildPdfEmbedUrl('/stream/doc.pdf#page=2', { ...defaults, initialPage: 5 })).toBe(
-      '/stream/doc.pdf#page=2',
-    );
-    expect(buildPdfEmbedUrl('', { ...defaults, initialPage: 5 })).toBe('');
-    expect(buildPdfEmbedUrl(undefined, defaults)).toBe('');
+  it('rejects missing, partial, and malformed bootstrap entries', () => {
+    expect(readPdfjsAssets(undefined)).toBeNull();
+    expect(readPdfjsAssets({})).toBeNull();
+    expect(readPdfjsAssets({ pdfjs: null })).toBeNull();
+    expect(readPdfjsAssets({ pdfjs: { moduleUrl: '/assets/pdf.min.mjs' } })).toBeNull();
+    expect(readPdfjsAssets({ pdfjs: { moduleUrl: '', workerUrl: '/assets/w.mjs' } })).toBeNull();
+    expect(readPdfjsAssets({ pdfjs: { moduleUrl: 42, workerUrl: '/assets/w.mjs' } })).toBeNull();
+  });
+
+  it('rejects cross-origin and non-http(s) sources (no CDN, no data:, no javascript:)', () => {
+    expect(
+      readPdfjsAssets({
+        pdfjs: {
+          moduleUrl: 'https://cdn.example.com/pdf.min.mjs',
+          workerUrl: '/assets/w.mjs',
+        },
+      }),
+    ).toBeNull();
+    expect(
+      readPdfjsAssets({ pdfjs: { moduleUrl: 'data:text/javascript,module', workerUrl: '/w.mjs' } }),
+    ).toBeNull();
+    expect(
+      readPdfjsAssets({
+        pdfjs: { moduleUrl: 'javascript:///assets/pdf.min.mjs', workerUrl: '/w.mjs' },
+      }),
+    ).toBeNull();
+    expect(
+      readPdfjsAssets({ pdfjs: { moduleUrl: 'file:///assets/pdf.min.mjs', workerUrl: '/w.mjs' } }),
+    ).toBeNull();
+  });
+});
+
+describe('zoom and page bounds', () => {
+  it('clamps zoom into the §9.1 0.5–3.0 band and resets non-finite input', () => {
+    expect(clampPdfZoom(1)).toBe(1);
+    expect(clampPdfZoom(0.2)).toBe(0.5);
+    expect(clampPdfZoom(9)).toBe(3);
+    expect(clampPdfZoom(Number.NaN)).toBe(1);
+    expect(clampPdfZoom('2')).toBe(2);
+  });
+
+  it('steps zoom by ×1.25 with a hard 0.5 floor and 3.0 ceiling', () => {
+    expect(stepPdfZoom(1, 1)).toBeCloseTo(1.25, 12);
+    expect(stepPdfZoom(2.8, 1)).toBe(3);
+    expect(stepPdfZoom(1, -1)).toBeCloseTo(0.8, 12);
+    expect(stepPdfZoom(0.55, -1)).toBe(0.5);
+  });
+
+  it('resolves fit-width against the container and guards degenerate measures', () => {
+    expect(resolvePdfScale('fit-width', 800, 400)).toBeCloseTo(0.5, 12);
+    expect(resolvePdfScale('fit-width', 800, 1600)).toBeCloseTo(2, 12);
+    expect(resolvePdfScale('fit-width', 800, 99999)).toBe(3); // clamped ceiling
+    expect(resolvePdfScale('fit-width', 0, 400)).toBe(1); // jsdom zero-size guard
+    expect(resolvePdfScale('fit-width', 800, 0)).toBe(1);
+    expect(resolvePdfScale(1.5, 0, 0)).toBe(1.5); // explicit zoom unaffected
+  });
+
+  it('clamps page requests into [1, totalPages]', () => {
+    expect(clampPdfPage(1, 10)).toBe(1);
+    expect(clampPdfPage(5, 10)).toBe(5);
+    expect(clampPdfPage(11, 10)).toBe(10);
+    expect(clampPdfPage(0, 10)).toBe(1);
+    expect(clampPdfPage(-3, 10)).toBe(1);
+    expect(clampPdfPage(Number.NaN, 10)).toBe(1);
+    expect(clampPdfPage(4.9, 10)).toBe(4);
+    expect(clampPdfPage(3, 0)).toBe(1);
+    expect(clampPdfPage('7', 10)).toBe(7);
+  });
+});
+
+describe('classifyPdfjsError', () => {
+  it('maps pdf.js typed exceptions to §9.1 pdf_error codes', () => {
+    expect(classifyPdfjsError({ name: 'MissingPDFException' })).toBe('PDF_MISSING');
+    expect(classifyPdfjsError({ name: 'InvalidPDFException' })).toBe('PDF_INVALID');
+    expect(classifyPdfjsError({ name: 'UnexpectedResponseException' })).toBe('PDF_RESPONSE_ERROR');
+  });
+
+  it('collapses unknown and non-object failures to the generic load error', () => {
+    expect(classifyPdfjsError(new Error('boom'))).toBe('PDFJS_LOAD_ERROR');
+    expect(classifyPdfjsError('string failure')).toBe('PDFJS_LOAD_ERROR');
+    expect(classifyPdfjsError(undefined)).toBe('PDFJS_LOAD_ERROR');
+    expect(classifyPdfjsError({ name: 'SomethingElseException' })).toBe('PDFJS_LOAD_ERROR');
   });
 });

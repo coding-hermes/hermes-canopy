@@ -14,9 +14,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchFileRange, postFileAccess, streamUrl } from '../lib/fileApi';
+import { PDFJS_ASSETS } from '../lib/viewers/pdfAssets';
 import { viewerBodyForSlug } from '../lib/viewerBodies';
 import { DEFAULT_FILE_VIEWER_CONFIG, FileViewerConfigSchema, type FileMetadata, type ViewerRegistration } from '../types/fileviewer';
 
+// SPEC-PL-02 §9.1 phase 9: the one worker rule the local pdf.js worker asset
+// needs. blob: covers pdf.js's module-worker fallback wrapper; no data:,
+// wildcard, or remote script sources are admitted.
 export const VIEWER_SANDBOX_CSP = [
   "default-src 'none'",
   "script-src 'self' 'unsafe-inline'",
@@ -25,6 +29,7 @@ export const VIEWER_SANDBOX_CSP = [
   "media-src 'self' blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  "worker-src 'self' blob:",
 ].join('; ');
 
 export interface ViewerHostProps {
@@ -162,6 +167,15 @@ export function buildViewerDoc(input: {
     .replaceAll('__FILE_META_JSON__', inlinedJson(input.file))
     .replaceAll('__STREAM_URL__', js(input.streamUrl))
     .replaceAll('__VIEWER_CONFIG_JSON__', inlinedJson(input.config));
+  // SPEC-PL-02 §9.1 phase 9: the pdf slug's bootstrap additionally carries
+  // the host-resolved LOCAL pdf.js asset URLs so the sandboxed body can load
+  // the bundled module/worker from same-origin URLs (no CDN, no network).
+  // Every other slug gets an empty object — the URLs never leave the host
+  // for them. The full JSON object literal is the second Object.assign
+  // argument ({"pdfjs":{...}} or {}), keeping the script valid JS.
+  const bootstrapExtras = inlinedJson(
+    input.viewer.viewerSlug === 'pdf' ? { pdfjs: PDFJS_ASSETS } : {},
+  );
   // Phase 3: built-in viewer bodies run inside the frame AFTER the shim,
   // against the canopy.viewer surface. Unknown / not-yet-shipped slugs keep
   // the phase-2 shim-only doc (no body <script>).
@@ -178,6 +192,9 @@ export function buildViewerDoc(input: {
   <div id="root"></div>
   <script>
     ${shim}
+  </script>
+  <script>
+    window.canopy.__bootstrap = Object.assign(window.canopy.__bootstrap, ${bootstrapExtras});
   </script>${bodyScript}
 </body>
 </html>`;

@@ -1,5 +1,5 @@
 /**
- * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–8).
+ * Unit tests — viewer body sources & registry (SPEC-PL-02 phases 3–9).
  * Pins: registry mapping (all built-in slugs non-null with expected hooks,
  * unknown → null), serialization validity (the bodies PARSE and EXECUTE
  * against a jsdom + stubbed canopy shim, exercising the load/error paths),
@@ -14,8 +14,14 @@ import { markdownViewerBody } from '../markdownViewerBody';
 import { csvViewerBody, csvHelpers } from '../csvViewerBody';
 import { mediaHelpers, mediaViewerBody } from '../mediaViewerBody';
 import { codeViewerBody, codeHelpers } from '../codeViewerBody';
-import { pdfHelpers, pdfViewerBody } from '../pdfViewerBody';
-import { isPdfFile } from '../pdfViewerLogic';
+import {
+  PDFJS_LOADER_FAKE,
+  PDFJS_MODULE_LOADER_SOURCE,
+  composePdfViewerBody,
+  installPdfjsLoaderFake,
+  pdfHelpers,
+  pdfViewerBody,
+} from '../pdfViewerBody';
 
 describe('viewerBodyForSlug registry', () => {
   it('returns non-null bodies for every shipped built-in slug', () => {
@@ -79,15 +85,19 @@ describe('viewerBodyForSlug registry', () => {
     expect(body).toContain('ready');
   });
 
-  it('pdf body carries the native-embed, fallback, and event hooks', () => {
+  it('pdf body carries the pdf.js, fallback, and event hooks (phase 9)', () => {
     const body = viewerBodyForSlug('pdf') ?? '';
     expect(body).toBe(pdfViewerBody);
     expect(body).toContain('getStreamUrl');
-    expect(body).toContain('application/pdf');
+    expect(body).toContain('GlobalWorkerOptions');
+    expect(body).toContain('getDocument');
     expect(body).toContain('normalizePdfConfig');
     expect(body).toContain('buildPdfRenderPlan');
-    expect(body).toContain('buildPdfEmbedUrl');
+    expect(body).toContain('readPdfjsAssets');
+    expect(body).toContain('data-pdf-canvas');
     expect(body).toContain('pdf_ready');
+    expect(body).toContain('pdf_page_visible');
+    expect(body).toContain('pdf_zoom_changed');
     expect(body).toContain('pdf_error');
     expect(body).toContain('download');
     expect(body).toContain('logAccess');
@@ -1099,10 +1109,13 @@ describe('csv body serialization and sandbox contract', () => {
   });
 });
 
-describe('pdf body serialization and sandbox contract', () => {
+describe('pdf body serialization and sandbox contract (phase 9 pdf.js host bundle)', () => {
   type HandlerMap = Record<string, Array<(payload: unknown) => void>>;
 
-  let pdfViewerEnabledRestore: (() => void) | null = null;
+  const ASSETS = {
+    moduleUrl: '/assets/pdf.min-abc123.mjs',
+    workerUrl: '/assets/pdf.worker.min-def456.mjs',
+  };
 
   function installPdfShim(
     options: {
@@ -1112,8 +1125,8 @@ describe('pdf body serialization and sandbox contract', () => {
       streamUrl?: string;
       config?: Record<string, unknown>;
       authoritativeUrl?: string;
-      pluginAvailable?: boolean;
       includeStreamApi?: boolean;
+      includeAssets?: boolean;
     } = {},
   ) {
     const handlers: HandlerMap = {};
@@ -1135,20 +1148,92 @@ describe('pdf body serialization and sandbox contract', () => {
         },
         streamUrl: options.streamUrl ?? '/stream/report.pdf',
         config: options.config ?? {},
+        ...(options.includeAssets === false ? {} : { pdfjs: ASSETS }),
       },
       viewer,
     };
-    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'pdfViewerEnabled');
-    Object.defineProperty(navigator, 'pdfViewerEnabled', {
-      value: options.pluginAvailable ?? true,
-      configurable: true,
-    });
-    pdfViewerEnabledRestore = () => {
-      if (descriptor) Object.defineProperty(navigator, 'pdfViewerEnabled', descriptor);
-      else delete (navigator as { pdfViewerEnabled?: boolean }).pdfViewerEnabled;
-      pdfViewerEnabledRestore = null;
-    };
     return { handlers, getStreamUrl, logAccess, ready };
+  }
+
+  /** Capture pdf.js interactions at the module seam the body consumes. */
+  function makePdfjsModule(options: {
+    numPages?: number;
+    pageWidth?: number;
+    pageHeight?: number;
+    loadError?: unknown;
+    pageError?: unknown;
+    renderError?: unknown;
+  } = {}) {
+    const calls = {
+      loadParams: [] as Array<Record<string, unknown>>,
+      renderedPages: [] as number[],
+      renderParams: [] as Array<{ canvasContext: unknown; viewportWidth: number }>,
+      destroys: 0,
+      taskDestroys: 0,
+      cancelled: 0,
+    };
+    const module = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument(params: Record<string, unknown>) {
+        calls.loadParams.push(params);
+        const doc = {
+          numPages: options.numPages ?? 3,
+          destroy: vi.fn(() => {
+            calls.destroys += 1;
+            return Promise.resolve();
+          }),
+          getPage(pageNumber: number) {
+            if (options.pageError) return Promise.reject(options.pageError);
+            calls.renderedPages.push(pageNumber);
+            const page = {
+              getViewport({ scale }: { scale: number }) {
+                return {
+                  width: (options.pageWidth ?? 612) * scale,
+                  height: (options.pageHeight ?? 792) * scale,
+                };
+              },
+              render(renderParams: { canvasContext: unknown; viewport: { width: number } }) {
+                calls.renderParams.push({
+                  canvasContext: renderParams.canvasContext,
+                  viewportWidth: renderParams.viewport.width,
+                });
+                if (options.renderError) {
+                  return { promise: Promise.reject(options.renderError), cancel: () => { calls.cancelled += 1; } };
+                }
+                return { promise: Promise.resolve(), cancel: () => { calls.cancelled += 1; } };
+              },
+            };
+            return Promise.resolve(page);
+          },
+        };
+        const task = options.loadError
+          ? {
+              promise: Promise.reject(options.loadError),
+              destroy: () => {
+                calls.taskDestroys += 1;
+                return Promise.resolve();
+              },
+            }
+          : {
+              promise: Promise.resolve(doc),
+              destroy: () => {
+                calls.taskDestroys += 1;
+                return Promise.resolve();
+              },
+            };
+        return task;
+      },
+    };
+    return { module, calls };
+  }
+
+  /** The EXACT shipped body source, loader seam swapped for the test fake. */
+  function bodyWithFakeLoader(): string {
+    return composePdfViewerBody(PDFJS_LOADER_FAKE);
+  }
+
+  async function flushPdf(): Promise<void> {
+    for (let i = 0; i < 12; i += 1) await Promise.resolve();
   }
 
   function ensurePdfRoot(): HTMLElement {
@@ -1161,132 +1246,398 @@ describe('pdf body serialization and sandbox contract', () => {
   afterEach(() => {
     document.getElementById('root')?.remove();
     delete (window as unknown as { canopy?: unknown }).canopy;
-    if (pdfViewerEnabledRestore) pdfViewerEnabledRestore();
+    delete (globalThis as { __pdfjsLoader?: unknown }).__pdfjsLoader;
     vi.restoreAllMocks();
   });
 
-  it('serializes the helper bundle and executes the body without free identifiers', () => {
-    expect(pdfHelpers.formatByteSize(1536)).toBe('1.5 KB');
-    expect(isPdfFile({ mimeType: 'application/pdf' })).toBe(true);
+  it('serializes the helper bundle and parses the shipped body source', () => {
+    expect(pdfHelpers.clampPdfPage(9, 3)).toBe(3);
+    expect(pdfHelpers.readPdfjsAssets({ pdfjs: ASSETS })).toEqual(ASSETS);
+    // The production source parses; the loader source is an opaque string
+    // literal (never rewritten by a bundler).
     expect(() => new Function(pdfViewerBody)).not.toThrow();
-    ensurePdfRoot();
-    installPdfShim();
-    expect(() => new Function(pdfViewerBody)()).not.toThrow();
+    expect(PDFJS_MODULE_LOADER_SOURCE).toContain('import(moduleUrl)');
+    expect(pdfViewerBody).toContain(PDFJS_MODULE_LOADER_SOURCE);
+    // The native <object> embed path is gone as the primary route.
+    expect(pdfViewerBody).not.toContain("embed.type = 'application/pdf'");
+    expect(pdfViewerBody).not.toContain('data-pdf-embed');
+    // The pdf.js canvas path is the primary route.
+    expect(pdfViewerBody).toContain('data-pdf-canvas');
   });
 
-  it('renders the native embed from the bootstrap URL and emits pdf_ready on load', async () => {
+  it('initializes pdf.js from the host-injected local assets and renders the active page to canvas', async () => {
     ensurePdfRoot();
     const shim = installPdfShim({ config: { initialPage: 2 } });
+    const { module, calls } = makePdfjsModule({ numPages: 3 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
     const readyEvents: Array<Record<string, unknown>> = [];
-    shim.handlers.pdf_ready = [(payload: unknown) => readyEvents.push(payload as Record<string, unknown>)];
+    const pageEvents: Array<Record<string, unknown>> = [];
+    const zoomEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_ready = [(p: unknown) => readyEvents.push(p as Record<string, unknown>)];
+    shim.handlers.pdf_page_visible = [(p: unknown) => pageEvents.push(p as Record<string, unknown>)];
+    shim.handlers.pdf_zoom_changed = [(p: unknown) => zoomEvents.push(p as Record<string, unknown>)];
 
-    new Function(pdfViewerBody)();
-    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
-    expect(embed).not.toBeNull();
-    expect(embed.type).toBe('application/pdf');
-    expect(embed.getAttribute('data')).toBe('/stream/report.pdf#page=2');
-    expect(document.querySelector('[data-pdf-fallback]')).toBeNull();
-    expect((document.querySelector('[data-pdf-status]') as HTMLElement).textContent).toContain('report.pdf');
-    expect((document.querySelector('[data-pdf-status]') as HTMLElement).textContent).toContain('2.3 MB');
-    expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('native-embed');
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
 
-    shim.handlers.pdf_error = [() => {
-      throw new Error('no error expected on the load path');
-    }];
-    embed.dispatchEvent(new window.Event('load'));
-    expect(readyEvents).toEqual([{ nativePlugin: true }]);
+      // Module loaded from the LOCAL module asset; worker pointed at the
+      // LOCAL worker asset; document loaded from the signed stream URL in a
+      // Range-capable {url} request.
+      expect(calls.loadParams).toEqual([{ url: '/stream/report.pdf' }]);
+      expect(module.GlobalWorkerOptions.workerSrc).toBe(ASSETS.workerUrl);
+      expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('pdfjs');
+      // initialPage=2 honored: page 2 was rendered, not page 1.
+      expect(calls.renderedPages).toEqual([2]);
+      const canvas = document.querySelector('[data-pdf-canvas]') as HTMLCanvasElement;
+      expect(canvas).not.toBeNull();
+      expect(calls.renderParams.length).toBeGreaterThan(0);
+      expect(calls.renderParams[0].viewportWidth).toBeGreaterThan(0);
+      expect(canvas.width).toBeGreaterThan(0);
+      expect(canvas.height).toBeGreaterThan(0);
+      expect(document.querySelector('[data-pdf-fallback]')).toBeNull();
 
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(shim.getStreamUrl).toHaveBeenCalledWith(null);
-    expect(shim.ready).toHaveBeenCalledTimes(1);
-    expect(shim.logAccess).toHaveBeenCalledWith(
-      'open',
-      expect.objectContaining({ fileId: 'pdf-1', filename: 'report.pdf' }),
-    );
+      // §9.1 event payloads, exact shape, in order.
+      expect(readyEvents).toEqual([{ totalPages: 3 }]);
+      expect(pageEvents).toEqual([{ page: 2, totalPages: 3 }]);
+      expect(zoomEvents).toEqual([{ zoom: 1, fitMode: true }]); // fit-width in jsdom
+      // Status bar names page and total.
+      const status = document.querySelector('[data-pdf-status]') as HTMLElement;
+      expect(status.textContent).toContain('page 2 of 3');
+      expect(shim.ready).toHaveBeenCalledTimes(1);
+      expect(shim.logAccess).toHaveBeenCalledWith(
+        'open',
+        expect.objectContaining({ fileId: 'pdf-1', filename: 'report.pdf' }),
+      );
+      expect(shim.getStreamUrl).toHaveBeenCalledWith(null);
+    } finally {
+      removeLoader();
+    }
   });
 
-  it('adopts the authoritative stream URL with a re-render when it differs from bootstrap', async () => {
-    ensurePdfRoot();
-    installPdfShim({ authoritativeUrl: '/stream/signed-report.pdf' });
-    new Function(pdfViewerBody)();
-    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
-    expect(embed.getAttribute('data')).toBe('/stream/report.pdf');
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(document.querySelector('[data-pdf-embed]')!.getAttribute('data')).toBe(
-      '/stream/signed-report.pdf',
-    );
-  });
-
-  it('swaps to the fallback card when the embed fires an error event', () => {
+  it('navigates with bounds enforcement via controls and keyboard, emitting pdf_page_visible', async () => {
     ensurePdfRoot();
     const shim = installPdfShim();
+    const { module, calls } = makePdfjsModule({ numPages: 3 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    const pageEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_page_visible = [(p: unknown) => pageEvents.push(p as Record<string, unknown>)];
+
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+
+      const prev = document.querySelector('[data-pdf-prev]') as HTMLButtonElement;
+      const next = document.querySelector('[data-pdf-next]') as HTMLButtonElement;
+      const label = document.querySelector('[data-pdf-page-label]') as HTMLElement;
+      expect(prev.disabled).toBe(true); // bound: page 1 of 3
+      expect(next.disabled).toBe(false);
+      expect(label.textContent).toBe('1 / 3');
+
+      next.click();
+      await flushPdf();
+      expect(label.textContent).toBe('2 / 3');
+      expect(prev.disabled).toBe(false);
+
+      // Keyboard: End → last page (bound), Home → first, arrows step.
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End' }));
+      await flushPdf();
+      expect(label.textContent).toBe('3 / 3');
+      expect(next.disabled).toBe(true); // bound: last page
+
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home' }));
+      await flushPdf();
+      expect(label.textContent).toBe('1 / 3');
+      expect(prev.disabled).toBe(true); // bound: first page
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      await flushPdf();
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      await flushPdf();
+      expect(label.textContent).toBe('1 / 3');
+
+      // Every visible page was announced with the exact payload.
+      expect(pageEvents).toEqual([
+        { page: 1, totalPages: 3 },
+        { page: 2, totalPages: 3 },
+        { page: 3, totalPages: 3 },
+        { page: 1, totalPages: 3 },
+        { page: 2, totalPages: 3 },
+        { page: 1, totalPages: 3 },
+      ]);
+      expect(calls.renderedPages.at(-1)).toBe(1);
+    } finally {
+      removeLoader();
+    }
+  });
+
+  it('zooms in/out/reset within §9.1 bounds via controls and keyboard, emitting pdf_zoom_changed', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim();
+    const { module } = makePdfjsModule({ numPages: 2 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    const zoomEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_zoom_changed = [(p: unknown) => zoomEvents.push(p as Record<string, unknown>)];
+
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+
+      const zoomIn = document.querySelector('[data-pdf-zoom-in]') as HTMLButtonElement;
+      const zoomOut = document.querySelector('[data-pdf-zoom-out]') as HTMLButtonElement;
+      const zoomReset = document.querySelector('[data-pdf-zoom-reset]') as HTMLButtonElement;
+
+      zoomIn.click();
+      await flushPdf();
+      expect(zoomEvents.at(-1)).toEqual({ zoom: 1.25, fitMode: false });
+      expect(zoomReset.textContent).toBe('125%');
+
+      // ×1.25 steps clamp at the 3.0 ceiling.
+      zoomIn.click();
+      await flushPdf();
+      zoomIn.click();
+      await flushPdf();
+      zoomIn.click();
+      await flushPdf();
+      zoomIn.click();
+      await flushPdf();
+      zoomIn.click();
+      await flushPdf();
+      expect(zoomEvents.at(-1)).toEqual({ zoom: 3, fitMode: false });
+
+      // Ctrl/Cmd+0 resets to fit-width.
+      window.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: '0', ctrlKey: true, cancelable: true }),
+      );
+      await flushPdf();
+      expect(zoomEvents.at(-1)).toEqual({ zoom: 1, fitMode: true });
+
+      // Ctrl/Cmd+- steps out; the 0.5 floor holds.
+      window.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: '-', ctrlKey: true, cancelable: true }),
+      );
+      await flushPdf();
+      expect(zoomEvents.at(-1)).toEqual({ zoom: 0.8, fitMode: false });
+      for (let i = 0; i < 4; i += 1) {
+        window.dispatchEvent(
+          new window.KeyboardEvent('keydown', { key: '-', ctrlKey: true, cancelable: true }),
+        );
+        await flushPdf();
+      }
+      expect(zoomEvents.at(-1)).toEqual({ zoom: 0.5, fitMode: false });
+      expect(zoomOut.disabled).toBe(false);
+    } finally {
+      removeLoader();
+    }
+  });
+
+  it('downloads via Ctrl/Cmd+S and logs the access action', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim();
+    const { module } = makePdfjsModule({ numPages: 2 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      window.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }),
+      );
+      await flushPdf();
+      expect(shim.logAccess).toHaveBeenCalledWith(
+        'download',
+        expect.objectContaining({ fileId: 'pdf-1', filename: 'report.pdf' }),
+      );
+    } finally {
+      removeLoader();
+    }
+  });
+
+  it('renders the fallback when pdf.js cannot be imported, and still notifies ready', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim();
+    const removeLoader = installPdfjsLoaderFake(() => Promise.reject(new Error('module blocked')));
     const errors: Array<Record<string, unknown>> = [];
-    shim.handlers.pdf_error = [(payload: unknown) => errors.push(payload as Record<string, unknown>)];
-    new Function(pdfViewerBody)();
-    const embed = document.querySelector('[data-pdf-embed]') as HTMLObjectElement;
-    embed.dispatchEvent(new window.Event('error'));
-    const card = document.querySelector('[data-pdf-fallback]');
-    expect(card).not.toBeNull();
-    expect(card!.getAttribute('role')).toBe('alert');
-    expect((card!.querySelector('[data-pdf-fallback-message]') as HTMLElement).textContent).toContain(
-      'download',
-    );
-    expect(errors).toEqual([expect.objectContaining({ code: 'PDF_EMBED_ERROR' })]);
-    expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('fallback');
+    shim.handlers.pdf_error = [(p: unknown) => errors.push(p as Record<string, unknown>)];
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      const card = document.querySelector('[data-pdf-fallback]')!;
+      expect(card).not.toBeNull();
+      expect(card.getAttribute('role')).toBe('alert');
+      expect(document.querySelector('[data-pdf-viewer]')!.getAttribute('data-pdf-mode')).toBe('fallback');
+      expect((card.querySelector('[data-pdf-download]') as HTMLAnchorElement).getAttribute('href')).toBe(
+        '/stream/report.pdf',
+      );
+      expect(errors).toEqual([
+        { code: 'PDFJS_LOAD_ERROR', message: 'module blocked' },
+      ]);
+      expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code: 'PDFJS_LOAD_ERROR' }));
+      expect(shim.ready).toHaveBeenCalledTimes(1);
+    } finally {
+      removeLoader();
+    }
   });
 
   it.each([
     {
-      name: 'missing plugin',
-      options: { pluginAvailable: false },
-      code: 'PDF_PLUGIN_UNAVAILABLE',
+      name: 'module shape invalid',
+      moduleOptions: {},
+      badModule: { notPdfjs: true },
+      code: 'PDFJS_LOAD_ERROR',
     },
     {
-      name: 'missing stream URL',
-      options: { streamUrl: '', includeStreamApi: false },
-      code: 'STREAM_URL_MISSING',
+      name: 'document load rejects (invalid PDF)',
+      moduleOptions: { loadError: { name: 'InvalidPDFException', message: 'bad header' } },
+      badModule: null,
+      code: 'PDF_INVALID',
     },
     {
-      name: 'non-PDF metadata',
-      options: { filename: 'notes.txt', mimeType: 'text/plain' },
-      code: 'NOT_A_PDF_FILE',
+      name: 'document load rejects (missing PDF)',
+      moduleOptions: { loadError: { name: 'MissingPDFException', message: 'gone' } },
+      badModule: null,
+      code: 'PDF_MISSING',
     },
-  ])('renders an honest fallback card for $name and still notifies ready', ({ options, code }) => {
+    {
+      name: 'page render rejects',
+      moduleOptions: { renderError: new Error('canvas gone') },
+      badModule: null,
+      code: 'PDF_RENDER_ERROR',
+    },
+  ])('falls back honestly when $name', async ({ moduleOptions, badModule, code }) => {
     ensurePdfRoot();
-    const shim = installPdfShim(options);
-    const errors: Array<Record<string, unknown>> = [];
-    shim.handlers.pdf_error = [(payload: unknown) => errors.push(payload as Record<string, unknown>)];
-
-    new Function(pdfViewerBody)();
-    expect(document.querySelector('[data-pdf-embed]')).toBeNull();
-    const card = document.querySelector('[data-pdf-fallback]')!;
-    expect(card).not.toBeNull();
-    expect(card.getAttribute('role')).toBe('alert');
-    expect((card.querySelector('[data-pdf-fallback-meta]') as HTMLElement).textContent).toContain(
-      options.filename ?? 'report.pdf',
+    const shim = installPdfShim();
+    const { module } = makePdfjsModule(moduleOptions);
+    const removeLoader = installPdfjsLoaderFake(() =>
+      Promise.resolve(badModule ?? (module as unknown)),
     );
-    expect((card.querySelector('[data-pdf-fallback-message]') as HTMLElement).textContent).toBeTruthy();
-    // The effective stream URL is the test default unless the case overrides it.
-    const effectiveUrl = options.streamUrl !== undefined ? options.streamUrl : '/stream/report.pdf';
-    const download = card.querySelector('[data-pdf-download]') as HTMLAnchorElement | null;
-    expect(download === null).toBe(effectiveUrl.length === 0);
-    if (download) expect(download.getAttribute('download')).toBe(options.filename ?? 'report.pdf');
-    expect(errors).toEqual([expect.objectContaining({ code })]);
-    expect(shim.logAccess).toHaveBeenCalledWith('error', expect.objectContaining({ code }));
-    expect(shim.ready).toHaveBeenCalledTimes(1);
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_error = [(p: unknown) => errors.push(p as Record<string, unknown>)];
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      const card = document.querySelector('[data-pdf-fallback]')!;
+      expect(card).not.toBeNull();
+      expect(card.getAttribute('role')).toBe('alert');
+      // The message shows the underlying error verbatim; the download/open
+      // ACTIONS are the actionable fallback surface.
+      expect(card.querySelector('[data-pdf-download]')).not.toBeNull();
+      expect(card.querySelector('[data-pdf-open]')).not.toBeNull();
+      expect(errors[0].code).toBe(code);
+      expect(shim.ready).toHaveBeenCalledTimes(1);
+      // No blank frame: the status bar still identifies the file.
+      expect(((document.querySelector('[data-pdf-status]') as HTMLElement).textContent ?? '').length).toBeGreaterThan(0);
+    } finally {
+      removeLoader();
+    }
   });
 
-  it('omits download actions when no stream URL exists at all', () => {
+  it('falls back before any pdf.js import when assets are missing or the file is not a PDF', () => {
     ensurePdfRoot();
-    installPdfShim({ streamUrl: '', pluginAvailable: false, includeStreamApi: false });
-    new Function(pdfViewerBody)();
+    const shim = installPdfShim({ includeAssets: false });
+    const errors: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_error = [(p: unknown) => errors.push(p as Record<string, unknown>)];
+    new Function(bodyWithFakeLoader())();
+    expect(document.querySelector('[data-pdf-fallback]')).not.toBeNull();
+    expect(errors).toEqual([expect.objectContaining({ code: 'PDFJS_ASSETS_MISSING' })]);
+
+    document.getElementById('root')?.remove();
+    ensurePdfRoot();
+    const shim2 = installPdfShim({ filename: 'notes.txt', mimeType: 'text/plain' });
+    const errors2: Array<Record<string, unknown>> = [];
+    shim2.handlers.pdf_error = [(p: unknown) => errors2.push(p as Record<string, unknown>)];
+    new Function(bodyWithFakeLoader())();
+    expect(document.querySelector('[data-pdf-fallback]')).not.toBeNull();
+    expect(errors2).toEqual([expect.objectContaining({ code: 'NOT_A_PDF_FILE' })]);
+  });
+
+  it('falls back with no download actions when no stream URL exists at all', () => {
+    ensurePdfRoot();
+    installPdfShim({ streamUrl: '', includeStreamApi: false, includeAssets: false });
+    new Function(bodyWithFakeLoader())();
     const card = document.querySelector('[data-pdf-fallback]')!;
+    expect(card).not.toBeNull();
     expect(card.querySelector('[data-pdf-download]')).toBeNull();
     expect(card.querySelector('[data-pdf-open]')).toBeNull();
   });
-});
 
+  it('reloads pdf.js from the authoritative stream URL when reconcile lands after load', async () => {
+    ensurePdfRoot();
+    // Hold the signed-URL reconcile until AFTER the first document is fully
+    // loaded (the rare slow-reconcile path), then release it.
+    const release = { reconcile: null as (() => void) | null };
+    const shim = installPdfShim({ authoritativeUrl: '/stream/signed-report.pdf' });
+    shim.getStreamUrl.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release.reconcile = () => resolve({ url: '/stream/signed-report.pdf' });
+        }),
+    );
+    const { module, calls } = makePdfjsModule({ numPages: 3 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    const readyEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_ready = [(p: unknown) => readyEvents.push(p as Record<string, unknown>)];
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      expect(readyEvents).toEqual([{ totalPages: 3 }]); // first load settled
+      release.reconcile?.();
+      await flushPdf();
+      // First document destroyed, reloaded from the signed URL.
+      expect(calls.destroys).toBe(1);
+      expect(calls.loadParams).toEqual([
+        { url: '/stream/report.pdf' },
+        { url: '/stream/signed-report.pdf' },
+      ]);
+      expect(readyEvents).toEqual([{ totalPages: 3 }, { totalPages: 3 }]);
+      // Status reflects the signed URL and a settled page.
+      expect((document.querySelector('[data-pdf-status]') as HTMLElement).textContent).toContain(
+        'page 1 of 3',
+      );
+    } finally {
+      removeLoader();
+    }
+  });
+
+  it('supersedes an in-flight load when the authoritative URL arrives first', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim({ authoritativeUrl: '/stream/signed-report.pdf' });
+    const { module, calls } = makePdfjsModule({ numPages: 3 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    const readyEvents: Array<Record<string, unknown>> = [];
+    shim.handlers.pdf_ready = [(p: unknown) => readyEvents.push(p as Record<string, unknown>)];
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      // The first attempt died inside the (fake) import, before any pdf.js
+      // loading task existed — nothing to destroy; exactly one document is
+      // live, loaded from the signed URL.
+      expect(calls.destroys).toBe(0);
+      expect(calls.taskDestroys).toBe(0);
+      expect(calls.loadParams).toEqual([{ url: '/stream/signed-report.pdf' }]);
+      expect(readyEvents).toEqual([{ totalPages: 3 }]);
+      expect(module.GlobalWorkerOptions.workerSrc).toBe(ASSETS.workerUrl);
+    } finally {
+      removeLoader();
+    }
+  });
+
+  it('cancels in-flight work and detaches keys on pagehide (no leaks across frames)', async () => {
+    ensurePdfRoot();
+    const shim = installPdfShim();
+    shim.getStreamUrl.mockImplementation(() => new Promise(() => {})); // never lands
+    const { module, calls } = makePdfjsModule({ numPages: 3 });
+    const removeLoader = installPdfjsLoaderFake(() => Promise.resolve(module));
+    try {
+      new Function(bodyWithFakeLoader())();
+      await flushPdf();
+      window.dispatchEvent(new window.Event('pagehide'));
+      expect(calls.destroys).toBe(1);
+      // Keyboard shortcuts are dead after teardown.
+      const before = calls.renderedPages.length;
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      await flushPdf();
+      expect(calls.renderedPages.length).toBe(before);
+    } finally {
+      removeLoader();
+    }
+  });
+});

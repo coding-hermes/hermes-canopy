@@ -25,6 +25,30 @@ const DEV_JWT_DEFAULT =
 const DEV_JWT = process.env.VITE_DEV_JWT || DEV_JWT_DEFAULT
 const API_URL = process.env.VITE_API_URL || 'http://localhost:8091'
 
+// ─── pdf.js host-bundle assets (SPEC-PL-02 §9.1, PL02-P9) ─────────────────
+//
+// Copies pdf.min.mjs + pdf.worker.min.mjs from the LOCKED pdfjs-dist npm
+// dependency into public/pdfjs/ on every dev/build start. public/ is served
+// verbatim by the dev server and copied verbatim into dist by the build, so
+// /pdfjs/*.mjs are local same-origin build outputs — no CDN, no network
+// dependency, and no vendored blob in the repo (public/pdfjs/ is
+// gitignored; bytes always come from node_modules).
+import { copyFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+function copyPdfjsAssets() {
+  const outDir = join(__dirname, 'public', 'pdfjs')
+  mkdirSync(outDir, { recursive: true })
+  for (const file of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
+    copyFileSync(
+      join(__dirname, 'node_modules', 'pdfjs-dist', 'build', file),
+      join(outDir, file),
+    )
+  }
+}
+
+copyPdfjsAssets()
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],

@@ -8,7 +8,8 @@
  * phase 5 adds `markdown` (§9.5 zero-dep GFM subset); phase 6 adds `csv`
  * (§9.4 zero-dep table subset); phase 7 adds `code` (§9.3 read-only,
  * dependency-free source viewer); phase 8 adds `pdf` (§9.1 zero-dep
- * subset). Every built-in slug now resolves to a shipped body — a null
+ * subset); phase 9 upgrades `pdf` to the pdf.js v4.x host-bundle canvas
+ * foundation. Every built-in slug now resolves to a shipped body — a null
  * here means an unknown slug, not a pending phase.
  */
 
