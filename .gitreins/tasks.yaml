@@ -2245,5 +2245,6 @@ tasks:
     DB hard gate); (2) pre-deploy check compares embedded-vs-DB schema versions; (3)
     test asserting embedded version vs latest deployed schema; (4) crash-loop restart
     counter produce a visible alert
-  status: in_progress
+  status: complete
   created_at: '2026-09-14T17:47:10.114816+00:00'
+  completed_at: '2026-09-14T22:20:12.260575+00:00'
