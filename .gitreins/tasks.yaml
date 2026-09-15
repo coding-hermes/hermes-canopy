@@ -2248,3 +2248,16 @@ tasks:
   status: complete
   created_at: '2026-09-14T17:47:10.114816+00:00'
   completed_at: '2026-09-14T22:20:12.260575+00:00'
+- id: GAP-070
+  title: "P1 \u2014 deploy-check timer detected outage-class condition then stayed\
+    \ silent 24h"
+  criteria:
+  - '1) checker runs hourly (OnUnitActiveSec=1h); 2) on STALE/STALE_BLOCKED the run
+    appends a board row or triggers a notify hook (e.g. systemd OnFailure=) so stale
+    becomes a task not an exit code; 3) README Deployment documents the stale+dirty-worktree
+    recovery operator path; 4) severity distinguishes ''stale but serving'' from ''stale
+    + refusing to start'' (outage); AC: a repeat of the 09-12/09-13 sequence produces
+    a board row/notify within one hour'
+  status: complete
+  created_at: '2026-09-15T01:26:59.593789+00:00'
+  completed_at: '2026-09-15T01:39:35.802741+00:00'

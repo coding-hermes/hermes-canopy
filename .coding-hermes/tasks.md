@@ -11864,3 +11864,36 @@ board pending 15 (post-dedupe); pick: GAP-069 (P0, production outage root-cause)
 
 ### Next tick
 - P1 GAP-071 (file-viewer docs + fresh-DB provisioning) is the top project-owned pick; GAP-070 (timer cadence/notify) is small and deps-free now that GAP-069's alert path exists. QA-HERMES-CANOPY-1 bunker rows remain non-project-owned (filed for reference). E2E-001: last battery = T454-era window; watch tasks.md tail for the 6-tick cadence.
+
+## Tick 456 — 2026-09-15 ~02:45Z (WORK — GAP-070 complete)
+
+### Verdict
+P1 GAP-070 picked (deps met via GAP-069): deploy-check timer detected outage-class STALE_BLOCKED on 09-13 and stayed silent 24h. QA-HERMES-CANOPY-1 skipped (bunker infra, not project-owned); GAP-071 next in queue. CI pre-check green (3/3 success).
+
+### Dispatch / Worker
+Attempt 1 glm-5.3-flash@zai-glm-default (pid 1132517): DEAD DISPATCH — 0-byte stdout at 4 min, killed per doctrine. THIRD zero-liveness event for that lane on this project (PL02-P6, T455, T456) — lane now suspect; future ticks should prefer gpt-5.6-luna@openai-codex for this project until proven otherwise.
+Attempt 2 gpt-5.6-luna@openai-codex (brief /tmp/gap070-brief.txt): committed ff41701 — timer OnUnitActiveSec 24h→1h, check_stale_blocked() threshold-gated deploy_stale_blocked_alert board event on all un-remediated-stale paths (STALE_BLOCKED/DEPLOY_FAILED/STALE_AFTER_DEPLOY), severity stale_but_serving vs stale_refused_to_start (+outage_class), streak state in git-ignored deploy-check-state.json, exit codes unchanged, README/INTEGRATION operator recovery docs, harness 32→45.
+
+### Gates (fresh this tick)
+go build -o /dev/null ./cmd/canopyd PASS; go vet ./... PASS; bash scripts/test-check-deploy-staleness.sh 45 passed, 0 failed (exit 0); gitleaks 0 leaks. Guard short-circuit on shell/markdown-only diff worked around by running gates directly (worker-named caveat, verified by foreman).
+
+### Live rollout (beyond worker scope)
+make install-deploy-timer re-run by foreman this tick: installed unit now OnUnitActiveSec=1h (verified via systemctl --user cat). Residual from worker report closed.
+
+### GitReins
+GAP-070 create+start pre-dispatch; task complete post-commit: Tier 1 PASS, Tier 2 judge c238ee11 COMPLETE — all 4 sub-criteria verified incl. live end-to-end simulation of the 09-12/09-13 sequence producing a board row within one hour.
+
+### CI
+Pre-pick: 3/3 recent runs success (ticks 455 board, 455 gitreins-lifecycle, 454). Post-push runs pending at tick end (content commit + board closeout each trigger a run).
+
+### Push health
+origin/master..HEAD = 0 after both commits (verified below).
+
+### Bookkeeping
+tasks.jsonl: GAP-070 line 300 → complete (commit ff41701, judge c238ee11). events.jsonl: +1 task_completed (453). board.jsonl: ticks_total 455→456, last_commit→ff41701. Compact-JSONL preserved (json.loads 303/303 parse; untouched lines byte-identical, diff = 1 line).
+
+### DuckBrain
+Tick key + status key written this tick (see delivery).
+
+### Next tick
+P1 GAP-071 (file-viewer docs + fresh-DB provisioning) is the top pick; then GAP-072 (P2 API polish). Dispatch-watch: glm-5.3-flash@zai-glm-default has 3 dead dispatches on this project — default to the codex fallback.
