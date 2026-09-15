@@ -11922,3 +11922,16 @@ Delivered: (a) `internal/db/bootstrap.go` `EnsureDevWorkspaceProfile()` — dev 
 **Bookkeeping.** `tasks.jsonl` +1 row (append-only; GAP-071 keep-LAST is now `complete`, the historical pending row is retained — expected, `grep -c '"status":"pending"'` still reports it). `events.jsonl` +3 (ids **454** worker_dispatched, **455** task_completed, **456** audit). `board.jsonl`: `ticks_total` 456 → **457**, `last_commit` → `c6e0496…`. Both JSONL files parse clean. `tasks.md` = this entry.
 
 **Watch / next tick.** (1) The live `:8091` binary (`/home/kara/bin/canopyd`, uptime >11h) predates c6e0496, so the deployed stack still 500s on `set-active-profile` and has **0 workspaces**; redeploy belongs to the deploy lane (`make deploy` + the GAP-069/070 staleness checker), not this tick — next tick should check whether the deploy lane picked it up. (2) Next tractable project-owned row: **GAP-072 (P2)** API rough edges (`parent_id:""` creating a root node, envelope split, `recents` ignoring uploads). (3) PL02-P3 remains the next PL-02 phase if a P3 is preferred over GAP-072. (4) Worker-flagged drift, documented not fixed: `FILE_SOFT_DELETED` (410) unreachable and `STREAM_INTERRUPTED` (503) unmapped.
+
+## Tick 458 — 2026-09-15 ~08:45Z (work tick — GAP-072 COMPLETE)
+
+Verdict: board scan 274 unique / 9 pending (keep-LAST); QA-HERMES-CANOPY-1 pending rows all bunker-infra (port pool, DNS, config drift — not project-owned, named in prior ticks), QA-HERMES-CANOPY-2 P3 same. Picked GAP-072 (P2, dogfood-2026-09-14, 0 attempts): 4-item API polish.
+Dispatch/Worker: gpt-5.6-luna @ openai-codex, brief /tmp/gap072-brief.md, 1 attempt, silent-log-but-live-tree pattern (known luna behavior — verified via git status, never killed). Commit 80ba7db.
+Landed: (1) parent_id now *string — present-but-empty → 400 INVALID_PARENT_ID naming the field; absent → root 201 unchanged; (2) docs/API.md "Response envelopes (per route)" section + examples, README quick-ref corrected; (3) fork empty body → 400 EMPTY_CONTENT "content is required" via errEmptyNodeBody, malformed JSON stays INVALID_BODY; (4) upload stamps last_accessed → fresh uploads appear in /files/recents; docs state final semantics. 6 new GAP072 tests.
+Gates (fresh this tick): go build PASS, go vet PASS, golangci-lint handler+fileviewer 0 issues, CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/handler (258s ok) ./internal/fileviewer (28s ok) exit 0 — real PASS not SKIP. Never set CANOPY_TEST_DB_URL.
+GitReins: GAP-072 create/start/complete lifecycle run; Tier 1 guard full PASS; Tier 2 verdict eead1eef COMPLETE.
+Off-by-one: discover go-http-api-polish-validation-errors → not_found (health confirmed via discover response).
+Push: 80ba7db (content) + f904278 (gitreins bookkeeping) + board closeout; origin/master parity 0 unpushed.
+Bookkeeping: tasks.jsonl GAP-072 row → complete (compact JSONL preserved, pending grep count consistent); events.jsonl id 458 task_completed; board.jsonl ticks_total 457→458, last_commit 80ba7db.
+CI: pending on push runs; verified next tick or below.
+Next tick: pending backlog = QA-HERMES-CANOPY-1/2 bunker rows + PL-02..06/FTR-06 P3 specs. Watch: off-by-one submission for the silent-log-live-tree dispatch pattern if useful.
