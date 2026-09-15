@@ -469,6 +469,299 @@ Response (200 OK):
 }
 ```
 
+### File Viewers (SPEC-PL-02): upload → resolve → stream → access → dispatch
+
+The complete file-viewer walkthrough, runnable on a **fresh database**. Start
+canopyd with the dev defaults (§ 4) — with the default `JWT_SECRET` it
+provisions the dev user, the dev workspace
+(`00000000-0000-0000-0000-000000000010`), the `dev-hermes` profile that the
+`/files` routes act as, and the active `profile_route` mapping on boot:
+
+```
+INF dev JWT user provisioned user_id=00000000-0000-0000-0000-000000000001
+INF dev workspace + profile provisioned owner_id=00000000-0000-0000-0000-000000000001 profile_name=dev-hermes workspace_id=00000000-0000-0000-0000-000000000010
+INF file viewer storage ready file_root=/home/kara/.canopy/files
+```
+
+Without that provisioning every `/files` call below answers
+`404 PROFILE_NOT_FOUND`, and `POST /api/v1/workspaces/{ws}/profiles` fails with
+a foreign-key error surfaced as `500 INTERNAL_ERROR` (GAP-071). Reuse the
+`DEV_JWT` / `AUTH` / `BASE` variables from the top of § 6.
+
+**1. List files (empty on a fresh DB):**
+
+```bash
+curl -s "$BASE/api/v1/files" -H "$AUTH" | jq .
+```
+```json
+{ "files": [], "pagination": { "count": 0 } }
+```
+
+**2. Upload a file** (multipart `file` part; `filename`/`declaredMime` are
+optional — they fall back to the part's filename and `Content-Type`):
+
+```bash
+printf 'Hello from the walkthrough.\nSecond line.\n' > /tmp/note.md
+UPLOAD=$(curl -s -X POST "$BASE/api/v1/files/upload" -H "$AUTH" \
+  -F "file=@/tmp/note.md" -F "filename=note.md" -F "declaredMime=text/markdown")
+echo "$UPLOAD" | jq .
+FILE_ID=$(echo "$UPLOAD" | jq -r .file.id)
+SHA=$(echo "$UPLOAD" | jq -r .file.sha256)
+```
+
+Response (201):
+```json
+{
+  "file": {
+    "id": "01a0a32e-63f5-7666-ac1d-a809a24ee800",
+    "profileId": "01a0a32e-62a8-751b-bf9a-271bb6fbdc00",
+    "sha256": "bdbeddd49e5cc697816366c3af527da048c9abcd263946e9bc3b04aa02592a5c",
+    "byteSize": 49,
+    "mimeType": "text/markdown",
+    "declaredMime": "text/markdown",
+    "filename": "note.md",
+    "extension": "md",
+    "storageKind": "hermes_kb",
+    "sourceKind": "upload",
+    "isText": true,
+    "isBinary": false,
+    "isViewable": true,
+    "viewerHint": "markdown",
+    "metadata": "e30=",
+    "referenceCount": 1,
+    "accessCount": 0,
+    "quarantined": false,
+    "createdAt": "2026-09-14T22:48:41.589474-05:00",
+    "updatedAt": "2026-09-14T22:48:41.589474-05:00"
+  },
+  "was_new_upload": true,
+  "was_deduped": false,
+  "stream_url": "/api/v1/files/01a0a32e-63f5-7666-ac1d-a809a24ee800/stream",
+  "expires_at": "2026-09-14T23:03:41.59780124-05:00"
+}
+```
+
+`sha256` is the content address and `metadata` is base64 (`"e30="` = `{}`).
+Re-uploading the same bytes for the same profile is a no-op that bumps
+`referenceCount` and answers `"was_deduped": true`.
+
+**3. Resolve by hash reference** (`profile_id` omitted = the acting profile):
+
+```bash
+curl -s -X POST "$BASE/api/v1/files/resolve" -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{\"hash_ref\":{\"sha256\":\"$SHA\"}}" | jq .
+# → same ResolveFileOutput with "was_new_upload": false, "was_deduped": false
+```
+
+Batch form (JSON **array**, up to 200 entries):
+
+```bash
+curl -s -X POST "$BASE/api/v1/files/resolve/batch" -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "[{\"hash_ref\":{\"sha256\":\"$SHA\"}}]" | jq .
+```
+
+**4. Stream the bytes** — full body:
+
+```bash
+curl -s -D - "$BASE/api/v1/files/$FILE_ID/stream" -H "$AUTH"
+```
+```
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Cache-Control: private, max-age=300
+Content-Disposition: inline
+Content-Length: 49
+Content-Type: text/markdown
+Etag: "bdbeddd49e5cc697816366c3af527da048c9abcd263946e9bc3b04aa02592a5c"
+X-Viewer-Hint: markdown
+
+Hello from the walkthrough.
+Second line.
+```
+
+Same route with a Range header — `206 Partial Content`:
+
+```bash
+curl -s -D - -H "Range: bytes=0-4" "$BASE/api/v1/files/$FILE_ID/stream" -H "$AUTH"
+```
+```
+HTTP/1.1 206 Partial Content
+Accept-Ranges: bytes
+Content-Disposition: inline
+Content-Length: 5
+Content-Range: bytes 0-4/49
+Content-Type: text/markdown
+Etag: "bdbeddd49e5cc697816366c3af527da048c9abcd263946e9bc3b04aa02592a5c"
+X-Viewer-Hint: markdown
+
+Hello
+```
+
+`ETag` is the file's `sha256`, so a matching `If-None-Match` returns
+`304 Not Modified` with no body.
+
+**5. Append an access-log entry** (`action` and `viewer_slug` are required):
+
+```bash
+curl -s -X POST "$BASE/api/v1/files/$FILE_ID/access" -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"open","viewer_slug":"code"}' | jq .
+```
+```json
+{
+  "id": "01a0a32e-6452-76fc-8ae2-592ff00c1c00",
+  "fileId": "01a0a32e-63f5-7666-ac1d-a809a24ee800",
+  "profileId": "01a0a32e-62a8-751b-bf9a-271bb6fbdc00",
+  "viewerSlug": "code",
+  "action": "open",
+  "clientInfo": "e30=",
+  "createdAt": "2026-09-14T22:48:41.681579-05:00"
+}
+```
+
+The table is append-only (UPDATE/DELETE are rejected by a trigger):
+
+```bash
+curl -s "$BASE/api/v1/files/$FILE_ID/access" -H "$AUTH" | jq .
+```
+
+**6. Recents** — logging the access above is what makes the file show up here:
+
+```bash
+curl -s "$BASE/api/v1/files/recents" -H "$AUTH" | jq .
+```
+```json
+[
+  {
+    "id": "01a0a32e-63f5-7666-ac1d-a809a24ee800",
+    "profileId": "01a0a32e-62a8-751b-bf9a-271bb6fbdc00",
+    "sha256": "bdbeddd49e5cc697816366c3af527da048c9abcd263946e9bc3b04aa02592a5c",
+    "byteSize": 49,
+    "mimeType": "text/markdown",
+    "filename": "note.md",
+    "extension": "md",
+    "storageKind": "hermes_kb",
+    "isText": true,
+    "isViewable": true,
+    "viewerHint": "markdown",
+    "referenceCount": 1,
+    "lastAccessedAt": "2026-09-14T22:48:41.685445-05:00",
+    "createdAt": "2026-09-14T22:48:41.589474-05:00"
+  }
+]
+```
+
+**7. Viewer registry:**
+
+```bash
+curl -s "$BASE/api/v1/viewers" -H "$AUTH" | jq -r '.[].viewerSlug'
+# audio_video
+# code
+# csv
+# image
+# json
+# markdown
+# pdf
+
+curl -s "$BASE/api/v1/viewers/code" -H "$AUTH" | jq .
+```
+```json
+{
+  "id": "01a0a32e-62b4-72f5-80dc-e1d4db306400",
+  "viewerSlug": "code",
+  "version": "0.4.2",
+  "canopydVersion": "0.4.2",
+  "displayName": "Code Editor",
+  "description": "View code with Monaco Editor — 20+ languages, syntax highlighting",
+  "iconUrl": "/static/viewers/code/icon.svg",
+  "renderType": "fullscreen",
+  "supportsMime": ["text/x-python", "text/x-go", "application/json", "..."],
+  "supportsExtensions": ["py", "go", "ts", "md", "yml", "..."],
+  "supportsViewerHint": [],
+  "requiredCapabilities": [],
+  "bundlePath": "/static/viewers/code/monaco.bundle.js",
+  "bundleByteSize": 5242880,
+  "bundleSha256": "",
+  "minCanopydVersion": "0.4.0",
+  "isActive": true,
+  "installedAt": "2026-09-14T22:48:41.267703-05:00"
+}
+```
+
+**8. Dispatch** — which viewer renders this file?
+
+```bash
+curl -s -X POST "$BASE/api/v1/viewers/dispatch" -H "$AUTH" \
+  -H "Content-Type: application/json" -d "{\"file_id\":\"$FILE_ID\"}" | jq .
+```
+```json
+{
+  "viewerSlug": "markdown",
+  "renderType": "fullscreen",
+  "bundlePath": "",
+  "bundleSha256": "",
+  "displayName": "Markdown",
+  "iconUrl": "/static/viewers/markdown/icon.svg",
+  "config": {},
+  "isBuiltIn": true
+}
+```
+
+**9. Workspace profile mapping** — on a fresh DB this used to fail (`500`);
+the dev workspace is provisioned, so it returns 200 and can be read back:
+
+```bash
+DEV_WS=00000000-0000-0000-0000-000000000010
+curl -s -X POST "$BASE/api/v1/workspaces/$DEV_WS/profiles" -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"profile_name":"dev-hermes","profile_token":"hprof_dev_token"}' | jq .
+curl -s "$BASE/api/v1/workspaces/$DEV_WS/profiles/active" -H "$AUTH" | jq .
+```
+```json
+{
+  "workspaceId": "00000000-0000-0000-0000-000000000010",
+  "profileName": "dev-hermes",
+  "displayName": "Dev Hermes",
+  "isActive": true,
+  "mappedAt": "2026-09-14T22:48:41.253186-05:00",
+  "lastUsedAt": "2026-09-14T22:48:41.784555-05:00"
+}
+```
+
+An unknown workspace id is a **404**, not a 500:
+
+```bash
+curl -s -w '\nHTTP %{http_code}\n' -X POST "$BASE/api/v1/workspaces/11111111-2222-3333-4444-555555555555/profiles" \
+  -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"profile_name":"dev-hermes","profile_token":"hprof_dev_token"}'
+```
+```json
+{"error":{"code":"WORKSPACE_NOT_FOUND","message":"workspace 11111111-2222-3333-4444-555555555555 does not exist; create it before setting a profile"}}
+```
+
+**10. Soft-delete the file:**
+
+```bash
+curl -s -X DELETE "$BASE/api/v1/files/$FILE_ID" -H "$AUTH" -w '\nHTTP %{http_code}\n'
+# {}
+# HTTP 200
+curl -s "$BASE/api/v1/files/$FILE_ID" -H "$AUTH" -w '\nHTTP %{http_code}\n'
+# {"error":{"code":"FILE_NOT_FOUND_BY_ID","message":"file not found"}} — HTTP 404
+```
+
+The delete is a soft delete (`deleted_at` is set), but every read path filters
+`deleted_at IS NULL`, so the file reads back as `404 FILE_NOT_FOUND_BY_ID` (not
+the `410 FILE_SOFT_DELETED` the handler switch declares — that branch has no
+producer today; see docs/API.md § Spec-vs-Code Drift). `GET .../stream` answers
+the same 404, and resolving the hash afterwards gives
+`404 FILE_NOT_FOUND_BY_HASH` because the unique `(profile_id, sha256)` index
+only covers live rows.
+
+Full route/field reference (all 13 routes, error codes, base64 notes):
+[API.md](API.md) § File Viewers.
+
 ## 7. Frontend Dev Workflow
 
 1. Start PostgreSQL: `docker compose up -d postgres`

@@ -126,6 +126,25 @@ curl -H "Authorization: Bearer <token>" http://localhost:8091/api/v1/trees
 
 `/health`, `/healthz`, `/version` — no token required.
 
+### Dev-mode provisioning (fresh database)
+
+When canopyd starts with the **default** dev secret it provisions the dev
+identity itself, so a fresh database needs no manual SQL (the previously
+required `scripts/seed-demo-data.sql` is optional again):
+
+| Row | Value |
+|-----|-------|
+| `users` | `00000000-0000-0000-0000-000000000001` (`dev@canopy.dev`) — GAP-064 |
+| `workspaces` | `00000000-0000-0000-0000-000000000010` (`Dev Workspace`, slug `dev`) — GAP-071 |
+| `profiles` | `dev-hermes` (`Dev Hermes`), owned by the dev user — the file-viewer acting profile |
+| `profile_route` | the dev workspace → `dev-hermes`, active |
+
+Every insert is idempotent (a second boot inserts nothing) and the whole block
+is skipped when `JWT_SECRET` is set to anything else — a production server
+never mints users, workspaces or profiles. Provisioning is what makes the
+[File viewers](#file-viewers-spec-pl-02) routes and
+`POST /api/v1/workspaces/{ws}/profiles` work on a brand-new database.
+
 ### Production
 
 **MUST** set a real `JWT_SECRET` environment variable. The dev secret
@@ -285,6 +304,31 @@ Tree-scoped (primary, membership-gated):
 
 > Approval requests are created internally by merge operations — there is no
 > public create endpoint.
+
+### File viewers (SPEC-PL-02)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/files/upload` | Upload bytes (multipart `file` part) — content-addressed by `sha256`, dedup-aware (`was_deduped`) |
+| `POST` | `/api/v1/files/resolve` | Resolve a file by `hash_ref` (JSON) |
+| `POST` | `/api/v1/files/resolve/batch` | Resolve up to 200 `hash_ref` entries in one call |
+| `GET` | `/api/v1/files` | List files — `sort` (`created_desc` default), `mimeFilter`, `extensionFilter`, `viewableOnly`, `excludeQuarantined`, `limit` (1–200), `cursor` |
+| `GET` | `/api/v1/files/recents` | Recently accessed files — `limit` (1–200, default 50) |
+| `GET` | `/api/v1/files/{id}` | File metadata |
+| `GET` | `/api/v1/files/{id}/stream` | File bytes — `Range` supported (206, `Content-Range`), `If-None-Match` → 304 |
+| `GET` | `/api/v1/files/{id}/access` | Access-log entries (append-only table) |
+| `POST` | `/api/v1/files/{id}/access` | Append one access entry — `action` + `viewer_slug` required |
+| `DELETE` | `/api/v1/files/{id}` | Soft-delete a file |
+| `GET` | `/api/v1/viewers` | List registered viewers (`audio_video`, `code`, `csv`, `image`, `json`, `markdown`, `pdf`) |
+| `GET` | `/api/v1/viewers/{slug}` | One viewer registration |
+| `POST` | `/api/v1/viewers/dispatch` | Resolve the viewer for `{file_id}` without opening it |
+
+> The `/files` routes and `/viewers/dispatch` act as the **acting profile** of
+> the JWT `sub`. On a fresh database started with the default dev secret,
+> canopyd provisions that profile (plus a dev workspace) at startup — see
+> § Authentication (dev mode) below. Full request/response contracts and error
+> codes: [docs/API.md](docs/API.md) § File Viewers; runnable walkthrough:
+> [docs/INTEGRATION.md](docs/INTEGRATION.md) § 6.
 
 ### SSE (Server-Sent Events)
 

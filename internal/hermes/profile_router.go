@@ -18,6 +18,13 @@ var (
 	ErrNoProfileMapping    = errors.New("hermes: no profile mapped for this workspace")
 	ErrProfileNameRequired = errors.New("hermes: profile name is required")
 	ErrTokenEmpty          = errors.New("hermes: profile token is empty")
+
+	// ErrWorkspaceNotFound is returned when the addressed workspace row
+	// does not exist. profile_route.workspace_id references workspaces(id)
+	// (fk_profile_route_workspace), so without this check the insert
+	// surfaced as a raw FK violation and the HTTP layer mapped the unknown
+	// error to 500 INTERNAL_ERROR — a client-supplied id must be a 4xx.
+	ErrWorkspaceNotFound = errors.New("hermes: workspace not found")
 )
 
 // ProfileMapping associates a Canopy workspace with a Hermes profile.
@@ -100,6 +107,20 @@ func (r *PGProfileRouter) SetActiveProfile(ctx context.Context, workspaceID uuid
 		return fmt.Errorf("hermes: set active profile: begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// The workspace must exist BEFORE the profile_route write: the FK
+	// (fk_profile_route_workspace) would otherwise abort the transaction
+	// with a raw SQL error that callers can only report as 500. Checked in
+	// the same transaction so the answer cannot go stale between the check
+	// and the insert.
+	var workspaceExists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`, workspaceID).Scan(&workspaceExists); err != nil {
+		return fmt.Errorf("hermes: set active profile: check workspace: %w", err)
+	}
+	if !workspaceExists {
+		return ErrWorkspaceNotFound
+	}
 
 	if _, err := tx.Exec(ctx, `
 		UPDATE profile_route

@@ -186,6 +186,30 @@ func main() {
 		} else {
 			log.Info().Str("user_id", db.DevJWTUserID).Msg("dev JWT user already present")
 		}
+
+		// GAP-071: the dev workspace + the dev profile owned by that user.
+		// The file-viewer routes resolve the JWT sub to a profiles row and
+		// the workspace-profile endpoint needs a workspaces row for
+		// profile_route's FK — without both, a fresh database 404s
+		// PROFILE_NOT_FOUND on /api/v1/files and 500s on
+		// POST /api/v1/workspaces/{ws}/profiles. Same gate as above: a
+		// production server (non-default secret) provisions nothing.
+		provisioned, err := db.EnsureDevWorkspaceProfile(ctx, database.Pool)
+		if err != nil {
+			log.Fatal().Err(err).Msg("provision dev workspace + profile failed")
+		}
+		if provisioned {
+			log.Info().
+				Str("workspace_id", db.DevWorkspaceID).
+				Str("profile_name", db.DevProfileName).
+				Str("owner_id", db.DevJWTUserID).
+				Msg("dev workspace + profile provisioned")
+		} else {
+			log.Info().
+				Str("workspace_id", db.DevWorkspaceID).
+				Str("profile_name", db.DevProfileName).
+				Msg("dev workspace + profile already present")
+		}
 	}
 
 	relayConfigManager := relaypkg.NewDeploymentConfigManager()

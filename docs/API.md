@@ -1011,6 +1011,373 @@ and approval operations for programmatic agent access.
 
 ---
 
+## File Viewers (SPEC-PL-02)
+
+Mounted at `/api/v1/files` and `/api/v1/viewers`. All require auth (JWT Bearer).
+Phase 1 of SPEC-PL-02 (SPEC-PL-02 §4.3): file storage with content-addressed
+dedup, MIME detection, viewer registry + dispatch, streaming with HTTP Range
+support and an append-only access log. Thumbnails, preview-text extraction,
+overrides endpoints and viewer SSE events are later phases and are not exposed.
+
+**Acting profile.** Every `/files` route and `POST /viewers/dispatch` resolves
+the JWT `sub` (a `users.id`) to the ACTING profile — a profile whose `id`
+equals the subject, else the subject's newest live owned profile. A subject
+with no profile gets `404 PROFILE_NOT_FOUND`. On a fresh database the dev
+server provisions both (`profiles` row `dev-hermes` owned by the dev subject,
+`workspaces` row `00000000-0000-0000-0000-000000000010`, and the active
+`profile_route` mapping) at startup — but only when `JWT_SECRET` is the
+default dev secret. See [README.md § Authentication (dev mode)](../README.md#authentication-dev-mode)
+and [docs/INTEGRATION.md § 6](INTEGRATION.md) for the runnable walkthrough.
+
+### Routes
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/files/upload` | Upload bytes (multipart) — content-addressed, dedup-aware |
+| `POST` | `/api/v1/files/resolve` | Resolve by hash reference (`hash_ref`) — JSON |
+| `POST` | `/api/v1/files/resolve/batch` | Resolve up to 200 hash references in one call |
+| `GET` | `/api/v1/files/recents` | Recently accessed files for the acting profile |
+| `GET` | `/api/v1/files` | Paginated file list for the acting profile |
+| `GET` | `/api/v1/files/{id}` | File metadata |
+| `GET` | `/api/v1/files/{id}/stream` | File bytes — supports `Range` (206) and `If-None-Match` (304) |
+| `GET` | `/api/v1/files/{id}/access` | Access-log entries for one file (newest first) |
+| `POST` | `/api/v1/files/{id}/access` | Append one access-log entry (append-only table) |
+| `DELETE` | `/api/v1/files/{id}` | Soft-delete a file |
+| `GET` | `/api/v1/viewers` | List registered viewers |
+| `GET` | `/api/v1/viewers/{slug}` | One viewer registration |
+| `POST` | `/api/v1/viewers/dispatch` | Resolve which viewer renders a file (without opening it) |
+
+### Upload a file
+
+```
+POST /api/v1/files/upload
+Content-Type: multipart/form-data
+```
+
+| Part / field | Required | Notes |
+|--------------|----------|-------|
+| `file` (part) | yes | The bytes. 0 bytes → `400 FILE_EMPTY`; > 500 MB → `413 FILE_TOO_LARGE` |
+| `filename` | no | Falls back to the part's filename. `400 FILENAME_INVALID` if empty, > 1000 chars, or containing path separators / `..` |
+| `declaredMime` | no | Falls back to the part's `Content-Type`. The stored `mimeType` is server-detected by magic bytes |
+| `sourceMessageId` | no | UUID of the message the file was attached to (`400 INVALID_REQUEST` if not a UUID) |
+
+The same bytes for the same profile are stored **once**: `sha256` (hex) is the
+content address and `(profile_id, sha256)` is unique among live rows. A repeat
+upload of identical bytes answers `"was_deduped": true` and returns the
+ORIGINAL row (its filename is the first upload's); the stored `referenceCount`
+is incremented in the database, while the echoed `file` object carries the
+value read *before* the bump — verify with `GET /api/v1/files/{id}`.
+
+**Response (201):**
+```json
+{
+  "file": {
+    "id": "01a0a32e-63f5-7666-ac1d-a809a24ee800",
+    "profileId": "01a0a32e-62a8-751b-bf9a-271bb6fbdc00",
+    "sha256": "bdbeddd49e5cc697816366c3af527da048c9abcd263946e9bc3b04aa02592a5c",
+    "byteSize": 49,
+    "mimeType": "text/markdown",
+    "declaredMime": "text/markdown",
+    "filename": "note.md",
+    "extension": "md",
+    "storageKind": "hermes_kb",
+    "sourceKind": "upload",
+    "isText": true,
+    "isBinary": false,
+    "isViewable": true,
+    "viewerHint": "markdown",
+    "metadata": "e30=",
+    "referenceCount": 1,
+    "accessCount": 0,
+    "quarantined": false,
+    "createdAt": "2026-09-14T22:48:41.589474-05:00",
+    "updatedAt": "2026-09-14T22:48:41.589474-05:00"
+  },
+  "was_new_upload": true,
+  "was_deduped": false,
+  "stream_url": "/api/v1/files/01a0a32e-63f5-7666-ac1d-a809a24ee800/stream",
+  "expires_at": "2026-09-14T23:03:41.59780124-05:00"
+}
+```
+
+`storageKind` ∈ `hermes_kb` | `hermes_fs_ref` | `external`; `sourceKind` ∈
+`upload` | `reference` | `agent_message` | `import`; `viewerHint` is the
+server-detected viewer slug (`''` = download-only, `isViewable: false`).
+
+> **Byte-typed fields are base64.** `metadata` (the file's `metadata_json`) and
+> the access log's `clientInfo` are Go `[]byte` values, so they serialize as
+> base64 strings: `"e30="` decodes to `{}`. Decode before parsing as JSON.
+
+### Resolve by hash reference
+
+```
+POST /api/v1/files/resolve
+Content-Type: application/json
+```
+
+```json
+{ "hash_ref": { "profile_id": "01a0a32e-...", "sha256": "<64 hex>" } }
+```
+
+`profile_id` may be omitted (or null) — it then means the acting profile.
+`upload` is the mutually exclusive alternative: JSON resolve rejects it with
+`400 INVALID_REQUEST` (bytes ride `POST /files/upload`). Unknown hash →
+`404 FILE_NOT_FOUND_BY_HASH`.
+
+**Response (200):** the same `ResolveFileOutput` shape as upload, with
+`was_new_upload: false` and `was_deduped` reflecting whether the row was
+already present.
+
+```
+POST /api/v1/files/resolve/batch
+```
+
+Body is a JSON **array** of `{hash_ref: {...}}` (max 200). Every entry is
+resolved independently: a failing entry comes back as a positional output with
+no `file` and `null` `expires_at` (never a whole-request failure).
+
+### List files
+
+```
+GET /api/v1/files
+```
+
+| Query param | Default | Notes |
+|-------------|---------|-------|
+| `sort` | `created_desc` | One of `created_desc` \| `created_asc` \| `name_asc` \| `size_desc` \| `last_accessed_desc` (unknown values fall back to `created_desc`) |
+| `mimeFilter` | — | Case-insensitive substring match on the MIME type |
+| `extensionFilter` | — | Exact lowercase extension, no dot (`md`) |
+| `viewableOnly` | `true` | `false` includes download-only files |
+| `excludeQuarantined` | `true` | `false` includes quarantined files |
+| `limit` | `50` | 1–200, else `400 INVALID_REQUEST` |
+| `cursor` | — | Last `id` of the previous page (keyset `id > cursor`); must be a UUID or `400 INVALID_REQUEST` |
+
+**Response (200):**
+```json
+{ "files": [], "pagination": { "count": 0 } }
+```
+
+Each element is the slim shape (no `metadata`, no `previewText`): `id`,
+`profileId`, `sha256`, `byteSize`, `mimeType`, `filename`, `extension`,
+`storageKind`, `isText`, `isViewable`, `viewerHint`, `referenceCount`,
+`lastAccessedAt` (omitted until first access), `createdAt`.
+
+### Recents
+
+```
+GET /api/v1/files/recents?limit=50
+```
+
+**Response (200):** a bare JSON array of the slim file shape (not wrapped),
+newest access first. `limit` 1–200.
+
+### Get one file
+
+```
+GET /api/v1/files/{id}
+```
+
+**Response (200):** the full file object (as in the upload response). `{id}`
+must be a UUID (`400 INVALID_FILE_ID`); unknown → `404 FILE_NOT_FOUND_BY_ID`.
+Soft-deleted rows are filtered by the same query, so a deleted file also reads
+as `404 FILE_NOT_FOUND_BY_ID` (the `410 FILE_SOFT_DELETED` sentinel exists but
+no repo path returns it today — see § Spec-vs-Code Drift).
+
+### Stream file content
+
+```
+GET /api/v1/files/{id}/stream
+Range: bytes=0-4            # optional
+If-None-Match: "<etag>"     # optional
+```
+
+**Response headers (200 / 206):**
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | Server-detected MIME (`text/markdown`) |
+| `ETag` | `"<sha256 hex>"` — strong validator, quoted |
+| `Accept-Ranges` | `bytes` |
+| `Content-Disposition` | `inline` (viewable) or `attachment` (download-only) |
+| `Cache-Control` | `private, max-age=300` |
+| `X-Viewer-Hint` | Server-detected viewer slug (`markdown`) |
+| `Content-Range` | `bytes 0-4/49` — 206 responses only |
+
+A `Range` header yields `206 Partial Content` with `Content-Length` = the
+window length; a suffix/oversized range → `416 RANGE_NOT_SATISFIABLE` with code
+`RANGE_NOT_SATISFIABLE` (malformed header → `400 INVALID_RANGE_HEADER`). A
+matching `If-None-Match` yields `304 Not Modified` with no body. Quarantined
+files never stream (`423 FILE_QUARANTINED`), and a soft-deleted file answers
+`404 FILE_NOT_FOUND_BY_ID` (same reason as `GET /files/{id}`).
+
+### Access log
+
+```
+GET  /api/v1/files/{id}/access?limit=50
+POST /api/v1/files/{id}/access
+```
+
+`file_access_log` is **append-only** (a database trigger rejects UPDATE and
+DELETE). `POST` body:
+
+```json
+{
+  "action": "open",
+  "viewer_slug": "code",
+  "tree_id": "optional-uuid",
+  "node_id": "optional-uuid",
+  "duration_ms": 1200,
+  "byte_offset": 4096,
+  "error_code": "optional-string"
+}
+```
+
+`action` must be one of `open` | `download` | `thumbnail_fetch` |
+`preview_text` | `stream_start` | `stream_end` | `error`;
+`viewer_slug` is required and must match `^[a-z][a-z0-9_]*$`
+(`400 INVALID_VIEWER_SLUG`). Unknown file → `404 FILE_NOT_FOUND_BY_ID`.
+
+**Response (201):** the stored entry, e.g.
+
+```json
+{
+  "id": "01a0a32e-6452-76fc-8ae2-592ff00c1c00",
+  "fileId": "01a0a32e-63f5-7666-ac1d-a809a24ee800",
+  "profileId": "01a0a32e-62a8-751b-bf9a-271bb6fbdc00",
+  "viewerSlug": "code",
+  "action": "open",
+  "clientInfo": "e30=",
+  "createdAt": "2026-09-14T22:48:41.681579-05:00"
+}
+```
+
+`GET` returns a bare JSON array of these entries (same shape), newest first;
+an empty log is `[]`, never `null`. Logging an access also refreshes
+`lastAccessedAt` / `accessCount`, which is what feeds `/files/recents`.
+
+### Delete a file
+
+```
+DELETE /api/v1/files/{id}
+```
+
+Soft delete (`deleted_at` set). **Response (200):** `{}`.
+
+### Viewer registry
+
+```
+GET /api/v1/viewers
+```
+
+**Response (200):** a JSON array of registrations (seeded on boot from the
+built-in viewers compiled into canopyd — `audio_video`, `code`, `csv`,
+`image`, `json`, `markdown`, `pdf`). Registry JSON shape:
+
+```json
+[
+  {
+    "viewerSlug": "markdown",
+    "version": "0.4.2",
+    "displayName": "Markdown",
+    "renderType": "fullscreen",
+    "supportsMime": ["text/markdown", "text/x-markdown"],
+    "supportsExtensions": ["md", "markdown", "mdx"],
+    "isActive": true
+  }
+]
+```
+
+```
+GET /api/v1/viewers/{slug}
+```
+
+**Response (200):** the full registration, adding `id`, `canopydVersion`,
+`description`, `iconUrl`, `supportsViewerHint`, `requiredCapabilities`,
+`bundlePath`, `bundleByteSize`, `bundleSha256`, `minCanopydVersion`
+(`deprecationNotice` when set) and `installedAt`:
+
+```json
+{
+  "id": "01a0a32e-62b4-72f5-80dc-e1d4db306400",
+  "viewerSlug": "code",
+  "version": "0.4.2",
+  "canopydVersion": "0.4.2",
+  "displayName": "Code Editor",
+  "description": "View code with Monaco Editor — 20+ languages, syntax highlighting",
+  "iconUrl": "/static/viewers/code/icon.svg",
+  "renderType": "fullscreen",
+  "supportsMime": ["text/x-python", "text/x-go", "application/json", "..."],
+  "supportsExtensions": ["py", "go", "ts", "md", "yml", "..."],
+  "supportsViewerHint": [],
+  "requiredCapabilities": [],
+  "bundlePath": "/static/viewers/code/monaco.bundle.js",
+  "bundleByteSize": 5242880,
+  "bundleSha256": "",
+  "minCanopydVersion": "0.4.0",
+  "isActive": true,
+  "installedAt": "2026-09-14T22:48:41.267703-05:00"
+}
+```
+
+An unknown or malformed slug → `404 VIEWER_NOT_FOUND` / `400
+INVALID_VIEWER_SLUG`.
+
+### Dispatch
+
+```
+POST /api/v1/viewers/dispatch
+Content-Type: application/json
+
+{ "file_id": "01a0a32e-63f5-7666-ac1d-a809a24ee800", "tree_id": null }
+```
+
+Picks the viewer for a file without streaming it (per-tree/profile overrides
+land in a later phase). Unknown file → `404 FILE_NOT_FOUND_BY_ID`; no active
+viewer matches → `404 VIEWER_NOT_FOUND`.
+
+**Response (200):**
+```json
+{
+  "viewerSlug": "markdown",
+  "renderType": "fullscreen",
+  "bundlePath": "",
+  "bundleSha256": "",
+  "displayName": "Markdown",
+  "iconUrl": "/static/viewers/markdown/icon.svg",
+  "config": {},
+  "isBuiltIn": true
+}
+```
+
+### File-viewer error codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `INVALID_REQUEST` | 400 | Bad JSON, bad `limit`/`cursor`, mutually exclusive fields, batch > 200, bad `action` |
+| `INVALID_MULTIPART` | 400 | Body is not multipart/form-data or has no `file` part |
+| `INVALID_FILE_ID` | 400 | `{id}` is not a UUID |
+| `INVALID_VIEWER_SLUG` | 400 | Slug fails `^[a-z][a-z0-9_]*$` |
+| `INVALID_RANGE_HEADER` | 400 | `Range` header is malformed |
+| `FILENAME_INVALID` | 400 | Filename empty, > 1000 chars, or contains path separators |
+| `FILE_EMPTY` | 400 | 0-byte upload |
+| `FILE_NOT_FOUND_BY_ID` | 404 | No `file_metadata` row for that id |
+| `FILE_NOT_FOUND_BY_HASH` | 404 | No live row for that `(profile, sha256)` |
+| `PROFILE_NOT_FOUND` | 404 | The acting profile (or an explicit `profile_id`) does not exist |
+| `VIEWER_NOT_FOUND` | 404 | No viewer row for that slug, or no viewer matches the file |
+| `FILE_SOFT_DELETED` | 410 | Declared for soft-deleted files, but NOT reachable today: `GetByID` filters `deleted_at IS NULL` and answers `FILE_NOT_FOUND_BY_ID` instead |
+| `FILE_TOO_LARGE` | 413 | Upload exceeds the 500 MB limit |
+| `RANGE_NOT_SATISFIABLE` | 416 | `Range` window exceeds the file size |
+| `FILE_QUARANTINED` | 423 | Quarantined files cannot be streamed |
+| `ACCESS_LOG_APPEND_FAILED` | 500 | The append-only log rejected the insert |
+
+> **Known gap (SPEC-PL-02 §10.1 `STREAM_INTERRUPTED`, 503):** the storage
+> sentinel `fileviewer.ErrStorageUnavailable` is NOT mapped in the handlers'
+> error switch, so a storage failure currently surfaces as
+> `500 INTERNAL_ERROR` instead of `503 STREAM_INTERRUPTED`. Tracked in
+> § Spec-vs-Code Drift below.
+
+---
+
 ## Error Catalog
 
 All errors follow a consistent JSON envelope:
@@ -1064,6 +1431,15 @@ All errors follow a consistent JSON envelope:
 |------|-------------|-------------|
 | `TREE_NOT_FOUND` | 404 | Tree does not exist |
 | `TREE_DELETED` | 410 | Tree was soft-deleted |
+
+### File-Viewer Error Codes
+
+The `/api/v1/files` + `/api/v1/viewers` routes (SPEC-PL-02 phase 1) use their own
+code set — see [§ File Viewers](#file-viewers-spec-pl-02) for the full table
+(`FILE_NOT_FOUND_BY_ID`, `FILE_NOT_FOUND_BY_HASH`, `FILE_EMPTY`,
+`FILE_TOO_LARGE`, `FILENAME_INVALID`, `PROFILE_NOT_FOUND`,
+`FILE_SOFT_DELETED`, `FILE_QUARANTINED`, `VIEWER_NOT_FOUND`,
+`INVALID_VIEWER_SLUG`, `INVALID_RANGE_HEADER`, `RANGE_NOT_SATISFIABLE`).
 
 ---
 
@@ -1134,3 +1510,25 @@ actual code:
       approval
 
     The gateway API key is held server-side; the browser never sees it.
+
+14. **File-viewer routes and error mapping (GAP-071 docs pass):** the files that
+    `internal/fileviewer/handlers.go` registers (SPEC-PL-02 phase 1, migrations
+    43–46) — 13 routes: ten under `/api/v1/files` and three under
+    `/api/v1/viewers` (the task list named twelve and omitted
+    `DELETE /api/v1/files/{id}`) — were absent from README.md, docs/API.md and
+    docs/INTEGRATION.md. They are now documented (see § File Viewers); two
+    drifts remain between the Go sentinel contract and the handlers, both
+    verified live against a fresh DB:
+
+    - `fileviewer.ErrStorageUnavailable` is documented as `STREAM_INTERRUPTED`
+      (503) in `internal/fileviewer/errors.go` but has no case in
+      `handlers.go::fail`, so a storage failure falls through to
+      `500 INTERNAL_ERROR`.
+    - `fileviewer.ErrFileSoftDeleted` (`FILE_SOFT_DELETED`, 410) has a case in
+      `handlers.go::fail` but no producer: `PGFileMetadataRepo.GetByID` filters
+      `deleted_at IS NULL` and returns `ErrFileNotFound`, so a soft-deleted
+      file reads back as `404 FILE_NOT_FOUND_BY_ID`. The 410 branch is dead
+      code.
+
+    `DELETE /api/v1/files/{id}` (soft delete) also exists in code and is now
+    documented.

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -42,7 +43,7 @@ func (h *ProfileHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
 
 	profiles, err := h.router.ListProfiles(r.Context(), workspaceID)
 	if err != nil {
-		h.writeRouterError(w, r, err, "list profiles")
+		h.writeRouterError(w, r, workspaceID, err, "list profiles")
 		return
 	}
 	responseProfiles := make([]profileMappingResponse, 0, len(profiles))
@@ -70,13 +71,13 @@ func (h *ProfileHandler) SetActiveProfile(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.router.SetActiveProfile(r.Context(), workspaceID, req.ProfileName, req.ProfileToken); err != nil {
-		h.writeRouterError(w, r, err, "set active profile")
+		h.writeRouterError(w, r, workspaceID, err, "set active profile")
 		return
 	}
 
 	mapping, err := h.router.GetActiveProfile(r.Context(), workspaceID)
 	if err != nil {
-		h.writeRouterError(w, r, err, "read active profile after update")
+		h.writeRouterError(w, r, workspaceID, err, "read active profile after update")
 		return
 	}
 	writeJSON(w, http.StatusOK, profileMappingResponseFrom(*mapping))
@@ -90,7 +91,7 @@ func (h *ProfileHandler) GetActiveProfile(w http.ResponseWriter, r *http.Request
 
 	mapping, err := h.router.GetActiveProfile(r.Context(), workspaceID)
 	if err != nil {
-		h.writeRouterError(w, r, err, "get active profile")
+		h.writeRouterError(w, r, workspaceID, err, "get active profile")
 		return
 	}
 	writeJSON(w, http.StatusOK, profileMappingResponseFrom(*mapping))
@@ -108,7 +109,7 @@ func (h *ProfileHandler) RemoveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.router.RemoveProfile(r.Context(), workspaceID, profileName); err != nil {
-		h.writeRouterError(w, r, err, "remove profile")
+		h.writeRouterError(w, r, workspaceID, err, "remove profile")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -136,12 +137,19 @@ func profileMappingResponseFrom(mapping hermes.ProfileMapping) profileMappingRes
 	}
 }
 
-func (h *ProfileHandler) writeRouterError(w http.ResponseWriter, r *http.Request, err error, operation string) {
+func (h *ProfileHandler) writeRouterError(w http.ResponseWriter, r *http.Request, workspaceID uuid.UUID, err error, operation string) {
 	switch {
 	case errors.Is(err, hermes.ErrProfileNameRequired), errors.Is(err, hermes.ErrTokenEmpty):
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	case errors.Is(err, hermes.ErrNoProfileMapping):
 		writeError(w, http.StatusNotFound, "PROFILE_NOT_FOUND", "profile mapping not found")
+	case errors.Is(err, hermes.ErrWorkspaceNotFound):
+		// A workspace id supplied by the client that does not exist is a
+		// 404, not a 500: without this branch the pgx FK violation
+		// (fk_profile_route_workspace) fell through to INTERNAL_ERROR.
+		// The message names the id and the fix; no SQL text is echoed.
+		writeError(w, http.StatusNotFound, "WORKSPACE_NOT_FOUND",
+			fmt.Sprintf("workspace %s does not exist; create it before setting a profile", workspaceID))
 	default:
 		log.Ctx(r.Context()).Error().Err(err).Str("operation", strings.TrimSpace(operation)).Msg("profile request failed")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
