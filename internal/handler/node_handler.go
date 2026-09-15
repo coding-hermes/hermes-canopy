@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -132,8 +133,11 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ParentID is a *string so an ABSENT parent_id (a legitimate root node)
+	// stays distinguishable from a PRESENT-BUT-EMPTY one, which is a client
+	// bug and must 400 rather than silently creating a root node (GAP-072).
 	var req struct {
-		ParentID      string          `json:"parent_id"`
+		ParentID      *string         `json:"parent_id"`
 		Content       string          `json:"content"`
 		ContentFormat string          `json:"content_format,omitempty"`
 		NodeType      string          `json:"node_type,omitempty"`
@@ -143,6 +147,25 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if err := decodeNodeJSON(r, &req); err != nil {
 		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
 		return
+	}
+
+	// Validate parent_id when the key is present (GAP-072). Omitted = root
+	// node (201, unchanged); present-but-empty or not a UUID = 400 naming the
+	// field. Checked before the content rules so a malformed reference is
+	// reported as such even when other fields are also missing.
+	var parentID uuid.UUID
+	if req.ParentID != nil {
+		if strings.TrimSpace(*req.ParentID) == "" {
+			writeError(w, 400, "INVALID_PARENT_ID",
+				"parent_id must not be empty (omit the field to create a root node)")
+			return
+		}
+		pid, err := uuid.Parse(*req.ParentID)
+		if err != nil {
+			writeError(w, 400, "INVALID_PARENT_ID", "parent_id must be a valid UUID")
+			return
+		}
+		parentID = pid
 	}
 
 	// Validate content length (BUG-019 fix).
@@ -163,6 +186,7 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := service.CreateNodeInput{
+		ParentID:      parentID,
 		Content:       req.Content,
 		ContentFormat: req.ContentFormat,
 		NodeType:      req.NodeType,
@@ -170,16 +194,6 @@ func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		AuthorID:      authorID,
 		TreeID:        treeID,
 		Metadata:      req.Metadata,
-	}
-
-	// Parse parent_id if provided.
-	if req.ParentID != "" {
-		pid, err := uuid.Parse(req.ParentID)
-		if err != nil {
-			writeError(w, 400, "INVALID_PARENT_ID", "parent_id must be a valid UUID")
-			return
-		}
-		input.ParentID = pid
 	}
 
 	out, err := h.svc.Create(r.Context(), treeID, input)
@@ -383,7 +397,22 @@ func (h *NodeHandler) handleFork(w http.ResponseWriter, r *http.Request) {
 		Metadata      json.RawMessage `json:"metadata,omitempty"`
 	}
 	if err := decodeNodeJSON(r, &req); err != nil {
+		// An empty fork body means content was not supplied: name the
+		// missing field instead of reporting invalid JSON (GAP-072).
+		// Malformed JSON still goes through invalidNodeBodyMessage.
+		if errors.Is(err, errEmptyNodeBody) {
+			writeError(w, 400, "EMPTY_CONTENT", "content is required")
+			return
+		}
 		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
+		return
+	}
+
+	// Fork requires content (service.ForkInput); report the missing field
+	// here so the client does not have to infer it from a downstream
+	// validation error (GAP-072).
+	if len(req.Content) == 0 {
+		writeError(w, 400, "EMPTY_CONTENT", "content is required")
 		return
 	}
 

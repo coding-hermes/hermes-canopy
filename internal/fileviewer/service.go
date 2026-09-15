@@ -197,6 +197,10 @@ func (s *serviceImpl) LogAccess(ctx context.Context, entry *FileAccessEntry) err
 }
 
 // Recents returns recently accessed files for a profile.
+//
+// "Accessed" includes uploads (GAP-072): the upload handler stamps
+// last_accessed_at, so a file appears here as soon as it has been uploaded,
+// as well as after an explicit access-log entry.
 func (s *serviceImpl) Recents(ctx context.Context, profileID uuid.UUID, limit int) ([]FileMetadataSlim, error) {
 	return s.files.ListRecent(ctx, profileID, limit)
 }

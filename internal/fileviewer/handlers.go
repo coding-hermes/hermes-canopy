@@ -178,6 +178,20 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err)
 		return
 	}
+
+	// An upload counts as an access for the recents list (GAP-072): after a
+	// fresh upload GET /files/recents used to return [] because only
+	// POST /files/{id}/access stamped last_accessed_at, so the file the user
+	// had just added was invisible in recents. Stamping here makes the upload
+	// the profile's most recent file interaction.
+	//
+	// file_access_log still records EXPLICIT viewer interactions only: the
+	// table's action CHECK constraint (migrations/000045) and the spec §10
+	// enum have no "upload" value, so no audit row is fabricated — recency
+	// itself lives in file_metadata.last_accessed_at / access_count, which is
+	// what ListRecent reads.
+	_ = h.impl().files.UpdateLastAccessed(r.Context(), out.FileMetadata.ID)
+
 	writeJSON(w, 201, out)
 }
 
@@ -384,6 +398,15 @@ func parseListOpts(w http.ResponseWriter, r *http.Request) (ListFilesOpts, bool)
 }
 
 // Recents handles GET /files/recents.
+//
+// Semantics (GAP-072): recents lists the acting profile's non-deleted files
+// whose last_accessed_at is set, newest first. An access is recorded by
+// POST /files/{id}/access AND by an upload — POST /files/upload stamps
+// last_accessed_at (bumping access_count) so a freshly uploaded file shows up
+// in recents immediately instead of after the first explicit open.
+//
+// The response is a BARE JSON array of slim file records (no envelope), unlike
+// GET /files which answers {"files":[...],"pagination":{...}}.
 func (h *Handler) Recents(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {

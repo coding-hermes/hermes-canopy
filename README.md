@@ -224,6 +224,10 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 > quick-reference of the primary endpoints, generated from
 > `internal/server/server.go` + handler `Routes()` (verified live, GAP-032).
 > All paths are under `/api/v1` and require a JWT Bearer token unless noted.
+> Success **envelopes differ per route** — tree/topic/card create answer with a
+> bare object, node create/reply/fork with `{"node":…,"edge":…}`, and
+> `GET /files/recents` with a bare array. See
+> [docs/API.md § Response envelopes](docs/API.md#response-envelopes-per-route).
 
 ### Trees
 

@@ -48,15 +48,26 @@ var nodeFieldCasing = map[string]string{
 	"edgeType":      "edge_type",
 }
 
+// errEmptyNodeBody signals a zero-length (or whitespace-only) request body on
+// a node endpoint. A body of "" is not valid JSON, but "request body must be
+// valid JSON" is a misleading diagnostic when the real problem is a missing
+// required field: callers that require one (fork, per service.ForkInput)
+// translate this into a field-naming error instead (GAP-072).
+var errEmptyNodeBody = errors.New("empty request body")
+
 // decodeNodeJSON decodes a node endpoint request body leniently: camelCase
 // aliases (contentFormat, nodeType, parentId, edgeType) are accepted wherever
 // the snake_case key is absent, then the normalized body is strict-decoded so
 // genuinely unknown fields still fail — with the offending field named in the
 // error (decodeJSON's DisallowUnknownFields error includes the field name).
+// A zero-length body returns errEmptyNodeBody.
 func decodeNodeJSON(r *http.Request, v any) error {
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return errEmptyNodeBody
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil {

@@ -5,6 +5,125 @@ Base URL: `http://<host>:<port>/api/v1`
 All authenticated endpoints require a JWT Bearer token in the `Authorization`
 header. Health and version endpoints are public.
 
+---
+
+## Response envelopes (per route)
+
+There is **no single uniform success envelope** in this API: each route group
+has its own convention, and a client must match the route it calls. This table
+is the contract as implemented (`internal/handler/*.go`, `internal/fileviewer/
+handlers.go`) — documented here because consumers already depend on it, not
+changed (GAP-072).
+
+| Route | Success | Success body |
+|-------|---------|--------------|
+| `POST /api/v1/trees` | 201 | **bare object** — the created tree (no wrapper) |
+| `POST /api/v1/topics` | 201 | **bare object** — the created topic (no wrapper) |
+| `POST /api/v1/cards` | 201 | **bare object** — the created card (no wrapper) |
+| `POST /api/v1/trees/{tree_id}/nodes` | 201 | **`{"node":{…},"edge":{…}}`** |
+| `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply` | 201 | **`{"node":{…},"edge":{…}}`** |
+| `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork` | 201 | **`{"node":{…},"edge":{…}}`** |
+| `POST /api/v1/files/upload` | 201 | **`{"file":{…},"was_new_upload":…,…}`** |
+| `POST /api/v1/files/resolve` | 200 | **`{"file":{…},…}`** (same resolve shape) |
+| `GET /api/v1/trees` | 200 | **`{"trees":[…],"pagination":{…}}`** |
+| `GET /api/v1/trees/{tree_id}/nodes` | 200 | **`{"nodes":[…]}`** |
+| `GET /api/v1/files` | 200 | **`{"files":[…],"pagination":{…}}`** |
+| `GET /api/v1/files/recents` | 200 | **bare array** — `[ {file}, … ]` |
+| `GET /api/v1/viewers` | 200 | **bare array** |
+| Any failure | 4xx/5xx | **`{"error":{"code":"…","message":"…"}}`** |
+
+### Create tree → bare object
+
+```
+POST /api/v1/trees
+```
+```json
+{
+  "id": "a1b2c3d4-0000-0000-0000-000000000000",
+  "title": "My First Tree",
+  "description": "A test tree",
+  "owner_id": "00000000-0000-0000-0000-000000000001",
+  "root_node_id": "e5f6a7b8-0000-0000-0000-000000000000",
+  "node_count": 1,
+  "member_count": 1,
+  "created_at": "2026-09-14T12:00:00Z",
+  "updated_at": "2026-09-14T12:00:00Z",
+  "role": "owner"
+}
+```
+The tree object is the WHOLE body — there is no `{"tree": …}` wrapper.
+
+### Create topic → bare object
+
+```
+POST /api/v1/topics
+```
+```json
+{
+  "id": "b4c5d6e7-0000-0000-0000-000000000000",
+  "tree_id": "a1b2c3d4-0000-0000-0000-000000000000",
+  "root_node_id": "e5f6a7b8-0000-0000-0000-000000000000",
+  "title": "My First Topic",
+  "description": "Optional description",
+  "slug": "my-first-topic",
+  "status": "active",
+  "node_count": 1,
+  "created_at": "2026-09-14T12:02:00Z"
+}
+```
+Also unwrapped (`POST /api/v1/cards` follows the same bare-object convention).
+
+### Create node / reply / fork → node+edge wrapper
+
+```
+POST /api/v1/trees/{tree_id}/nodes
+```
+```json
+{
+  "node": {
+    "id": "c9d0e1f2-0000-0000-0000-000000000000",
+    "treeId": "a1b2c3d4-0000-0000-0000-000000000000",
+    "parentId": "e5f6a7b8-0000-0000-0000-000000000000",
+    "content": "Hello from the child node!",
+    "contentFormat": "markdown",
+    "nodeType": "message",
+    "sequenceNum": 2,
+    "createdAt": "2026-09-14T12:01:00Z"
+  },
+  "edge": {
+    "id": "d0e1f2a3-0000-0000-0000-000000000000",
+    "treeId": "a1b2c3d4-0000-0000-0000-000000000000",
+    "sourceNodeId": "e5f6a7b8-0000-0000-0000-000000000000",
+    "targetNodeId": "c9d0e1f2-0000-0000-0000-000000000000",
+    "edgeType": "reply",
+    "createdAt": "2026-09-14T12:01:00Z"
+  }
+}
+```
+`reply` and `fork` return the identical `{node, edge}` shape (a root node
+create — no `parent_id` — returns `"edge": null`). Note the node/edge objects
+use **camelCase** field names (`treeId`, `parentId`, `contentFormat`) while the
+tree and topic objects above use **snake_case**: the request side accepts both
+casings on the node endpoints (see § Nodes), the response side does not unify
+them.
+
+### Upload a file → file wrapper
+
+```
+POST /api/v1/files/upload
+```
+```json
+{
+  "file": { "id": "01a0a32e-…", "sha256": "bdbedd…", "byteSize": 49, "mimeType": "text/markdown", "…": "…" },
+  "was_new_upload": true,
+  "was_deduped": false,
+  "stream_url": "/api/v1/files/01a0a32e-…/stream",
+  "expires_at": "2026-09-14T13:00:00Z"
+}
+```
+
+---
+
 ## Auth
 
 ### JWT Tokens
@@ -108,7 +227,10 @@ POST /api/v1/trees
 }
 ```
 
-**Response (201):** Tree detail with `root_node_id`, `owner_id`, `created_at`.
+**Response (201):** **bare** tree object — tree detail with `root_node_id`,
+`owner_id`, `created_at`. There is NO wrapper: the body is the tree itself
+(unlike create node, which returns `{"node":…,"edge":…}` — see
+[Response envelopes](#response-envelopes-per-route)).
 
 **Error codes:** `INVALID_BODY` (400), `VALIDATION_ERROR` (400), `TOKEN_MISSING` (401)
 
@@ -208,7 +330,7 @@ POST /api/v1/trees/{tree_id}/nodes
 **Request body:**
 ```json
 {
-  "parent_id": "uuid (optional, empty = root child)",
+  "parent_id": "uuid (optional — OMIT the field to create a root node; a present-but-empty value is rejected: 400 INVALID_PARENT_ID 'parent_id must not be empty (omit the field to create a root node)')",
   "content": "string (required, max 64KB)",
   "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
   "node_type": "string (optional, default 'message')",
@@ -217,8 +339,13 @@ POST /api/v1/trees/{tree_id}/nodes
 }
 ```
 
+`parent_id` is validated **before** the content rules, so `{"parent_id":""}`
+alone reports `INVALID_PARENT_ID` naming the field rather than a content error
+(GAP-072). `"parent_id": null` is treated as omitted (root node).
+
 **Response (201):** `{ "node": {...}, "edge": {...} }` — the created node and
-the edge connecting it to its parent.
+the edge connecting it to its parent. A root node (no `parent_id`) has no
+parent edge, so the response is `{ "node": {...}, "edge": null }` (BUG-029).
 
 **Error codes:** `INVALID_TREE_ID` (400), `INVALID_BODY` (400), `EMPTY_CONTENT` (400),
 `CONTENT_TOO_LARGE` (400), `INVALID_PARENT_ID` (400), `VALIDATION_ERROR` (400),
@@ -300,6 +427,16 @@ from the source node.
 leaf returns `400 VALIDATION_ERROR` ("fork requires parent with at least one
 child"), since a leaf fork would be indistinguishable from a reply
 (SPEC-API-03 §7.3).
+
+**Error codes:** `INVALID_NODE_ID` (400), `EMPTY_CONTENT` (400), `INVALID_BODY` (400),
+`VALIDATION_ERROR` (400), `NOT_FOUND` (404), `GONE` (410), `CONFLICT` (409),
+`FORBIDDEN` (403), `TOKEN_MISSING` (401)
+
+**Empty body (GAP-072):** `content` is required. An empty body, a whitespace-only
+body, `{}`, or a body omitting `content` returns `400 EMPTY_CONTENT` with the
+message `content is required` — the field is named instead of the previous
+misleading `400 INVALID_BODY "request body must be valid JSON"`. Malformed JSON
+(no JSON at all, truncated, unknown field) still returns `400 INVALID_BODY`.
 
 ---
 
@@ -401,7 +538,8 @@ POST /api/v1/topics
 }
 ```
 
-**Response (201):** Created topic detail.
+**Response (201):** Created topic detail — a **bare** object (no
+`{"topic": …}` wrapper; see [Response envelopes](#response-envelopes-per-route)).
 
 ### Get Topic
 
@@ -1036,7 +1174,7 @@ and [docs/INTEGRATION.md § 6](INTEGRATION.md) for the runnable walkthrough.
 | `POST` | `/api/v1/files/upload` | Upload bytes (multipart) — content-addressed, dedup-aware |
 | `POST` | `/api/v1/files/resolve` | Resolve by hash reference (`hash_ref`) — JSON |
 | `POST` | `/api/v1/files/resolve/batch` | Resolve up to 200 hash references in one call |
-| `GET` | `/api/v1/files/recents` | Recently accessed files for the acting profile |
+| `GET` | `/api/v1/files/recents` | Recently accessed OR uploaded files for the acting profile (an upload counts as an access — GAP-072) |
 | `GET` | `/api/v1/files` | Paginated file list for the acting profile |
 | `GET` | `/api/v1/files/{id}` | File metadata |
 | `GET` | `/api/v1/files/{id}/stream` | File bytes — supports `Range` (206) and `If-None-Match` (304) |
@@ -1067,6 +1205,11 @@ upload of identical bytes answers `"was_deduped": true` and returns the
 ORIGINAL row (its filename is the first upload's); the stored `referenceCount`
 is incremented in the database, while the echoed `file` object carries the
 value read *before* the bump — verify with `GET /api/v1/files/{id}`.
+
+**Side effect (GAP-072):** a successful upload stamps `lastAccessedAt` and
+bumps `accessCount` on the file row, so the uploaded file is listed by
+`GET /api/v1/files/recents` right away. No `file_access_log` row is written
+(the log's action enum has no upload value) — see § Recents.
 
 **Response (201):**
 ```json
@@ -1170,6 +1313,18 @@ GET /api/v1/files/recents?limit=50
 
 **Response (200):** a bare JSON array of the slim file shape (not wrapped),
 newest access first. `limit` 1–200.
+
+**Semantics (GAP-072):** recents lists the acting profile's non-deleted files
+whose `last_accessed_at` is set, newest first. A file enters the list when it
+has been touched — either by an explicit access entry
+(`POST /api/v1/files/{id}/access`, which stamps `last_accessed_at` and bumps
+`access_count`) **or by being uploaded**: `POST /api/v1/files/upload` stamps the
+same fields, so a freshly uploaded file appears in recents immediately instead
+of after its first explicit open (from a dogfood session, 2026-09-14, recents
+returned `[]` right after an upload). Uploads do NOT write a `file_access_log`
+row — that table's action enum (`open|download|thumbnail_fetch|preview_text|
+stream_start|stream_end|error`, migrations/000045 CHECK constraint) has no
+upload value, so it stays the audit trail of explicit viewer interactions.
 
 ### Get one file
 
@@ -1419,9 +1574,9 @@ All errors follow a consistent JSON envelope:
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
-| `EMPTY_CONTENT` | 400 | Content field is empty |
+| `EMPTY_CONTENT` | 400 | Content field is empty (create) or missing/empty on fork — message `content is required` |
 | `CONTENT_TOO_LARGE` | 400 | Content exceeds 64KB |
-| `INVALID_PARENT_ID` | 400 | parent_id is not a valid UUID |
+| `INVALID_PARENT_ID` | 400 | parent_id is not a valid UUID, or is present but empty (GAP-072: omit the field for a root node) |
 | `GONE` | 410 | Node was already deleted |
 | `CONFLICT` | 409 | Parent node was deleted |
 

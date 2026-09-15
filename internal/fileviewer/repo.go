@@ -69,7 +69,9 @@ type FileMetadataRepo interface {
 	ListByTree(ctx context.Context, treeID uuid.UUID, opts ListFilesOpts) ([]FileMetadataSlim, error)
 
 	// ListRecent returns recently accessed files for a profile.
-	// Powers the "Recents" list.
+	// Powers the "Recents" list. A row counts as recently accessed once
+	// last_accessed_at is set, which happens on an explicit access-log append
+	// (POST /files/{id}/access) AND on upload (GAP-072).
 	ListRecent(ctx context.Context, profileID uuid.UUID, limit int) ([]FileMetadataSlim, error)
 
 	// IncrementReferenceCount atomically bumps reference_count.
@@ -280,6 +282,10 @@ func (r *PGFileMetadataRepo) ListByTree(ctx context.Context, treeID uuid.UUID, o
 }
 
 // ListRecent returns the profile's most recently accessed non-deleted files.
+//
+// The filter is `last_accessed_at IS NOT NULL`: a file enters recents once it
+// has been touched, which includes uploads (the upload handler stamps
+// last_accessed_at — GAP-072) and explicit access-log entries.
 func (r *PGFileMetadataRepo) ListRecent(ctx context.Context, profileID uuid.UUID, limit int) ([]FileMetadataSlim, error) {
 	if limit <= 0 {
 		limit = defaultListLimit

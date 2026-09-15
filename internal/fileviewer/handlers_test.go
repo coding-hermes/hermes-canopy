@@ -468,3 +468,80 @@ func TestHandler_ResolveBatchEndpoint(t *testing.T) {
 		t.Fatalf("batch output wrong: %+v", outs)
 	}
 }
+
+// TestGAP072_UploadAppearsInRecents proves item 4 of GAP-072: a fresh upload
+// counts as an access, so GET /files/recents lists the file immediately —
+// before any explicit POST /files/{id}/access entry exists. Pre-fix the
+// endpoint returned [] right after an upload (recents only saw explicit
+// access-log opens from a real dogfood session, 2026-09-14).
+func TestGAP072_UploadAppearsInRecents(t *testing.T) {
+	srv, _ := newHandlerTestServer(t)
+
+	// Recents starts empty for this profile (nothing touched yet).
+	resp, raw := do(t, srv, "GET", "/api/v1/files/recents", nil, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("recents status = %d (%s)", resp.StatusCode, raw)
+	}
+	var before []FileMetadataSlim
+	if err := json.Unmarshal(raw, &before); err != nil {
+		t.Fatalf("decode recents: %v (%s)", err, raw)
+	}
+	if len(before) != 0 {
+		t.Fatalf("recents should start empty for a fresh profile, got %+v", before)
+	}
+
+	// Upload — no access-log entry, no open, just the upload.
+	status, out := uploadMultipart(t, srv, "recents-note.md", "# recents probe\n", "text/markdown")
+	if status != 201 {
+		t.Fatalf("upload status = %d", status)
+	}
+	if out.FileMetadata == nil {
+		t.Fatal("upload returned no file metadata")
+	}
+	id := out.FileMetadata.ID.String()
+
+	// Recents now contains the uploaded file.
+	resp, raw = do(t, srv, "GET", "/api/v1/files/recents", nil, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("recents after upload status = %d (%s)", resp.StatusCode, raw)
+	}
+	var after []FileMetadataSlim
+	if err := json.Unmarshal(raw, &after); err != nil {
+		t.Fatalf("decode recents after upload: %v (%s)", err, raw)
+	}
+	if len(after) != 1 || after[0].ID != out.FileMetadata.ID {
+		t.Fatalf("recents after upload = %+v, want exactly the uploaded file %s", after, id)
+	}
+
+	// The stamp is real, not just this response: the row itself carries
+	// last_accessed_at and a bumped access_count.
+	resp, raw = do(t, srv, "GET", "/api/v1/files/"+id, nil, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("get file status = %d (%s)", resp.StatusCode, raw)
+	}
+	var meta FileMetadata
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		t.Fatalf("decode file metadata: %v (%s)", err, raw)
+	}
+	if meta.LastAccessedAt == nil {
+		t.Fatalf("upload did not stamp last_accessed_at: %+v", meta)
+	}
+	if meta.AccessCount < 1 {
+		t.Fatalf("upload did not bump access_count: %d", meta.AccessCount)
+	}
+
+	// The audit trail is unchanged: the upload itself is NOT written to
+	// file_access_log (its action enum has no upload value), so the log stays
+	// empty until a viewer interaction is recorded.
+	resp, raw = do(t, srv, "GET", "/api/v1/files/"+id+"/access", nil, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("access log status = %d (%s)", resp.StatusCode, raw)
+	}
+	var entries []FileAccessEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		t.Fatalf("decode access log: %v (%s)", err, raw)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("upload should not fabricate an access-log entry, got %+v", entries)
+	}
+}
