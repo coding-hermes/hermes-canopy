@@ -293,12 +293,12 @@ type TreeDetail struct {
 // null/empty when the tree has no association metadata (e.g. trees not
 // imported from Hermes sessions).
 type Related struct {
-	Parent           *RelatedRef     `json:"parent,omitempty"`
-	Children         []RelatedRef    `json:"children,omitempty"`
-	BoardTask        *string         `json:"board_task,omitempty"`
-	Project          *string         `json:"project,omitempty"`
-	CommitHash       *string         `json:"commit_hash,omitempty"`
-	DelegationGoals  []DelegationRef `json:"delegation_goals,omitempty"`
+	Parent          *RelatedRef     `json:"parent,omitempty"`
+	Children        []RelatedRef    `json:"children,omitempty"`
+	BoardTask       *string         `json:"board_task,omitempty"`
+	Project         *string         `json:"project,omitempty"`
+	CommitHash      *string         `json:"commit_hash,omitempty"`
+	DelegationGoals []DelegationRef `json:"delegation_goals,omitempty"`
 }
 
 // RelatedRef is a lightweight {id, title} reference to a related tree.
@@ -366,6 +366,14 @@ type TreeService interface {
 	// reply answers REFERENCE_CONTEXT_NOT_FOUND (404) — the same code a
 	// non-existent node gets (§9.4).
 	GetReferenceContext(ctx context.Context, nodeID uuid.UUID, opts ReferenceContextOptions) (*ReferenceContextResult, error)
+	// LoadCompileSelection loads the persisted selection of a compile
+	// target for SPEC-PL-06 §6, or nil when the target is not a
+	// multi-reference reply (the compiler then answers for that node
+	// exactly as it did before the §6 integration). A selection whose live
+	// sources no longer match the stored manifest hash fails with
+	// REFERENCE_SELECTION_STALE (§9.4) rather than compiling a mixed
+	// snapshot.
+	LoadCompileSelection(ctx context.Context, nodeID uuid.UUID) (*CompileSelection, error)
 }
 
 // ReferenceSelectionVerifier is the TreeService subset NodeService needs to
@@ -784,12 +792,12 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
 // trees) produces a nil/empty Related rather than failing the request.
 func (s *TreeServiceImpl) extractRelated(ctx context.Context, metadata []byte) *Related {
 	var meta struct {
-		SessionID       string `json:"session_id"`
-		ParentSessionID string `json:"parent_session_id"`
+		SessionID       string   `json:"session_id"`
+		ParentSessionID string   `json:"parent_session_id"`
 		ChildSessionIDs []string `json:"child_session_ids"`
-		Project         string `json:"project"`
-		BoardTask       string `json:"board_task"`
-		CommitHash      string `json:"commit_hash"`
+		Project         string   `json:"project"`
+		BoardTask       string   `json:"board_task"`
+		CommitHash      string   `json:"commit_hash"`
 		DelegationGoals []struct {
 			DelegationID string `json:"delegation_id"`
 			Goal         string `json:"goal"`

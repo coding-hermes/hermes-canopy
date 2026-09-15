@@ -18,7 +18,6 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
-	"github.com/google/uuid"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
 	"github.com/coding-hermes/hermes-canopy/internal/fileviewer"
@@ -33,6 +32,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/sync"
 	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
+	"github.com/google/uuid"
 )
 
 // Server is the Canopy HTTP server.
@@ -406,8 +406,15 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)
 		r.Mount("/mcp", mcpHandler.Routes())
 
-		// Context compiler (GAP-001) — budgeted context assembly with visible manifest.
-		r.Get("/context/{node_id}", handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).Compile)
+		// Context compiler (GAP-001) — budgeted context assembly with visible
+		// manifest. SPEC-PL-06 §6: the loader is wired here, on the only
+		// compile surface in the repo, so a multi-reference target compiles
+		// its §6.1 selected-source block. treeSvc is an interface: when a
+		// wiring harness passes nil, the handler runs with no loader and
+		// compilation is unchanged.
+		r.Get("/context/{node_id}",
+			handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).
+				WithReferenceSelectionLoader(treeSvc).Compile)
 
 		// Plugin sandbox (GAP-002) — register/list/source/install + instances.
 		// Plugin lifecycle events use the existing SSE hub, keyed by plugin id.
