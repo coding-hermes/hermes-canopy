@@ -12056,3 +12056,14 @@ repo). Watch: the deployed `/home/kara/bin/canopyd` now predates `a3cb957`, so t
 **DuckBrain:** pre-write state read first — `/ticks/` contiguous through 459, status keys ending `2026-09-15-tick459-audit`. Written via the local CLI: `/ticks/460` → `6d19e29d-b877-4b1d-8d9f-e40a91bec8b9`; `/project/hermes-canopy/status/2026-09-15-tick460-audit` → `0ee1fab6-5696-43af-8da8-89bee2415213`. Both **verified on disk**: `namespaces/hermes-canopy/event/2026-09/current.jsonl` and `config/2026-09/current.jsonl`.
 
 **Next tick:** PL-06 phase 3 needs a design decision before dispatch — the remaining sections are §10.1 `reference_context_invalidated` (needs retained context-audit storage, so it is real design work, not a mount), §6 context compiler, §4.1/§4.3/§7 frontend, §8 merge conflict model. Also open: the honest interpretation call the worker flagged — §10.1 describes `node_added` as a *full node with `parent_mode='multi_reference'`*, while the shared broadcast payload is the pre-existing `{node_id, tree_id, actor_id, event}`; phase 2 kept the shared payload because changing it touches every node creation, so if §10.1 must be met literally that is its own scoped task. P3 backlog unchanged (PL-02..PL-05, FTR-06). Watch: the deployed `/home/kara/bin/canopyd` predates `a3cb957` and now `06aed60` — the hourly `canopy-deploy-check.timer` owns the redeploy, not this tick.
+
+### Tick 460 — CI verified GREEN (follow-up record, appended after the run completed)
+
+Both tick-460 commits have their own GitHub Actions run, and both are green:
+
+| Run | Commit | Kind | Conclusion | Steps checked |
+|---|---|---|---|---|
+| [34999577767](https://github.com/coding-hermes/hermes-canopy/actions/runs/34999577767) | `06aed60` | content (PL06-P2) | **success** | Tidy, Build, Vet, golangci-lint, Test (short), Integration tests, Frontend install+build+type-check, Gitleaks detect, Docker build, Deploy — **all success** |
+| [34999754946](https://github.com/coding-hermes/hermes-canopy/actions/runs/34999754946) | `09121b8` | board closeout | **success** | build job success |
+
+CI health at tick start was 5/5 success on `origin/master` — no pre-existing failure to file. The `ci_result` on the `PL-06` umbrella row is now `GREEN`; the earlier `pending_on_push` shape was never translated into green before the runs finished. Push parity after both commits: `origin/master..HEAD` = 0, `gitlab/master..HEAD` = 0.
