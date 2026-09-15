@@ -12105,3 +12105,12 @@ Attempt 3 also fixed a real defect its new rule exposed: estimation now runs on 
 **DuckBrain:** pre-write state read first — `/ticks/` contiguous through 460. Writes recorded in the follow-up below with their returned ids and disk verification.
 
 **Next tick:** the highest-value open item is the **HTTP caller for §6** (a route/service that builds a `MultiReferenceSelection` from a persisted node — the compiler it will call now exists and is judged), followed by §10.1 `reference_context_invalidated` (needs retained context-audit storage), §4.1/§4.3/§7 frontend and §8 merge conflict model. P3 umbrellas PL-02..PL-05 and FTR-06 unchanged. Watch: the deployed `/home/kara/bin/canopyd` still predates `a3cb957`/`06aed60`/`56eb33d` — the hourly `canopy-deploy-check.timer` owns the redeploy, not this tick.
+
+### Tick 461 — CI verified GREEN (follow-up record, appended after the runs completed)
+
+| Run | Commit | Kind | Conclusion | Steps checked |
+|---|---|---|---|---|
+| [35014853088](https://github.com/coding-hermes/hermes-canopy/actions/runs/35014853088) | `35e72b0` (covers the content commit `56eb33d` — one push, one run on the tip) | board closeout | **success** | build job: Tidy, Build, Vet, golangci-lint, Test (short), Integration tests, Frontend install+build+type-check, Gitleaks detect, Docker build, Deploy |
+| [35014928410](https://github.com/coding-hermes/hermes-canopy/actions/runs/35014928410) | `b65c59a` | board closeout 2 | **success** | same build job — every step success |
+
+CI health at tick start was 6/6 success on `origin/master`; no pre-existing failure needed filing. The `ci_result` on the `PL-06` umbrella row is `GREEN` and was already green before this tick's commits — the phase-3 row is tracked on that umbrella, so no `pending_on_push` state was ever written. Push parity after all three commits: `origin/master..HEAD` = 0, `gitlab/master..HEAD` = 0.
