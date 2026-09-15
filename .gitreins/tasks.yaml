@@ -2295,3 +2295,18 @@ tasks:
   status: complete
   created_at: '2026-09-15T11:04:49.571485+00:00'
   completed_at: '2026-09-15T13:55:01.461822+00:00'
+- id: PL06-P2
+  title: "SPEC-PL-06 phase 2 \u2014 reference-context read route (\xA79.3) + SSE convergence\
+    \ vocabulary (\xA710)"
+  criteria:
+  - "GET /api/v1/nodes/{node_id}/reference-context returns the \xA79.3 envelope for\
+    \ a multi-reference node and 404 REFERENCE_CONTEXT_NOT_FOUND otherwise, honouring\
+    \ include_content/max_source_tokens/verify_hash; the tree SSE stream emits node_added,\
+    \ then N edge_added ordered by selection_order, then one multi_reference_converged\
+    \ with the exact \xA710.2 field set; route parity covers the new pattern; focused\
+    \ Go tests PASS not SKIP under CANOPY_TEST_ALLOW_SHARED_DB=1; golangci-lint 0\
+    \ issues; live isolated-stack curl + SSE capture; docs/API.md + README updated;\
+    \ one commit with co-author trailer"
+  status: complete
+  created_at: '2026-09-15T16:23:13.517597+00:00'
+  completed_at: '2026-09-15T17:02:58.072104+00:00'
