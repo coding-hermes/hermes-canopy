@@ -11935,3 +11935,91 @@ Push: 80ba7db (content) + f904278 (gitreins bookkeeping) + board closeout; origi
 Bookkeeping: tasks.jsonl GAP-072 row → complete (compact JSONL preserved, pending grep count consistent); events.jsonl id 458 task_completed; board.jsonl ticks_total 457→458, last_commit 80ba7db.
 CI: pending on push runs; verified next tick or below.
 Next tick: pending backlog = QA-HERMES-CANOPY-1/2 bunker rows + PL-02..06/FTR-06 P3 specs. Watch: off-by-one submission for the silent-log-live-tree dispatch pattern if useful.
+
+## Tick 459 — 2026-09-15 ~14:05Z (work: STEWARDSHIP — orphaned PL06-P1 landed)
+
+Verdict: board reading at tick start — `.coding-hermes/board/tasks.jsonl` 309 lines / 278 unique ids
+(266 complete, 12 pending by keep-LAST; a raw grep counts 30 `"status":"pending"` lines because
+recycled ids carry stale siblings). Pick = **QA-HERMES-CANOPY-11** (P3), the only actionable row at
+HEAD: it reports that commit `a3cb957` (SPEC-PL-06 phase 1, multi-reference write path) landed
+unpushed on BOTH remotes with no board record. Verified true at tick start:
+`git rev-list --count origin/master..HEAD` = 2 (`a3cb957` + the qa-cron row commit `e24ba0b`),
+gitlab 11 behind, `.gitreins/tasks.yaml` carrying an `in_progress` PL06-P1 row uncommitted, and no
+worker process holding the work (`pgrep -af 'hermes chat'` empty) — the tick-458 orphan signature.
+Skipped rows and why: QA-HERMES-CANOPY-1/2 (bunker port-pool + docker-install mirror — not
+project-owned), QA-HERMES-CANOPY-8/9/10 (battery harness / stand-in workdir / ui-probe root
+`package.json` — QA-harness-owned, not canopy source), PL-02..PL-05 + FTR-06 (P3 feature
+specs, 45K–146K word specs, no phase design yet).
+
+Dispatch: **none — this is a stewardship class, not a re-dispatch.** The implementation was already
+in the tree from the orphaned tick-458 dispatch (19 files, +3849/-27); the tick's work was
+verification, the gitreins lifecycle, and the landing. No worker was spawned, and saying so is the
+honest outcome.
+
+Worker/carrier: `gpt-5.6-luna` @ `openai-codex` (tick-458 dispatch); commit `a3cb957`
+(`feat(references): PL06-P1 — multi-reference write path (migration, EdgeRepo/NodeService, 2 API
+routes, tests)`) with the `Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>` trailer.
+
+Gates (fresh, this tick, all against the orphaned commit):
+- `go build -o /dev/null ./cmd/canopyd` exit 0; `go vet ./...` exit 0
+- `golangci-lint run ./...` → **0 issues**, exit 0 (CI form, same binary as the workflow)
+- `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1` … → `TEST_EXIT=0`:
+  db 112.464s ok · service 5.973s ok · config 0.003s ok · server 0.007s ok · handler 262.735s ok
+- focused PL06 run (`-run 'TestMultiReference|TestCreateReferenceSet|TestEdgeCreateDecisionTable|
+  TestValidateIncomingInvariant|TestReference|TestIsSyntheticMergePoint'`): **46 RUN / 41
+  top-level PASS / 0 SKIP / 0 FAIL**, exit 0 — the shared-DB flag is what turns these from SKIP
+  into real PASS (a bare `go test` here is a phantom pass)
+- `npx vitest run` → 54 files / **1011 tests passed** (12.6s); `npx oxlint src` clean on the
+  touched surface; `gitleaks detect --no-git` → **no leaks found** (18.2s, 429.8 MB scanned)
+
+Live proof (isolated stack, per `references/live-proof-isolated-stack.md`): probe DB
+`canopy_probe` (:5437) + HEAD binary `/tmp/canopyd-probe` on :8099, seeded with
+`scripts/seed-demo-data.sql`, dev JWT from the documented mint form —
+`POST /trees/{T}/reference-selections` → **200** (signed 646-byte selection token, canonical source
+ids, budget 16384); `POST /trees/{T}/multi-reference-replies` → **201** with
+`node.parent_mode="multi_reference"`, `parent_id` set to the display anchor, branch-span metadata
+(`commonAncestorId` = the seeded root) and `contextManifestHash`; rejections
+`REFERENCE_SOURCE_COUNT_TOO_LOW` **400** and `REFERENCE_SOURCE_INVALID` **400**. DB effect confirmed
+in the probe DB: 1 multi-reference node + exactly 2 `reference` edges. Cleanup: listener on :8099
+killed, `DROP DATABASE canopy_probe`, deployed :8091 still 200. The live `canopy` DB was NOT touched
+by the probe (its 2 users / 25 trees / 45 nodes is 09-13 dogfood + shared-DB test residue, not this
+tick — the "0|0|0 between windows" reference expectation is stale).
+
+GitReins: `gitreins task complete PL06-P1` (the task had been created+started by tick 458 and left
+`in_progress`) → **Stage tier1 PASS** (guard: secrets clean, go_build ok, go_lint ok, test mode:
+full) and **Stage tier2 PASS / COMPLETE**, verdict **`0c5ce6b2`**, every criterion individually
+verified by the judge (the judge ran its own isolated-stack proof on :18099 and reproduced the
+200/201 success envelopes plus REFERENCE_SOURCE_COUNT_TOO_LOW / REFERENCE_TREE_MISMATCH /
+NOT_TREE_MEMBER rejections). Verdict record: `.gitreins/history/2026-09-15/` (git-ignored by repo
+convention — only `tasks.yaml` status lands in git). Tier 2 was already sized 9M/250/45m, so no cap
+adjustment was needed.
+
+Push health: `a3cb957` + `e24ba0b` + this bookkeeping commit pushed to **origin/master** and
+**gitlab/master**; `git fetch origin && git rev-list --count origin/master..HEAD` = 0 afterwards.
+
+Bookkeeping: tasks.jsonl — `QA-HERMES-CANOPY-11` → `status: complete` (reasoning = stewardship
+rationale + the verified list, `commit_hash: a3cb957…`, guard/ci fields, worker_summary), `PL-06`
+umbrella row annotated `worker_status: partial` + `foreman_note` recording phase 1 landed with the
+open spec sections (§10 SSE vocabulary, §9.3 reference-context read, §6 context compiler,
+§4.1/§4.3/§7 frontend, §8 merge model) so the next tick does not re-dispatch a landed phase or
+silently close an unphased umbrella. Compact JSONL preserved (`json.dumps(..., separators=(",",":"))`,
+only 2 lines touched, `grep -c '"status":"pending"'` 30 → 29). events.jsonl ids **459**
+(`task_completed`, QA-HERMES-CANOPY-11) and **460** (`audit`, PL06-P1). board.jsonl `ticks_total`
+458 → **459**, `last_commit` → `a3cb957…`.
+
+Off-by-one: health probe `GET /health` → `{"status":"ok","uptime":"11h56m27s"}`. Discover fired
+before designing anything: `POST /api/v1/problems/discover
+{"problem_class":"gitreins-tier2-input-token-cap-exceeded"}` → **found** (corpus answer: the cap
+line in the job log is the authoritative signal, raise one rung; canopy already sized at 9M —
+matches the live `.gitreins/config.yaml`), and
+`{"problem_class":"gitreins-tier2-judge-verdict-complete"}` → `not_found`. Nothing non-trivial was
+debugged this tick, so no `post-debug` submission.
+
+CI: runs triggered by the push of `a3cb957` / `e24ba0b` / this bookkeeping commit — checked live and
+recorded in the tick-459 events (a green build is claimed only for a run that actually concluded).
+
+Next tick: pending backlog = PL-06 (phases 2+ need a phase design before dispatch), PL-02..PL-05,
+FTR-06 (P3 specs), QA-HERMES-CANOPY-1/2/8/9/10 (all harness/bunker-owned — do not dispatch from this
+repo). Watch: the deployed `/home/kara/bin/canopyd` now predates `a3cb957`, so the hourly
+`canopy-deploy-check.timer` should pick the new migration up; verify the deploy actually crossed
+000047 rather than re-reporting the staleness.
