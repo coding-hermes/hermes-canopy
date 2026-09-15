@@ -27,6 +27,7 @@ changed (GAP-072).
 | `POST /api/v1/files/resolve` | 200 | **`{"file":{…},…}`** (same resolve shape) |
 | `GET /api/v1/trees` | 200 | **`{"trees":[…],"pagination":{…}}`** |
 | `GET /api/v1/trees/{tree_id}/nodes` | 200 | **`{"nodes":[…]}`** |
+| `GET /api/v1/nodes/{node_id}/reference-context` | 200 | **bare object** — the §9.3 reference-context envelope (`node_id`, `tree_id`, `parent_mode`, `primary_source_id`, `context{…}`) |
 | `GET /api/v1/files` | 200 | **`{"files":[…],"pagination":{…}}`** |
 | `GET /api/v1/files/recents` | 200 | **bare array** — `[ {file}, … ]` |
 | `GET /api/v1/viewers` | 200 | **bare array** |
@@ -438,6 +439,72 @@ message `content is required` — the field is named instead of the previous
 misleading `400 INVALID_BODY "request body must be valid JSON"`. Malformed JSON
 (no JSON at all, truncated, unknown field) still returns `400 INVALID_BODY`.
 
+### Get Reference Context (SPEC-PL-06 §9.3)
+
+```
+GET /api/v1/nodes/{node_id}/reference-context
+```
+
+Flat node surface (bare node id, SPEC-API-03 §6). Returns the **stored**
+provenance of a multi-reference reply: the sources that were compiled into it,
+in the order they were selected, with the branch span and token accounting.
+Tree membership is resolved from the target node's own tree — the flat surface
+carries no `tree_id` segment for `TreeMembershipMiddleware`.
+
+A multi-reference reply is created through the two write endpoints of the same
+spec (§9.1 `POST /api/v1/trees/{tree_id}/reference-selections` preflight, §9.2
+`POST /api/v1/trees/{tree_id}/multi-reference-replies` create).
+
+**Query params:**
+- `include_content` — bool, default `true`. When `false` each source's
+  `content` key is **omitted** (not returned empty), so a client can tell
+  "not asked for" from "empty source".
+- `max_source_tokens` — int, default = the source allocation recorded at
+  creation (the §6.2 per-source ceiling of 2,048 tokens); a larger value is
+  clamped to 2,048. A truncated source keeps its head and tail around the
+  §6.1 omission marker `[... N tokens omitted from source RN ...]`.
+- `verify_hash` — bool, default `true`. When a source's current content no
+  longer matches the snapshot the manifest hash was built from (or a selected
+  source was soft-deleted), the response adds
+  `source_changed_since_creation: true`.
+
+**Response (200):** the §9.3 envelope. `context.manifest_hash` is the value
+persisted at creation and is **never recomputed** at read time — it is the
+provenance record; `verify_hash` only compares a digest against it.
+
+```json
+{
+  "node_id": "0191a8b2-7fff-7000-9000-000000000301",
+  "tree_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "parent_mode": "multi_reference",
+  "primary_source_id": "0191a8b2-7fff-7000-9000-000000000101",
+  "context": {
+    "sources": [
+      {"source_label": "R1", "node_id": "0191a8b2-7fff-7000-9000-000000000101", "content": "…", "truncated": false},
+      {"source_label": "R2", "node_id": "0191a8b2-7fff-7000-9000-000000000202", "content": "…", "truncated": false}
+    ],
+    "is_synthetic_merge_point": true,
+    "branch_span": {"common_ancestor_id": "0191a8b2-7fff-7000-9000-000000000001", "source_branches": []},
+    "token_budget": 8192,
+    "tokens_used": 1460,
+    "manifest_hash": "91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f"
+  }
+}
+```
+
+`source_changed_since_creation: true` is present only in that case; the field is
+absent on an unchanged snapshot.
+
+**Error codes:** `INVALID_NODE_ID` (400), `TOKEN_MISSING` (401),
+`NOT_TREE_MEMBER` (403), `REFERENCE_CONTEXT_NOT_FOUND` (404),
+`INVALID_INCLUDE_CONTENT` / `INVALID_VERIFY_HASH` / `INVALID_MAX_SOURCE_TOKENS`
+(400), `SERVICE_UNAVAILABLE` (503).
+
+**404 semantics (§9.3):** `REFERENCE_CONTEXT_NOT_FOUND` is the answer for a node
+that is not a multi-reference reply **and** for a node that does not exist —
+identical status, code and message, so the route is deliberately not an
+existence oracle.
+
 ---
 
 ## Edges
@@ -793,11 +860,12 @@ GET /api/v1/trees/{tree_id}/events
 | `node_added` | A node was created |
 | `node_updated` | A node was updated |
 | `node_removed` | A node was soft-deleted |
-| `edge_added` | An edge was created |
+| `edge_added` | An edge was created — for a multi-reference reply, one full `reference` edge per source, ordered by `metadata.selection_order` (SPEC-PL-06 §10.1) |
 | `edge_removed` | An edge was deleted |
 | `tree_created` | A tree was created |
 | `tree_updated` | A tree was updated |
 | `tree_deleted` | A tree was deleted |
+| `multi_reference_converged` | A multi-reference reply and all N of its reference edges are committed (SPEC-PL-06 §10.2 composite) |
 
 Heartbeat: `: heartbeat` (SSE comment, every 30s).
 
@@ -807,6 +875,45 @@ Heartbeat: `: heartbeat` (SSE comment, every 30s).
 `INVALID_SINCE_HASH` (400), `INVALID_PROFILE_ID` (400),
 `TOO_MANY_CONNECTIONS_TREE` (429), `TOO_MANY_CONNECTIONS` (503),
 `STREAMING_NOT_SUPPORTED` (500), `SUBSCRIPTION_FAILED` (500)
+
+#### Multi-reference convergence (SPEC-PL-06 §10)
+
+`POST /api/v1/trees/{tree_id}/multi-reference-replies` publishes, **only after
+commit** and in this exact order:
+
+1. `node_added` — the reply itself (`parent_mode: "multi_reference"`). First.
+2. exactly **N** `edge_added` events, one full `reference` edge each, ordered by
+   `metadata.selection_order` (each payload carries the §5.2 metadata:
+   `selection_order`, `source_label` = `R1..RN`, `color_key`, `role`).
+3. exactly **one** `multi_reference_converged` composite. Last.
+
+Composite `data` — this field set exactly (§10.2):
+
+```json
+{
+  "tree_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "node_id": "0191a8b2-7fff-7000-9000-000000000301",
+  "parent_mode": "multi_reference",
+  "primary_source_id": "0191a8b2-7fff-7000-9000-000000000101",
+  "source_node_ids": ["0191a8b2-…", "0191a8b2-…"],
+  "edge_ids": ["0191a8b2-…", "0191a8b2-…"],
+  "is_synthetic_merge_point": true,
+  "common_ancestor_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "context_manifest_hash": "91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f",
+  "created_at": "2026-07-22T12:00:00Z"
+}
+```
+
+`source_node_ids` and `edge_ids` share one order (2–20 entries);
+`context_manifest_hash` is 64 hex characters; `common_ancestor_id` may be null.
+
+The composite is purely **additive**: clients that understand only
+`node_added` / `edge_added` keep working, and no client should synthesize edges
+from the composite when the `edge_added` events are missing — replay the stream
+instead (§10.3). `reference_context_invalidated` (§10.1 row 4) is **not emitted
+yet**; the read route reports the same condition as
+`source_changed_since_creation` (see [§ Get Reference
+Context](#get-reference-context-spec-pl-06-93)).
 
 ---
 
@@ -1579,6 +1686,7 @@ All errors follow a consistent JSON envelope:
 | `INVALID_PARENT_ID` | 400 | parent_id is not a valid UUID, or is present but empty (GAP-072: omit the field for a root node) |
 | `GONE` | 410 | Node was already deleted |
 | `CONFLICT` | 409 | Parent node was deleted |
+| `REFERENCE_CONTEXT_NOT_FOUND` | 404 | `GET /api/v1/nodes/{node_id}/reference-context`: the node is not a multi-reference reply — the SAME answer a non-existent node gets, so the route is not an existence oracle (SPEC-PL-06 §9.3/§9.4) |
 
 ### Tree-Specific Error Codes
 

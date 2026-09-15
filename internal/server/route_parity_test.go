@@ -84,11 +84,13 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/v1/trees/{}/nodes/{}"},
 		{http.MethodPost, "/api/v1/nodes/{}/reply"},
 		{http.MethodPost, "/api/v1/nodes/{}/fork"},
-		// SPEC-PL-06 multi-message reference model (§9.1, §9.2):
+		// SPEC-PL-06 multi-message reference model (§9.1, §9.2, §9.3):
 		//   POST /api/v1/trees/{tree_id}/reference-selections    preflight
 		//   POST /api/v1/trees/{tree_id}/multi-reference-replies create
+		//   GET  /api/v1/nodes/{node_id}/reference-context       read (§9.3)
 		{http.MethodPost, "/api/v1/trees/{}/reference-selections"},
 		{http.MethodPost, "/api/v1/trees/{}/multi-reference-replies"},
+		{http.MethodGet, "/api/v1/nodes/{}/reference-context"},
 	}
 
 	// Control: tree-scoped fork was mounted before GAP-065 and must stay

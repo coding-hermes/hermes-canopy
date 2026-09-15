@@ -253,6 +253,13 @@ Tree-scoped (primary, membership-gated):
 | `GET` | `/api/v1/trees/{tree_id}/nodes/{node_id}` | Get node details |
 | `POST` | `/api/v1/trees/{tree_id}/nodes/{node_id}/fork` | Fork a node (create child branch; source must already have ≥1 child) |
 
+Reference context (SPEC-PL-06 §9.3) — flat surface, bare node id, membership
+resolved per node:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/nodes/{node_id}/reference-context` | Stored provenance of a multi-reference reply — `include_content`, `max_source_tokens` (max 2048), `verify_hash`; `404 REFERENCE_CONTEXT_NOT_FOUND` for a node that is not a multi-reference reply |
+
 > Edges are managed **implicitly** through node operations (reply/fork/synthesis)
 > — there is no standalone edge API.
 

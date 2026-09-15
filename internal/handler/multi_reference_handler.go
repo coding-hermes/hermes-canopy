@@ -1,18 +1,22 @@
 // Package handler — multi-message reference endpoints (SPEC-PL-06 §9.1,
-// §9.2, §9.4).
+// §9.2, §9.3, §9.4).
 //
-//	POST /api/v1/trees/{tree_id}/reference-selections   — preflight (200)
-//	POST /api/v1/trees/{tree_id}/multi-reference-replies — create  (201)
+//	POST /api/v1/trees/{tree_id}/reference-selections      — preflight (200)
+//	POST /api/v1/trees/{tree_id}/multi-reference-replies   — create (201)
+//	GET  /api/v1/nodes/{node_id}/reference-context         — read (200)
 //
-// Both are tree-scoped and registered with the same auth + tree-membership
-// middleware as the other tree-scoped surfaces (§14.1 steps 6-7). Request
-// and response field names are snake_case on this boundary (§9).
+// The two tree-scoped routes are registered with the same auth + tree
+// membership middleware as the other tree-scoped surfaces (§14.1 steps 6-7).
+// The read route lives on the flat node surface (§6), which has no tree_id
+// segment, so it resolves membership from the target node's own tree.
+// Request and response field names are snake_case on this boundary (§9).
 package handler
 
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -21,15 +25,27 @@ import (
 )
 
 // MultiReferenceHandler wires the multi-message reference endpoints to the
-// tree (preflight) and node (creation) services.
+// tree (preflight + context read) and node (creation) services.
 type MultiReferenceHandler struct {
 	treeSvc service.TreeService
 	nodeSvc service.NodeService
+	// members is optional: when set, the flat-surface read route resolves
+	// per-node membership itself (the flat mount carries no tree_id
+	// segment, so TreeMembershipMiddleware cannot run there). Nil skips
+	// the check and is only used by DB-free wiring harnesses.
+	members TreeMemberChecker
 }
 
 // NewMultiReferenceHandler returns a handler over the two services.
 func NewMultiReferenceHandler(treeSvc service.TreeService, nodeSvc service.NodeService) *MultiReferenceHandler {
 	return &MultiReferenceHandler{treeSvc: treeSvc, nodeSvc: nodeSvc}
+}
+
+// WithMembership wires the per-node membership checker used by the §9.3
+// read route. Safe to call with nil.
+func (h *MultiReferenceHandler) WithMembership(checker TreeMemberChecker) *MultiReferenceHandler {
+	h.members = checker
+	return h
 }
 
 // referenceSelectionRequest is the §9.1 request body. Source ids decode as
@@ -156,6 +172,115 @@ func (h *MultiReferenceHandler) CreateMultiReferenceReply(w http.ResponseWriter,
 	}
 	w.Header().Set("Location", "/api/v1/nodes/"+result.Node.ID.String()+"/reference-context")
 	writeJSON(w, http.StatusCreated, result)
+}
+
+// --- §9.3 reference-context read ---------------------------------------------
+
+// GetReferenceContext handles GET /nodes/{node_id}/reference-context (§9.3).
+//
+// It returns the stored provenance of a multi-reference reply: the sources in
+// persisted selection order (labelled R1..RN), the branch span, the token
+// accounting and — always as persisted — the creation manifest hash. A node
+// that is not a multi-reference reply answers 404
+// REFERENCE_CONTEXT_NOT_FOUND, and so does a node that does not exist, so the
+// route cannot be used as an existence oracle (§9.3, §9.4).
+//
+// The flat surface carries no tree_id segment, so tree membership is
+// resolved from the target node's own tree once the node is known to exist
+// (§9.3 "authorized like a node read").
+func (h *MultiReferenceHandler) GetReferenceContext(w http.ResponseWriter, r *http.Request) {
+	nodeID, ok := parseNodeID(w, r)
+	if !ok {
+		return
+	}
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+	if h.treeSvc == nil {
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "tree service unavailable")
+		return
+	}
+
+	opts, ok := parseReferenceContextOptions(w, r)
+	if !ok {
+		return
+	}
+
+	result, err := h.treeSvc.GetReferenceContext(r.Context(), nodeID, opts)
+	if err != nil {
+		writeReferenceServiceError(w, r, err)
+		return
+	}
+
+	if h.members != nil && result.TreeID != uuid.Nil {
+		member, err := h.members.IsMember(r.Context(), result.TreeID, userID)
+		if err != nil {
+			log.Ctx(r.Context()).Error().Err(err).Msg("reference-context membership check failed")
+			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "membership check unavailable")
+			return
+		}
+		if !member {
+			writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER", "you are not a member of this tree")
+			return
+		}
+		// Same order as TreeMembershipMiddleware: membership first, then the
+		// soft-deleted-tree gate (members of a deleted tree get 410).
+		deleted, err := h.members.IsTreeDeleted(r.Context(), result.TreeID)
+		if err != nil {
+			log.Ctx(r.Context()).Error().Err(err).Msg("reference-context tree-state check failed")
+			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "tree state check unavailable")
+			return
+		}
+		if deleted {
+			writeError(w, http.StatusGone, "TREE_DELETED", "tree has been deleted")
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// parseReferenceContextOptions reads the §9.3 query parameters. Defaults:
+// include_content=true, verify_hash=true, max_source_tokens=the source
+// allocation recorded at creation (the §6.2 per-source ceiling).
+//
+// It writes the error response and returns ok=false on a malformed value.
+// max_source_tokens above the documented 2,048 maximum is CLAMPED, not
+// rejected — "maximum 2,048" bounds the allowance rather than the input.
+func parseReferenceContextOptions(w http.ResponseWriter, r *http.Request) (service.ReferenceContextOptions, bool) {
+	opts := service.ReferenceContextOptions{IncludeContent: true, VerifyHash: true}
+	q := r.URL.Query()
+
+	if raw := q.Get("include_content"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_INCLUDE_CONTENT", "include_content must be a boolean")
+			return opts, false
+		}
+		opts.IncludeContent = value
+	}
+	if raw := q.Get("verify_hash"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_VERIFY_HASH", "verify_hash must be a boolean")
+			return opts, false
+		}
+		opts.VerifyHash = value
+	}
+	if raw := q.Get("max_source_tokens"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 {
+			writeError(w, http.StatusBadRequest, "INVALID_MAX_SOURCE_TOKENS", "max_source_tokens must be a positive integer")
+			return opts, false
+		}
+		if value > service.ReferenceMaxSourceTokens {
+			value = service.ReferenceMaxSourceTokens
+		}
+		opts.MaxSourceTokens = value
+	}
+	return opts, true
 }
 
 // --- Error mapping (SPEC-PL-06 §9.4) ----------------------------------------

@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // --- Request / response types (SPEC-PL-06 §13) -------------------------------
@@ -279,11 +280,25 @@ func (s *NodeServiceImpl) CreateMultiReferenceReply(ctx context.Context, treeID 
 		return nil, fmt.Errorf("%w: commit: %v", ErrDatabaseUnavailable, err)
 	}
 
-	// §13.1 step 10 — publish only after commit. This phase reuses the
-	// existing standard node broadcast; the §10 composite
-	// `multi_reference_converged` event and its ordered edge events are
-	// deferred (spec §10), so no client sees a half-defined event.
+	// §13.1 step 10 / §10.1 — publish only after commit, in the documented
+	// order: node_added, exactly N edge_added events ordered by
+	// metadata.selection_order, then one multi_reference_converged composite
+	// as the last event. A publication failure never rolls back a committed
+	// graph, and nothing is broadcast before the commit above.
 	s.broadcastNodeEvent(ctx, treeID, "node_added", created.ID, authorID)
+	s.broadcastReferenceEdgeEvents(treeID, edgeRows, authorID)
+	s.broadcastMultiReferenceConverged(treeID, authorID, MultiReferenceConvergedEvent{
+		TreeID:                treeID,
+		NodeID:                created.ID,
+		ParentMode:            string(db.ParentModeMultiReference),
+		PrimarySourceID:       primary,
+		SourceNodeIDs:         append([]uuid.UUID(nil), orderedIDs...),
+		EdgeIDs:               referenceEdgeIDs(edgeRows),
+		IsSyntheticMergePoint: isMergePoint,
+		CommonAncestorID:      commonAncestorID(span),
+		ContextManifestHash:   manifestHash,
+		CreatedAt:             created.CreatedAt.UTC().Format(time.RFC3339),
+	})
 
 	return &CreateMultiReferenceReplyResult{
 		Node:  nodeToReferenceReplyNode(created),
@@ -294,6 +309,85 @@ func (s *NodeServiceImpl) CreateMultiReferenceReply(ctx context.Context, treeID 
 			IsSyntheticMergePoint: isMergePoint,
 		},
 	}, nil
+}
+
+// --- §10 SSE convergence vocabulary ------------------------------------------
+
+// MultiReferenceConvergedEvent is the §10.2 composite event payload. It is
+// exactly the field set the spec's TypeScript schema validates: no extra
+// keys, snake_case on the boundary, context_manifest_hash as 64 hex
+// characters and created_at as RFC3339.
+//
+// It is purely ADDITIVE: clients that only understand node_added/edge_added
+// keep working (SPEC-API-03's event model — there is no second source of
+// graph truth, §10.3 step 5).
+type MultiReferenceConvergedEvent struct {
+	TreeID                uuid.UUID   `json:"tree_id"`
+	NodeID                uuid.UUID   `json:"node_id"`
+	ParentMode            string      `json:"parent_mode"`
+	PrimarySourceID       uuid.UUID   `json:"primary_source_id"`
+	SourceNodeIDs         []uuid.UUID `json:"source_node_ids"`
+	EdgeIDs               []uuid.UUID `json:"edge_ids"`
+	IsSyntheticMergePoint bool        `json:"is_synthetic_merge_point"`
+	CommonAncestorID      *uuid.UUID  `json:"common_ancestor_id"`
+	ContextManifestHash   string      `json:"context_manifest_hash"`
+	CreatedAt             string      `json:"created_at"`
+}
+
+// broadcastReferenceEdgeEvents publishes one `edge_added` event per created
+// reference edge (§10.1: "One full `reference` edge", exactly N events,
+// ordered by metadata.selection_order). The payload is the §9.2 edge
+// representation, which carries the §5.2 metadata a convergence-aware client
+// stores (selection order and accessible label, §10.3 step 2).
+//
+// Ordered-by-selection_order is structural here: CreateReferenceSet returns
+// the edges in the order it inserted them, which is the canonical selection
+// order it was given.
+func (s *NodeServiceImpl) broadcastReferenceEdgeEvents(treeID uuid.UUID, edges []*db.Edge, actorID uuid.UUID) {
+	if s.sseHub == nil {
+		return
+	}
+	for _, e := range edges {
+		if e == nil {
+			continue
+		}
+		s.sseHub.Broadcast(treeID, sse.ComposeEvent(treeID, actorID, "edge_added",
+			edgeToReferenceReplyEdge(e)))
+	}
+}
+
+// broadcastMultiReferenceConverged publishes the §10.2 composite as the last
+// event of a creation (§10.1: "Last event after all N edge events"). The
+// composite `data` is exactly the §10.2 field set; the creator rides the SSE
+// envelope's actor_id, outside `data`.
+func (s *NodeServiceImpl) broadcastMultiReferenceConverged(treeID, actorID uuid.UUID, payload MultiReferenceConvergedEvent) {
+	if s.sseHub == nil {
+		return
+	}
+	s.sseHub.Broadcast(treeID, sse.ComposeEvent(treeID, actorID, "multi_reference_converged", payload))
+}
+
+// referenceEdgeIDs returns the created edges' ids in creation order (the
+// same order as their sources, §10.2 `edge_ids`).
+func referenceEdgeIDs(edges []*db.Edge) []uuid.UUID {
+	out := make([]uuid.UUID, 0, len(edges))
+	for _, e := range edges {
+		if e == nil {
+			continue
+		}
+		out = append(out, e.ID)
+	}
+	return out
+}
+
+// commonAncestorID exposes the §8.1 common display ancestor, or nil when the
+// span carries none (§10.2 allows null).
+func commonAncestorID(span *BranchSpanMetadata) *uuid.UUID {
+	if span == nil || span.CommonAncestorID == uuid.Nil {
+		return nil
+	}
+	ancestor := span.CommonAncestorID
+	return &ancestor
 }
 
 // --- Helpers -----------------------------------------------------------------
@@ -575,16 +669,22 @@ func edgesToReferenceReplyEdges(edges []*db.Edge) []*ReferenceReplyEdge {
 		if e == nil {
 			continue
 		}
-		out = append(out, &ReferenceReplyEdge{
-			ID:           e.ID,
-			TreeID:       e.TreeID,
-			SourceNodeID: e.SourceID,
-			TargetNodeID: e.TargetID,
-			EdgeType:     e.EdgeType,
-			SequenceNum:  e.SequenceNum,
-			Metadata:     append(json.RawMessage(nil), e.Metadata...),
-			CreatedAt:    e.CreatedAt,
-		})
+		out = append(out, edgeToReferenceReplyEdge(e))
 	}
 	return out
+}
+
+// edgeToReferenceReplyEdge maps one stored edge onto the §9.2 wire shape.
+// The same shape is the §10.1 `edge_added` payload (one full reference edge).
+func edgeToReferenceReplyEdge(e *db.Edge) *ReferenceReplyEdge {
+	return &ReferenceReplyEdge{
+		ID:           e.ID,
+		TreeID:       e.TreeID,
+		SourceNodeID: e.SourceID,
+		TargetNodeID: e.TargetID,
+		EdgeType:     e.EdgeType,
+		SequenceNum:  e.SequenceNum,
+		Metadata:     append(json.RawMessage(nil), e.Metadata...),
+		CreatedAt:    e.CreatedAt,
+	}
 }

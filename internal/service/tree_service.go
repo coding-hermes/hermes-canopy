@@ -361,6 +361,11 @@ type TreeService interface {
 	// AnalyzeReferenceBranchSpan finds the nearest shared display ancestor
 	// and each source's first divergent child (§8.1).
 	AnalyzeReferenceBranchSpan(ctx context.Context, treeID uuid.UUID, sourceIDs []uuid.UUID) (*BranchSpanMetadata, error)
+	// GetReferenceContext returns the stored provenance context of a
+	// multi-reference reply (§9.3). A node that is not a multi-reference
+	// reply answers REFERENCE_CONTEXT_NOT_FOUND (404) — the same code a
+	// non-existent node gets (§9.4).
+	GetReferenceContext(ctx context.Context, nodeID uuid.UUID, opts ReferenceContextOptions) (*ReferenceContextResult, error)
 }
 
 // ReferenceSelectionVerifier is the TreeService subset NodeService needs to

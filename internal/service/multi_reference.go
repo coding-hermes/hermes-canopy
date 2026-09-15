@@ -85,6 +85,7 @@ var (
 	ErrReferenceParentInvariant       = errors.New("service: reference parent invariant violated")
 	ErrReferenceRequestIDConflict     = errors.New("service: request id reused with a different payload")
 	ErrReferenceSelectionUnconfigured = errors.New("service: reference selection signer is not configured")
+	ErrReferenceContextNotFound       = errors.New("service: target node is not a multi-reference reply")
 )
 
 // referenceErrorSpec is the catalog row for one sentinel: the §9.4 code,
@@ -112,6 +113,7 @@ var referenceErrorCatalog = map[error]referenceErrorSpec{
 	ErrReferenceSelectionStale:        {"REFERENCE_SELECTION_STALE", 409, "a selected message changed or was deleted since preflight"},
 	ErrReferenceParentInvariant:       {"REFERENCE_PARENT_INVARIANT", 409, "reference parent invariant violated"},
 	ErrReferenceRequestIDConflict:     {"REFERENCE_REQUEST_ID_CONFLICT", 409, "request_id was reused with a different payload"},
+	ErrReferenceContextNotFound:       {"REFERENCE_CONTEXT_NOT_FOUND", 404, "target node is not a multi-reference reply"},
 }
 
 // ReferenceAPIError is a rejected reference operation with its §9.4

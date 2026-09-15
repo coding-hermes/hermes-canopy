@@ -301,9 +301,16 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// reference routes above) so chi resolves these specific patterns
 		// before the wildcard subrouter. Preflight is read-authorised
 		// (§15 scenario 32); creation inherits the standard write policy.
-		multiRefHandler := handler.NewMultiReferenceHandler(treeSvc, nodeSvc)
+		multiRefHandler := handler.NewMultiReferenceHandler(treeSvc, nodeSvc).
+			WithMembership(membersRepo)
 		r.With(membershipMW).Post("/trees/{tree_id}/reference-selections", multiRefHandler.ValidateReferenceSelection)
 		r.With(membershipMW).Post("/trees/{tree_id}/multi-reference-replies", multiRefHandler.CreateMultiReferenceReply)
+		// §9.3 reference-context read. The documented path is the FLAT node
+		// surface, so it is registered here — before the /nodes mount below
+		// — and chi.Walk on the real router sees the exact pattern. It has
+		// no tree_id segment for TreeMembershipMiddleware to act on, so the
+		// handler resolves membership from the target node's tree.
+		r.Get("/nodes/{node_id}/reference-context", multiRefHandler.GetReferenceContext)
 
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
