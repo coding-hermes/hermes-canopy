@@ -2261,3 +2261,14 @@ tasks:
   status: complete
   created_at: '2026-09-15T01:26:59.593789+00:00'
   completed_at: '2026-09-15T01:39:35.802741+00:00'
+- id: GAP-071
+  title: 'File-viewer subsystem: docs + fresh-DB provisioning (dev-seed) + workspace
+    4xx instead of FK 500'
+  criteria:
+  - docs/API.md documents all 12 /files + /viewers routes; a fresh DB on the default
+    dev secret serves GET /api/v1/files 200 without hand-seeded SQL; POST /workspaces/{unknown}/profiles
+    returns 4xx naming the missing workspace instead of 500 fk_profile_route_workspace;
+    go build/vet + golangci-lint clean on changed packages
+  status: complete
+  created_at: '2026-09-15T03:45:15.511307+00:00'
+  completed_at: '2026-09-15T04:02:40.849486+00:00'
