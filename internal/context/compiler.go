@@ -47,6 +47,17 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		return nil, ErrInvalidBudget
 	}
 
+	// ── Step 0: Multi-reference block (SPEC-PL-06 §6) ───────────────────
+	// The selected-source block is created before the agent's response and is
+	// the highest-priority block of the turn: every selected message
+	// participates. It is compiled FIRST, and a selection that cannot be
+	// compiled in full fails the whole compilation — no partial source sets,
+	// never a block plus an error (§6.4).
+	multiRef, err := compileMultiReference(req.MultiReference)
+	if err != nil {
+		return nil, err
+	}
+
 	// Defaults
 	maxAncestors := req.MaxAncestors
 	if maxAncestors <= 0 {
@@ -163,6 +174,35 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		remainingBudget -= item.TokenCount
 	}
 
+	// ── Step 5b: Multi-reference accounting (SPEC-PL-06 §6.3) ───────────
+	// Each selected source is one visible reference in the manifest, and the
+	// block's own budget accounting is recorded alongside it.
+	if multiRef != nil {
+		for _, src := range multiRef.Context.Sources {
+			manifest.References = append(manifest.References, ManifestItem{
+				ID:         src.NodeID,
+				Kind:       "reference",
+				Title:      src.SourceLabel,
+				TokenCount: src.TokenCount,
+				Truncated:  src.Truncated,
+			})
+		}
+		manifest.MultiReference = multiRefManifestEntry(multiRef.Context)
+
+		// Every source fit inside its allocation: report the unused
+		// selected-source budget. Context is never padded to fill it.
+		if multiRef.AllFit {
+			manifest.Warnings = append(manifest.Warnings, fmt.Sprintf(
+				"multi-reference: %d sources used %d of %d allocated tokens (%d unused, no padding)",
+				len(multiRef.Context.Sources), multiRef.Context.TokensUsed, multiRef.Context.TokenBudget,
+				multiRef.Context.TokenBudget-multiRef.Context.TokensUsed))
+		}
+		for _, label := range multiRef.Escaped {
+			manifest.Warnings = append(manifest.Warnings, fmt.Sprintf(
+				"multi-reference: source %s contained the block terminator; escaped", label))
+		}
+	}
+
 	// ── Step 6: Cards ───────────────────────────────────────────────────
 	cardContent, cardItems, cardWarnings := c.compileCards(ctx, req, currentNode.Content, remainingBudget)
 	manifest.Cards = cardItems
@@ -178,6 +218,19 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		finalContent += "\n\n" + joinSections(cardContent)
 	}
 
+	// The selected-source block is the highest-priority block of the turn, so
+	// it is prepended to whatever the ordinary compilation assembled.
+	if multiRef != nil {
+		if finalContent == "" {
+			finalContent = multiRef.Block
+		} else {
+			finalContent = multiRef.Block + "\n\n" + finalContent
+		}
+	}
+
+	// The block is part of Content, so the estimate below already accounts for
+	// the selected sources' used tokens (mirrored per source in
+	// Manifest.MultiReference.TokensUsed).
 	manifest.TokensUsed = c.est.Estimate(finalContent)
 
 	// Defensive: if tokens used > budget, warn (shouldn't happen with budget loop)

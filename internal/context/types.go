@@ -38,6 +38,14 @@ type CompileRequest struct {
 	MaxAncestors int       `json:"maxAncestors"` // default 50 when 0
 	IncludeCards bool      `json:"includeCards"` // attach card data
 	ResolveRefs  bool      `json:"resolveRefs"`  // default true
+
+	// MultiReference, when non-nil, is a preflight-validated multi-reference
+	// selection (SPEC-PL-06 §6). Its block is compiled first and prepended to
+	// the payload because it is the highest-priority block of the turn: every
+	// selected message participates. An invalid selection fails the whole
+	// compilation (§6.4) — never a partial source set. nil leaves compilation
+	// exactly as it was before multi-reference support.
+	MultiReference *MultiReferenceSelection `json:"multiReference,omitempty"`
 }
 
 // CompiledContext is the final payload + manifest.
@@ -65,6 +73,11 @@ type Manifest struct {
 	OmittedReason     string         `json:"omittedReason"`     // "budget" | "depth" | ""
 	TruncationMarkers []string       `json:"truncationMarkers"` // e.g. "3 messages omitted"
 	Warnings          []string       `json:"warnings"`          // e.g. "5+ references: context becoming unfocused"
+
+	// MultiReference is the §6.3 audit record of the selected-source block,
+	// when the turn was compiled from a multi-reference selection. Omitted
+	// entirely for ordinary turns.
+	MultiReference *MultiReferenceManifestEntry `json:"multiReference,omitempty"`
 }
 
 // ManifestItem describes one component of the compiled context.
