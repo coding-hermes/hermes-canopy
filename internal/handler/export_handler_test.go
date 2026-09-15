@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
@@ -135,6 +136,20 @@ func (s *stubExportEdgeRepo) GetEdgeCounts(_ context.Context, _ uuid.UUID) (*db.
 	panic("not used")
 }
 func (s *stubExportEdgeRepo) Move(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*db.Edge, error) {
+	panic("not used")
+}
+
+// SPEC-PL-06 §12 additions — unreachable on the export path.
+func (s *stubExportEdgeRepo) CreateReferenceSet(_ context.Context, _ pgx.Tx, _ db.CreateReferenceSetInput) ([]*db.Edge, error) {
+	panic("not used")
+}
+func (s *stubExportEdgeRepo) GetActiveIncoming(_ context.Context, _ pgx.Tx, _ uuid.UUID) ([]*db.Edge, error) {
+	panic("not used")
+}
+func (s *stubExportEdgeRepo) GetActiveReferenceParents(_ context.Context, _ uuid.UUID) ([]db.ReferenceParentEdge, error) {
+	panic("not used")
+}
+func (s *stubExportEdgeRepo) ValidateIncomingInvariant(_ context.Context, _ pgx.Tx, _ *db.Node) error {
 	panic("not used")
 }
 

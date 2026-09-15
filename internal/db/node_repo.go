@@ -44,14 +44,14 @@ func NewPGNodeRepo(pool *pgxpool.Pool) *PGNodeRepo {
 	return &PGNodeRepo{pool: pool}
 }
 
-const nodeColumns = `id, tree_id, parent_id, author_id, content,
+const nodeColumns = `id, tree_id, parent_id, parent_mode, author_id, content,
     content_format, node_type, sequence_num, metadata, created_at,
     edited_at, deleted_at`
 
 // scanNode centralises the column order for node row scans.
 func scanNode(row pgx.Row, n *Node) error {
 	return row.Scan(
-		&n.ID, &n.TreeID, &n.ParentID, &n.AuthorID, &n.Content,
+		&n.ID, &n.TreeID, &n.ParentID, &n.ParentMode, &n.AuthorID, &n.Content,
 		&n.ContentFormat, &n.NodeType, &n.SequenceNum, &n.Metadata,
 		&n.CreatedAt, &n.EditedAt, &n.DeletedAt,
 	)
@@ -116,7 +116,7 @@ func (r *PGNodeRepo) GetByTree(ctx context.Context, treeID uuid.UUID) ([]Node, e
 // ordered by edge.sequence_num then node.sequence_num.
 func (r *PGNodeRepo) GetChildren(ctx context.Context, parentID uuid.UUID) ([]Node, error) {
 	rows, err := r.pool.Query(ctx, `
-        SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
+        SELECT n.id, n.tree_id, n.parent_id, n.parent_mode, n.author_id, n.content,
                n.content_format, n.node_type, n.sequence_num, n.metadata,
                n.created_at, n.edited_at, n.deleted_at
         FROM nodes n
@@ -136,14 +136,14 @@ func (r *PGNodeRepo) GetChildren(ctx context.Context, parentID uuid.UUID) ([]Nod
 // Result includes the input node (index 0) up to the root (last).
 func (r *PGNodeRepo) GetAncestors(ctx context.Context, nodeID uuid.UUID) ([]Node, error) {
 	rows, err := r.pool.Query(ctx, `
-        WITH RECURSIVE chain(id, tree_id, parent_id, author_id, content,
+        WITH RECURSIVE chain(id, tree_id, parent_id, parent_mode, author_id, content,
                 content_format, node_type, sequence_num, metadata, created_at,
                 edited_at, deleted_at, depth) AS (
             SELECT `+nodeColumns+`, 0
             FROM nodes
             WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content,
+            SELECT n.id, n.tree_id, n.parent_id, n.parent_mode, n.author_id, n.content,
                    n.content_format, n.node_type, n.sequence_num, n.metadata,
                    n.created_at, n.edited_at, n.deleted_at, chain.depth + 1
             FROM nodes n
@@ -174,7 +174,7 @@ func (r *PGNodeRepo) GetSubtree(ctx context.Context, rootID uuid.UUID, maxDepth 
             FROM nodes
             WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
-            SELECT n.id, n.tree_id, n.parent_id, n.author_id, n.content, n.content_format,
+            SELECT n.id, n.tree_id, n.parent_id, n.parent_mode, n.author_id, n.content, n.content_format,
                    n.node_type, n.sequence_num, n.metadata, n.created_at, n.edited_at, n.deleted_at,
                    sub.depth + 1
             FROM nodes n

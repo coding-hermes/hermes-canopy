@@ -25,7 +25,7 @@ import (
 // nodeColumns mirrors db.nodeColumns so the service can query the
 // nodes table without depending on the unexported repository constant.
 // Kept in lockstep with internal/db/node_repo.go.
-const nodeColumns = `id, tree_id, parent_id, author_id, content,
+const nodeColumns = `id, tree_id, parent_id, parent_mode, author_id, content,
     content_format, node_type, sequence_num, metadata, created_at,
     edited_at, deleted_at`
 
@@ -238,6 +238,11 @@ type NodeService interface {
 	// Fork creates a child node with edge_type="fork" — requires the
 	// parent to already have at least one child.
 	Fork(ctx context.Context, parentNodeID uuid.UUID, input ForkInput) (*CreateNodeResult, error)
+	// CreateMultiReferenceReply creates one message node and exactly N
+	// reference parent edges from a signed selection (SPEC-PL-06 §13). It
+	// revalidates the snapshot, binds the context manifest hash, commits
+	// atomically, and publishes the node after commit.
+	CreateMultiReferenceReply(ctx context.Context, treeID uuid.UUID, input CreateMultiReferenceReplyInput) (*CreateMultiReferenceReplyResult, error)
 }
 
 // NodeServiceImpl is the pgx-backed implementation of NodeService.
@@ -245,12 +250,17 @@ type NodeService interface {
 // can be tested with stubs; pool is the underlying pgxpool used to
 // open the Create transaction and run depth/child-count queries.
 type NodeServiceImpl struct {
-	nodeRepo    db.NodeRepo
-	edgeRepo    db.EdgeRepo
-	pool        *pgxpool.Pool
-	now         func() time.Time // injectable for testing
-	sseHub      sse.SSEHub       // BE-18 — SSE broadcast after mutations
-	topicSvc    TopicDetector    // TM-02 — auto-detection hook (optional)
+	nodeRepo db.NodeRepo
+	edgeRepo db.EdgeRepo
+	pool     *pgxpool.Pool
+	now      func() time.Time // injectable for testing
+	sseHub   sse.SSEHub       // BE-18 — SSE broadcast after mutations
+	topicSvc TopicDetector    // TM-02 — auto-detection hook (optional)
+
+	// SPEC-PL-06 §13.1 step 3 — selection-token verifier. Nil refuses
+	// multi-reference creation rather than trusting an unverified
+	// selection.
+	refResolver ReferenceSelectionVerifier
 }
 
 // TopicDetector is the subset of TopicService needed by NodeService for
@@ -404,7 +414,7 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		seqNum,
 		[]byte(metadata),
 	).Scan(
-		&created.ID, &created.TreeID, &created.ParentID, &created.AuthorID,
+		&created.ID, &created.TreeID, &created.ParentID, &created.ParentMode, &created.AuthorID,
 		&created.Content, &created.ContentFormat, &created.NodeType,
 		&created.SequenceNum, &created.Metadata,
 		&created.CreatedAt, &created.EditedAt, &created.DeletedAt,
@@ -617,7 +627,7 @@ func (s *NodeServiceImpl) applyUpdate(ctx context.Context, nodeID uuid.UUID, inp
         RETURNING `+nodeColumns,
 		nodeID, content, format, rawMetadata,
 	).Scan(
-		&out.ID, &out.TreeID, &out.ParentID, &out.AuthorID,
+		&out.ID, &out.TreeID, &out.ParentID, &out.ParentMode, &out.AuthorID,
 		&out.Content, &out.ContentFormat, &out.NodeType,
 		&out.SequenceNum, &out.Metadata,
 		&out.CreatedAt, &out.EditedAt, &out.DeletedAt,

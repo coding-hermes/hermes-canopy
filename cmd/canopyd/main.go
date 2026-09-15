@@ -254,6 +254,18 @@ func main() {
 		database.Edges,
 		database.Pool,
 	)
+	// SPEC-PL-06 §14.1: preflight selection tokens are HMAC-signed with a
+	// server secret (falling back to the JWT secret so a dev or probe stack
+	// needs no extra configuration), and the default profile context budget
+	// drives the selected-source estimate.
+	selectionSecret := cfg.ReferenceSelectionSecret
+	if selectionSecret == "" {
+		selectionSecret = cfg.JWTSecret
+	}
+	treeService.WithReferenceSelection(
+		service.NewReferenceSelectionSigner(selectionSecret, nil),
+		cfg.ContextDefaultBudget,
+	)
 
 	// Export service — GAP-003 import/export (SPEC-API-03).
 	exportService := service.NewExportService(
@@ -286,6 +298,9 @@ func main() {
 		database.Pool,
 		sseHub,
 	)
+	// SPEC-PL-06 §13.1 step 3: multi-reference creation resolves the signed
+	// selection token through the tree service.
+	nodeService.WithReferenceSelection(treeService)
 
 	// Sync engine — coordinates event logging, snapshot creation, and
 	// SSE broadcast after every mutation. Per SPEC-DM-02 §8.3.

@@ -296,6 +296,15 @@ func newRouter(deps *routeDeps) *chi.Mux {
 			r.With(membershipMW).Post("/trees/{tree_id}/references/inject", refHandler.Inject)
 		}
 
+		// Multi-message reference model (SPEC-PL-06 §14.1 steps 6-7).
+		// Registered BEFORE the /trees mount (like the topic-search and
+		// reference routes above) so chi resolves these specific patterns
+		// before the wildcard subrouter. Preflight is read-authorised
+		// (§15 scenario 32); creation inherits the standard write policy.
+		multiRefHandler := handler.NewMultiReferenceHandler(treeSvc, nodeSvc)
+		r.With(membershipMW).Post("/trees/{tree_id}/reference-selections", multiRefHandler.ValidateReferenceSelection)
+		r.With(membershipMW).Post("/trees/{tree_id}/multi-reference-replies", multiRefHandler.CreateMultiReferenceReply)
+
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
 			WithShares(userRepo, membersRepo, sseHub)

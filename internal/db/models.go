@@ -38,12 +38,34 @@ const (
 	EdgeTypeReference = "reference"
 )
 
+// ParentMode enumerates how a node's parents are declared. `lineage`
+// keeps SPEC-DM-01's structural rule (at most one active incoming parent
+// edge); `multi_reference` marks a message whose parent set is an atomic
+// 2-20 `reference` edge set (SPEC-PL-06 §3.2, §3.3). Values mirror the
+// chk_nodes_parent_mode constraint added by migration 000047.
+type ParentMode string
+
+const (
+	ParentModeLineage        ParentMode = "lineage"
+	ParentModeMultiReference ParentMode = "multi_reference"
+)
+
+// Valid reports whether the value is one of the enumerated parent modes.
+func (m ParentMode) Valid() bool {
+	switch m {
+	case ParentModeLineage, ParentModeMultiReference:
+		return true
+	}
+	return false
+}
+
 // Node represents a single message in a conversation tree. Maps to the
 // nodes table. JSON tags match the wire format used by SPEC-API-03.
 type Node struct {
 	ID            uuid.UUID  `db:"id"             json:"id"`
 	TreeID        uuid.UUID  `db:"tree_id"        json:"treeId"`
-	ParentID      *uuid.UUID `db:"parent_id"      json:"parentId"`
+	ParentID      *uuid.UUID `db:"parent_id"      json:"parentId"` // display anchor; graph parents are incoming edges
+	ParentMode    ParentMode `db:"parent_mode"    json:"parentMode"`
 	AuthorID      uuid.UUID  `db:"author_id"      json:"authorId"`
 	Content       string     `db:"content"        json:"content"`
 	ContentFormat string     `db:"content_format" json:"contentFormat"`
@@ -53,6 +75,51 @@ type Node struct {
 	CreatedAt     time.Time  `db:"created_at"     json:"createdAt"`
 	EditedAt      *time.Time `db:"edited_at"      json:"editedAt"`
 	DeletedAt     *time.Time `db:"deleted_at"     json:"deletedAt"`
+}
+
+// MultiReferenceMetadata is the reserved `metadata.multi_reference`
+// object stored on every parent_mode='multi_reference' node. It is a
+// validated, server-built denormalized manifest — the active reference
+// edges remain authoritative (SPEC-PL-06 §3.3, §3.5 invariant 5).
+// JSON tags are camelCase because this object is stored inside the
+// node's metadata document, not on an HTTP boundary.
+type MultiReferenceMetadata struct {
+	Version               int                 `json:"version"`
+	PrimarySourceID       uuid.UUID           `json:"primarySourceId"`
+	CanonicalSourceIDs    []uuid.UUID         `json:"canonicalSourceIds"` // denormalized audit order; edges remain authoritative
+	IsSyntheticMergePoint bool                `json:"isSyntheticMergePoint"`
+	BranchSpan            *BranchSpanMetadata `json:"branchSpan,omitempty"`
+	ContextManifestHash   string              `json:"contextManifestHash"`
+	ContextTokenBudget    int                 `json:"contextTokenBudget"`
+
+	// RequestID / RequestHash implement the §13.1 step 8 idempotency
+	// record. SPEC-PL-06's §3.1 DDL adds no idempotency table, so the
+	// record lives in the reserved server-owned metadata key: a create
+	// with the same caller + tree + request_id whose payload hash matches
+	// returns the original result, and a mismatched hash is a
+	// REFERENCE_REQUEST_ID_CONFLICT (§15 scenarios 19-20).
+	RequestID   string `json:"requestId,omitempty"`
+	RequestHash string `json:"requestHash,omitempty"`
+}
+
+// MultiReferenceMetadataVersion is the only metadata version this
+// implementation writes (SPEC-PL-06 §3.3, §9.2 example).
+const MultiReferenceMetadataVersion = 1
+
+// BranchSpanMetadata records the nearest shared display ancestor and each
+// source's first divergent child (SPEC-PL-06 §3.3, §8.1). Stored inside
+// metadata.multi_reference.branchSpan (camelCase keys).
+type BranchSpanMetadata struct {
+	CommonAncestorID uuid.UUID               `json:"commonAncestorId"`
+	SourceBranches   []ReferenceBranchSource `json:"sourceBranches"`
+}
+
+// ReferenceBranchSource is one source's divergence point inside a
+// BranchSpanMetadata document.
+type ReferenceBranchSource struct {
+	SourceID         uuid.UUID `json:"sourceId"`
+	BranchRootID     uuid.UUID `json:"branchRootId"`
+	DistanceFromRoot int       `json:"distanceFromRoot"`
 }
 
 // Edge represents a typed directed edge between two nodes. Maps to the

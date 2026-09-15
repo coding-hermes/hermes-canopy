@@ -34,6 +34,10 @@ type Config struct {
 	// JWT
 	JWTSecret string
 
+	// Multi-message reference model (SPEC-PL-06 §14.1): HMAC secret for
+	// preflight selection tokens. Empty falls back to JWTSecret.
+	ReferenceSelectionSecret string
+
 	// Metrics
 	MetricsEnabled bool
 
@@ -146,6 +150,9 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		c.JWTSecret = v
+	}
+	if v := os.Getenv("REFERENCE_SELECTION_SECRET"); v != "" {
+		c.ReferenceSelectionSecret = v
 	}
 	if v := os.Getenv("METRICS_ENABLED"); v == "true" || v == "1" {
 		c.MetricsEnabled = true

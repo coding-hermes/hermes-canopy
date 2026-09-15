@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
@@ -157,6 +158,21 @@ func (e *edgeRepoStub) GetEdgeCounts(_ context.Context, _ uuid.UUID) (*db.EdgeCo
 }
 func (e *edgeRepoStub) Move(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*db.Edge, error) {
 	return nil, nil
+}
+
+// SPEC-PL-06 §12 additions — the stub is only used for non-reference paths,
+// so the reference-set methods stay inert.
+func (e *edgeRepoStub) CreateReferenceSet(_ context.Context, _ pgx.Tx, _ db.CreateReferenceSetInput) ([]*db.Edge, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) GetActiveIncoming(_ context.Context, _ pgx.Tx, _ uuid.UUID) ([]*db.Edge, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) GetActiveReferenceParents(_ context.Context, _ uuid.UUID) ([]db.ReferenceParentEdge, error) {
+	return nil, nil
+}
+func (e *edgeRepoStub) ValidateIncomingInvariant(_ context.Context, _ pgx.Tx, _ *db.Node) error {
+	return nil
 }
 
 func TestValidateCreateTree_ValidInput(t *testing.T) {

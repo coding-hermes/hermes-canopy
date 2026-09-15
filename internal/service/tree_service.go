@@ -349,6 +349,24 @@ type TreeService interface {
 	UpdateTreeMetadata(ctx context.Context, treeID uuid.UUID, metadata json.RawMessage) error
 	// DeleteTree soft-deletes a tree and returns the deletion timestamp.
 	DeleteTree(ctx context.Context, treeID uuid.UUID) (deletedAt time.Time, err error)
+
+	// --- Multi-message reference model (SPEC-PL-06 §11) ---
+
+	// ValidateReferenceSelection validates ordered sources and returns a
+	// signed, short-lived, non-persistent token plus a UI/context preview.
+	ValidateReferenceSelection(ctx context.Context, treeID uuid.UUID, input ReferenceSelectionInput) (*ReferenceSelectionResult, error)
+	// GetReferenceParents returns the complete active incoming reference
+	// parent set in canonical selection order for a multi-reference target.
+	GetReferenceParents(ctx context.Context, treeID, nodeID uuid.UUID) ([]ReferenceParent, error)
+	// AnalyzeReferenceBranchSpan finds the nearest shared display ancestor
+	// and each source's first divergent child (§8.1).
+	AnalyzeReferenceBranchSpan(ctx context.Context, treeID uuid.UUID, sourceIDs []uuid.UUID) (*BranchSpanMetadata, error)
+}
+
+// ReferenceSelectionVerifier is the TreeService subset NodeService needs to
+// resolve a signed preflight token into its snapshot claims (§13.1 step 3).
+type ReferenceSelectionVerifier interface {
+	VerifyReferenceSelectionToken(ctx context.Context, token string, callerID uuid.UUID) (*ReferenceSelectionClaims, error)
 }
 
 // TreeServiceImpl is the pgx-backed implementation of TreeService.
@@ -361,6 +379,12 @@ type TreeServiceImpl struct {
 	edgeRepo db.EdgeRepo
 	pool     *pgxpool.Pool
 	now      func() time.Time // injectable for testing
+
+	// Multi-message reference model (SPEC-PL-06 §11, §14.1): the HMAC
+	// signer for preflight selection tokens and the fallback profile
+	// context budget used for estimation.
+	refSigner *ReferenceSelectionSigner
+	refBudget int
 }
 
 // NewTreeService wires the repositories + pool into a TreeServiceImpl.
