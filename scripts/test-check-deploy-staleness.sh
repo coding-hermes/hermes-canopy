@@ -21,6 +21,12 @@
 #      first run, below-threshold and counter-reset silence, >= threshold
 #      alert with exact delta fields, corrupt state file, env threshold
 #      override, and alert-on-the-stale-path.
+# 21+. GAP-070: STALE_BLOCKED streak alert — a single refusal stays silent, a
+#      second consecutive one writes a deploy_stale_blocked_alert board event
+#      with its severity/reason, a CURRENT run resets the streak, the env
+#      threshold override fires on the first refusal, stale-after-failed-deploy
+#      (deploy command failed / still stale after deploy) alerts with its own
+#      reason, and every exit code is unchanged throughout.
 #
 # Exit 0 only when every scenario passes.
 
@@ -57,10 +63,16 @@ mkrepo() {
 	mkdir -p "$repo/internal/x" "$repo/cmd" "$repo/migrations"
 	echo "v1" >"$repo/internal/x/a.go"
 	# Mirror the production .gitignore for the checker's own runtime state
-	# (the crash-loop baseline). Without it that file counts as untracked dirt
-	# and the --deploy scenarios could never succeed — exactly why the real
-	# repo ignores it too.
+	# (the crash-loop baseline and the GAP-070 stale streak). Without it that
+	# file counts as untracked dirt and the --deploy scenarios could never
+	# succeed — exactly why the real repo ignores it too.
 	printf '%s\n' ".coding-hermes/deploy-check-state.json" >"$repo/.gitignore"
+	# The board event log is TRACKED in production (the foreman commits it), so
+	# it is tracked here too: the checker's own alert file must not be what
+	# makes a scenario's worktree dirty, or a clean-tree scenario could never
+	# reach the deploy gate.
+	mkdir -p "$repo/.coding-hermes/board"
+	: >"$repo/.coding-hermes/board/events.jsonl"
 	git -C "$repo" add -A
 	git -C "$repo" commit -q -m init
 }
@@ -383,14 +395,24 @@ fi
 # fake systemctl: prints the NRestarts value recorded in a file, so a test can
 # move the counter between runs with no real service anywhere in sight. Same
 # stubbing idea as mk_fake_psql above: match the argv the checker uses.
+# Third arg (optional, GAP-070): a file holding the unit's is-active answer, so
+# the stale-blocked severity probe is drivable too (systemd's own exit status
+# is mirrored: 0 when active, 3 otherwise).
 mk_fake_systemctl() {
-	local path="$1" nrfile="$2"
+	local path="$1" nrfile="$2" activefile="${3:-}"
 	cat >"$path" <<EOF
 #!/usr/bin/env bash
 for a in "\$@"; do
 	if [[ "\$a" == "NRestarts" ]]; then
 		cat "$nrfile" 2>/dev/null || echo 0
 		exit 0
+	fi
+	if [[ "\$a" == "is-active" ]]; then
+		state="\$(cat "$activefile" 2>/dev/null)"
+		state="\${state:-inactive}"
+		echo "\$state"
+		[[ "\$state" == "active" ]] && exit 0
+		exit 3
 	fi
 done
 echo "fake systemctl: unrecognized invocation: \$*" >&2
@@ -586,6 +608,250 @@ if [[ "$rc" == "1" ]] && [[ "$types_seen" == "deploy_crashloop_alert,deploy_stal
 else
 	bad "crashloop: stale run alert set wrong (rc=$rc types='$types_seen')" "$OUT"
 fi
+
+# ── GAP-070: STALE_BLOCKED streak alert ─────────────────────────────────────
+# A `--deploy` run that refuses to deploy (dirty worktree) is the correct call
+# and a terrible thing to leave silent: the 2026-09-13 tick exited 2 and nobody
+# looked again for 24h. These cases drive the streak counter, the threshold
+# gate, the board event and its severity field, the reset — and prove the exit
+# codes are untouched.
+SB_ACTIVE_FILE="$WORK/fake-active"
+FAKE_SYSTEMCTL_SB="$WORK/fake-systemctl-sb"
+mk_fake_systemctl "$FAKE_SYSTEMCTL_SB" "$CRASHLOOP_NRFILE" "$SB_ACTIVE_FILE"
+
+# blocked_run <repo> <artifact> <nrestarts> <active-state> [extra env...]
+# One `--deploy` checker run against a stub systemctl that answers BOTH the
+# restart counter and is-active. Prints combined output; caller reads rc.
+blocked_run() {
+	local repo="$1" art="$2" n="$3" active="$4"
+	shift 4
+	echo "$n" >"$CRASHLOOP_NRFILE"
+	printf '%s\n' "$active" >"$SB_ACTIVE_FILE"
+	env CANOPYD_STALE_REPO_ROOT="$repo" \
+		CANOPYD_STALE_PATH="$art" \
+		CANOPYD_STALE_THRESHOLD_S=86400 \
+		CANOPYD_SYSTEMCTL="$FAKE_SYSTEMCTL_SB" \
+		CANOPYD_SERVICE_NAME=canopy-canopyd \
+		CANOPYD_SCHEMA_PSQL="$FAKE_PSQL" \
+		"$@" \
+		bash "$CHECKER" --deploy 2>&1
+}
+
+# blocked_alerts <repo>: deploy_stale_blocked_alert lines on that board.
+blocked_alerts() {
+	local f="$1/.coding-hermes/board/events.jsonl"
+	if [[ ! -f "$f" ]]; then
+		echo 0
+		return
+	fi
+	grep -c 'deploy_stale_blocked_alert' "$f" || true
+}
+
+# state_key <repo> <key>: one value out of the shared state file (or ERROR:...).
+state_key() {
+	python3 - "$1/.coding-hermes/deploy-check-state.json" "$2" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        print(json.load(f).get(sys.argv[2]))
+except Exception as e:
+    print("ERROR:%s" % e)
+PY
+}
+
+# mk_stale_blocked_repo <dir> <artifact> [--dirty]
+# Fresh synthetic repo whose artifact is STALE; --dirty adds the untracked
+# half-written file that makes --deploy refuse.
+mk_stale_blocked_repo() {
+	local repo="$1" art="$2" dirty="${3:-}"
+	mkrepo "$repo"
+	touch_new_commit "$repo"
+	: >"$art"
+	make_stale "$art"
+	if [[ "$dirty" == "--dirty" ]]; then
+		echo "half-written worker code" >"$repo/internal/x/wip.go"
+	fi
+	return 0
+}
+
+# 21. First refusal: below threshold. No alert, streak 1, rc still 2 — and a
+#     foreign key seeded into the shared state file survives the run, proving
+#     the streak writer is a read-modify-write, not a clobber of the GAP-069
+#     restart baseline.
+REPO="$WORK/sb-first"
+SB_ART1="$WORK/artifacts/sb-first-canopyd"
+mk_stale_blocked_repo "$REPO" "$SB_ART1" --dirty
+printf '{"canary": "keep-me"}\n' >"$REPO/.coding-hermes/deploy-check-state.json"
+OUT="$(blocked_run "$REPO" "$SB_ART1" 0 inactive)"
+rc=$?
+if [[ "$rc" == "2" ]] && [[ "$(blocked_alerts "$REPO")" == "0" ]] \
+	&& [[ "$(state_key "$REPO" stale_blocked_streak)" == "1" ]] \
+	&& [[ "$(state_key "$REPO" canary)" == "keep-me" ]] \
+	&& grep -q "1/2 consecutive un-remediated stale runs (STALE_BLOCKED)" <<<"$OUT"; then
+	ok "stale-blocked: one refusal is below threshold — rc 2, no alert, streak 1"
+else
+	bad "stale-blocked: first refusal misbehaved (rc=$rc alerts=$(blocked_alerts "$REPO") streak=$(state_key "$REPO" stale_blocked_streak) canary=$(state_key "$REPO" canary))" "$OUT"
+fi
+
+# 22. Second consecutive refusal: alert fires, rc unchanged, severity is the
+#     outage class because the stub unit is NOT active while the artifact is
+#     stale.
+OUT="$(blocked_run "$REPO" "$SB_ART1" 0 inactive)"
+rc=$?
+if [[ "$rc" == "2" ]] && [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& [[ "$(state_key "$REPO" stale_blocked_streak)" == "2" ]] \
+	&& grep -q "STALE_BLOCKED_ALERT: 2 consecutive un-remediated stale runs (STALE_BLOCKED, severity=stale_refused_to_start, threshold 2)" <<<"$OUT"; then
+	ok "stale-blocked: second consecutive refusal alerts with rc unchanged (rc=2)"
+else
+	bad "stale-blocked: second refusal did not alert (rc=$rc alerts=$(blocked_alerts "$REPO") streak=$(state_key "$REPO" stale_blocked_streak))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, re, sys
+lines = [l for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+evs = [json.loads(l) for l in lines]
+blocked = [e for e in evs if e.get("event_type") == "deploy_stale_blocked_alert"]
+assert len(blocked) == 1, f"expected exactly 1 stale-blocked alert, got {len(blocked)}: {evs}"
+ev = blocked[0]
+assert ev["task_id"] == "GAP-070", ev
+assert ev["actor"] == "deploy-staleness-check", ev
+assert isinstance(ev["id"], int), ev
+assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", ev["timestamp"]), ev
+d = json.loads(ev["detail"])
+assert d["reason"] == "STALE_BLOCKED", d
+assert d["severity"] == "stale_refused_to_start", d
+assert d["outage_class"] is True, d
+assert d["consecutive_runs"] == 2, d
+assert d["threshold"] == 2, d
+assert isinstance(d["lag_seconds"], int), d
+assert re.match(r"^[0-9a-f]{40}$", d["source_commit"]), d
+assert d["deployed_binary"].endswith("sb-first-canopyd"), d
+print("PASS: stale-blocked alert line is well-formed JSONL with severity/reason")
+PY
+[[ $? == 0 ]] && ok "stale-blocked: alert line carries reason, severity, outage_class, streak and lag" \
+	|| bad "stale-blocked: alert line failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+# 23. A run that finds the artifact CURRENT clears the streak (rc 0), and the
+#     next refusal starts over at 1 with no repeat alert — the alert re-arms.
+touch "$SB_ART1"
+OUT="$(blocked_run "$REPO" "$SB_ART1" 0 inactive)"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(state_key "$REPO" stale_blocked_streak)" == "0" ]] \
+	&& [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "stale-blocked streak reset to 0 (was 2)" <<<"$OUT"; then
+	ok "stale-blocked: a CURRENT run resets the streak to 0 (no extra alert)"
+else
+	bad "stale-blocked: CURRENT run did not reset the streak (rc=$rc streak=$(state_key "$REPO" stale_blocked_streak) alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+make_stale "$SB_ART1"
+OUT="$(blocked_run "$REPO" "$SB_ART1" 0 inactive)"
+rc=$?
+if [[ "$rc" == "2" ]] && [[ "$(state_key "$REPO" stale_blocked_streak)" == "1" ]] \
+	&& [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "1/2 consecutive" <<<"$OUT"; then
+	ok "stale-blocked: after a reset the next refusal restarts at 1 (alert re-armed)"
+else
+	bad "stale-blocked: post-reset refusal misbehaved (rc=$rc streak=$(state_key "$REPO" stale_blocked_streak) alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+
+# 24. CANOPYD_STALE_BLOCKED_THRESHOLD=1 fires on the FIRST refusal (rc still 2)
+#     and reports stale_but_serving because the unit IS active; a following
+#     refusal above the threshold does not repeat the alert.
+REPO="$WORK/sb-thresh1"
+SB_ART2="$WORK/artifacts/sb-thresh1-canopyd"
+mk_stale_blocked_repo "$REPO" "$SB_ART2" --dirty
+OUT="$(blocked_run "$REPO" "$SB_ART2" 0 active CANOPYD_STALE_BLOCKED_THRESHOLD=1)"
+rc=$?
+if [[ "$rc" == "2" ]] && [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "severity=stale_but_serving" <<<"$OUT"; then
+	ok "stale-blocked: threshold override 1 alerts on the first refusal, rc unchanged (rc=2)"
+else
+	bad "stale-blocked: threshold override misbehaved (rc=$rc alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+evs = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+blocked = [e for e in evs if e.get("event_type") == "deploy_stale_blocked_alert"]
+assert len(blocked) == 1, blocked
+d = json.loads(blocked[0]["detail"])
+assert d["severity"] == "stale_but_serving", d
+assert d["outage_class"] is False, d
+assert d["consecutive_runs"] == 1, d
+assert d["threshold"] == 1, d
+print("PASS: active-unit refusal is reported stale_but_serving, not outage-class")
+PY
+[[ $? == 0 ]] && ok "stale-blocked: active unit → severity stale_but_serving / outage_class false" \
+	|| bad "stale-blocked: serving-severity event failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+OUT="$(blocked_run "$REPO" "$SB_ART2" 0 active CANOPYD_STALE_BLOCKED_THRESHOLD=1)"
+rc=$?
+if [[ "$rc" == "2" ]] && [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "alert already raised at the threshold, no repeat" <<<"$OUT"; then
+	ok "stale-blocked: streak past the threshold does not repeat the alert (rc=2)"
+else
+	bad "stale-blocked: alert repeated past the threshold (rc=$rc alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+
+# 25. Stale-after-failed-deploy: the deploy DID run (clean tree, gate passed)
+#     and the artifact is still stale — an outage-class stale with its own
+#     reason. Two flavours: the deploy command failing, and a no-op deploy that
+#     leaves the artifact stale (rc 3 both times, unchanged).
+REPO="$WORK/sb-deployfail"
+SB_ART3="$WORK/artifacts/sb-deployfail-canopyd"
+mk_stale_blocked_repo "$REPO" "$SB_ART3" # clean tree: the gate must let this through
+OUT="$(blocked_run "$REPO" "$SB_ART3" 0 inactive CANOPYD_STALE_BLOCKED_THRESHOLD=1 \
+	CANOPYD_DEPLOY_CMD=false CANOPYD_DEPLOY_DIR="$WORK")"
+rc=$?
+if [[ "$rc" == "3" ]] && [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "deploy command failed" <<<"$OUT"; then
+	ok "stale-blocked: failed deploy command alerts (DEPLOY_FAILED) and keeps rc=3"
+else
+	bad "stale-blocked: failed deploy command misbehaved (rc=$rc alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+evs = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+blocked = [e for e in evs if e.get("event_type") == "deploy_stale_blocked_alert"]
+assert len(blocked) == 1, blocked
+d = json.loads(blocked[0]["detail"])
+assert d["reason"] == "DEPLOY_FAILED", d
+assert d["severity"] == "stale_refused_to_start", d
+assert d["outage_class"] is True, d
+print("PASS: failed deploy is reported as an outage-class stale, reason DEPLOY_FAILED")
+PY
+[[ $? == 0 ]] && ok "stale-blocked: DEPLOY_FAILED event names its reason and outage class" \
+	|| bad "stale-blocked: DEPLOY_FAILED event failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+REPO="$WORK/sb-afterdeploy"
+SB_ART4="$WORK/artifacts/sb-afterdeploy-canopyd"
+mk_stale_blocked_repo "$REPO" "$SB_ART4" # clean tree, deploy succeeds but fixes nothing
+OUT="$(blocked_run "$REPO" "$SB_ART4" 0 inactive CANOPYD_STALE_BLOCKED_THRESHOLD=1 \
+	CANOPYD_DEPLOY_CMD=true CANOPYD_DEPLOY_DIR="$WORK")"
+rc=$?
+if [[ "$rc" == "3" ]] && [[ "$(blocked_alerts "$REPO")" == "1" ]] \
+	&& grep -q "still stale after deploy" <<<"$OUT"; then
+	ok "stale-blocked: no-op deploy leaving the artifact stale alerts (rc=3)"
+else
+	bad "stale-blocked: still-stale-after-deploy misbehaved (rc=$rc alerts=$(blocked_alerts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+evs = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+blocked = [e for e in evs if e.get("event_type") == "deploy_stale_blocked_alert"]
+assert len(blocked) == 1, blocked
+d = json.loads(blocked[0]["detail"])
+assert d["reason"] == "STALE_AFTER_DEPLOY", d
+assert d["severity"] == "stale_refused_to_start", d
+print("PASS: still-stale-after-deploy is reported with reason STALE_AFTER_DEPLOY")
+PY
+[[ $? == 0 ]] && ok "stale-blocked: STALE_AFTER_DEPLOY event carries the deploy-specific reason" \
+	|| bad "stale-blocked: STALE_AFTER_DEPLOY event failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+# 26. A nonsense threshold is an operational error (exit 3), never a silent
+#     no-op — same discipline as CANOPYD_CRASHLOOP_THRESHOLD.
+run_case "invalid CANOPYD_STALE_BLOCKED_THRESHOLD exits 3" 3 \
+	CANOPYD_STALE_REPO_ROOT="$WORK/sb-first" \
+	CANOPYD_STALE_PATH="$SB_ART1" \
+	CANOPYD_STALE_BLOCKED_THRESHOLD=0 \
+	EVIDENCE="CANOPYD_STALE_BLOCKED_THRESHOLD not a positive integer" --
 
 echo ""
 echo "== results: $pass passed, $fail failed =="

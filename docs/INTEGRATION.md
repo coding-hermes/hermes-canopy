@@ -517,7 +517,7 @@ Hermetic regression coverage lives in
 command; never touches the real service):
 
 ```bash
-bash scripts/test-check-deploy-staleness.sh   # 12 assertions, exit 0 = pass
+bash scripts/test-check-deploy-staleness.sh   # 45 assertions, exit 0 = pass
 ```
 
 Covered controls: current artifact → 0; stale → 1; missing → 1; stale +
@@ -536,7 +536,20 @@ even when the artifact is current. The baseline lives in the local, git-ignored
 or corrupt file simply re-baselines with no alert. This path never changes the
 checker's exit code.
 
-Install the automation (daily timer, opt-in, concrete unit names —
+**Stale-blocked alert (GAP-070).** A `STALE_BLOCKED` refusal is the right call —
+and a silent one for 24h was the 2026-09-13 failure. The checker now counts
+CONSECUTIVE runs that ended with a stale artifact left *un-remediated* (deploy
+refused on a dirty worktree, the deploy command failed, or the artifact was
+still stale after a deploy) in the same state file, and appends ONE
+`deploy_stale_blocked_alert` event as that streak crosses
+`CANOPYD_STALE_BLOCKED_THRESHOLD` (default 2). The alert is edge-triggered (one
+event per blocked streak, re-armed when a run returns `CURRENT`) and its detail
+carries a `severity` split — `stale_but_serving` when the unit is up,
+`stale_refused_to_start` (outage class) when it is not. The state read/write is
+a read-modify-write shared with the GAP-069 restart baseline, and like the
+crash-loop path it never changes an exit code.
+
+Install the automation (hourly timer, opt-in, concrete unit names —
 `canopy-deploy-check.timer` enables cleanly against `timers.target`, template
 units would not; refuses dirty worktrees). Pre-flight without touching the
 live session: render to a temp dir, then `systemd-analyze --user verify` and

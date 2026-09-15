@@ -301,6 +301,39 @@ Tree-scoped (primary, membership-gated):
 
 ## Deployment
 
+### Stale deployments: hourly check + operator recovery
+
+The live service is the systemd user unit `canopy-canopyd.service`, which runs
+`/home/kara/bin/canopyd` — a plain `make build` never updates what systemd
+executes. The systemd user timer `canopy-deploy-check.timer` re-checks the
+deployed binary **every hour** (`OnBootSec=10min`, `OnUnitActiveSec=1h`,
+`Persistent=true`) and auto-deploys it when it is stale and the worktree is
+clean.
+
+If a check reports `STALE_BLOCKED` (exit 2) the artifact is stale but the
+worktree has tracked/untracked changes, so the auto-deploy was refused **on
+purpose**: half-written worker code must never ship. The recovery path is:
+
+```bash
+git status --short              # see what is dirty
+git commit …  # or: git stash push -m "deploy-check"
+make deploy                     # atomic: build → install → restart → health → smoke
+```
+
+…or simply wait: the next hourly tick deploys automatically once the tree is
+clean again. Two consecutive refusals raise a `deploy_stale_blocked_alert`
+event in `.coding-hermes/board/events.jsonl` (one dirty tick is normal worker
+traffic; two in a row is an operator problem), and its `severity` field tells
+the two situations apart:
+
+| `severity` | Meaning |
+|------------|---------|
+| `stale_but_serving` | the unit is up, so a stale binary is at least still serving traffic — degraded, not an outage |
+| `stale_refused_to_start` | the unit is **not** up while the artifact is stale — **outage class**, escalate |
+
+Full reference (exit codes, thresholds, systemd units): see
+[Deploying → Automated staleness detection](#automated-staleness-detection-gap-067).
+
 ### Docker (Recommended)
 
 ```bash
@@ -461,7 +494,52 @@ Overrides: `CANOPYD_STALE_REPO_ROOT`, `CANOPYD_STALE_PATH`
 `make deploy` path when stale, then re-checks and fails if still stale —
 manual `make deploy` behavior is unchanged.
 
-Install the daily systemd user timer (concrete unit names
+#### Recovering from `STALE_BLOCKED`
+
+Exit `2` is a deliberate refusal, not a failure: the deployed binary is stale
+and the worktree has tracked/untracked changes, so auto-deploy is skipped —
+deploying a half-written worker tree is worse than running one commit behind.
+The operator path is to make the tree deployable again, then deploy:
+
+```bash
+git status --short                 # what is dirty?
+git commit -am "…"                 # commit it…
+git stash push -m "deploy-check"   # …or park it
+make deploy                        # atomic install + restart + health + smoke
+```
+
+Waiting is also valid — the next hourly tick deploys by itself once the tree is
+clean. Confirm afterwards with `bash scripts/check-deploy-staleness.sh`
+(exit `0`, `CURRENT`).
+
+#### Board alerts (GAP-069 / GAP-070)
+
+The checker never leaves an outage-class condition to a raw exit code:
+
+| Board event | Raised when | Threshold |
+|-------------|-------------|-----------|
+| `deploy_stale_alert` | every stale run (`STALE` / `STALE_BLOCKED`) | none — one event per stale run |
+| `deploy_crashloop_alert` | the unit's `NRestarts` counter climbed between two runs | `CANOPYD_CRASHLOOP_THRESHOLD` (default `50`) |
+| `deploy_stale_blocked_alert` | consecutive runs ended with a stale artifact left **un-remediated** — deploy refused on a dirty worktree, the deploy command failed, or the artifact was still stale after a deploy | `CANOPYD_STALE_BLOCKED_THRESHOLD` (default `2`) |
+
+The stale-blocked alert is edge-triggered: it fires once as the streak crosses
+the threshold (not once per hourly run, which would be a drumbeat) and re-arms
+when a run comes back `CURRENT`. Its `detail` carries a `severity` field that
+separates the two operator situations:
+
+* `stale_but_serving` — the unit is up, so the stale binary is at least serving
+  traffic. Degraded, fix it on your schedule.
+* `stale_refused_to_start` — the unit is **not** up (or its state cannot be
+  proven) while the artifact is stale. **Outage class**: this is the shape of
+  the 2026-09-12 crash-loop, where a stale build met a newer schema and nothing
+  watched the exits.
+
+All three events are appended (never rewritten) to
+`.coding-hermes/board/events.jsonl` by the checker itself; counters live in the
+git-ignored `.coding-hermes/deploy-check-state.json`, so the checker can never
+dirty the worktree its own gate then refuses.
+
+Install the hourly systemd user timer (concrete unit names
 `canopy-deploy-check.service` / `canopy-deploy-check.timer` — templates cannot
 be enabled against `timers.target`; renders this checkout's path into
 `~/.config/systemd/user`, `daemon-reload`, `enable --now`):
@@ -470,9 +548,10 @@ be enabled against `timers.target`; renders this checkout's path into
 make install-deploy-timer
 ```
 
-The timer runs the checker with `--deploy` once per 24h (`OnBootSec=10min`,
-`OnUnitActiveSec=24h`, `Persistent=true`, units tracked under
-`deploy/systemd/`). It never deploys from a dirty worktree. Pre-flight
+The timer runs the checker with `--deploy` once per **hour** (`OnBootSec=10min`,
+`OnUnitActiveSec=1h`, `Persistent=true`, units tracked under
+`deploy/systemd/`; GAP-070 moved this off `24h`, which left a refusal invisible
+for a full day). It never deploys from a dirty worktree. Pre-flight
 verification without touching the live session:
 
 ```bash
@@ -487,7 +566,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 |--------|-------------|
 | `build` | Build the canopyd binary |
 | `deploy` | Build, install to `/home/kara/bin/canopyd`, restart `canopy-canopyd`, run the gateway smoke test |
-| `install-deploy-timer` | Install + enable the daily deployed-binary staleness check timer (GAP-067) |
+| `install-deploy-timer` | Install + enable the hourly deployed-binary staleness check timer (GAP-067) |
 | `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |

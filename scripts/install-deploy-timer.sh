@@ -3,8 +3,9 @@
 # install-deploy-timer.sh (GAP-067): render the tracked systemd user units
 # (deploy/systemd/canopy-deploy-check.service/.timer — CONCRETE names, not
 # templates: systemd refuses to enable a template timer against
-# timers.target) into ~/.config/systemd/user/ and enable the daily staleness
-# timer.
+# timers.target) into ~/.config/systemd/user/ and enable the hourly staleness
+# timer (GAP-070: OnUnitActiveSec=1h — a daily tick left an outage-class
+# condition invisible for up to 24h).
 #
 # Rendering approach: the tracked units are portable (%h placeholders only —
 # no hardcoded /home/kara). The installer bakes THIS checkout's repo path into
@@ -79,5 +80,5 @@ fi
 
 systemctl --user daemon-reload
 systemctl --user enable --now "$TIMER_NAME"
-echo "enabled: $TIMER_NAME (daily staleness check with auto-deploy)"
+echo "enabled: $TIMER_NAME (hourly staleness check with auto-deploy)"
 systemctl --user list-timers "$TIMER_NAME" --no-pager || true

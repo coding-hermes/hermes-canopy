@@ -1,9 +1,9 @@
 [Unit]
-Description=Canopy: daily deployed-binary staleness check with auto-remediation (GAP-067)
+Description=Canopy: hourly deployed-binary staleness check with auto-remediation (GAP-067, GAP-070)
 
 [Timer]
 OnBootSec=10min
-OnUnitActiveSec=24h
+OnUnitActiveSec=1h
 Persistent=true
 
 [Install]

@@ -34,10 +34,11 @@ build:
 deploy:
 	bash scripts/deploy-canopyd.sh
 
-# Install + enable the daily staleness check timer (GAP-067): renders this
-# checkout's repo path into the user unit, daemon-reload, enable --now. The
-# timer runs scripts/check-deploy-staleness.sh --deploy once per 24h; it
-# refuses to auto-deploy from a dirty worktree (STALE_BLOCKED). Manual
+# Install + enable the hourly staleness check timer (GAP-067, GAP-070): renders
+# this checkout's repo path into the user unit, daemon-reload, enable --now. The
+# timer runs scripts/check-deploy-staleness.sh --deploy once per hour (GAP-070
+# moved it off 24h); it refuses to auto-deploy from a dirty worktree
+# (STALE_BLOCKED) and alerts the board when that refusal persists. Manual
 # `make deploy` behavior is unchanged. Does not restart the live service.
 install-deploy-timer:
 	bash scripts/install-deploy-timer.sh

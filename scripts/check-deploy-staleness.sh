@@ -55,6 +55,14 @@
 #                             crash-loop alert threshold: number of restarts
 #                             the service counter may climb between two runs
 #                             before a board alert is written (default: 50)
+#   CANOPYD_STALE_BLOCKED_THRESHOLD
+#                             STALE_BLOCKED streak alert threshold: number of
+#                             CONSECUTIVE runs that left a stale artifact
+#                             un-remediated (deploy refused on a dirty
+#                             worktree, or a deploy that failed) before a
+#                             board alert is written (default: 2 — one
+#                             isolated block is normal worker traffic, two in
+#                             a row is an operator problem)
 #
 # Crash-loop alert (GAP-069 criterion 4): on EVERY staleness run the checker
 # compares the unit's NRestarts counter against a baseline persisted in
@@ -68,6 +76,24 @@
 # baseline file is rewritten on every run (alert or not) so it tracks reality;
 # a missing, corrupt or unparseable file simply re-baselines with no alert.
 # This path never changes the script's exit code.
+#
+# STALE_BLOCKED streak alert (GAP-070): a `--deploy` run that finds the
+# artifact stale but refuses to deploy (dirty worktree) is the right call and
+# the wrong kind of silent — the 2026-09-13 tick ran with ExecMainStatus=2 and
+# nothing else happened for 24h, because nobody reads a raw exit code. So the
+# checker counts CONSECUTIVE runs that ended with a stale artifact left
+# un-remediated (deploy refused, deploy command failed, or still stale after
+# deploy) in $REPO_ROOT/.coding-hermes/deploy-check-state.json, and appends ONE
+# deploy_stale_blocked_alert event to the board when that streak reaches
+# CANOPYD_STALE_BLOCKED_THRESHOLD (default 2). The event carries a `severity`
+# field that separates the two operator situations:
+#   stale_but_serving       the unit is up, so the stale artifact is at least
+#                           serving traffic — degraded, not an outage
+#   stale_refused_to_start  the unit is NOT up (or its state cannot be proven)
+#                           while the artifact is stale — outage-class
+# The alert is edge-triggered: it fires once as the streak crosses the
+# threshold, not once per hourly run, and re-arms when a run comes back
+# CURRENT. Like the crash-loop path it never changes an exit code.
 #
 # --deploy mode: only when stale, run the deploy command (the existing atomic
 # `make deploy` path — build → install → restart → health poll → smoke), then
@@ -116,11 +142,67 @@ DEFAULT_CRASHLOOP_THRESHOLD=50
 CRASHLOOP_THRESHOLD="${CANOPYD_CRASHLOOP_THRESHOLD:-$DEFAULT_CRASHLOOP_THRESHOLD}"
 [[ "$CRASHLOOP_THRESHOLD" =~ ^[0-9]+$ ]] \
 	|| fail_error "CANOPYD_CRASHLOOP_THRESHOLD not a non-negative integer: '$CRASHLOOP_THRESHOLD'"
+DEFAULT_STALE_BLOCKED_THRESHOLD=2
+STALE_BLOCKED_THRESHOLD="${CANOPYD_STALE_BLOCKED_THRESHOLD:-$DEFAULT_STALE_BLOCKED_THRESHOLD}"
+[[ "$STALE_BLOCKED_THRESHOLD" =~ ^[1-9][0-9]*$ ]] \
+	|| fail_error "CANOPYD_STALE_BLOCKED_THRESHOLD not a positive integer: '$STALE_BLOCKED_THRESHOLD'"
 BOARD_EVENTS="$REPO_ROOT/.coding-hermes/board/events.jsonl"
-# Baseline for the crash-loop counter. Local runtime state (git-ignored — see
+# Baselines for the two alert counters (crash-loop restart counter, GAP-070
+# un-remediated-stale streak). Local runtime state (git-ignored — see
 # .gitignore) rather than a tracked file: the checker must never make the
 # worktree dirty, or its own --deploy gate would refuse to deploy.
 DEPLOY_STATE_FILE="$REPO_ROOT/.coding-hermes/deploy-check-state.json"
+
+# state_get <key>: print the non-negative integer stored under <key>, or
+# nothing when the file is missing/corrupt or the value is not one. One reader
+# for every counter this script persists.
+state_get() {
+	python3 - "$DEPLOY_STATE_FILE" "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        v = json.load(f).get(sys.argv[2])
+except Exception:
+    v = None
+if isinstance(v, int) and not isinstance(v, bool) and v >= 0:
+    print(v)
+PY
+}
+
+# state_patch <key>=<json-value> [...]: atomic read-modify-write of the shared
+# state file. Every writer goes through here so a second counter (the GAP-070
+# stale streak) can never clobber the first (the GAP-069 restart baseline) and
+# a missing/corrupt file degrades to a fresh one. Best-effort: a write failure
+# is a NOTE on stderr, never a changed exit code.
+state_patch() {
+	if ! python3 - "$DEPLOY_STATE_FILE" "$@" <<'PY'
+import json, os, sys, time
+path, pairs = sys.argv[1], sys.argv[2:]
+state = {}
+try:
+    with open(path, encoding="utf-8") as f:
+        loaded = json.load(f)
+    if isinstance(loaded, dict):
+        state = loaded
+except Exception:
+    state = {}
+for pair in pairs:
+    key, _, raw = pair.partition("=")
+    state[key] = json.loads(raw)
+state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+parent = os.path.dirname(path)
+if parent:
+    os.makedirs(parent, exist_ok=True)
+tmp = "%s.tmp.%d" % (path, os.getpid())
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(state, f)
+    f.write("\n")
+os.replace(tmp, path)
+PY
+	then
+		echo "NOTE: could not write deploy-check state file $DEPLOY_STATE_FILE" >&2
+	fi
+}
 
 # ── Board alerts (GAP-069 / AC2): staleness AND crash-loops must be VISIBLE ─
 # The 2026-09-12 crash-loop (~37h, ~37k restarts) was invisible because no
@@ -131,13 +213,15 @@ DEPLOY_STATE_FILE="$REPO_ROOT/.coding-hermes/deploy-check-state.json"
 # rewrites the file, never touches tasks.jsonl, never changes an exit code.
 # Best-effort: a missing or unreadable board file degrades to a NOTE on stderr.
 #
-# append_board_event <event_type> <detail_json> [context]
+# append_board_event <event_type> <detail_json> [context] [task_id]
 # The single writer for every board event this script emits: derives the next
 # id from the file itself, renders the canonical line, appends it, and prints
-# one stdout confirmation. Both alert paths below route through it — never add
-# a second, divergent JSON writer.
+# one stdout confirmation. Every alert path below routes through it — never add
+# a second, divergent JSON writer. <task_id> defaults to GAP-069 (the task that
+# introduced the alert surface); GAP-070's stale-blocked streak alert passes its
+# own id so a board row is attributable to the task that defined it.
 append_board_event() {
-	local event_type="$1" detail_json="$2" context="${3:-}"
+	local event_type="$1" detail_json="$2" context="${3:-}" task_id="${4:-GAP-069}"
 	[[ -f "$BOARD_EVENTS" ]] || {
 		echo "NOTE: board events file missing ($BOARD_EVENTS) — alert NOT recorded" >&2
 		return 0
@@ -165,13 +249,13 @@ PY
 		return 0
 	}
 	ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-	line="$(python3 - "$next_id" "$ts" "$event_type" "$detail_json" <<'PY'
+	line="$(python3 - "$next_id" "$ts" "$event_type" "$detail_json" "$task_id" <<'PY'
 import json, sys
 print(json.dumps({
     "id": int(sys.argv[1]),
     "timestamp": sys.argv[2],
     "event_type": sys.argv[3],
-    "task_id": "GAP-069",
+    "task_id": sys.argv[5],
     "actor": "deploy-staleness-check",
     "detail": sys.argv[4],
 }))
@@ -254,36 +338,12 @@ check_crashloop() {
 		echo "NOTE: no restart counter from $SYSTEMCTL_BIN for $CANOPYD_SERVICE — crash-loop baseline NOT updated" >&2
 		return 0
 	fi
-	prev="$(python3 - "$DEPLOY_STATE_FILE" <<'PY'
-import json, sys
-try:
-    with open(sys.argv[1], encoding="utf-8") as f:
-        v = json.load(f).get("nrestarts")
-    if isinstance(v, int) and v >= 0:
-        print(v)
-except Exception:
-    pass
-PY
-)"
+	prev="$(state_get nrestarts)"
 	# Persist the counter observed NOW, before any early return: the baseline
 	# must track reality even when the climb is below threshold. Atomic
-	# replace so a concurrent reader never sees a half-written file.
-	python3 - "$DEPLOY_STATE_FILE" "$nrestarts" "$CANOPYD_SERVICE" <<'PY' || echo "NOTE: could not write crash-loop state file $DEPLOY_STATE_FILE" >&2
-import json, os, sys, time
-path, n, svc = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-parent = os.path.dirname(path)
-if parent:
-    os.makedirs(parent, exist_ok=True)
-tmp = "%s.tmp.%d" % (path, os.getpid())
-with open(tmp, "w", encoding="utf-8") as f:
-    json.dump({
-        "nrestarts": n,
-        "service": svc,
-        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }, f)
-    f.write("\n")
-os.replace(tmp, path)
-PY
+	# read-modify-write (state_patch) so the GAP-070 stale streak stored in the
+	# same file survives this update.
+	state_patch "nrestarts=$nrestarts" "service=\"$CANOPYD_SERVICE\""
 	if [[ ! "$prev" =~ ^[0-9]+$ ]]; then
 		echo "crash-loop baseline: $CANOPYD_SERVICE at $nrestarts restarts (no usable prior state) — no alert"
 		return 0
@@ -311,6 +371,90 @@ PY
 	}
 	append_board_event "deploy_crashloop_alert" "$detail" "delta=$delta"
 	echo "CRASHLOOP: $CANOPYD_SERVICE restarts climbed $prev -> $nrestarts (delta $delta >= threshold $CRASHLOOP_THRESHOLD)"
+}
+
+# ── STALE_BLOCKED streak alert (GAP-070) ────────────────────────────────────
+# service_serving_state(): is the deployed service up right now? Prints
+# "active" only when systemd says so; ANY other answer (inactive, failed, no
+# user session, unreadable) prints nothing. A stale artifact whose service
+# state cannot be PROVEN live is reported as the outage class — the alert
+# exists to surface outages, so an unprovable state must not be rounded down
+# to "serving".
+service_serving_state() {
+	local state
+	state="$("$SYSTEMCTL_BIN" --user is-active "$CANOPYD_SERVICE" 2>/dev/null || true)"
+	state="${state//[[:space:]]/}"
+	[[ "$state" == "active" ]] && echo "active"
+	return 0
+}
+
+# check_stale_blocked <reason> [lag_seconds]
+# <reason>: STALE_BLOCKED | DEPLOY_FAILED | STALE_AFTER_DEPLOY — every way this
+# checker can end a run with a stale artifact left un-remediated.
+# Counts CONSECUTIVE such runs in $DEPLOY_STATE_FILE, and appends ONE
+# deploy_stale_blocked_alert board event as the streak crosses
+# CANOPYD_STALE_BLOCKED_THRESHOLD. Edge-triggered by design: one alert per
+# blocked streak (an hourly repeat while nothing changed is noise, and the
+# foreman tick that reads .coding-hermes/board/events.jsonl needs the signal,
+# not the drumbeat). The streak re-arms when a run comes back CURRENT.
+# NEVER changes an exit code: it only writes the state file and the board log.
+check_stale_blocked() {
+	local reason="$1" lag="${2:-}"
+	local prev streak severity lag_json detail
+	prev="$(state_get stale_blocked_streak)"
+	[[ "$prev" =~ ^[0-9]+$ ]] || prev=0
+	streak=$((prev + 1))
+	state_patch "stale_blocked_streak=$streak" "stale_blocked_reason=\"$reason\""
+	if ((streak < STALE_BLOCKED_THRESHOLD)); then
+		echo "stale-blocked streak: $streak/$STALE_BLOCKED_THRESHOLD consecutive un-remediated stale runs ($reason) — below threshold, no alert"
+		return 0
+	fi
+	if ((prev >= STALE_BLOCKED_THRESHOLD)); then
+		echo "stale-blocked streak: $streak consecutive un-remediated stale runs ($reason) — alert already raised at the threshold, no repeat"
+		return 0
+	fi
+	if [[ "$(service_serving_state)" == "active" ]]; then
+		severity="stale_but_serving"
+	else
+		severity="stale_refused_to_start"
+	fi
+	if [[ "$lag" =~ ^[0-9]+$ ]]; then
+		lag_json="$lag"
+	else
+		lag_json="null"
+	fi
+	detail="$(python3 - "$reason" "$severity" "$streak" "$STALE_BLOCKED_THRESHOLD" "$lag_json" "$SRC_COMMIT" "$DEPLOYED_PATH" <<'PY'
+import json, sys
+severity = sys.argv[2]
+print(json.dumps({
+    "reason": sys.argv[1],
+    "severity": severity,
+    "outage_class": severity == "stale_refused_to_start",
+    "consecutive_runs": int(sys.argv[3]),
+    "threshold": int(sys.argv[4]),
+    "lag_seconds": int(sys.argv[5]) if sys.argv[5] != "null" else None,
+    "source_commit": sys.argv[6],
+    "deployed_binary": sys.argv[7],
+}))
+PY
+)" || {
+		echo "NOTE: could not render stale-blocked alert detail — alert NOT recorded" >&2
+		return 0
+	}
+	append_board_event "deploy_stale_blocked_alert" "$detail" "reason=$reason severity=$severity" "GAP-070"
+	echo "STALE_BLOCKED_ALERT: $streak consecutive un-remediated stale runs ($reason, severity=$severity, threshold $STALE_BLOCKED_THRESHOLD)"
+}
+
+# reset_stale_blocked_streak(): a run that finds the artifact CURRENT (nothing
+# stale left to remediate) clears the streak, so the next blocked run starts
+# counting from one and re-arms the alert. Nothing to do when it is already 0.
+reset_stale_blocked_streak() {
+	local prev
+	prev="$(state_get stale_blocked_streak)"
+	[[ "$prev" =~ ^[0-9]+$ ]] || return 0
+	((prev == 0)) && return 0
+	state_patch "stale_blocked_streak=0" "stale_blocked_reason=\"\""
+	echo "stale-blocked streak reset to 0 (was $prev)"
 }
 
 # ── --check-schema: embedded schema vs live DB schema (read-only) ───────────
@@ -390,6 +534,7 @@ else
 
 	if ((LAG <= THRESHOLD_S)); then
 		echo "CURRENT: deployed canopyd is up to date"
+		reset_stale_blocked_streak
 		exit "$EXIT_CURRENT"
 	fi
 	echo "STALE: deployed canopyd is ${LAG}s behind source"
@@ -408,12 +553,18 @@ if [[ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]]; then
 	echo "STALE_BLOCKED: commit or stash, then re-run $0 --deploy" >&2
 	echo "STALE_BLOCKED: deploy command NOT invoked" >&2
 	append_stale_event "STALE_BLOCKED" "$LAG"
+	# GAP-070: the refusal is correct — and must not be silent. Count the
+	# streak; the board alert fires as it crosses the threshold. Exit code
+	# below is unchanged (still EXIT_STALE_BLOCKED).
+	check_stale_blocked "STALE_BLOCKED" "$LAG"
 	exit "$EXIT_STALE_BLOCKED"
 fi
 
 # ── Deploy via the existing atomic path ─────────────────────────────────────
 echo "stale → deploying via: $DEPLOY_CMD (cwd: $DEPLOY_DIR)"
 if ! (cd "$DEPLOY_DIR" && $DEPLOY_CMD); then
+	# GAP-070: a failed deploy leaves the stale artifact exactly where it was.
+	check_stale_blocked "DEPLOY_FAILED" "$LAG"
 	fail_error "deploy command failed: $DEPLOY_CMD"
 fi
 echo "deploy command finished; re-checking staleness"
@@ -423,6 +574,10 @@ echo "deploy command finished; re-checking staleness"
 "$0"
 rc=$?
 if ((rc != 0)); then
+	# GAP-070: still stale after a deploy attempt — same unremediated-stale
+	# class as a refusal, different reason. Exit code unchanged (ERROR).
+	check_stale_blocked "STALE_AFTER_DEPLOY" "$LAG"
 	fail_error "deployed artifact still stale after deploy (re-check rc=$rc)"
 fi
+reset_stale_blocked_streak
 exit "$EXIT_CURRENT"
