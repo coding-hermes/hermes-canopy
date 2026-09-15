@@ -2327,3 +2327,18 @@ tasks:
   status: complete
   created_at: '2026-09-15T18:55:25.191126+00:00'
   completed_at: '2026-09-15T19:37:29.494953+00:00'
+- id: PL06-P4
+  title: "SPEC-PL-06 phase 4 \u2014 HTTP compile-surface caller: build a MultiReferenceSelection\
+    \ from a persisted multi-reference node"
+  criteria:
+  - "GET /api/v1/context/{node_id} for a node in parent_mode='multi_reference' compiles\
+    \ with the \xA76.1 <canopy_multi_reference> block plus manifest.multiReference\
+    \ carrying the STORED contextManifestHash verbatim; a node that is not a multi-reference\
+    \ reply keeps byte-identical output; a stale snapshot answers REFERENCE_SELECTION_STALE\
+    \ (409) and an underbudget profile REFERENCE_CONTEXT_BUDGET_EXCEEDED (422) per\
+    \ SPEC-PL-06 \xA79.4, never a partial source set; focused tests PASS not SKIP\
+    \ under CANOPY_TEST_ALLOW_SHARED_DB=1; go build/vet/golangci-lint/gofmt green;\
+    \ one commit with the co-author trailer"
+  status: complete
+  created_at: '2026-09-15T21:28:05.417963+00:00'
+  completed_at: '2026-09-15T21:59:07.432876+00:00'

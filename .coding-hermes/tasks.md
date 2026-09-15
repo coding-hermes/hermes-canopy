@@ -12114,3 +12114,54 @@ Attempt 3 also fixed a real defect its new rule exposed: estimation now runs on 
 | [35014928410](https://github.com/coding-hermes/hermes-canopy/actions/runs/35014928410) | `b65c59a` | board closeout 2 | **success** | same build job — every step success |
 
 CI health at tick start was 6/6 success on `origin/master`; no pre-existing failure needed filing. The `ci_result` on the `PL-06` umbrella row is `GREEN` and was already green before this tick's commits — the phase-3 row is tracked on that umbrella, so no `pending_on_push` state was ever written. Push parity after all three commits: `origin/master..HEAD` = 0, `gitlab/master..HEAD` = 0.
+
+## Tick 462 — 2026-09-15 ~21:30-23:0xZ (WORK — PL06-P4: SPEC-PL-06 §6 HTTP compile-surface caller)
+
+**Verdict: OK / WORK.** Board read directly from `.coding-hermes/board/tasks.jsonl` (314 lines, 29 raw `"status":"pending"` lines / ~14 live ids after keep-LAST): the only project-owned actionable row was the SPEC-PL-06 work — the P1 QA-HERMES-CANOPY-1/2/8/9/10 rows are bunker/QA-harness claims (bunker-las-03 dropped from `~/.bunker/config.yaml`, one-range port-pool exhaustion, `run_battery` killed by the 420s tool cap with 0-byte evidence, ui-probe assuming a root `package.json`, the `-qa` stand-in workdir that is not a git repo) and cannot be fixed from this repo; GAP-065, GAP-071, DF-HERMES-CANOPY-2/4 and DF-HERMES-CANOPY-5 already carry a later row marked `complete`, so their pending rows are stale board-close candidates, not re-dispatch targets; PL-02..PL-05, FTR-06, PL02-P2/P3 stay the P3 post-MVP backlog. Picked **PL06-P4 = the §6 caller**, the item tick 461 named as next: the compiler landed and was judged at tick 461, so the dependency was already satisfied.
+
+**Premise verified at HEAD before dispatch** (`2da2689`): `CompileMultiReference` and `CompileRequest.MultiReference` exist, but `grep` for a non-test caller found none — `internal/handler/context_handler.go` built the compile request without a selection, so the §6.1 block could never appear over HTTP. Live premise, not a stale row.
+
+**Dispatch:** one worker, `gpt-5.6-luna` @ `openai-codex` (this project's lane), brief `/tmp/pl06p4-brief.txt`, background pid 1265792. The known live-but-quiet pattern held again — a **0-byte log for ~35 min** while the tree changed (`internal/service/multi_reference_compile.go` appearing first, then the handler/server wiring), then a complete report; the commit, not process exit, was the done signal. **Attempt 1 accepted — no rework cycle.**
+
+**Deliverable — the §6 caller (one commit, `4766541`, 1,362 insertions / 21 deletions across 7 files).**
+
+| File | Δ | What |
+|---|---:|---|
+| `internal/service/multi_reference_compile.go` | +256 (new) | `TreeServiceImpl.LoadCompileSelection`: the §9.3 canonical `ORDER BY` (`metadata->>'selection_order'`, then `sequence_num`), the reserved `metadata.multi_reference` decode, per-source §5.2 label/color from the edge metadata with the derived-helper fallback, branch root from the stored span with the source row as fallback |
+| `internal/handler/context_handler.go` | +132/-7 | handler-owned `ReferenceSelectionLoader` interface, projection onto `context.MultiReferenceSelection`, §9.4 → HTTP status map, load-error envelope |
+| `internal/service/tree_service.go` | +19/-11 | interface method (+ gofmt-only hunks) |
+| `internal/server/server.go` | +10/-3 | route wiring — `WithReferenceSelectionLoader(treeSvc)`, nil-safe for DB-free harnesses |
+| 3 test files | +945 (new) | 16 test funcs: loader, handler mapping/wiring, DB-backed A–D |
+
+- **Staleness is §9.3's rule, not a new one** (`multi_reference_compile.go:243-254`): `referenceManifestHash` is recomputed over the LIVE source set and compared with the **STORED** `metadata.contextManifestHash`, and a soft-deleted source is stale by definition. Anything else → `REFERENCE_SELECTION_STALE` and the whole load fails — never a 200 that mixes snapshots, never a partial source set.
+- **The stored hash is carried verbatim**: the block's manifest entry reports `sel.Metadata.ContextManifestHash`, never a recomputation, and the test asserts it equals the hash read back from `nodes.metadata` in the DB.
+- **Ordinary turns are untouched**: a node that is not `parent_mode='multi_reference'` (or is soft-deleted/missing) yields `(nil, nil)`, `req.MultiReference` stays nil and `internal/context/compiler.go` is byte-identical to pre-change.
+- **§9.4 mapping**: 422 `REFERENCE_CONTEXT_BUDGET_EXCEEDED`, 409 `REFERENCE_SELECTION_STALE`, 404 `REFERENCE_SOURCE_NOT_FOUND`, 400 `REFERENCE_SOURCE_COUNT_TOO_LOW/_TOO_HIGH`; a corrupt reserved manifest stays a loud 500 (never a fabricated empty block).
+- **Layering, forced not chosen:** the loader lives in `internal/service` (it owns the unexported `referenceManifestHash`) but cannot return a `context` type — `service → context` closes an import cycle via `card` (proved with a scratch build, not assumed). So the loader returns a service-owned projection and the handler owns both the interface and the mapping. This differs from the brief's suggestion; the worker said so explicitly rather than silently.
+- **Style churn disclosed:** the brief's "gofmt -l on touched files empty" cost ~4 gofmt-only hunks inside `tree_service.go`/`server.go` (struct alignment + one import reorder). Seven OTHER files are dirty under this box's gofmt and none of them was touched by this commit — the drift is pre-existing at `2da2689` (verified by running gofmt on the `HEAD~1` blobs), and CI does not gate on `gofmt -l`.
+
+**Verification (foreman-run, independent of the worker report — the load-bearing gate).**
+
+| Gate | Result |
+|---|---|
+| `gofmt -l` on the 7 touched files | none listed |
+| `go build -o /dev/null ./cmd/canopyd` | exit 0 |
+| `go vet ./...` | exit 0 |
+| `golangci-lint run ./...` (the CI form) | **0 issues**, exit 0 |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -v -run '<new names>' ./internal/service/... ./internal/handler/...` | **RUN 31 / PASS 21 / SKIP 0 / FAIL 0**, `ok service 5.796s`, `ok handler 7.407s` |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 <24 non-handler pkgs>` | exit 0 (db 94.9s, federation 83.0s, plugin 26.6s, fileviewer 22.3s, service 6.9s) |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 ./internal/handler/...` | `ok 247.453s`, exit 0 |
+
+The 0-SKIP count is the point: a bare run would have SKIPped every DB-backed test (GAP-069 gate) and looked identically green. The four criteria are asserted against the DB and the HTTP surface, not against mocks: the tests compose the real chi router (`AuthMiddleware("canopy-dev-secret")` + `TreeMembershipMiddleware` + the production handler at the same `/context/{node_id}` pattern) over `httptest` against real PostgreSQL. The live `canopy` DB was not written to (0 nodes / 0 trees in the previous 2 h); this tick created no probe DB, so nothing of ours needs dropping.
+
+**GitReins:** `PL06-P4` created + started **before** implementation; `gitreins task complete` after the commit → **tier1 PASS** (guard full: secrets clean, go_build ok, go_lint ok, go_tests ran) + **tier2 PASS / COMPLETE**, verdict `.gitreins/history/2026-09-15/8bd97eae/verdict.json`. The judge re-derived the wiring from the source (`context_handler.go:118-127`, `multi_reference.go:555/599`, `multi_reference_compile.go:243-247`) and re-ran both focused suites itself (0 SKIP).
+
+**Off-by-one:** health `GET /health` 200 `{"status":"ok"}` (uptime 6h05m at tick start). Two discovers fired **before** designing — `go-context-compiler-multi-reference-selection-caller-wiring` → `not_found`, `canopy-multi-reference-http-caller` → `not_found` (no cached answer, so the spec carried the design). No submission: this tick's only non-trivial discovery was the worker's import-cycle proof, which is a compiler error rather than a diagnosis, and nothing was debugged from scratch by the foreman.
+
+**E2E-001 — recorded honestly as UNSATISFIED, not covered.** Window **458-463 is open**; the last recorded full battery is tick 444 (window 440-445) and windows 446-451/452-457 ran none either. This tick spent its budget on project work, so the battery did **not** run. It is the first item on the next tick.
+
+**Push:** `4766541` pushed to **origin** and **gitlab**; parity `origin/master..HEAD` = 0 and `gitlab/master..HEAD` = 0 immediately after.
+
+**Bookkeeping:** `tasks.jsonl` 314 lines (unchanged line count; the only edited line is **92, the `PL-06` umbrella** — `foreman_note` now records PHASE 4, the commit, the judge verdict, the layering constraint and the sections still open; `updated_at` refreshed; title/status/keys untouched, compact separators preserved, `grep -c '"status":"pending"'` still 29). No new task rows: PL-06 phases ride the umbrella row, matching ticks 459-461. `events.jsonl` +2 (ids **468** `task_completed`, **469** `audit` with the pick rationale, the premise check and the deferred items). `board.jsonl`: `ticks_total` 461 → **462**, `last_commit` = `4766541`, `last_tick`/`updated_at` refreshed; branch/cooldown untouched. `.gitreins/tasks.yaml` carries `PL06-P4` as `complete` (kept for audit, the fleet default).
+
+**Next tick:** (1) run the overdue **E2E-001** battery (demo-seed lifecycle; `canopy-e2e-testing`) — it has now missed the 446-451, 452-457 and 458-463 windows; (2) the remaining SPEC-PL-06 sections: §10.1 `reference_context_invalidated` (needs retained context-audit storage — a design decision first), §4.1/§4.3/§7 frontend, §8 merge conflict model; (3) stale board-close candidates that need a one-line premise re-check rather than a dispatch: `GAP-065`, `GAP-071`, `DF-HERMES-CANOPY-2/4/5`, `QA-HERMES-CANOPY-3`; (4) do **not** dispatch `QA-HERMES-CANOPY-1/2/8/9/10` — bunker/QA-harness, not project-owned. **Watch:** the deployed `/home/kara/bin/canopyd` still predates `a3cb957`/`06aed60`/`56eb33d`/`4766541` — the hourly `canopy-deploy-check.timer` owns the redeploy, not this tick. Post-test DB residue to watch, NOT to auto-drop: 20 leftover `canopy_<hex>` test databases (~11-13 MB each, ~240 MB total) plus `canopy_dogfood_0910`; none is provably this tick's (the shared pool names its DB per run), so they are flagged rather than dropped.
