@@ -12208,3 +12208,163 @@ CI health at tick start was 5/5 success on `origin/master` (tip `2da2689`, run 3
 - Bookkeeping: `tasks.jsonl` + GAP-073 row and the PL-06 umbrella annotated (`worker_status: partial` + `foreman_note` naming P1..P5 commits and the still-open sections); compact-JSONL separators preserved (315 lines / 279 unique ids / 11 pending, parse clean); `events.jsonl` id 471 `task_completed` + id 472 `audit`; `board.jsonl` `ticks_total` 463 → **464**, `last_commit` = `05875f98…`. Commit `9ebcf47` (board closeout), then this entry.
 - DuckBrain: `/ticks/464` = `8090ed63-849a-4d3e-80df-8181d1ece14c`, `/project/hermes-canopy/status/2026-09-16` = `0ec0482f-4d0c-4581-a519-f601982e5328` — both verified on disk in `namespaces/hermes-canopy/{event,config}/2026-09/current.jsonl`; pre-write tick keys contiguous through `/ticks/463`.
 - Next tick: 11 pending rows. GAP-073 (P2, scoped, ready) is the best candidate. PL-06 next seams: **§4.1/§4.3 selection + preflight UI** (multi-select mode + composer chips — the OTHER half of the §7.2/§7.3 surface; only the render half exists now), §10.1 `reference_context_invalidated` (needs a retained context-audit storage decision), §8 merge conflict model. Watch: test-residue DBs are now at 9 `canopy_<hex>` (flagged, not dropped — none provably this tick's); the E2E-001 battery is STILL overdue (last full battery tick 444) and this tick spent its budget on project work again — it must be the first thing on the next tick; deployed `/home/kara/bin/canopyd` still predates this tick (the hourly canopy-deploy-check.timer owns the redeploy).
+
+## Tick 465 — 2026-09-16 ~05:37-06:5x -05 (WORK — GAP-073, graph subtree dedupe)
+
+### Verdict
+
+Board at tick start: `.coding-hermes/board/tasks.jsonl` = 315 lines / 29 `"status":"pending"` rows;
+`events.jsonl` = 487 lines; `board.jsonl` header `ticks_total` 464. CI at tick start: 6/6 recent runs
+on `origin/master` **success** (35053445794, 35053508018, 35053445794's neighbours) — no pre-existing
+failure to file.
+
+The pending set is mostly **not project-owned or not dispatchable**:
+
+- `QA-HERMES-CANOPY-1/2` (P1, five recycled rows) — bunker-las-02/03 infra: port-range pool exhaustion,
+  `bunker-las-03` missing from `~/.bunker/config.yaml`, rootless-installer DNS failure. Not fixable from
+  this repo; named in the pick rationale rather than dispatched.
+- `QA-HERMES-CANOPY-9/10` (P3) — fleet QA-harness defects (ui-probe root-package.json assumption,
+  empty stand-in workdir re-picked forever). Not project-owned.
+- `PL-02..PL-06`, `FTR-06`, `PL02-P3` (P3) — post-MVP spec backlog; the dispatchable phases of those
+  umbrellas were already consumed by ticks 443-464.
+
+Two pending **P1** rows were re-verified against HEAD and found **premise-false** (closed below, no
+dispatch). The pick is the one fresh project-owned defect:
+
+**GAP-073 (P2, complexity 2)** — *"Graph subtree returns duplicate node rows for multi-parent nodes"*,
+filed by tick 464 from its own PL06-P5 verification. Root cause named to the file and the SQL construct
+(`internal/db/node_repo.go` → `GetSubtree`, recursive CTE over `edges` with `UNION ALL`), no deps,
+testable acceptance criteria, and it is exactly the shape that stops being theoretical once
+multi-reference edges exist in the UI.
+
+### Dispatch / Worker
+
+- Worker lane: `gpt-5.6-luna` @ `openai-codex` (the board row's `worker_model`/`worker_provider`, and the
+  project's proven lane after the `glm-5.3-flash` zero-liveness era).
+- Brief: `/tmp/gap073-brief.md` (root cause, the three depth contracts to preserve, the PostgreSQL
+  "no distinct UNION in a recursive term" trap, the DB-test requirement, the exact gate commands).
+- 1 attempt, no rework. Worker pid alive, stdout log **0 bytes for the whole dispatch** (the documented
+  luna live-but-quiet signature) while the tree changed underneath — liveness confirmed by
+  `git status`/`git diff --stat` and file mtimes, not by the log.
+- Commit **ed054b5** `fix(graph): GAP-073 — dedupe subtree rows for multi-parent nodes`
+  (3 files, +312/-1, co-author trailer present exactly once).
+
+### The fix
+
+`GetSubtree` keeps its recursive CTE and its depth semantics; the per-path duplicates are collapsed in
+the **final** SELECT:
+
+```sql
+SELECT <nodeColumns>
+FROM (SELECT DISTINCT ON (id) <nodeColumns> FROM sub) deduped
+ORDER BY sequence_num ASC
+```
+
+`UNION ALL` in the recursive term is untouched on purpose — PostgreSQL rejects a distinct `UNION` inside
+a recursive CTE, so "swap UNION ALL for UNION" is not a fix, it is a syntax error. `depth` is not
+selectable by the `DISTINCT ON` subquery, so `maxDepth == 0` (unbounded), `maxDepth == -1` (normalized
+to 0) and `maxDepth == n` still bound the **walk**, not the returned rows, and the `sub.depth < 10000`
+cycle guard is intact. `GetAncestors`, `GetPath`, `GetChildren` and the edge queries are untouched.
+
+### Gates (fresh, this tick, foreman-run)
+
+| Gate | Command | Result |
+|---|---|---|
+| build | `go build -o /dev/null ./cmd/canopyd` | exit 0 |
+| vet | `go vet ./...` | exit 0 |
+| focused shared-DB | `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -v -run 'TestGAP073\|TestPGNodeRepo_GetSubtree\|TestPL06P5_GetSubtree' ./internal/db/... ./internal/service/...` | **6 PASS / 0 SKIP / 0 FAIL**, both packages `ok` (db 8.75s, service 8.79s) |
+| full sweep | `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 $(go list ./... \| grep -v /internal/handler) -timeout=600s` | all packages `ok`, `grep -c FAIL` = **0** |
+| lint | `golangci-lint run ./...` (local binary == CI version) | **0 issues** |
+
+The bare-`go test` phantom-pass trap was avoided deliberately: every DB-backed run carried
+`CANOPY_TEST_ALLOW_SHARED_DB=1` and the focused run reports PASS (not SKIP). `CANOPY_TEST_DB_URL` was
+never set.
+
+### Independent live proof (isolated stack, foreman's own, not the worker's suite)
+
+Throwaway `canopy_probe` DB (dropped afterwards) + HEAD binary on `:8099`; fixture = root, three sources,
+one `multi_reference` reply with **three active incoming edges** (A reply + B/C reference), one follow-up
+below it — the probe shape tick 464 found, reduced so the counts are exact.
+
+| Probe | Rows | Unique ids |
+|---|---|---|
+| PRE-FIX query (`UNION ALL`, no dedupe) | 10 | 6 |
+| POST-FIX query (`DISTINCT ON (id)`) | **6** | **6** |
+| Edges for the same tree (must be unchanged) | 7 | 7 triples |
+| `GET /api/v1/graph/trees/{tree}/subtree/{root}?max_depth=0` (HTTP 200) | **6** | **6**, zero duplicated ids |
+
+The fixture's active-incoming-edge histogram shows the multi-parent node at `active_in = 3`, so the
+pre-fix duplication is reproduced as a fact of the data, not asserted from the diff.
+
+Cleanup verified: probe listener killed (`:8099` → connection refused), `canopy_probe` **dropped**, live
+`canopy` DB untouched (`2 users / 25 trees / 45 nodes`, **0** node rows created in the last 2 hours),
+deployed `:8091` still `health=200`. Note the live DB no longer matches the older `0|0|0` window
+expectation — it carries 09-13..09-16 dogfood residue (25 trees / 45 nodes). No residue dropped.
+
+### Board closeouts performed this tick (board hygiene, verified at HEAD — no dispatch)
+
+| Row | Verdict at HEAD 69ed2f3 | Evidence |
+|---|---|---|
+| **GAP-065** (P1) | **premise-false** — the tree-scoped reply route is real | `internal/handler/node_handler.go:87` `r.Post("/{node_id}/reply", h.handleReply)` inside `TreeRoutes()`, mounted by `internal/server/server.go:325-326` (`r.Mount("/trees/{tree_id}/nodes", treeNodes)`); `go test -count=1 -run TestRouteParityDocumentedNodeRoutes ./internal/server/` → **ok**, chi.Walk sees both the tree-scoped and flat reply paths. The 09-10 "phantom" observation is pre-fix behaviour; `docs/API.md` lines 24/393 are correct as written. |
+| **GAP-071** (P1) | **superseded** by c6e0496 | commit `c6e0496` (`fix(files): GAP-071 — file-viewer docs + dev workspace/profile provisioning + 404 for missing workspace`, 2026-09-14 22:55 -05) landed **after** the row was filed (2026-09-14T11:30-05). At HEAD: `grep -c 'files/upload\|viewers/dispatch'` → docs/API.md **9**, README.md **3**, docs/INTEGRATION.md **1**; `db.EnsureDevWorkspaceProfile` (`internal/db/bootstrap.go:121`) provisions workspace + `dev-hermes` profile + `profile_route` (the row's "nothing provisions it" claim). |
+
+An earlier row can stay live under a recycled ID, so each pending row's premise was read individually
+rather than trusted from the ID: that is what separated these two from GAP-073.
+
+### GitReins
+
+`gitreins task create GAP-073 "Fix graph subtree duplicate node rows for multi-parent nodes" "<criterion>"`
+→ `gitreins task start GAP-073` (before any implementation) → `gitreins task complete GAP-073` **after**
+the commit landed in git log. Tier 1 + Tier 2 verdict: **8998e448** (tier1 PASS / tier2 PASS / COMPLETE — the judge ran its own RED proof: reverting the DISTINCT ON produced FAIL 'returned 10 node rows for 6 unique ids' and 'multi-parent reply … returned 3 times, want 1', then restored the tree clean).
+
+### Off-by-one
+
+Health: `curl -s http://localhost:8766/health` → `{"status":"ok","uptime":"6h10m58s"}`.
+
+Discover before designing (actually fired, not copied): `POST /api/v1/problems/discover`
+`{"problem_class":"postgres-recursive-cte-duplicate-rows-multi-parent"}` → **`not_found`**;
+`{"problem_class":"sql-recursive-cte-org-chart"}` → **found** (single sqlite answer about recursive-CTE
+shape, no coverage of per-path duplication under multi-parent reachability). No cached answer existed for
+this class, so the fix was designed and proven here. Submission with `cadence: post-debug` below.
+
+### CI
+
+Content commit `ed054b5` and the board commit that follows it are pushed together; `gh run list` below
+records the runs and their conclusions. see the follow-up commit (this push's runs are recorded there once they conclude).
+
+### Push health
+
+`origin` (GitHub) and `gitlab` (gitlab.readydedis.com) are both at HEAD (`git rev-list --count
+origin/master..HEAD` = 0, same for `gitlab/master..HEAD`). Covers the content commit **and** the board
+closeout + this entry.
+
+### Bookkeeping
+
+- `tasks.jsonl`: **GAP-073 → complete** (`worker_summary`, `foreman_note`, `commit_hash` ed054b5,
+  `guard_result` PASS, `ci_result`, `attempts` 1, `files_changed` 3); **GAP-065** and **GAP-071** closed
+  as premise-false with their evidence in `foreman_note`. Rows rewritten in place, compact separators
+  preserved (`"status":"pending"`, no space after the colon), every untouched line passed through
+  byte-identically.
+- `events.jsonl`: +3 (ids 474-477) — `task_completed` GAP-073, `audit` (tick 465 pick rationale) and
+  `audit` (the two premise-false closures).
+- `board.jsonl`: `ticks_total` 464 → **465**, `last_tick`/`updated_at` = tick stamp, `last_commit` =
+  ed054b5 (the CONTENT commit, not the board commit).
+
+### DuckBrain
+
+`hermes-canopy` namespace, HTTP `:3000`: `POST /ticks/465` (domain `event`) + the
+`/project/hermes-canopy/status/2026-09-16` entry, ids recorded in the tick log below.
+
+### Next tick
+
+- GAP-073's dedupe sits in the final SELECT: correctness is fixed, **cost is not bounded** — a
+  pathological multi-parent DAG still expands per-path inside the recursive term. A visited-set rewrite is
+  an optimisation, not a defect; file it only if a real tree ever shows the blow-up.
+- The remaining pending backlog is P3 spec work (`PL-02..PL-06`, `FTR-06`) plus the non-project-owned
+  bunker/QA-harness rows. When a PL-06 phase is next in scope, §4.1/§4.3 selection+preflight UI, §10.1
+  `reference_context_invalidated` (needs retained context-audit storage) and §8 merge conflict model are
+  the open halves.
+- Watch item: the live `canopy` DB grows dogfood residue (25 trees / 45 nodes at this tick) and the
+  09-13 note still calls that "contamination" — check row timestamps, not the count, before flagging.
+- Watch item: leftover `canopy_<hex>` per-test databases continue to accumulate from the shared-DB pool
+  (`CANOPY_TEST_ALLOW_SHARED_DB=1`) — flagged, deliberately not dropped.
