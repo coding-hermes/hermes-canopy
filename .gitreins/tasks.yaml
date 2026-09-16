@@ -2342,3 +2342,20 @@ tasks:
   status: complete
   created_at: '2026-09-15T21:28:05.417963+00:00'
   completed_at: '2026-09-15T21:59:07.432876+00:00'
+- id: PL06-P5
+  title: "SPEC-PL-06 \xA77 visual model \u2014 convergence edges, reference badge,\
+    \ source list, inspector"
+  criteria:
+  - "Graph edge payload exposes persisted edge id + \xA75.2 metadata; React Flow renders\
+    \ reference edges with the \xA77.2 palette/2.5px/arrow/R# label using persisted\
+    \ DB edge ids; multi-reference reply nodes show an N references badge and a DOM\
+    \ source list; the reply inspector shows the \xA77.3 field set incl. synthetic\
+    \ merge marker, nearest common ancestor, manifest hash, token allocation, truncation\
+    \ indicators and a View context action backed by GET /api/v1/nodes/{node_id}/reference-context;\
+    \ focus exposes the \xA77.2 ARIA description; hover highlights the exact edge\
+    \ and dims unrelated convergence edges; go build/vet/golangci-lint clean, focused\
+    \ Go tests PASS with CANOPY_TEST_ALLOW_SHARED_DB=1, npx vitest run all-pass with\
+    \ new tests, npx oxlint clean, npm run build exit 0."
+  status: complete
+  created_at: '2026-09-16T03:01:06.404920+00:00'
+  completed_at: '2026-09-16T03:46:48.329414+00:00'
