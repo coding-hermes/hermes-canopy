@@ -436,6 +436,10 @@ func main() {
 	// build time (-ldflags) pins viewer_registry versions; the viewer
 	// registry is seeded (idempotent) on boot below.
 	fileviewer.BuildVersion = version
+	// The MCP handshake reports the same build version in serverInfo.version,
+	// so the endpoint can never advertise a version `canopyd -version` does
+	// not print (DF-HERMES-CANOPY-10).
+	handler.MCPVersion = version
 	fvFilesRepo := fileviewer.NewPGFileMetadataRepo(database.Pool)
 	fvViewersRepo := fileviewer.NewPGViewerRegistryRepo(database.Pool)
 	fvAccessRepo := fileviewer.NewPGFileAccessLogRepo(database.Pool)

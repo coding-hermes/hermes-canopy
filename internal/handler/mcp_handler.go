@@ -5,12 +5,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
+
+// MCPVersion is the build version reported in the MCP `initialize` result
+// (serverInfo.version). cmd/canopyd assigns the same value it injects into
+// main.version at startup, so the handshake can never advertise a version that
+// `canopyd -version` does not print. It is a var so -ldflags -X can set it on
+// its own as well.
+var MCPVersion = "dev"
+
+// mcpServerName is the implementation name advertised in serverInfo.name.
+const mcpServerName = "canopyd-canopy"
+
+// supportedProtocolVersions lists the MCP protocol revisions this endpoint
+// implements, NEWEST FIRST: index 0 is the server's preferred revision and the
+// answer to any client asking for a revision the server does not know.
+var supportedProtocolVersions = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
+
+// negotiateProtocolVersion implements the MCP `initialize` version
+// negotiation (MCP 2025-06-18 §Lifecycle): echo the revision the client asked
+// for when the server supports it, otherwise answer with the server's newest
+// supported revision — the spec leaves the final choice to the client, which
+// disconnects if it cannot speak what the server answered.
+func negotiateProtocolVersion(requested string) string {
+	for _, v := range supportedProtocolVersions {
+		if v == requested {
+			return requested
+		}
+	}
+	return supportedProtocolVersions[0]
+}
 
 // MCPHandler serves the Model Context Protocol JSON-RPC endpoint.
 // Agents POST to /mcp to invoke Canopy operations programmatically.
@@ -42,7 +72,11 @@ func NewMCPHandler(
 	}
 }
 
-// Routes returns a chi router mounted at /mcp.
+// Routes returns a chi router mounted at /mcp (production: /api/v1/mcp, see
+// internal/server/server.go). The endpoint is STATELESS: it issues no session
+// id, requires no `initialize` before `tools/list`, and keeps no per-client
+// state — every request is answered from its own body. Do NOT "fix" this into
+// a session state machine; there is no session store behind it.
 func (h *MCPHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.handleJSONRPC)
@@ -68,6 +102,32 @@ type jsonrpcResponse struct {
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// ── MCP lifecycle types ────────────────────────────────────────────
+
+// initializeResult is the `initialize` response (MCP 2025-06-18
+// §Lifecycle): the negotiated protocol revision, the server's capabilities —
+// only what this endpoint actually implements — and the build version.
+type initializeResult struct {
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    serverCapacity `json:"capabilities"`
+	ServerInfo      implementation `json:"serverInfo"`
+}
+
+type serverCapacity struct {
+	Tools toolsCapacity `json:"tools"`
+}
+
+// toolsCapacity advertises tools/list + tools/call only; this server sends no
+// tools/list_changed notifications, so listChanged is false.
+type toolsCapacity struct {
+	ListChanged bool `json:"listChanged"`
+}
+
+type implementation struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 // ── Tool definitions ───────────────────────────────────────────────
@@ -167,25 +227,74 @@ var tools = []toolDef{
 
 // ── JSON-RPC dispatch ──────────────────────────────────────────────
 
+// handleJSONRPC decodes one JSON-RPC 2.0 message and dispatches it.
+//
+// Order matters: the notification check runs BEFORE the version check and
+// before the method switch, because a JSON-RPC notification is never answered
+// with a body — not even for a version or a method this endpoint rejects.
 func (h *MCPHandler) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 	var req jsonrpcRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeRPCError(w, nil, -32700, "Parse error: "+err.Error())
 		return
 	}
+
+	// Notifications (MCP §Lifecycle: `notifications/initialized` is sent
+	// right after `initialize`) carry no id and MUST NOT be answered with a
+	// JSON-RPC body — a client that receives an error object for
+	// notifications/initialized aborts the handshake. Over this HTTP
+	// transport the acknowledgement is 202 Accepted with an empty body.
+	// Every notification is accepted this way, including ones this server has
+	// no use for: an unknown notification is not an error.
+	if strings.HasPrefix(req.Method, "notifications/") {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
 	if req.JSONRPC != "2.0" {
 		writeRPCError(w, req.ID, -32600, `Invalid Request: jsonrpc must be "2.0"`)
 		return
 	}
 
 	switch req.Method {
+	case "initialize":
+		h.handleInitialize(w, req)
+	case "ping":
+		writeRPCResult(w, req.ID, map[string]any{})
 	case "tools/list":
+		// Pagination: MCP marks `nextCursor` optional and the 7 tools fit one
+		// page, so the field is omitted rather than sent as null.
 		writeRPCResult(w, req.ID, map[string]any{"tools": tools})
 	case "tools/call":
 		h.handleToolsCall(w, r, req)
 	default:
 		writeRPCError(w, req.ID, -32601, "Method not found: "+req.Method)
 	}
+}
+
+// handleInitialize answers the MCP `initialize` request. Stateless: the answer
+// depends only on this request (see Routes), and `tools/list` works without a
+// preceding `initialize`.
+//
+// Unknown params and extra fields are ignored (encoding/json drops them) and a
+// missing params object is not an error — the client is answered with the
+// server's newest supported revision.
+func (h *MCPHandler) handleInitialize(w http.ResponseWriter, req jsonrpcRequest) {
+	var params struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	if len(req.Params) > 0 {
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			writeRPCError(w, req.ID, -32602, "Invalid params: "+err.Error())
+			return
+		}
+	}
+
+	writeRPCResult(w, req.ID, initializeResult{
+		ProtocolVersion: negotiateProtocolVersion(params.ProtocolVersion),
+		Capabilities:    serverCapacity{Tools: toolsCapacity{ListChanged: false}},
+		ServerInfo:      implementation{Name: mcpServerName, Version: MCPVersion},
+	})
 }
 
 func (h *MCPHandler) handleToolsCall(w http.ResponseWriter, r *http.Request, req jsonrpcRequest) {
