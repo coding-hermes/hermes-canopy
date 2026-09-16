@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -44,17 +45,70 @@ import (
 // Example: go build -ldflags="-X main.version=v0.1.0" ./cmd/canopyd
 var version = "dev"
 
+// argRoute is main()'s routing decision for the first positional argument.
+// Only a recognised subcommand may start CLI mode, and a non-flag argument that
+// matches nothing is refused instead of falling through to server mode.
+type argRoute int
+
+const (
+	// argRouteServer: no positional argument, or one starting with "-" — the
+	// server flag surface (bare `canopyd`, `canopyd -version`, …).
+	argRouteServer argRoute = iota
+	// argRouteServe: the explicit `serve` alias for server mode.
+	argRouteServe
+	// argRouteSubcommand: a known CLI subcommand (tree/session/topic).
+	argRouteSubcommand
+	// argRouteUnknown: a non-flag argument that is not a known subcommand.
+	argRouteUnknown
+)
+
+// classifyArgs classifies os.Args[1:] for main()'s routing seam. Anything that
+// starts with "-" keeps the historical server-flag behaviour, so bare flag
+// parsing (including -version and -relay-mode) is untouched.
+func classifyArgs(args []string) argRoute {
+	if len(args) == 0 {
+		return argRouteServer
+	}
+	first := args[0]
+	if strings.HasPrefix(first, "-") {
+		return argRouteServer
+	}
+	if first == "serve" {
+		return argRouteServe
+	}
+	if isSubcommand(first) {
+		return argRouteSubcommand
+	}
+	return argRouteUnknown
+}
+
+// versionOutput writes the build version to stdout and returns the exit code
+// for the -version flag. Extracted from main so the flag's user-visible
+// behaviour — which value it prints and what it exits with — is testable
+// without starting a process. `version` is injected at build time with
+// -ldflags -X main.version=…, so this always reports the real build value.
+func versionOutput(stdout io.Writer) int {
+	_, _ = fmt.Fprintln(stdout, version)
+	return 0
+}
+
 func main() {
-	// `serve` is an explicit alias for server mode (configuration is
-	// env-only). Handle it BEFORE subcommand routing so `canopyd serve --help`
-	// prints usage and exits 0 WITHOUT starting a server (GAP-033).
-	if len(os.Args) >= 2 && os.Args[1] == "serve" {
+	// Route on the first positional argument. An unrecognised one is a typo,
+	// and a typo must never boot a server: refuse it before any flag parsing
+	// (DF-HERMES-CANOPY-10). `serve` is an explicit alias for server mode
+	// (configuration is env-only); handle it BEFORE subcommand routing so
+	// `canopyd serve --help` prints usage and exits 0 WITHOUT starting a
+	// server (GAP-033).
+	switch classifyArgs(os.Args[1:]) {
+	case argRouteServe:
 		if wantsServeHelp(os.Args[2:]) {
 			printServerUsage()
 			os.Exit(0)
 		}
 		// Rebuild os.Args so server flag parsing sees only real flags.
 		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+	case argRouteUnknown:
+		os.Exit(refuseUnknownSubcommand(os.Args[1]))
 	}
 
 	// If a known subcommand is present, route to CLI mode.
@@ -87,8 +141,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(version)
-		os.Exit(0)
+		os.Exit(versionOutput(os.Stdout))
 	}
 
 	// -print-schema-version (GAP-069): print the max migration version

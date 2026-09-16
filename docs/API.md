@@ -1266,6 +1266,54 @@ POST /api/v1/mcp
 Accepts JSON-RPC 2.0 requests. Exposes tools for tree, node, topic, card, graph,
 and approval operations for programmatic agent access.
 
+A trailing slash (`POST /api/v1/mcp/`) is the same endpoint. The endpoint is
+**stateless**: no session id is issued or required, and `initialize` is not a
+precondition for `tools/list` — each request is answered from its own body.
+Auth is the same JWT Bearer token as every other `/api/v1` route; without it
+the response is the standard envelope, `401 {"error":{"code":"TOKEN_MISSING",
+"message":"Authorization Bearer token required"}}`.
+
+### Handshake
+
+| Request | Response |
+|---------|----------|
+| `initialize` | `200` — `{"jsonrpc":"2.0","id":…,"result":{"protocolVersion":…,"capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"canopyd-canopy","version":…}}}` |
+| `notifications/initialized` (and any `notifications/…`) | `202` — **empty body** (a notification is never answered with a JSON-RPC object) |
+| `ping` | `200` — `"result":{}` |
+| `tools/list` | `200` — `{"tools":[…7 tools…]}` |
+| `tools/call` | `200` — the tool result, or a JSON-RPC error object |
+| any other method (e.g. `resources/list`) | `200` — `-32601 Method not found: <method>` |
+
+`initialize` params: `protocolVersion` (string), `clientInfo` (object),
+`capabilities` (object). Unknown fields are ignored, and a missing `params`
+object is not an error. **Version negotiation:** `protocolVersion` echoes the
+requested revision when the server supports it (`2025-06-18`, `2025-03-26`,
+`2024-11-05`); any other value — newer or older — is answered with the server's
+newest supported revision, and the client decides whether to continue.
+`serverInfo.version` is the binary's build version, identical to
+`canopyd -version` (never a hardcoded literal).
+
+Error codes: `-32700` parse error (`400`), `-32600` invalid request (jsonrpc
+must be `"2.0"`), `-32602` invalid params (e.g. a non-object `params`),
+`-32601` method not found, `-32000` tool execution failure.
+
+`notifications/…` requests are answered `202` with an empty body **before** any
+version or method validation, because JSON-RPC forbids replying to a
+notification.
+
+### Tools
+
+`list_trees`, `get_tree`, `create_node`, `list_topics`, `get_graph_stats`,
+`list_approvals`, `list_cards`.
+
+```
+POST /api/v1/mcp
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_trees","arguments":{}}}
+```
+
+`tools/list` omits the optional `nextCursor` pagination field: the tool set fits
+one page.
+
 ---
 
 ## File Viewers (SPEC-PL-02)
@@ -1744,8 +1792,11 @@ actual code:
 5. **Context compiler:** `GET /api/v1/context/{node_id}` is registered but not
    documented in the README.
 
-6. **MCP endpoint:** `POST /api/v1/mcp` is registered but not documented in the
-   README.
+6. **MCP endpoint:** `POST /api/v1/mcp` is registered and is now documented in
+   the README (§ API Reference → MCP) as well as here — this entry is kept as
+   history: before DF-HERMES-CANOPY-10 the endpoint answered `-32601` for
+   `initialize`, so it was advertised in `entry_point` and absent from both the
+   README and any usable handshake.
 
 7. **Plugin endpoints:** `POST /api/v1/plugins/register`, instance lifecycle,
    and source retrieval are registered but not fully documented in the README.

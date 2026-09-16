@@ -97,19 +97,16 @@ var knownSubcommands = map[string]struct{}{
 	"topic":   {},
 }
 
+// exitUnknownSubcommand is the exit code for CLI misuse: an argument that is
+// neither a known subcommand nor a flag. It is distinct from 1 (a command that
+// ran and failed) so a script can tell "you typed it wrong" from "it failed".
+const exitUnknownSubcommand = 2
+
 // runCLI detects the subcommand from args and dispatches to the appropriate handler.
 // It should be called when os.Args[1] matches a known subcommand.
 func runCLI() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: canopyd <subcommand> [args...]\n")
-		fmt.Fprintf(os.Stderr, "Subcommands:\n")
-		fmt.Fprintf(os.Stderr, "  tree create <name> [--content <text>]  Create a new tree (root message required)\n")
-		fmt.Fprintf(os.Stderr, "  tree list                 List all trees\n")
-		fmt.Fprintf(os.Stderr, "  tree delete <id>          Delete a tree\n")
-		fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
-		fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
-		fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
-		fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
+		printCLIUsage()
 		os.Exit(1)
 	}
 
@@ -122,10 +119,34 @@ func runCLI() {
 	case "topic":
 		runTopicCmd(os.Args[2:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", sub)
-		fmt.Fprintf(os.Stderr, "Run 'canopyd' without arguments to see usage.\n")
-		os.Exit(1)
+		os.Exit(refuseUnknownSubcommand(sub))
 	}
+}
+
+// printCLIUsage documents the top-level CLI surface: every subcommand a reader
+// can actually run. main() prints it for an unrecognised first argument, and
+// runCLI prints it when it is somehow reached with no subcommand.
+func printCLIUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd <subcommand> [args...]\n")
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  tree create <name> [--content <text>]  Create a new tree (root message required)\n")
+	fmt.Fprintf(os.Stderr, "  tree list                 List all trees\n")
+	fmt.Fprintf(os.Stderr, "  tree delete <id>          Delete a tree\n")
+	fmt.Fprintf(os.Stderr, "  tree navigate <id>        Print tree structure as indented text\n")
+	fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
+	fmt.Fprintf(os.Stderr, "  session associations-backfill [flags]  Recompute association metadata for imported sessions\n")
+	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
+	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
+}
+
+// refuseUnknownSubcommand reports an unrecognised first argument and returns
+// the exit code main() must use. It never starts a server: a typo used to fall
+// through to server mode and boot canopyd against the live database
+// (DF-HERMES-CANOPY-10).
+func refuseUnknownSubcommand(arg string) int {
+	fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", arg)
+	printCLIUsage()
+	return exitUnknownSubcommand
 }
 
 // runTreeCmd dispatches tree sub-subcommands.
@@ -858,10 +879,19 @@ func wantsServeHelp(args []string) bool {
 
 // printServerUsage documents the env-only server configuration. It is the
 // custom flag.Usage for server mode and the output of `canopyd serve --help`.
+// It also lists the CLI subcommands: without them a reader of `canopyd --help`
+// never learns that the binary has a command line at all (DF-HERMES-CANOPY-10).
 func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: canopyd [serve] [flags]\n\n")
 	fmt.Fprintf(os.Stderr, "Server mode (default). Configuration is environment-based — see\n")
 	fmt.Fprintf(os.Stderr, "docs/INTEGRATION.md §4 and README \"Environment Variables\".\n\n")
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode)\n")
+	fmt.Fprintf(os.Stderr, "  tree <subcmd> [args...]   Tree CRUD from the command line (see `canopyd tree --help`)\n")
+	fmt.Fprintf(os.Stderr, "  session <subcmd> [flags]  Import Hermes sessions from state.db (see `canopyd session --help`)\n")
+	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection proposals + config (see `canopyd topic --help`)\n\n")
+	fmt.Fprintf(os.Stderr, "The tree/session/topic subcommands are HTTP clients of a running canopyd;\n")
+	fmt.Fprintf(os.Stderr, "they target CANOPY_SERVER_URL (default %s).\n\n", defaultServerURL)
 	fmt.Fprintf(os.Stderr, "Flags:\n")
 	fmt.Fprintf(os.Stderr, "  -version                print version and exit\n")
 	fmt.Fprintf(os.Stderr, "  -relay-mode             air_gapped, self_hosted, or saas (default air_gapped)\n")

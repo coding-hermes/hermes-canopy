@@ -17,26 +17,51 @@ import (
 
 // runTopicCmd dispatches topic sub-subcommands.
 func runTopicCmd(args []string) {
+	os.Exit(runTopicCmdE(args))
+}
+
+// runTopicCmdE is runTopicCmd without the process exit so tests can assert exit
+// codes. `canopyd topic --help` / `-h` prints usage and returns 0; `canopyd
+// topic` with no arguments returns 1; only a genuinely unknown topic
+// subcommand returns nonzero (DF-HERMES-CANOPY-10).
+func runTopicCmdE(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: canopyd topic <detect|proposals|config> [flags]\n")
-		os.Exit(1)
+		printTopicUsage()
+		return 1
 	}
 
 	sub := args[0]
 	rest := args[1:]
 
+	if sub == "-h" || sub == "--help" {
+		printTopicUsage()
+		return 0
+	}
+
 	switch sub {
 	case "detect":
-		os.Exit(topicDetectE(rest))
+		return topicDetectE(rest)
 	case "proposals":
-		os.Exit(topicProposalsE(rest))
+		return topicProposalsE(rest)
 	case "config":
-		os.Exit(topicConfigE(rest))
+		return topicConfigE(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown topic subcommand: %s\n", sub)
 		fmt.Fprintf(os.Stderr, "Available: detect, proposals, config\n")
-		os.Exit(1)
+		return 1
 	}
+}
+
+// printTopicUsage documents the topic subcommands. It is printed by
+// `canopyd topic --help` (exit 0) and by a bare `canopyd topic` (exit 1).
+func printTopicUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd topic <detect|proposals|config> [flags]\n\n")
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  detect --tree <uuid> --node <uuid>     Explain how a node would be evaluated\n")
+	fmt.Fprintf(os.Stderr, "  proposals --tree <uuid>                Show detection config + pending-proposal guidance\n")
+	fmt.Fprintf(os.Stderr, "  config --tree <uuid> [flags]           View or update per-tree detection config\n\n")
+	fmt.Fprintf(os.Stderr, "These are HTTP clients of a running canopyd and target CANOPY_SERVER_URL\n")
+	fmt.Fprintf(os.Stderr, "(default %s).\n", defaultServerURL)
 }
 
 // topicDetectE previews a detection proposal for a node. It returns an exit

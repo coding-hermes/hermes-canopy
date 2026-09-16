@@ -367,6 +367,61 @@ resolved per node:
 | `GET` | `/health` | Health check |
 | `GET` | `/metrics` | Prometheus metrics (if METRICS_ENABLED=true) |
 
+### MCP (Model Context Protocol)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/mcp` | JSON-RPC 2.0 MCP endpoint — `initialize`, notifications, `ping`, `tools/list`, `tools/call` |
+
+The MCP endpoint speaks JSON-RPC 2.0 over HTTP POST at
+`POST /api/v1/mcp` (a trailing slash is accepted too). It requires the **same
+JWT Bearer token as every other `/api/v1` route** (`Authorization: Bearer
+<jwt>`) — it is mounted inside the authenticated group, not public. The
+endpoint is **stateless**: it issues no session id, `initialize` is not
+required before `tools/list`, and a client may reconnect without
+re-initializing.
+
+Handshake (`$TOKEN` is a dev JWT from `canopyd serve` startup output — see
+§ Authentication (dev mode)):
+
+```bash
+# 1. initialize — negotiate a protocol revision
+curl -s -X POST http://localhost:8080/api/v1/mcp \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+# 200 {"jsonrpc":"2.0","id":1,"result":{
+#        "protocolVersion":"2025-06-18",
+#        "capabilities":{"tools":{"listChanged":false}},
+#        "serverInfo":{"name":"canopyd-canopy","version":"<build version>"}}}
+
+# 2. notifications/initialized — a notification: HTTP 202 with an EMPTY body
+curl -s -i -X POST http://localhost:8080/api/v1/mcp \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+# HTTP/1.1 202 Accepted   (no body — a notification never gets an error object)
+
+# 3. tools/list — the 7 tools this server implements
+curl -s -X POST http://localhost:8080/api/v1/mcp \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+Protocol revision negotiation: `protocolVersion` echoes the client's request
+when the server supports it (`2025-06-18`, `2025-03-26`, `2024-11-05`);
+anything else is answered with the server's **newest** supported revision and
+the client decides whether it can continue. `ping` answers `{}`; any method
+this endpoint does not implement answers `-32601` (for example
+`resources/list`); a non-object `params` answers `-32602`.
+
+Tools: `list_trees`, `get_tree`, `create_node`, `list_topics`,
+`get_graph_stats`, `list_approvals`, `list_cards` — invoked with
+`{"method":"tools/call","params":{"name":"<tool>","arguments":{…}}}`.
+The revision reported by the handshake is the MCP spec revision, not the build
+version; `serverInfo.version` is the binary's build version, identical to
+`canopyd -version`.
+
+Full request/response contract: [docs/API.md § MCP](docs/API.md#mcp-model-context-protocol).
+
 ## Deployment
 
 ### Stale deployments: hourly check + operator recovery

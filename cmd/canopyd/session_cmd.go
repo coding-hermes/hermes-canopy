@@ -20,9 +20,21 @@ var defaultOwnerID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 // runSessionCmd dispatches session sub-subcommands.
 func runSessionCmd(args []string) {
+	os.Exit(runSessionCmdE(args))
+}
+
+// runSessionCmdE is runSessionCmd without the process exit so tests can assert
+// exit codes. `canopyd session --help` / `-h` prints usage and returns 0;
+// `canopyd session` with no arguments returns 1; only a genuinely unknown
+// session subcommand returns nonzero (DF-HERMES-CANOPY-10).
+func runSessionCmdE(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: canopyd session <import> [flags...]\n")
-		os.Exit(1)
+		printSessionUsage()
+		return 1
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		printSessionUsage()
+		return 0
 	}
 	switch args[0] {
 	case "import":
@@ -32,8 +44,21 @@ func runSessionCmd(args []string) {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown session subcommand: %s\n", args[0])
 		fmt.Fprintf(os.Stderr, "Available: import, associations-backfill\n")
-		os.Exit(1)
+		return 1
 	}
+	return 0
+}
+
+// printSessionUsage documents the session subcommands. It is printed by
+// `canopyd session --help` (exit 0) and by a bare `canopyd session` (exit 1).
+func printSessionUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: canopyd session <import|associations-backfill> [flags...]\n\n")
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  import                  Import Hermes sessions from state.db into Canopy trees\n")
+	fmt.Fprintf(os.Stderr, "  associations-backfill   Recompute association metadata for already-imported sessions\n\n")
+	fmt.Fprintf(os.Stderr, "Both read $HOME/.hermes/state.db (override with --db) and write to the\n")
+	fmt.Fprintf(os.Stderr, "PostgreSQL database configured by DB_*/CANOPY_DB_URL — they are in-process\n")
+	fmt.Fprintf(os.Stderr, "importers, not HTTP clients of a running canopyd.\n")
 }
 
 // sessionImport imports new Hermes sessions from state.db into Canopy
