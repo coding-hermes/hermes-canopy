@@ -164,6 +164,14 @@ func (r *PGNodeRepo) GetAncestors(ctx context.Context, nodeID uuid.UUID) ([]Node
 // GetSubtree returns all descendants of rootID up to maxDepth levels
 // below it. maxDepth == 0 means "unbounded" — caller is responsible
 // for safety on large subtrees.
+//
+// Each node is returned AT MOST ONCE (GAP-073): a node with N active
+// incoming edges is reachable through N distinct paths, and the recursive
+// walk below yields it once per path (each copy carrying a different depth).
+// The duplicates carry identical node columns, so they are collapsed in the
+// final SELECT. Depth semantics stay owned by the CTE — the DISTINCT ON
+// subquery never sees the depth column, so maxDepth still bounds the walk
+// itself rather than the returned rows.
 func (r *PGNodeRepo) GetSubtree(ctx context.Context, rootID uuid.UUID, maxDepth int) ([]Node, error) {
 	if maxDepth < 0 {
 		maxDepth = 0
@@ -186,7 +194,7 @@ func (r *PGNodeRepo) GetSubtree(ctx context.Context, rootID uuid.UUID, maxDepth 
               AND sub.depth < 10000
         )
         SELECT `+nodeColumns+`
-        FROM sub
+        FROM (SELECT DISTINCT ON (id) `+nodeColumns+` FROM sub) deduped
         ORDER BY sequence_num ASC`, rootID, maxDepth)
 	if err != nil {
 		return nil, fmt.Errorf("db: select subtree: %w", err)

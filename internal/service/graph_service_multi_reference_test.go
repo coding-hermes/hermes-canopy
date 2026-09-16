@@ -244,6 +244,104 @@ func TestPL06P5_GetSubtree_PlainReplyEdgeUnaffected(t *testing.T) {
 	}
 }
 
+// TestGAP073_GetSubtree_UniqueNodeRows is the service-seam regression for
+// GAP-073: the subtree read must hand the API ONE row per node, not one per
+// incoming path. With three reference edges into the reply, the reply — and
+// every node below it — was emitted once per path (7 rows for 5 nodes).
+//
+// The edge payload is pinned too: one row per ACTIVE edge (3 display/reply
+// edges + 3 reference edges), no duplicate edge ids, so a dedupe that
+// collapsed edges as well would fail here.
+func TestGAP073_GetSubtree_UniqueNodeRows(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	ctx := context.Background()
+
+	treeID := pl06P5Tree(t, pool)
+	root := pl06P5Node(t, pool, treeID, nil, db.ParentModeLineage, "Root")
+	sourceA := pl06P5Node(t, pool, treeID, &root, db.ParentModeLineage, "Message A")
+	sourceB := pl06P5Node(t, pool, treeID, &root, db.ParentModeLineage, "Message B")
+	sourceC := pl06P5Node(t, pool, treeID, &root, db.ParentModeLineage, "Message C")
+	reply := pl06P5Node(t, pool, treeID, &sourceA, db.ParentModeMultiReference, "Agent reply")
+
+	pl06P5LineageEdge(t, pool, treeID, root, sourceA, 1)
+	pl06P5LineageEdge(t, pool, treeID, root, sourceB, 2)
+	pl06P5LineageEdge(t, pool, treeID, root, sourceC, 3)
+
+	edgeRepo := db.NewPGEdgeRepo(pool)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	if _, err := edgeRepo.CreateReferenceSet(ctx, tx, db.CreateReferenceSetInput{
+		TreeID:         treeID,
+		TargetID:       reply,
+		OrderedSources: []uuid.UUID{sourceA, sourceB, sourceC},
+	}); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("CreateReferenceSet: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit reference set: %v", err)
+	}
+
+	svc := NewGraphServiceImpl(db.NewPGNodeRepo(pool), edgeRepo)
+	result, err := svc.GetSubtree(ctx, root, 0)
+	if err != nil {
+		t.Fatalf("GetSubtree: %v", err)
+	}
+
+	// One row per node: 5 active nodes, and the 3-source reply must not triple.
+	const wantNodes = 5
+	if len(result.Nodes) != wantNodes {
+		t.Errorf("GAP-073: subtree returned %d node rows, want %d (one per node)",
+			len(result.Nodes), wantNodes)
+	}
+	nodeCounts := make(map[uuid.UUID]int, len(result.Nodes))
+	for _, n := range result.Nodes {
+		nodeCounts[n.ID]++
+	}
+	if len(nodeCounts) != wantNodes {
+		t.Errorf("GAP-073: subtree returned %d rows for %d unique node ids",
+			len(result.Nodes), len(nodeCounts))
+	}
+	for _, want := range []uuid.UUID{root, sourceA, sourceB, sourceC, reply} {
+		if got := nodeCounts[want]; got != 1 {
+			t.Errorf("GAP-073: node %s returned %d times, want exactly 1", want, got)
+		}
+	}
+
+	// Edge payload unchanged: one row per active edge, no duplicates.
+	const wantEdges = 6 // 3 display/reply edges + 3 reference edges
+	if len(result.Edges) != wantEdges {
+		t.Errorf("GAP-073: subtree returned %d edge rows, want %d", len(result.Edges), wantEdges)
+	}
+	edgeIDs := make(map[uuid.UUID]int, len(result.Edges))
+	for _, e := range result.Edges {
+		edgeIDs[e.ID]++
+	}
+	if len(edgeIDs) != len(result.Edges) {
+		t.Errorf("edge rows are not unique: %d rows for %d edge ids", len(result.Edges), len(edgeIDs))
+	}
+	for id, count := range edgeIDs {
+		if count != 1 {
+			t.Errorf("edge %s returned %d times, want 1", id, count)
+		}
+	}
+
+	// The three reference edges into the reply are all still present, exactly
+	// once each — the multi-parent input the dedupe must not lose.
+	refs := 0
+	for _, e := range result.Edges {
+		if e.TargetID == reply && e.EdgeType == db.EdgeTypeReference {
+			refs++
+		}
+	}
+	if refs != 3 {
+		t.Errorf("subtree reported %d reference edges into the reply, want 3", refs)
+	}
+}
+
 // TestPL06P5_DecodeEdgeMetadata_EmptySpellings covers the column shapes the
 // decoder must treat identically (no DB): NULL/absent bytes, the JSON `null`
 // literal, and the schema's `{}` default. A malformed value must ERROR rather
