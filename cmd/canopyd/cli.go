@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -171,17 +173,132 @@ func printTreeUsage() {
 	fmt.Fprintf(os.Stderr, "  list                              List all trees\n")
 	fmt.Fprintf(os.Stderr, "  delete <id>                       Delete a tree\n")
 	fmt.Fprintf(os.Stderr, "  navigate <id>                     Print tree structure as indented text\n")
+	fmt.Fprintf(os.Stderr, "\nThese commands are HTTP clients of a running canopyd and target\n")
+	fmt.Fprintf(os.Stderr, "CANOPY_SERVER_URL (default %s). HTTP_ADDR and DB_* configure the\n", defaultServerURL)
+	fmt.Fprintf(os.Stderr, "server process; set CANOPY_SERVER_URL to the API you mean to change.\n")
 }
 
 // --- HTTP helpers --------------------------------------------------------------
 
-// serverURL reads CANOPY_SERVER_URL from the environment, defaulting to
-// http://localhost:8091.
-func serverURL() string {
-	if u := os.Getenv("CANOPY_SERVER_URL"); u != "" {
-		return strings.TrimRight(u, "/")
+// serverOnlyEnvVars names the environment variables that configure the canopyd
+// SERVER process — its HTTP listen address and its PostgreSQL connection. They
+// describe where a server runs, never where an API can be reached from a
+// client, so a CLI run with one of them set and no CANOPY_SERVER_URL is
+// ambiguous: the CLI used to fall back to defaultServerURL, which silently
+// wrote into whatever instance happened to be live on :8091
+// (DF-HERMES-CANOPY-6). Only the NAMES are ever reported — DB_PASSWORD would
+// leak if values were echoed.
+var serverOnlyEnvVars = []string{
+	"HTTP_ADDR",
+	"CANOPY_DB_URL",
+	"DB_HOST",
+	"DB_PORT",
+	"DB_USER",
+	"DB_PASSWORD",
+	"DB_NAME",
+	"DB_SCHEMA",
+	"DB_SSLMODE",
+}
+
+// ErrCLITargetUnresolved wraps every resolveServerURL failure so callers (and
+// tests) can distinguish a target-configuration refusal from a transport error
+// without string matching.
+var ErrCLITargetUnresolved = errors.New("unresolved CLI API target")
+
+// cliTargetError is a target refusal carrying an actionable, possibly
+// multi-line message. It unwraps to ErrCLITargetUnresolved, so callers match it
+// with errors.Is instead of inspecting the text.
+type cliTargetError struct{ msg string }
+
+func (e *cliTargetError) Error() string { return e.msg }
+
+func (e *cliTargetError) Unwrap() error { return ErrCLITargetUnresolved }
+
+// cliTargetRefusal builds a refusal whose lines are joined for stderr.
+func cliTargetRefusal(lines ...string) error {
+	return &cliTargetError{msg: ErrCLITargetUnresolved.Error() + ": " + strings.Join(lines, "\n")}
+}
+
+// resolveServerURL resolves the API base URL the CLI must talk to. Rules:
+//
+//   - An explicit non-empty CANOPY_SERVER_URL wins — even when DB_*/HTTP_ADDR
+//     are set; that is the documented isolation path. It must be a valid
+//     absolute http(s) URL with a host, and a malformed explicit value fails
+//     closed instead of falling back to the default target.
+//   - With no explicit value, any server-only setting (HTTP_ADDR or
+//     DB_* / CANOPY_DB_URL) is refused: the CLI is an HTTP client and cannot
+//     derive an API address from a listen address or a database DSN.
+//   - With no relevant configuration at all, the historical default is kept.
+//
+// It never exits and never contacts the network: help paths and callers that
+// want to render their own message stay in control of the process.
+func resolveServerURL(getenv func(string) string) (string, error) {
+	if raw := strings.TrimSpace(getenv("CANOPY_SERVER_URL")); raw != "" {
+		target := strings.TrimRight(raw, "/")
+		if err := validateServerURL(target); err != nil {
+			return "", cliTargetRefusal(
+				fmt.Sprintf("invalid CANOPY_SERVER_URL %s: %v", strconv.Quote(redactURLCredentials(raw)), err),
+				fmt.Sprintf("the CLI needs an absolute http(s) URL with a host (e.g. CANOPY_SERVER_URL=%s) and refuses to fall back to %s, which would target whichever instance is live there", defaultServerURL, defaultServerURL),
+			)
+		}
+		return target, nil
 	}
-	return defaultServerURL
+
+	if set := serverOnlyEnvSet(getenv); len(set) > 0 {
+		return "", cliTargetRefusal(
+			fmt.Sprintf("ambiguous API target — %s set without CANOPY_SERVER_URL", strings.Join(set, ", ")),
+			"The canopyd CLI is an HTTP client: it talks to a running canopyd API server and cannot derive that address from HTTP_ADDR (a listen address for `canopyd serve`) or from DB_*/CANOPY_DB_URL (PostgreSQL settings).",
+			fmt.Sprintf("Set CANOPY_SERVER_URL to the API base URL of the instance you mean to target, e.g. `CANOPY_SERVER_URL=%s canopyd tree list`.", defaultServerURL),
+			"To isolate a scratch instance, start a second canopyd with its own HTTP_ADDR and DB_* settings, then point CANOPY_SERVER_URL at it (see README \"CLI\").",
+		)
+	}
+
+	return defaultServerURL, nil
+}
+
+// validateServerURL rejects anything that is not an absolute http(s) URL with
+// a host. The parse error is deliberately not propagated: url.Parse echoes the
+// offending URL text, which may contain credentials. Hostname() (not Host) is
+// checked so a host-less ":8091" is refused too.
+func validateServerURL(target string) error {
+	u, err := url.Parse(target)
+	if err != nil {
+		return errors.New("not a valid URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme %q is neither http nor https", u.Scheme)
+	}
+	if u.Hostname() == "" {
+		return errors.New("missing host")
+	}
+	return nil
+}
+
+// serverOnlyEnvSet returns the names (never the values) of the server-only
+// configuration variables that are set in getenv.
+func serverOnlyEnvSet(getenv func(string) string) []string {
+	var set []string
+	for _, name := range serverOnlyEnvVars {
+		if strings.TrimSpace(getenv(name)) != "" {
+			set = append(set, name)
+		}
+	}
+	return set
+}
+
+// redactURLCredentials replaces userinfo in a URL-shaped string with "***" so
+// an error message can quote the value without exposing a password.
+func redactURLCredentials(raw string) string {
+	i := strings.Index(raw, "://")
+	if i < 0 {
+		return raw
+	}
+	rest := raw[i+3:]
+	at := strings.IndexByte(rest, '@')
+	if at < 0 || strings.Contains(rest[:at], "/") {
+		return raw
+	}
+	return raw[:i+3] + "***@" + rest[at+1:]
 }
 
 // authHeader returns an Authorization: Bearer header value if CANOPY_TOKEN is
@@ -198,16 +315,20 @@ func authHeader() string {
 // httpClient is a shared HTTP client with a reasonable timeout.
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
-// apiRequest makes an HTTP request to the canopyd API and returns the parsed
-// response. On 4xx/5xx, it prints the error from the response body and exits.
-// On success, it returns the raw body bytes for the caller to unmarshal.
-func apiRequest(method, path string, body io.Reader) ([]byte, int) {
-	url := serverURL() + path
-
-	req, err := http.NewRequest(method, url, body)
+// apiRequestE makes an HTTP request to the canopyd API and returns the parsed
+// response body plus its status code. Every failure — an unresolvable or
+// invalid CLI target, request build, transport, body read, and HTTP >= 400
+// (whose error payload is rendered exactly as before) — is returned as an
+// error so callers report it and return a nonzero exit code of their own.
+func apiRequestE(method, path string, body io.Reader) ([]byte, int, error) {
+	target, err := resolveServerURL(os.Getenv)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to build request: %v\n", err)
-		os.Exit(1)
+		return nil, 0, err
+	}
+
+	req, err := http.NewRequest(method, target+path, body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to build request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -217,33 +338,29 @@ func apiRequest(method, path string, body io.Reader) ([]byte, int) {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to reach server at %s: %v\n", serverURL(), err)
-		os.Exit(1)
+		return nil, 0, fmt.Errorf("failed to reach server at %s: %w", target, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to read response: %v\n", err)
-		os.Exit(1)
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
 		var apiErr apiErrorResponse
 		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error.Code != "" {
-			fmt.Fprintf(os.Stderr, "Error: [%s] %s\n", apiErr.Error.Code, apiErr.Error.Message)
-		} else {
-			// Fallback: print status and raw body (trimmed).
-			raw := strings.TrimSpace(string(respBody))
-			if len(raw) > 500 {
-				raw = raw[:500] + "..."
-			}
-			fmt.Fprintf(os.Stderr, "Error: HTTP %d\n%s\n", resp.StatusCode, raw)
+			return nil, resp.StatusCode, fmt.Errorf("[%s] %s", apiErr.Error.Code, apiErr.Error.Message)
 		}
-		os.Exit(1)
+		// Fallback: print status and raw body (trimmed).
+		raw := strings.TrimSpace(string(respBody))
+		if len(raw) > 500 {
+			raw = raw[:500] + "..."
+		}
+		return nil, resp.StatusCode, fmt.Errorf("HTTP %d\n%s", resp.StatusCode, raw)
 	}
 
-	return respBody, resp.StatusCode
+	return respBody, resp.StatusCode, nil
 }
 
 // --- Tree subcommands ----------------------------------------------------------
@@ -339,7 +456,11 @@ func treeCreateE(args []string) int {
 		return 1
 	}
 
-	respBody, _ := apiRequest(http.MethodPost, "/api/v1/trees", bytes.NewReader(reqBody))
+	respBody, _, err := apiRequestE(http.MethodPost, "/api/v1/trees", bytes.NewReader(reqBody))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var tree treeCreateResponse
 	if err := json.Unmarshal(respBody, &tree); err != nil {
@@ -359,7 +480,11 @@ func treeListE(args []string) int {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd tree list\n")
 		return 0
 	}
-	respBody, _ := apiRequest(http.MethodGet, "/api/v1/trees", nil)
+	respBody, _, err := apiRequestE(http.MethodGet, "/api/v1/trees", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var list listTreesResponse
 	if err := json.Unmarshal(respBody, &list); err != nil {
@@ -396,7 +521,11 @@ func treeDeleteE(args []string) int {
 	}
 	id := args[0]
 
-	_, status := apiRequest(http.MethodDelete, "/api/v1/trees/"+id, nil)
+	_, status, err := apiRequestE(http.MethodDelete, "/api/v1/trees/"+id, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	if status == http.StatusNoContent {
 		fmt.Printf("Tree %s deleted successfully.\n", id)
@@ -418,27 +547,35 @@ func treeNavigateE(args []string) int {
 	treeID := args[0]
 
 	// Step 1: Fetch tree details to get root_node_id.
-	respBody, _ := apiRequest(http.MethodGet, "/api/v1/trees/"+treeID, nil)
+	respBody, _, err := apiRequestE(http.MethodGet, "/api/v1/trees/"+treeID, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var detail treeDetail
 	if err := json.Unmarshal(respBody, &detail); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse tree detail: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if detail.RootNodeID == "" {
 		fmt.Fprintf(os.Stderr, "Error: tree has no root node\n")
-		os.Exit(1)
+		return 1
 	}
 
 	// Step 2: Fetch subtree.
 	subtreePath := fmt.Sprintf("/api/v1/graph/trees/%s/subtree/%s", treeID, detail.RootNodeID)
-	respBody, _ = apiRequest(http.MethodGet, subtreePath, nil)
+	respBody, _, err = apiRequestE(http.MethodGet, subtreePath, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var result graphQueryResult
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse subtree: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if len(result.Nodes) == 0 {
@@ -732,6 +869,3 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "  JWT_SECRET      HS256 signing secret (default dev-secret-change-me)\n")
 	fmt.Fprintf(os.Stderr, "  LOG_LEVEL, LOG_FORMAT, METRICS_ENABLED, CORS_ORIGIN\n")
 }
-
-// Ensure net/http is used (compile-time check).
-var _ = errors.New

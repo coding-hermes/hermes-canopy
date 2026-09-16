@@ -159,6 +159,16 @@ export CANOPY_TOKEN=your-jwt-token
 ./bin/canopyd tree delete <tree-id>
 ```
 
+The CLI is an **HTTP client** of an already-running canopyd: `CANOPY_SERVER_URL`
+is the only setting that selects its destination. `HTTP_ADDR` (a listen address)
+and `DB_*` / `CANOPY_DB_URL` (PostgreSQL settings) configure a *server* process and
+never redirect the CLI — with any of them set and no `CANOPY_SERVER_URL`, the CLI
+fails before sending a request rather than guessing. An explicit
+`CANOPY_SERVER_URL` always wins (that is the supported isolation path), and a
+malformed one also fails before any request. `session import` /
+`session associations-backfill` are the exception: they run in-process against
+PostgreSQL and do use `DB_*` / `CANOPY_DB_URL`.
+
 Server configuration is **environment-only** — there are no server flags
 (only `-version`). See the "Environment Variables" table in the README and
 §4 above. `canopyd serve --help` lists the key variables.
@@ -902,5 +912,5 @@ returns HTTP 201 (not 503).
 | `METRICS_ENABLED`     | `false`               | Enable Prometheus metrics on `/metrics`  |
 | `VITE_API_URL`        | `http://localhost:8091`| Frontend proxy target (frontend only)   |
 | `VITE_DEV_JWT`        | (hardcoded dev token) | Dev JWT for proxy auth (frontend only)   |
-| `CANOPY_SERVER_URL`   | `http://localhost:8091`| CLI server URL (CLI only)               |
+| `CANOPY_SERVER_URL`   | `http://localhost:8091`| CLI API base URL (CLI only). An explicit value wins over `HTTP_ADDR`/`DB_*`; with those set and no URL the CLI fails before any request (§4) |
 | `CANOPY_TOKEN`        | —                     | CLI auth token (CLI only)                |

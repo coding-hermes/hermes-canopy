@@ -76,10 +76,19 @@ func TestWantsServeHelp(t *testing.T) {
 	}
 }
 
+// TestCLIDefaultServerURL asserts an env-clean CLI keeps the historical
+// default API target (backward compatibility for no-config local use).
 func TestCLIDefaultServerURL(t *testing.T) {
-	t.Setenv("CANOPY_SERVER_URL", "")
-	if got := serverURL(); got != "http://localhost:8091" {
-		t.Fatalf("serverURL() = %q, want http://localhost:8091", got)
+	clearCLITargetEnv(t)
+	got, err := resolveServerURL(os.Getenv)
+	if err != nil {
+		t.Fatalf("resolveServerURL() error = %v, want nil", err)
+	}
+	if got != "http://localhost:8091" {
+		t.Fatalf("resolveServerURL() = %q, want http://localhost:8091", got)
+	}
+	if got != defaultServerURL {
+		t.Fatalf("resolveServerURL() = %q, want defaultServerURL %q", got, defaultServerURL)
 	}
 }
 

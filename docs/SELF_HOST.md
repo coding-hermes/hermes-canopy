@@ -195,7 +195,7 @@ The `canopyd` binary doubles as a CLI client for remote servers. These are only 
 
 | Variable            | Default                      | Description                            |
 |---------------------|------------------------------|----------------------------------------|
-| `CANOPY_SERVER_URL` | `http://localhost:8080`      | Base URL of the Canopy API server. The quick-start / compose flows in this guide serve the API on host port `8091` — set `CANOPY_SERVER_URL=http://localhost:8091` for CLI commands against them. |
+| `CANOPY_SERVER_URL` | `http://localhost:8080`      | Base URL of the Canopy API server. The quick-start / compose flows in this guide serve the API on host port `8091` — set `CANOPY_SERVER_URL=http://localhost:8091` for CLI commands against them. The CLI is an HTTP client: `HTTP_ADDR` and `DB_*` configure a *server* process and never redirect the CLI — with any of them set and no `CANOPY_SERVER_URL`, the CLI exits nonzero before sending a request instead of guessing a destination. |
 | `CANOPY_TOKEN`      | *(none)*                     | Bearer token for authenticated requests. Without it, the CLI sends requests without auth (dev mode). |
 
 ### Example: Full Production Config

@@ -27,11 +27,11 @@ func runTopicCmd(args []string) {
 
 	switch sub {
 	case "detect":
-		topicDetect(rest)
+		os.Exit(topicDetectE(rest))
 	case "proposals":
-		topicProposals(rest)
+		os.Exit(topicProposalsE(rest))
 	case "config":
-		topicConfig(rest)
+		os.Exit(topicConfigE(rest))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown topic subcommand: %s\n", sub)
 		fmt.Fprintf(os.Stderr, "Available: detect, proposals, config\n")
@@ -39,8 +39,9 @@ func runTopicCmd(args []string) {
 	}
 }
 
-// topicDetect previews a detection proposal for a node.
-func topicDetect(args []string) {
+// topicDetectE previews a detection proposal for a node. It returns an exit
+// code instead of exiting so tests can assert it.
+func topicDetectE(args []string) int {
 	fs := flag.NewFlagSet("topic detect", flag.ExitOnError)
 	treeID := fs.String("tree", "", "tree UUID")
 	nodeID := fs.String("node", "", "node UUID")
@@ -48,7 +49,7 @@ func topicDetect(args []string) {
 
 	if *treeID == "" || *nodeID == "" {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd topic detect --tree <uuid> --node <uuid>\n")
-		os.Exit(1)
+		return 1
 	}
 
 	// The preview endpoint is not exposed as a REST route; detection runs
@@ -60,17 +61,20 @@ func topicDetect(args []string) {
 	// we print guidance to use the proposals list instead.
 	fmt.Fprintf(os.Stderr, "Detection preview is server-side only. Use 'canopyd topic proposals --tree %s' to see pending proposals.\n", *treeID)
 	fmt.Fprintf(os.Stderr, "Node %s will be evaluated on creation; check proposals above.\n", *nodeID)
+	return 0
 }
 
-// topicProposals lists pending proposals for a tree.
-func topicProposals(args []string) {
+// topicProposalsE lists pending proposals for a tree. It returns an exit code
+// instead of exiting so tests can assert both the usage and the
+// target-refusal paths (DF-HERMES-CANOPY-6).
+func topicProposalsE(args []string) int {
 	fs := flag.NewFlagSet("topic proposals", flag.ExitOnError)
 	treeID := fs.String("tree", "", "tree UUID")
 	_ = fs.Parse(args)
 
 	if *treeID == "" {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd topic proposals --tree <uuid>\n")
-		os.Exit(1)
+		return 1
 	}
 
 	// Proposals are listed via the topics endpoint with a status filter,
@@ -78,12 +82,16 @@ func topicProposals(args []string) {
 	// For now, use the topic-detection config endpoint to verify the tree
 	// has detection enabled, then show guidance.
 	path := fmt.Sprintf("/api/v1/trees/%s/topic-detection", *treeID)
-	respBody, _ := apiRequest(http.MethodGet, path, nil)
+	respBody, _, err := apiRequestE(http.MethodGet, path, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var cfg detectionConfigCLIResponse
 	if err := json.Unmarshal(respBody, &cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse config: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Printf("Detection config for tree %s:\n", *treeID)
@@ -97,10 +105,13 @@ func topicProposals(args []string) {
 	fmt.Println("Use the HTTP API to confirm/dismiss proposals:")
 	fmt.Println("  POST /api/v1/topic-proposals/{id}/confirm")
 	fmt.Println("  POST /api/v1/topic-proposals/{id}/dismiss")
+	return 0
 }
 
-// topicConfig views or updates the per-tree detection configuration.
-func topicConfig(args []string) {
+// topicConfigE views or updates the per-tree detection configuration. It
+// returns an exit code instead of exiting so tests can assert the
+// target-refusal path on both the GET and the PUT helper.
+func topicConfigE(args []string) int {
 	fs := flag.NewFlagSet("topic config", flag.ExitOnError)
 	treeID := fs.String("tree", "", "tree UUID")
 	level := fs.String("level", "", "detection level: off|explicit_only|full")
@@ -110,7 +121,7 @@ func topicConfig(args []string) {
 
 	if *treeID == "" {
 		fmt.Fprintf(os.Stderr, "Usage: canopyd topic config --tree <uuid> [--level off|explicit_only|full] [--auto-create] [--always-ask]\n")
-		os.Exit(1)
+		return 1
 	}
 
 	// If no update flags, just GET the config.
@@ -124,14 +135,18 @@ func topicConfig(args []string) {
 	if !set {
 		// GET mode.
 		path := fmt.Sprintf("/api/v1/trees/%s/topic-detection", *treeID)
-		respBody, _ := apiRequest(http.MethodGet, path, nil)
+		respBody, _, err := apiRequestE(http.MethodGet, path, nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 1
+		}
 		var cfg detectionConfigCLIResponse
 		if err := json.Unmarshal(respBody, &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to parse config: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		printTopicDetectionConfig(*treeID, cfg)
-		return
+		return 0
 	}
 
 	// PUT mode — build update body.
@@ -153,20 +168,25 @@ func topicConfig(args []string) {
 	reqBody, err := json.Marshal(updateBody)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to marshal request: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	path := fmt.Sprintf("/api/v1/trees/%s/topic-detection", *treeID)
-	respBody, _ := apiRequest(http.MethodPut, path, strings.NewReader(string(reqBody)))
+	respBody, _, err := apiRequestE(http.MethodPut, path, strings.NewReader(string(reqBody)))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 
 	var cfg detectionConfigCLIResponse
 	if err := json.Unmarshal(respBody, &cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to parse response: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Println("Detection config updated.")
 	printTopicDetectionConfig(*treeID, cfg)
+	return 0
 }
 
 // detectionConfigCLIResponse is the CLI representation of the config response.

@@ -65,6 +65,19 @@ cd frontend
 npm install
 npm run dev
 
+# CLI (separate terminal) — the CLI is an HTTP CLIENT of an already-running
+# canopyd, so it is configured with a URL, not with server settings:
+#   CANOPY_SERVER_URL  → the API base URL the CLI talks to (client setting)
+#   HTTP_ADDR / DB_*   → listen address + PostgreSQL of a SERVER process; they
+#                        never redirect the CLI.
+# Without CANOPY_SERVER_URL the CLI targets http://localhost:8091, and it
+# REFUSES to run when HTTP_ADDR/DB_* are set without an explicit URL: `tree
+# create` is a write, and the CLI will not guess which instance to write into.
+export CANOPY_SERVER_URL=http://localhost:8091   # the API you mean to change
+export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode)"
+./bin/canopyd tree create "My Tree" --content 'Hello from the CLI'
+./bin/canopyd tree list
+
 # Troubleshooting: "STALE BUILD" at startup
 # If canopyd refuses to start with `STALE BUILD: database schema is newer than
 # this binary's embedded migrations`, your database was created by a NEWER
@@ -466,6 +479,8 @@ METRICS_ENABLED=true \
 | `CONTEXT_MAX_REFS` | `5` | Max topic references (soft; hard cap is 2×) |
 | `CONTEXT_DEFAULT_BUDGET` | `8000` | Default token budget for context compilation |
 | `PLUGIN_MAX_SIZE` | `1048576` | Max plugin source size in bytes (1 MB) |
+| `CANOPY_SERVER_URL` | `http://localhost:8091` | **CLI only** — API base URL the `tree`/`topic` subcommands call; an explicit value wins over `DB_*`/`HTTP_ADDR`, and a malformed one fails before any request (see "CLI") |
+| `CANOPY_TOKEN` | *(unset)* | **CLI only** — Bearer token sent with each CLI request |
 
 ## Development
 
@@ -683,9 +698,36 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 
 ### CLI
 
+The `canopyd` binary doubles as an API client: the `tree` and `topic`
+subcommands operate on a **running** canopyd over HTTP. Keep the two kinds of
+settings apart — a client setting names the API to talk to, a server setting
+configures a canopyd process:
+
+| Setting | Kind | Meaning |
+|---------|------|---------|
+| `CANOPY_SERVER_URL` | client | API base URL the CLI talks to (default `http://localhost:8091`) |
+| `CANOPY_TOKEN` | client | Bearer token sent with each request |
+| `HTTP_ADDR` | server | listen address of a `canopyd serve` process — never a CLI destination |
+| `DB_*`, `CANOPY_DB_URL` | server | PostgreSQL connection of a `canopyd serve` process — never a CLI destination |
+
+The CLI enforces four rules (DF-HERMES-CANOPY-6):
+
+1. An explicit `CANOPY_SERVER_URL` always wins — including while `DB_*` and
+   `HTTP_ADDR` are set. That is the supported way to point the CLI at a scratch
+   instance. It must be an absolute `http://` or `https://` URL with a host.
+2. A malformed explicit value fails **before any request is sent**; the CLI never
+   falls back to the default target.
+3. With no `CANOPY_SERVER_URL` but any `HTTP_ADDR` / `DB_*` / `CANOPY_DB_URL` set,
+   the CLI refuses to run and tells you to set `CANOPY_SERVER_URL`. `tree create`
+   is a write and `tree list` reads a specific instance — guessing the destination
+   is how a "scratch" run ends up writing into the live instance. `HTTP_ADDR` is a
+   *listen* address, not an API URL, and `DB_PORT` says nothing about where the API
+   is, so neither can be used to derive one.
+4. With nothing configured, the historical default `http://localhost:8091` still
+   applies. `-h` / `--help` never validates the target and never touches the network.
+
 ```bash
-# Interactive CLI (hermes canopy subcommand)
-# Requires CANOPY_SERVER_URL and CANOPY_TOKEN env vars
+# Against the dev server from the Quick Start (API on :8091)
 export CANOPY_SERVER_URL=http://localhost:8091
 export CANOPY_TOKEN=your-jwt-token
 
@@ -694,6 +736,25 @@ export CANOPY_TOKEN=your-jwt-token
 ./bin/canopyd tree navigate <tree-id>
 ./bin/canopyd tree delete <tree-id>
 ```
+
+```bash
+# Scratch target: address a SECOND, already-running canopyd instead of :8091.
+# Start it once (its own HTTP_ADDR and database), then give the CLI its URL.
+HTTP_ADDR=:8092 DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy \
+  DB_NAME=canopy_scratch ./bin/canopyd serve &
+
+CANOPY_SERVER_URL=http://localhost:8092 CANOPY_TOKEN=$TOKEN \
+  ./bin/canopyd tree create "Scratch tree" --content 'write target check'
+```
+
+> Setting `CANOPY_SERVER_URL` selects **which running instance** the CLI talks to;
+> it does not create, reset, or otherwise isolate that instance's data — start the
+> scratch server/database you want to target yourself.
+
+> `session import` and `session associations-backfill` are the exception: they run
+> in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly, plus
+> `--db` for the Hermes `state.db`), so they are configured like a server rather
+> than like an HTTP client.
 
 ## Monitoring
 
