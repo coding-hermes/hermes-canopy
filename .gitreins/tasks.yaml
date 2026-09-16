@@ -2368,3 +2368,16 @@ tasks:
   status: complete
   created_at: '2026-09-16T05:38:15.867414+00:00'
   completed_at: '2026-09-16T05:57:22.687081+00:00'
+- id: DF-HERMES-CANOPY-6
+  title: Reject ambiguous CLI API targets
+  criteria:
+  - CLI never silently targets localhost:8091 when HTTP_ADDR or DB_* settings are
+    supplied without CANOPY_SERVER_URL; fail nonzero before network with actionable
+    guidance. Explicit valid CANOPY_SERVER_URL wins; invalid targets fail without
+    fallback; env-clean default and help stay compatible. Isolated HTTP fixture regression
+    tests cover shared client paths and exit codes; README explains server/client
+    distinction and explicit target usage. Build, vet, CLI tests and lint pass; no
+    production mutation.
+  status: complete
+  created_at: '2026-09-16T22:53:45.497717+00:00'
+  completed_at: '2026-09-16T23:06:49.540452+00:00'
