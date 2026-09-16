@@ -2359,3 +2359,12 @@ tasks:
   status: complete
   created_at: '2026-09-16T03:01:06.404920+00:00'
   completed_at: '2026-09-16T03:46:48.329414+00:00'
+- id: GAP-073
+  title: Fix graph subtree duplicate node rows for multi-parent nodes
+  criteria:
+  - A subtree query returns each node id exactly once including multi-parent (multi_reference)
+    targets; DB-backed regression test proves unique-node-count == tree node count;
+    edge payload unchanged; existing graph/subtree tests green
+  status: complete
+  created_at: '2026-09-16T05:38:15.867414+00:00'
+  completed_at: '2026-09-16T05:57:22.687081+00:00'
