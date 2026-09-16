@@ -286,8 +286,13 @@ func serverOnlyEnvSet(getenv func(string) string) []string {
 	return set
 }
 
-// redactURLCredentials replaces userinfo in a URL-shaped string with "***" so
-// an error message can quote the value without exposing a password.
+// redactURLCredentials replaces the password in the userinfo of a URL-shaped
+// string with "***" so an error message can quote the value without exposing a
+// secret. Only the password is masked: the username and host stay readable for
+// diagnosis, matching how net/http renders a failed request in its own
+// url.Error (stripPassword), so both halves of one message agree. A bare
+// userinfo with no ":" (an opaque token used as a username) is masked whole —
+// there is no way to tell a token apart from a password.
 func redactURLCredentials(raw string) string {
 	i := strings.Index(raw, "://")
 	if i < 0 {
@@ -298,7 +303,11 @@ func redactURLCredentials(raw string) string {
 	if at < 0 || strings.Contains(rest[:at], "/") {
 		return raw
 	}
-	return raw[:i+3] + "***@" + rest[at+1:]
+	masked := "***"
+	if colon := strings.IndexByte(rest[:at], ':'); colon >= 0 {
+		masked = rest[:colon+1] + "***"
+	}
+	return raw[:i+3] + masked + rest[at:]
 }
 
 // authHeader returns an Authorization: Bearer header value if CANOPY_TOKEN is
@@ -328,7 +337,10 @@ func apiRequestE(method, path string, body io.Reader) ([]byte, int, error) {
 
 	req, err := http.NewRequest(method, target+path, body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to build request: %w", err)
+		// url.Parse echoes the offending URL in its error, so the target is
+		// redacted here too — a parse error must not be the one path that
+		// prints a password (DF-HERMES-CANOPY-6).
+		return nil, 0, fmt.Errorf("failed to build request for %s: %w", redactURLCredentials(target), err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -338,7 +350,9 @@ func apiRequestE(method, path string, body io.Reader) ([]byte, int, error) {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to reach server at %s: %w", target, err)
+		// The resolved target may carry userinfo; Go's own url.Error redacts it
+		// (net/http stripPassword) but this prefix must not print it verbatim.
+		return nil, 0, fmt.Errorf("failed to reach server at %s: %w", redactURLCredentials(target), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

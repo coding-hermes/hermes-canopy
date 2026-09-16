@@ -569,6 +569,71 @@ func TestCLITransportFailureRendersTarget(t *testing.T) {
 	}
 }
 
+// TestCLITransportFailureRedactsCredentials asserts no CLI error path can print
+// a URL password: with a credential-bearing explicit target, a transport
+// failure must name only the redacted target. The transport fails in-process
+// (failingTransport), so no socket is opened and no live server is required —
+// the point is the CLI's own message, not Go's dial error.
+func TestCLITransportFailureRedactsCredentials(t *testing.T) {
+	const (
+		rawTarget      = "http://user:pw@127.0.0.1:5999"
+		redactedTarget = "http://user:***@127.0.0.1:5999"
+	)
+	installFailingClient := func(t *testing.T) {
+		t.Helper()
+		old := httpClient
+		httpClient = &http.Client{
+			Transport: failingTransport{err: errors.New("dial tcp 127.0.0.1:5999: connect: connection refused")},
+		}
+		t.Cleanup(func() { httpClient = old })
+	}
+	// assertRedacted fails when a password survives anywhere in the message, in
+	// any rendering (user:pw, the bare pw@ suffix), and requires the redacted
+	// host to be visible so a message that simply omits the target cannot pass.
+	assertRedacted := func(t *testing.T, where, msg string) {
+		t.Helper()
+		for _, leak := range []string{"user:pw", "pw@"} {
+			if strings.Contains(msg, leak) {
+				t.Errorf("%s leaks a credential (%q present): %q", where, leak, msg)
+			}
+		}
+		if !strings.Contains(msg, redactedTarget) {
+			t.Errorf("%s does not name the redacted target %q: %q", where, redactedTarget, msg)
+		}
+	}
+
+	t.Run("returned error", func(t *testing.T) {
+		clearCLITargetEnv(t)
+		t.Setenv("CANOPY_SERVER_URL", rawTarget)
+		installFailingClient(t)
+
+		_, _, err := apiRequestE(http.MethodGet, "/api/v1/trees", nil)
+		if err == nil {
+			t.Fatal("apiRequestE error = nil, want a transport failure")
+		}
+		assertRedacted(t, "apiRequestE error", err.Error())
+		if !strings.Contains(err.Error(), "failed to reach server at "+redactedTarget) {
+			t.Errorf("error does not name the redacted target as the attempted server: %q", err.Error())
+		}
+	})
+
+	t.Run("cli stderr", func(t *testing.T) {
+		clearCLITargetEnv(t)
+		t.Setenv("CANOPY_SERVER_URL", rawTarget)
+		installFailingClient(t)
+
+		code, out := captureStderr(t, func() int { return runTreeCmdE([]string{"list"}) })
+
+		if code != 1 {
+			t.Errorf("exit = %d, want 1", code)
+		}
+		assertRedacted(t, "cli stderr", out)
+		if !strings.Contains(out, "connection refused") {
+			t.Errorf("stderr does not report the transport failure: %q", out)
+		}
+	})
+}
+
 // failingTransport fails every request in-process.
 type failingTransport struct{ err error }
 
