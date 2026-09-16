@@ -11,13 +11,19 @@
  * dots land on the same coordinate and read as the single fan-out dot in
  * the mockup — no separate "branch point" bookkeeping required.
  *
- * ReplyEdge / ForkEdge / SynthesisEdge are thin wrappers that pick a
- * `kind`; all geometry and colour lives in lib/canvasGeometry so it can be
- * unit-tested without a renderer.
+ * ReplyEdge / ForkEdge / SynthesisEdge / ReferenceEdge are thin wrappers
+ * that pick a `kind`; all geometry and colour lives in lib/canvasGeometry so
+ * it can be unit-tested without a renderer.
+ *
+ * `reference` (SPEC-PL-06 §7.2) additionally paints the edge's small `R#`
+ * midpoint label, honours the React Flow `markerEnd` the store attached (the
+ * §7.2 arrow at the target), and dims when the page reports a hover
+ * elsewhere in the convergence set.
  */
 
 import { memo } from 'react';
 import type { EdgeProps } from '@xyflow/react';
+import { palette } from '../../theme';
 import {
   connectorPath,
   connectorStyle,
@@ -38,6 +44,53 @@ interface ConnectorData {
   dimmed?: boolean;
   /** Suppress the fan-out dot (single-child links don't fan out). */
   hideJoint?: boolean;
+  /** §5.2 `color_key` — `reference` edges only. */
+  colorKey?: string;
+  /** §5.2 `source_label` (`R1`…`R20`) — painted at the midpoint. */
+  sourceLabel?: string;
+}
+
+// ─── Label ─────────────────────────────────────────────────────────────
+
+/** Small midpoint label font size (`R#`). */
+const LABEL_FONT_SIZE = 10;
+
+/**
+ * The `R#` marker at a convergence edge's midpoint.
+ *
+ * Painted with a surface-coloured outline (`paintOrder: stroke`) so the
+ * label stays legible where it crosses the edge, the grid, or another
+ * convergence edge — §7.2 makes the label the colour-independent identifier,
+ * so it cannot be the hard-to-read part of the drawing.
+ */
+function MidpointLabel({
+  x,
+  y,
+  text,
+  fill,
+}: {
+  x: number;
+  y: number;
+  text: string;
+  fill: string;
+}) {
+  return (
+    <text
+      x={x}
+      y={y - 6}
+      textAnchor="middle"
+      fill={fill}
+      stroke={palette.surfaceBase}
+      strokeWidth={3}
+      paintOrder="stroke"
+      fontSize={LABEL_FONT_SIZE}
+      fontWeight={600}
+      pointerEvents="none"
+      data-testid="reference-edge-label"
+    >
+      {text}
+    </text>
+  );
 }
 
 // ─── Component ─────────────────────────────────────────────────────────
@@ -51,18 +104,24 @@ function GlowConnectorComponent({
   targetY,
   selected,
   data,
+  markerEnd,
 }: GlowConnectorProps) {
   const points = { sourceX, sourceY, targetX, targetY };
-  const { path } = connectorPath(points);
+  const { path, midX, midY } = connectorPath(points);
 
   const edgeData = (data ?? {}) as ConnectorData;
-  const style = connectorStyle(kind, {
-    selected: selected === true,
-    dimmed: edgeData.dimmed === true,
-  });
+  const style = connectorStyle(
+    kind,
+    {
+      selected: selected === true,
+      dimmed: edgeData.dimmed === true,
+    },
+    edgeData.colorKey,
+  );
 
   const joint = jointDotPosition(points);
   const showJoint = edgeData.hideJoint !== true;
+  const label = kind === 'reference' ? edgeData.sourceLabel : undefined;
 
   return (
     <g className="canopy-connector" data-kind={kind}>
@@ -88,8 +147,12 @@ function GlowConnectorComponent({
         strokeWidth={style.strokeWidth}
         strokeLinecap="round"
         {...(style.dash ? { strokeDasharray: style.dash } : {})}
+        {...(markerEnd ? { markerEnd } : {})}
         pointerEvents="none"
       />
+
+      {/* §7.2 `R#` — the colour-independent source identifier */}
+      {label ? <MidpointLabel x={midX} y={midY} text={label} fill={style.stroke} /> : null}
 
       {/* Joint dot at the fan-out point */}
       {showJoint && (

@@ -12,6 +12,7 @@
 
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import type { TreeEdgePayload } from '../lib/treeGraph.ts';
 import type {
   NodeData,
   EdgeData,
@@ -223,6 +224,88 @@ function decodeMetadata(raw: unknown): Record<string, unknown> {
   }
 }
 
+// ─── Edge ingestion + lineage derivation ──────────────────────────────
+
+/** A convergence edge is provenance, not a reply (SPEC-PL-06 §7.1). */
+function isReferenceEdgeType(edgeType: unknown): boolean {
+  return edgeType === 'reference';
+}
+
+/** True when the node's reserved metadata declares a multi-reference reply. */
+function isMultiReferenceMetadata(metadata: Record<string, unknown>): boolean {
+  const reserved = metadata?.multi_reference ?? metadata?.multiReference;
+  if (!reserved || typeof reserved !== 'object') return false;
+  const obj = reserved as Record<string, unknown>;
+  const ids = obj.canonicalSourceIds ?? obj.canonical_source_ids;
+  return Array.isArray(ids) ? ids.length > 0 : obj.primarySourceId !== undefined;
+}
+
+/**
+ * Insert persisted edges into the replica, keeping their DATABASE ids.
+ *
+ * SPEC-PL-06 §7.1: React Flow edge identity must be the persisted
+ * `edges.id` — that is what makes an edge re-readable, inspectable and
+ * linkable from outside the canvas. Dedupe is by id, and then by
+ * (source, target, type) so a previously synthesised local edge for the same
+ * pair cannot double-wire the graph.
+ *
+ * Returns the number of edges newly added.
+ */
+export function mergeBackendEdges(
+  doc: TreeYDoc,
+  edges: readonly TreeEdgePayload[],
+): number {
+  let added = 0;
+  doc.ydoc.transact(() => {
+    added = addEdges(doc, edges);
+  });
+  return added;
+}
+
+/** Untransacted core — callers wrap it so nodes+edges land in one transaction. */
+function addEdges(doc: TreeYDoc, edges: readonly TreeEdgePayload[]): number {
+  let added = 0;
+  for (const edge of edges) {
+    if (!edge || !edge.id || !edge.sourceId || !edge.targetId) continue;
+    if (doc.edges.has(edge.id)) continue;
+
+    let duplicatePair = false;
+    for (const [, edgeMap] of doc.edges.entries()) {
+      if (
+        edgeMap.get('sourceId') === edge.sourceId &&
+        edgeMap.get('targetId') === edge.targetId &&
+        (edgeMap.get('edgeType') ?? 'reply') === edge.edgeType
+      ) {
+        duplicatePair = true;
+        break;
+      }
+    }
+    if (duplicatePair) continue;
+
+    doc.edges.set(
+      edge.id,
+      objectToMap({
+        id: edge.id,
+        sourceId: edge.sourceId,
+        targetId: edge.targetId,
+        edgeType: edge.edgeType,
+        metadata: edge.metadata ?? {},
+        createdAt: edge.createdAt ?? nowISO(),
+      }),
+    );
+    added++;
+  }
+  return added;
+}
+
+/** True when the replica already wires an incoming edge to `nodeId`. */
+function hasIncomingEdge(doc: TreeYDoc, nodeId: string): boolean {
+  for (const [, edgeMap] of doc.edges.entries()) {
+    if (edgeMap.get('targetId') === nodeId) return true;
+  }
+  return false;
+}
+
 /**
  * Merge backend nodes into the Yjs doc (BUG-032 fix).
  *
@@ -232,11 +315,22 @@ function decodeMetadata(raw: unknown): Record<string, unknown> {
  * (parentId === null) are appended to rootOrder; children get a `reply`
  * edge to their parent.
  *
+ * `edges` (optional) are PERSISTED edges — the graph subtree payload, which
+ * carries `edges.id` and the §5.2 metadata a synthesised edge cannot have.
+ * They are merged FIRST so the lineage synthesis below can see what the
+ * database already wired. Two rules follow from SPEC-PL-06 §7.1:
+ *
+ *   - a multi-reference reply never gets a synthetic `reply` edge (its
+ *     edges ARE the reference edges — `parent_id` is only a display anchor,
+ *     and a synthetic reply edge would duplicate one of them);
+ *   - a node the database already wired is never synthesised twice.
+ *
  * Returns the number of nodes newly added.
  */
 export function mergeBackendNodes(
   doc: TreeYDoc,
   nodes: BackendNodePayload[],
+  edges: readonly TreeEdgePayload[] = [],
 ): number {
   let added = 0;
   const now = nowISO();
@@ -244,17 +338,24 @@ export function mergeBackendNodes(
   doc.ydoc.transact(() => {
     const existingIds = new Set(doc.nodes.keys());
 
+    if (edges.length > 0) addEdges(doc, edges);
+
     for (const n of nodes) {
       if (!n || !n.id || n.deletedAt) continue;
       if (existingIds.has(n.id)) continue;
 
+      const metadata = decodeMetadata(n.metadata);
       const nodeMap = objectToMap({
         id: n.id,
+        // Display anchor (§7.1). Stored so the hierarchy can place a
+        // multi-reference reply under its primary source without inventing
+        // a reply edge for it.
+        parentId: n.parentId ?? null,
         content: n.content ?? '',
         contentFormat: n.contentFormat ?? 'markdown',
         nodeType: n.nodeType ?? 'message',
         authorId: n.authorId ?? 'local',
-        metadata: decodeMetadata(n.metadata),
+        metadata,
         createdAt: n.createdAt ?? now,
         editedAt: n.editedAt ?? null,
       });
@@ -266,6 +367,11 @@ export function mergeBackendNodes(
         doc.rootOrder.push([n.id]);
         continue;
       }
+
+      // §7.1: reference edges are never inferred from parent_id, and a
+      // multi-reference reply carries no lineage edge at all.
+      if (isMultiReferenceMetadata(metadata)) continue;
+      if (hasIncomingEdge(doc, n.id)) continue;
 
       // Dedupe edges by (sourceId, targetId) so re-hydration never
       // double-wires a parent/child pair.
@@ -300,23 +406,72 @@ export function mergeBackendNodes(
 }
 
 /**
+ * parent id → ordered lineage child ids, in ONE pass over the replica
+ * (O(nodes + edges)). Every hot path (the tree walk, the d3 layout, the
+ * collapse map) needs this same derivation, and calling `getChildIds` per
+ * node would be O(n²) on a large tree.
+ *
+ * Lineage is `reply` / `fork` / `synthesis` edges PLUS each node's stored
+ * display anchor (`parentId`). `reference` edges are excluded: a
+ * multi-reference reply is not a reply of sources R2…RN, and treating a
+ * convergence edge as lineage would place the node under whichever source
+ * the edge map happened to yield first (SPEC-PL-06 §7.1).
+ */
+export function buildLineageChildMap(doc: TreeYDoc): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+
+  const push = (parentId: unknown, childId: unknown): void => {
+    if (typeof parentId !== 'string' || typeof childId !== 'string') return;
+    if (!parentId || !childId) return;
+    const list = map.get(parentId);
+    if (list) {
+      if (!list.includes(childId)) list.push(childId);
+    } else {
+      map.set(parentId, [childId]);
+    }
+  };
+
+  for (const [, edgeMap] of doc.edges.entries()) {
+    if (isReferenceEdgeType(edgeMap.get('edgeType'))) continue;
+    push(edgeMap.get('sourceId'), edgeMap.get('targetId'));
+  }
+
+  // Display anchors with no lineage edge — a multi-reference reply's
+  // parent_id is its primary source and its only incoming edges are
+  // `reference` (§3.5 invariant 6).
+  for (const [nodeId, nodeMap] of doc.nodes.entries()) {
+    const anchored = nodeMap.get('parentId');
+    if (typeof anchored === 'string' && anchored) push(anchored, nodeId);
+  }
+
+  return map;
+}
+
+/**
  * Return all node IDs in the tree.
- * Walks rootOrder recursively through edges to build the full list.
+ *
+ * Membership is the replica's node list; the child map only orders the
+ * walk. That matters for a multi-reference reply: it is reached through its
+ * display anchor, never through a synthesised edge, and an unreachable node
+ * would otherwise vanish from the canvas.
  */
 export function getAllNodeIds(doc: TreeYDoc): string[] {
+  const childMap = buildLineageChildMap(doc);
   const visited = new Set<string>();
 
   function walk(nodeId: string): void {
-    if (visited.has(nodeId)) return;
+    if (visited.has(nodeId) || !doc.nodes.has(nodeId)) return;
     visited.add(nodeId);
-    const children = getChildIds(doc, nodeId);
-    for (const childId of children) {
+    for (const childId of childMap.get(nodeId) ?? []) {
       walk(childId);
     }
   }
 
   for (const rootId of doc.rootOrder.toArray()) {
     walk(rootId);
+  }
+  for (const nodeId of doc.nodes.keys()) {
+    walk(nodeId);
   }
 
   return Array.from(visited);
@@ -424,32 +579,38 @@ export function getEdge(
 
 /**
  * Get all child node IDs for a given parent node.
- * Looks up edges where sourceId === parentId.
+ *
+ * Lineage only (SPEC-PL-06 §7.1): `reference` edges are excluded — they are
+ * provenance, not replies — and each node's stored display anchor
+ * (`parentId`) counts, which is what places a multi-reference reply under
+ * its primary source without inventing an edge for it. Prefer
+ * `buildLineageChildMap` inside a loop; this helper rebuilds the map.
  */
 export function getChildIds(doc: TreeYDoc, parentId: string): string[] {
-  const children: string[] = [];
-  for (const [, edgeMap] of doc.edges.entries()) {
-    if (edgeMap.get('sourceId') === parentId) {
-      const targetId = edgeMap.get('targetId') as string;
-      if (targetId) children.push(targetId);
-    }
-  }
-  return children;
+  return [...(buildLineageChildMap(doc).get(parentId) ?? [])];
 }
 
 /**
  * Get the parent node ID for a given node.
  * Returns undefined for root nodes (no incoming edges).
+ *
+ * Lineage edges win (a `fork` from `moveNode` re-parents a node without
+ * rewriting anything else); the stored display anchor is the fallback, which
+ * is the only lineage a multi-reference reply has. `reference` edges are
+ * never a parent (SPEC-PL-06 §7.1).
  */
 export function getParentId(
   doc: TreeYDoc,
   nodeId: string,
 ): string | undefined {
   for (const [, edgeMap] of doc.edges.entries()) {
+    if (isReferenceEdgeType(edgeMap.get('edgeType'))) continue;
     if (edgeMap.get('targetId') === nodeId) {
       return edgeMap.get('sourceId') as string | undefined;
     }
   }
+  const anchored = doc.nodes.get(nodeId)?.get('parentId');
+  if (typeof anchored === 'string' && anchored) return anchored;
   return undefined;
 }
 

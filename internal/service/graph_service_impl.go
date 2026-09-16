@@ -5,7 +5,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -76,10 +78,16 @@ func (s *GraphServiceImpl) GetSubtree(ctx context.Context, rootID uuid.UUID, max
 	edgeSummaries := make([]GraphEdgeSummary, 0)
 	for _, e := range treeEdges {
 		if nodeSet[e.SourceID] && nodeSet[e.TargetID] {
+			metadata, err := decodeEdgeMetadata(e)
+			if err != nil {
+				return nil, err
+			}
 			edgeSummaries = append(edgeSummaries, GraphEdgeSummary{
+				ID:       e.ID,
 				SourceID: e.SourceID,
 				TargetID: e.TargetID,
 				EdgeType: e.EdgeType,
+				Metadata: metadata,
 			})
 		}
 	}
@@ -91,6 +99,29 @@ func (s *GraphServiceImpl) GetSubtree(ctx context.Context, rootID uuid.UUID, max
 		Nodes: summaries,
 		Edges: edgeSummaries,
 	}, nil
+}
+
+// decodeEdgeMetadata turns an edge's JSONB metadata column into the object
+// the API returns. A NULL, empty or `{}`/`null` column yields nil, which the
+// `omitempty` JSON tag renders as an absent key — the same shape for "no
+// metadata" regardless of which empty spelling the row carries, so a client
+// never has to distinguish `null` from `{}` (SPEC-PL-06 §5.2).
+//
+// A decode failure is an error, not a silent drop: the column is JSONB, so
+// unparseable content means the row is corrupt and the caller must not
+// publish an edge whose renderer metadata was quietly thrown away.
+func decodeEdgeMetadata(e db.Edge) (map[string]any, error) {
+	if len(bytes.TrimSpace(e.Metadata)) == 0 {
+		return nil, nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(e.Metadata, &metadata); err != nil {
+		return nil, fmt.Errorf("graph service: decode metadata for edge %s: %w", e.ID, err)
+	}
+	if len(metadata) == 0 {
+		return nil, nil
+	}
+	return metadata, nil
 }
 
 // GetAncestors returns the path from the given node to the tree root.

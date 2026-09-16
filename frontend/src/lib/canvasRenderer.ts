@@ -28,7 +28,8 @@
  */
 
 import { palette, nodeTypeColor, alpha } from '../theme.ts';
-import { getEdgeStyle } from '../layouts/d3Layout.ts';
+import { getEdgeStyle, type EdgeStyle } from '../layouts/d3Layout.ts';
+import { referenceEdgeStyle } from './multiReference.ts';
 
 // ─── Threshold ────────────────────────────────────────────────────────
 
@@ -62,6 +63,14 @@ export interface CanvasSceneEdge {
   target: string;
   /** Logical edge kind — drives stroke color/dash via `getEdgeStyle`. */
   kind?: 'reply' | 'fork' | 'synthesis' | 'reference';
+  /**
+   * §7.2 `color_key` for a convergence edge — the server-computed stroke
+   * selector. Unknown/absent degrades to `ref-0` (never to an undefined
+   * canvas fillStyle, which silently paints the previous edge's colour).
+   */
+  colorKey?: string;
+  /** §7.2 `R#` midpoint label (reference edges only). */
+  label?: string;
 }
 
 // ─── Snapshot mapping (React Flow shapes → scene) ─────────────────────
@@ -78,6 +87,13 @@ export interface RfEdgeLike {
   source: string;
   target: string;
   type?: string;
+  data?: {
+    /** Persisted edge type — authoritative for reference detection (§7.1). */
+    edgeType?: string;
+    isReference?: boolean;
+    colorKey?: string;
+    sourceLabel?: string;
+  } | null;
 }
 
 /** Map React Flow edge type strings ('replyEdge' | 'synthesis' | …). */
@@ -94,6 +110,20 @@ export function flowTypeToKind(flowType: string | undefined): NonNullable<Canvas
   }
 }
 
+/**
+ * Resolve an edge's kind from its DATA first and its component name second,
+ * so a convergence edge stays a convergence edge even if the component name
+ * ever changes (§7.1).
+ */
+export function flowEdgeKind(edge: RfEdgeLike): NonNullable<CanvasSceneEdge['kind']> {
+  const data = edge?.data;
+  if (data?.isReference === true) return 'reference';
+  if (data?.edgeType) {
+    return flowTypeToKind(`${data.edgeType.replace('Edge', '')}Edge`);
+  }
+  return flowTypeToKind(edge?.type);
+}
+
 export function toCanvasNodes(nodes: readonly RfNodeLike[]): CanvasSceneNode[] {
   return nodes.map((n) => ({
     id: n.id,
@@ -104,11 +134,21 @@ export function toCanvasNodes(nodes: readonly RfNodeLike[]): CanvasSceneNode[] {
 }
 
 export function toCanvasEdges(edges: readonly RfEdgeLike[]): CanvasSceneEdge[] {
-  return edges.map((e) => ({
-    source: e.source,
-    target: e.target,
-    kind: flowTypeToKind(e.type),
-  }));
+  return edges.map((e) => {
+    const kind = flowEdgeKind(e);
+    return {
+      source: e.source,
+      target: e.target,
+      kind,
+      // §7.2: the same routes AND the same R# labels as the React Flow path.
+      ...(kind === 'reference'
+        ? {
+            ...(e.data?.colorKey ? { colorKey: e.data.colorKey } : {}),
+            ...(e.data?.sourceLabel ? { label: e.data.sourceLabel } : {}),
+          }
+        : {}),
+    };
+  });
 }
 
 // ─── View transform ───────────────────────────────────────────────────
@@ -274,10 +314,19 @@ function dashArray(spec: string | undefined): number[] | null {
   return parts.every((v) => Number.isFinite(v) && v > 0) ? parts : null;
 }
 
+/** Label font for the §7.2 `R#` marker in the Canvas 2D fallback. */
+export const EDGE_LABEL_FONT = '600 10px system-ui, sans-serif';
+
 /**
  * Paint connectors as straight lines in scene order. Edges with a
  * missing endpoint (multi-parent targets pruned elsewhere, transient
  * snapshots) are skipped silently.
+ *
+ * SPEC-PL-06 §7.2 (last bullet): the fallback draws the SAME routes and the
+ * SAME `R#` labels as the React Flow path. A convergence edge therefore
+ * takes its colour from its `color_key` and its full 2.5px stroke, and gets
+ * its label at the midpoint; every other kind keeps the flat 1px overview
+ * line it has always been.
  */
 export function drawEdges(
   ctx: Ctx,
@@ -291,10 +340,15 @@ export function drawEdges(
     const to = posById.get(edge.target);
     if (!from || !to) continue;
 
-    const style = getEdgeStyle(edge.kind ?? 'reply');
+    const kind = edge.kind ?? 'reply';
+    const isReference = kind === 'reference';
+    const style = isReference
+      ? referenceEdgeStyle(edge.colorKey)
+      : getEdgeStyle(kind);
     ctx.strokeStyle = style.stroke;
-    ctx.lineWidth = 1;
-    const dash = dashArray(style.strokeDasharray);
+    ctx.lineWidth = isReference ? style.strokeWidth : 1;
+    // §7.2 reference edges are solid; only the other kinds carry a dash.
+    const dash = dashArray(isReference ? undefined : (style as EdgeStyle).strokeDasharray);
     if (dash) ctx.setLineDash(dash);
 
     const a = layoutToScreen(transform, from.x, from.y);
@@ -305,7 +359,38 @@ export function drawEdges(
     ctx.stroke();
 
     if (dash) ctx.setLineDash([]);
+
+    if (isReference && edge.label) {
+      drawEdgeLabel(ctx, edge.label, (a.x + b.x) / 2, (a.y + b.y) / 2 - 6, style.stroke);
+    }
   }
+}
+
+/**
+ * `R#` marker for a convergence edge.
+ *
+ * Stroked with the surface colour before the fill (the canvas equivalent of
+ * the SVG `paint-order: stroke` halo), so the label stays readable where it
+ * crosses its own edge — §7.2 makes the label the colour-independent
+ * identifier.
+ */
+export function drawEdgeLabel(
+  ctx: Ctx,
+  text: string,
+  x: number,
+  y: number,
+  fill: string,
+): void {
+  ctx.font = EDGE_LABEL_FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = palette.surfaceBase;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y);
+  // Restore the default alignment the node painter expects.
+  ctx.textAlign = 'start';
 }
 
 export interface DrawNodesOptions {

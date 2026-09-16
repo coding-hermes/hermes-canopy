@@ -19,9 +19,10 @@
 
 import { memo, type ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronRight, Layers, MessageSquare } from 'lucide-react';
 import { describeNodeAvatar } from '../../lib/nodeAvatar.ts';
 import { replyBadgeAriaLabel, replyBadgeLabel } from '../../lib/replyCounts.ts';
+import { referenceBadgeLabel } from '../../lib/multiReference.ts';
 import { nodeGlowShadow } from '../../lib/canvasGeometry.ts';
 import { palette, alpha } from '../../theme.ts';
 
@@ -166,6 +167,72 @@ function CollapseChevronComponent({
 
 export const CollapseChevron = memo(CollapseChevronComponent);
 
+// ─── Reference badge (SPEC-PL-06 §7.1) ─────────────────────────────────
+
+export interface ReferenceBadgeProps {
+  /** Number of sources the reply was written against. */
+  count: number;
+  /** §7.2 accessibility sentence — also the button's title. */
+  ariaDescription: string;
+  /**
+   * Opens the source list. The list itself lives OUTSIDE the graph canvas
+   * (§7.1) — at 2000+ nodes the canvas is painted pixels with no DOM nodes
+   * at all, so the badge must not be the only way to reach the sources.
+   */
+  onOpen?: () => void;
+}
+
+/**
+ * Compact `N references` pill worn by a multi-reference reply (§7.1).
+ *
+ * A `<button>` when the page supplied a handler (keyboard-reachable, focus
+ * ring included) and a plain `<span>` otherwise — the badge is descriptive
+ * either way, so it never advertises an action it cannot perform.
+ */
+function ReferenceBadgeComponent({ count, ariaDescription, onOpen }: ReferenceBadgeProps) {
+  const label = referenceBadgeLabel(count);
+  const accent = palette.accent2;
+
+  const shared = {
+    className:
+      'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
+    style: {
+      backgroundColor: alpha(accent, 0.14),
+      color: accent,
+      border: `1px solid ${alpha(accent, 0.3)}`,
+    } as const,
+    title: ariaDescription,
+    'data-testid': 'reference-badge',
+    'data-reference-count': count,
+  };
+
+  if (!onOpen) {
+    return (
+      <span {...shared} aria-label={ariaDescription}>
+        <Layers className="h-2.5 w-2.5" aria-hidden="true" />
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      {...shared}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      aria-label={`${ariaDescription} Open source list.`}
+    >
+      <Layers className="h-2.5 w-2.5" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+export const ReferenceBadge = memo(ReferenceBadgeComponent);
+
 // ─── Card shell ────────────────────────────────────────────────────────
 
 export interface NodeShellProps {
@@ -175,6 +242,13 @@ export interface NodeShellProps {
   selected?: boolean;
   /** Full aria-label for the card. */
   ariaLabel: string;
+  /**
+   * id of the element carrying this card's longer description. Used by a
+   * multi-reference reply, whose §7.2 sentence ("Multi-reference reply to N
+   * messages: R1 …, R2 …") must reach a screen reader on FOCUS without
+   * crowding the aria-label.
+   */
+  ariaDescribedBy?: string;
   /** Handle colour; defaults to the accent. */
   handleColor?: string;
   minWidth?: number;
@@ -195,6 +269,7 @@ function NodeShellComponent({
   accent,
   selected,
   ariaLabel,
+  ariaDescribedBy,
   handleColor,
   minWidth = 200,
   maxWidth = 260,
@@ -214,6 +289,7 @@ function NodeShellComponent({
         }}
         role="article"
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         aria-current={selected ? 'true' : undefined}
         tabIndex={0}
       >

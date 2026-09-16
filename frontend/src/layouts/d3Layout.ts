@@ -19,6 +19,7 @@
 
 import { tree as d3Tree, hierarchy, type HierarchyNode } from 'd3-hierarchy';
 import { palette } from '../theme.ts';
+import { referenceEdgeStyle } from '../lib/multiReference.ts';
 
 // ─── Layout types ─────────────────────────────────────────────────────
 
@@ -287,11 +288,19 @@ export function computeD3Layout(input: LayoutInput): LayoutOutput {
 /**
  * Determine the React Flow edge type string from an edge's data type
  * and whether the target is a multi-parent synthesis node.
+ *
+ * `reference` is checked FIRST (SPEC-PL-06 §7.1): a convergence edge looks
+ * like a multi-parent contribution geometrically, but it is its own visual
+ * language — rendering it as a synthesis edge would claim the reply is a
+ * SPEC-API-04 synthesis node, which §8.2 explicitly forbids.
  */
 export function getFlowEdgeType(
   edgeType: string,
   isMultiParentTarget: boolean,
 ): string {
+  if (edgeType === 'reference') {
+    return 'referenceEdge';
+  }
   if (edgeType === 'synthesis' || isMultiParentTarget) {
     return 'synthesisEdge';
   }
@@ -336,14 +345,19 @@ export function getEdgeStyle(edgeType: string): EdgeStyle {
         animated: false,
         markerColor: palette.accent3,
       };
-    case 'reference':
+    case 'reference': {
+      // SPEC-PL-06 §7.2: the same 2.5px solid stroke the React Flow path
+      // uses. Without a `color_key` there is nothing to select a palette
+      // entry, so this is the `ref-0` baseline — the canvas renderer passes
+      // the real key through `referenceEdgeStyle` (§7.2 canvas parity).
+      const reference = referenceEdgeStyle(undefined);
       return {
-        stroke: palette.contentFaint,
-        strokeWidth: 1.5,
-        strokeDasharray: '4,4',
-        animated: false,
-        markerColor: palette.contentFaint,
+        stroke: reference.stroke,
+        strokeWidth: reference.strokeWidth,
+        animated: reference.animated,
+        markerColor: reference.stroke,
       };
+    }
     case 'reply':
     default:
       return {

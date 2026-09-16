@@ -14,12 +14,18 @@ import type { TreeNodeCardData } from '../types/tree.ts';
 import { nodeTypeToFlowType } from '../types/tree.ts';
 import { isAgentCardMetadata } from '../types/agent.ts';
 import {
+  buildLineageChildMap,
   getAllNodeIds,
   getNode,
-  getChildIds,
   getParentId,
   getNodeType,
 } from './treeStore.ts';
+import {
+  normaliseEdgeMetadata,
+  referenceArrowMarker,
+  referenceEdgeData,
+  referenceEdgeStyle,
+} from '../lib/multiReference.ts';
 import {
   computeD3Layout,
   getFlowEdgeType,
@@ -47,10 +53,15 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
     return { nodes: [], edges: [], multiParentNodes: new Set() };
   }
 
+  // Lineage adjacency, derived once: reference (convergence) edges and each
+  // node's stored display anchor. Calling getChildIds per node would be
+  // O(n²) on a large tree.
+  const childMap = buildLineageChildMap(doc);
+
   // Compute d3-hierarchy layout
   const layout: LayoutOutput = computeD3Layout({
     nodeIds,
-    getChildren: (id) => getChildIds(doc, id),
+    getChildren: (id) => childMap.get(id) ?? [],
     getParent: (id) => getParentId(doc, id),
     getNodeType: (id) => getNodeType(doc, id),
   });
@@ -58,7 +69,7 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
   // Build child counts per node (for collapse UI)
   const childCounts = new Map<string, number>();
   for (const nodeId of nodeIds) {
-    childCounts.set(nodeId, getChildIds(doc, nodeId).length);
+    childCounts.set(nodeId, (childMap.get(nodeId) ?? []).length);
   }
 
   // Build React Flow nodes
@@ -108,7 +119,7 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
     });
   }
 
-  // Build React Flow edges from Yjs edges map
+  // Build React Flow edges from Yjs edges map.
   const rfEdges: Edge[] = [];
   for (const [, edgeMap] of doc.edges.entries()) {
     const sourceId = edgeMap.get('sourceId') as string;
@@ -121,16 +132,47 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
     // Skip edges where source or target doesn't exist in our node set
     if (!nodeIds.includes(sourceId) || !nodeIds.includes(targetId)) continue;
 
+    // Edge id: the persisted `edges.id` when the edge came from the graph
+    // payload, a locally generated one for edges this replica synthesised
+    // (SPEC-PL-06 §7.1 — the persisted id is what makes a convergence edge
+    // addressable from outside the canvas).
+    const rfId = edgeId || `${sourceId}->${targetId}`;
+
     const isMultiParent = layout.multiParentNodes.has(targetId);
     const flowEdgeType = getFlowEdgeType(edgeType, isMultiParent);
+
+    // SPEC-PL-06 §7.2: a convergence edge is styled from its server-computed
+    // `color_key` (never from a local guess), and carries its §5.2 labels.
+    if (edgeType === 'reference') {
+      const meta = normaliseEdgeMetadata(edgeMap.get('metadata'), 0);
+      const data = meta
+        ? referenceEdgeData(meta)
+        : { edgeType: 'reference', isReference: true };
+      const style = referenceEdgeStyle(data.colorKey);
+      rfEdges.push({
+        id: rfId,
+        source: sourceId,
+        target: targetId,
+        type: flowEdgeType,
+        animated: style.animated,
+        data,
+        style: { stroke: style.stroke, strokeWidth: style.strokeWidth },
+        // §7.2: an arrow at the target. Reply connectors deliberately have
+        // none (UI-04) — a convergence edge is directional provenance.
+        markerEnd: referenceArrowMarker(data.colorKey),
+      });
+      continue;
+    }
+
     const style = getEdgeStyle(edgeType);
 
     rfEdges.push({
-      id: edgeId,
+      id: rfId,
       source: sourceId,
       target: targetId,
       type: flowEdgeType,
       animated: style.animated,
+      data: { edgeType },
       style: {
         stroke: style.stroke,
         strokeWidth: style.strokeWidth,

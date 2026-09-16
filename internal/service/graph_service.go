@@ -25,10 +25,20 @@ type GraphNodeSummary struct {
 
 // GraphEdgeSummary represents a directed edge between two graph nodes.
 type GraphEdgeSummary struct {
+	// ID is the persisted `edges.id`. SPEC-PL-06 §7.1 requires the
+	// frontend to render React Flow edges with the database identity, so a
+	// convergence edge can be re-read, inspected and hover-linked by id.
+	ID uuid.UUID `json:"id"`
 	SourceID uuid.UUID `json:"source_id"`
 	TargetID uuid.UUID `json:"target_id"`
 	EdgeType string    `json:"edge_type"` // reply | fork | reference | synthesis
 	Depth    int       `json:"depth"`
+	// Metadata is the edge's decoded JSONB metadata object. For a
+	// `reference` edge it carries the §5.2 renderer metadata
+	// (reference_index, source_label, color_key, selection_order, role).
+	// Omitted entirely when the column is NULL/empty — never emitted as a
+	// null or partial object.
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // GraphQueryResult contains the result of a graph traversal query.

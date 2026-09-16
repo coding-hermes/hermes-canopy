@@ -100,6 +100,35 @@ export function nodeTypeColor(
   }
 }
 
+// ─── Reference convergence palette (SPEC-PL-06 §7.2) ───────────────────
+
+/**
+ * Fixed accessible palette for multi-reference convergence edges.
+ *
+ * §7.2 pins these eight values by `color_key`: the server computes
+ * `ref-(fnv1a64(tree:target:source) mod 8)` (§5.2) and the client may only
+ * map the key to a colour — never invent one. Selections 9-20 reuse the
+ * palette; the `R#` label and the selection index carry identity there, so a
+ * repeated colour is never the sole identifier (§7.2).
+ *
+ * These are deliberately NOT part of `palette`: they are the spec's own
+ * contrast-checked ramp, mirrored here for the same reason `palette` exists
+ * (SVG stroke / canvas fill attributes sit outside the CSS cascade).
+ */
+export const referencePalette = {
+  'ref-0': '#2563EB',
+  'ref-1': '#059669',
+  'ref-2': '#D97706',
+  'ref-3': '#7C3AED',
+  'ref-4': '#DB2777',
+  'ref-5': '#0891B2',
+  'ref-6': '#65A30D',
+  'ref-7': '#C2410C',
+} as const;
+
+/** Every §7.2 color key, in palette order. */
+export type ReferenceColorKey = keyof typeof referencePalette;
+
 /** Compose a token hex with an 8-bit alpha suffix, e.g. alpha(accent2, 0.12). */
 export function alpha(hex: string, amount: number): string {
   const clamped = Math.max(0, Math.min(1, amount));

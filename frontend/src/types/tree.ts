@@ -5,6 +5,8 @@
  * Uses `import type` for verbatimModuleSyntax compliance.
  */
 
+import type { ReferenceNodeView } from '../lib/multiReference.ts';
+
 // ─── Enums ────────────────────────────────────────────────────────────
 
 export type ContentFormat = 'markdown' | 'plain' | 'rich';
@@ -71,6 +73,13 @@ export interface TreeMetadata {
  */
 export interface NodeData {
   id: string;
+  /**
+   * Display anchor from the backend (`parent_id`). SPEC-PL-06 §7.1: it is
+   * NOT the complete parent set — a multi-reference reply's parent set is
+   * its `reference` edges, and `parent_id` only decides where the node is
+   * drawn. Absent on locally created nodes (their lineage is their edges).
+   */
+  parentId?: string | null;
   content: string;
   contentFormat: string;
   nodeType: string;
@@ -243,6 +252,19 @@ export interface TreeNodeCardData extends Record<string, unknown> {
   onToggleCollapse?: () => void;
   /** Real author display names, when the caller can resolve them. */
   authorNames?: ReadonlyMap<string, string>;
+
+  // ─── SPEC-PL-06 §7.1: multi-reference replies ────────────────────────
+  /**
+   * Badge + §7.2 accessibility description for a multi-reference reply,
+   * derived by the canvas from the node's reserved metadata and the source
+   * nodes it already holds. Absent on every ordinary lineage node.
+   */
+  referenceView?: ReferenceNodeView;
+  /**
+   * Opens the source list. The list renders OUTSIDE the graph canvas (§7.1),
+   * so this is wired by the page, not by the node.
+   */
+  onOpenReferences?: () => void;
 }
 
 /** Data carried on a ghost placeholder node (UI-04 add-reply affordance). */

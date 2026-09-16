@@ -45,6 +45,15 @@ import { shouldUseSimplifiedMode } from '../layouts/d3Layout.ts';
 import { shouldUseCanvas } from '../lib/canvasRenderer.ts';
 import CanvasTreeView from './CanvasTreeView.tsx';
 import { palette, nodeTypeColor } from '../theme.ts';
+import { previewText } from '../lib/nodeCard.ts';
+import {
+  buildReferenceNodeView,
+  flowEdgeIsReference,
+  normaliseMultiReferenceMetadata,
+  referenceEdgeHighlightState,
+  type ReferenceHighlight,
+  type ReferenceNodeView,
+} from '../lib/multiReference.ts';
 import {
   buildChildMap,
   childrenOf,
@@ -82,6 +91,7 @@ import { AgentCardNode } from './agent/AgentCardNode.tsx';
 import { ReplyEdge } from './edges/ReplyEdge.tsx';
 import { ForkEdge } from './edges/ForkEdge.tsx';
 import { SynthesisEdge } from './edges/SynthesisEdge.tsx';
+import { ReferenceEdge } from './edges/ReferenceEdge.tsx';
 
 // ─── Registries ───────────────────────────────────────────────────────
 
@@ -98,6 +108,8 @@ const edgeTypes = {
   replyEdge: ReplyEdge,
   forkEdge: ForkEdge,
   synthesisEdge: SynthesisEdge,
+  /** SPEC-PL-06 §7.2 convergence edge (styled from its `color_key`). */
+  referenceEdge: ReferenceEdge,
 };
 
 /** Prefix marking a synthetic ghost slot node — never a real graph id. */
@@ -131,6 +143,19 @@ export interface TreeCanvasProps {
   onCreateReply?: (parentId: string) => void;
   /** Real author display names, when the page can resolve them. */
   authorNames?: ReadonlyMap<string, string>;
+  /**
+   * Opens a multi-reference reply's source list (§7.1). The list renders in
+   * the page, outside the canvas — when omitted the `N references` badge is
+   * descriptive only.
+   */
+  onOpenReferences?: (nodeId: string) => void;
+  /**
+   * Which convergence edge/source the page is currently pointing at (§7.2
+   * hover contract). The canvas highlights those edges and dims the rest.
+   */
+  referenceHighlight?: ReferenceHighlight | null;
+  /** Reports edge hover so the page can highlight the matching list row. */
+  onReferenceHighlightChange?: (highlight: ReferenceHighlight | null) => void;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────
@@ -144,12 +169,27 @@ function TreeCanvasInner({
   onCanvasMouseMove,
   onCreateReply,
   authorNames,
+  onOpenReferences,
+  referenceHighlight,
+  onReferenceHighlightChange,
 }: TreeCanvasProps) {
   const { nodes: allNodes, edges: allEdges, treeTitle, isReady } = tree;
   const reactFlowInstance = useReactFlow();
 
   // Collapse state — a set of node ids whose subtree is hidden.
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+
+  /**
+   * Lineage edges only (SPEC-PL-06 §7.1). Every hierarchy derivation below —
+   * reply counts, collapse descendants, drill-up parents — is about replies,
+   * and a convergence edge is provenance: counting it would badge source R2
+   * with a "reply" it never received, and collapsing R2 would hide the reply
+   * that is actually anchored under R1.
+   */
+  const lineageEdges = useMemo(
+    () => allEdges.filter((e) => !flowEdgeIsReference(e)),
+    [allEdges],
+  );
 
   /**
    * The node wearing the neon active glow.
@@ -163,12 +203,12 @@ function TreeCanvasInner({
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
 
   // Parent→children adjacency, the basis of every derivation below.
-  const childMap = useMemo(() => buildChildMap(allEdges), [allEdges]);
+  const childMap = useMemo(() => buildChildMap(lineageEdges), [lineageEdges]);
 
   // Reply counts straight from the graph — never hardcoded.
   const replyCounts = useMemo(
-    () => deriveReplyCounts(allEdges, allNodes.map((n) => n.id)),
-    [allEdges, allNodes],
+    () => deriveReplyCounts(lineageEdges, allNodes.map((n) => n.id)),
+    [lineageEdges, allNodes],
   );
 
   /*
@@ -206,15 +246,39 @@ function TreeCanvasInner({
    * collapse state, hidden-subtree size and a bound toggle. The toggle is
    * only attached to nodes that actually have children, so a leaf renders
    * no chevron.
+   *
+   * A multi-reference reply additionally gets its §7.1 badge and §7.2
+   * description, derived from its persisted metadata and the source nodes
+   * this snapshot already holds.
    */
   const visibleNodes = useMemo(() => {
     const enriched: Node<TreeNodeCardData>[] = [];
+    const nodeById = new Map(allNodes.map((n) => [n.id, n]));
+
+    const referenceViewFor = (
+      node: Node<TreeNodeCardData>,
+    ): ReferenceNodeView | undefined => {
+      const metadata = normaliseMultiReferenceMetadata(
+        (node.data?.metadata as Record<string, unknown> | undefined)?.multi_reference,
+      );
+      if (!metadata) return undefined;
+      return (
+        buildReferenceNodeView({
+          metadata,
+          fallbackText: (id) => {
+            const source = nodeById.get(id);
+            return source ? previewText(String(source.data?.content ?? ''), 60) : '';
+          },
+        }) ?? undefined
+      );
+    };
 
     for (const node of allNodes) {
       if (hiddenNodes.has(node.id)) continue;
 
       const collapsible = isCollapsible(childMap, node.id);
       const collapsed = collapsedNodes.has(node.id);
+      const referenceView = referenceViewFor(node);
 
       enriched.push({
         ...node,
@@ -228,6 +292,10 @@ function TreeCanvasInner({
             ? { onToggleCollapse: () => toggleCollapse(node.id) }
             : {}),
           ...(authorNames ? { authorNames } : {}),
+          ...(referenceView ? { referenceView } : {}),
+          ...(referenceView && onOpenReferences
+            ? { onOpenReferences: () => onOpenReferences(node.id) }
+            : {}),
         },
       });
     }
@@ -242,6 +310,7 @@ function TreeCanvasInner({
     toggleCollapse,
     authorNames,
     activeNodeId,
+    onOpenReferences,
   ]);
 
   const visibleNodeIds = useMemo(
@@ -308,19 +377,64 @@ function TreeCanvasInner({
    * Visible connectors. An edge whose source is collapsed is kept only
    * when its target is still on screen; the `dimmed` flag lets the
    * connector fade for a branch that leads into hidden content.
+   *
+   * SPEC-PL-06 §7.2: while the page points at a source (or one edge), that
+   * source's convergence edges are highlighted and the OTHER convergence
+   * edges dim. Reply/fork/synthesis edges are never touched — a hover on a
+   * reference source must not restyle the lineage the user is reading.
    */
+  const highlightFor = useCallback(
+    (edge: Edge, isReference: boolean) =>
+      referenceEdgeHighlightState({
+        isReference,
+        edgeId: edge.id,
+        edgeSource: edge.source,
+        highlight: referenceHighlight ?? null,
+        collapsed: collapsedNodes.has(edge.target),
+      }),
+    [referenceHighlight, collapsedNodes],
+  );
+
   const visibleEdges = useMemo(() => {
     const real = allEdges
       .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-      .map((edge) => ({
-        ...edge,
-        data: {
-          ...(edge.data ?? {}),
-          dimmed: collapsedNodes.has(edge.target),
-        },
-      }));
+      .map((edge) => {
+        const isReference = flowEdgeIsReference(edge);
+        const state = highlightFor(edge, isReference);
+
+        return {
+          ...edge,
+          ...(state.selected ? { selected: true } : {}),
+          data: {
+            ...(edge.data ?? {}),
+            dimmed: state.dimmed,
+          },
+        };
+      });
     return [...real, ...ghostEdges];
-  }, [allEdges, visibleNodeIds, collapsedNodes, ghostEdges]);
+  }, [allEdges, visibleNodeIds, ghostEdges, highlightFor]);
+
+  /**
+   * Edge hover → page state, so hovering a convergence edge highlights the
+   * matching `R#` row in the source list (§7.2, both directions).
+   */
+  const onEdgeMouseEnter = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      if (!onReferenceHighlightChange) return;
+      if (!flowEdgeIsReference(edge)) return;
+      onReferenceHighlightChange({ edgeId: edge.id });
+    },
+    [onReferenceHighlightChange],
+  );
+
+  const onEdgeMouseLeave = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      if (!onReferenceHighlightChange) return;
+      if (!flowEdgeIsReference(edge)) return;
+      onReferenceHighlightChange(null);
+    },
+    [onReferenceHighlightChange],
+  );
 
   // Large tree detection
   const totalCount = allNodes.length;
@@ -477,7 +591,7 @@ function TreeCanvasInner({
   // ─── Vim-style navigation (UI-07: j/k walk, h/l drill) ───────────
 
   /** child → first parent, for `h`'s step-up out of a branch. */
-  const parentMap = useMemo(() => buildParentMap(allEdges), [allEdges]);
+  const parentMap = useMemo(() => buildParentMap(lineageEdges), [lineageEdges]);
 
   /**
    * Move the keyboard cursor to a node: focus ring, selection glow, page
@@ -673,6 +787,9 @@ function TreeCanvasInner({
         proOptions={{ hideAttribution: true }}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
+        {...(onReferenceHighlightChange
+          ? { onEdgeMouseEnter, onEdgeMouseLeave }
+          : {})}
       >
         <Background
           color={palette.surfaceHover}

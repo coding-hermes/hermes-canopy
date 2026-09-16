@@ -28,9 +28,25 @@ import {
   bindIndexedDB,
   seedDemoTree,
   mergeBackendNodes,
+  mergeBackendEdges,
   type BackendNodePayload,
   type TreeYDoc,
 } from '../stores/treeStore.ts';
+import {
+  rootNodeIdOf,
+  subtreeRequestPath,
+  toEdgePayloads,
+  toGraphNodePayloads,
+  type RawSubtree,
+} from '../lib/treeGraph.ts';
+import {
+  flowEdgeIsReference,
+  normaliseMultiReferenceMetadata,
+  type MultiReferenceMetadata,
+  type ReferenceHighlight,
+  type ReferenceSourceNodeInfo,
+} from '../lib/multiReference.ts';
+import ReferenceInspectorPanel from '../components/ReferenceInspectorPanel.tsx';
 import { SSESyncProvider } from '../stores/yjsProvider.ts';
 import { resolveDemoAliasSync, storeTreeId } from '../lib/activeTree';
 import { useYjsTree } from '../stores/useYjsTree.ts';
@@ -171,11 +187,53 @@ export default function TreeView() {
               treeDoc.meta.set('description', treeRes.description);
             }
           });
-          const added = mergeBackendNodes(treeDoc, nodesRes?.nodes ?? []);
+          const nodes = nodesRes?.nodes ?? [];
+
+          /*
+           * SPEC-PL-06 §7.1: convergence edges only exist in the graph read.
+           * The REST node list carries no edges, and a multi-reference reply
+           * must render its N `reference` edges with their PERSISTED ids —
+           * never a synthetic edge inferred from parent_id.
+           *
+           * The root is derived from the node list already in hand (no new
+           * route); `max_depth=0` is the whole tree, and the subtree walk
+           * traverses edges, so reference edges are included.
+           *
+           * Edges are merged BEFORE the node list so every edge the database
+           * already holds keeps its own id: the lineage synthesis below then
+           * finds nothing left to invent. Best-effort — a graph read that
+           * fails must not cost the user the node hydration.
+           */
+          const rootId = rootNodeIdOf(nodes);
+          let graph: RawSubtree | null = null;
+          if (rootId) {
+            try {
+              graph = await apiGet<RawSubtree>(
+                subtreeRequestPath(resolvedTreeId, rootId),
+              );
+              const edgesAdded = mergeBackendEdges(treeDoc, toEdgePayloads(graph?.edges));
+              if (edgesAdded > 0) {
+                console.log(
+                  `[TreeView] hydrated ${edgesAdded} edges for tree ${resolvedTreeId}`,
+                );
+              }
+            } catch (err) {
+              console.warn('[TreeView] graph edge hydration failed', err);
+            }
+          }
+
+          const added = mergeBackendNodes(treeDoc, nodes);
           if (added > 0) {
             console.log(
               `[TreeView] hydrated ${added} nodes for tree ${resolvedTreeId}`,
             );
+          }
+
+          // Nodes the graph knows and the node list did not (metadata-free
+          // fallback; existing nodes are skipped, so the richer REST payload
+          // above always wins).
+          if (graph) {
+            mergeBackendNodes(treeDoc, toGraphNodePayloads(graph.nodes));
           }
         } catch (err) {
           console.warn('[TreeView] hydration failed', err);
@@ -285,6 +343,86 @@ export default function TreeView() {
     if (localUserId) names.set(localUserId, 'You');
     return names;
   }, [members, remotePresence, localUserId]);
+
+  // ── SPEC-PL-06 §7: multi-reference replies ──────────────────────────
+
+  /** Whether the source-list inspector below the canvas is expanded. */
+  const [referencePanelOpen, setReferencePanelOpen] = useState(false);
+
+  /**
+   * §7.2 hover sync. Two independent pointers feed one highlight: the source
+   * list (a row) and the canvas (an edge). The edge id is resolved back to
+   * its source so a hover on either side highlights the same pair.
+   */
+  const [hoveredSourceId, setHoveredSourceId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+
+  const referenceHighlight = useMemo<ReferenceHighlight | null>(() => {
+    if (hoveredEdgeId) {
+      const source =
+        tree.edges.find((edge) => edge.id === hoveredEdgeId)?.source ?? null;
+      return { edgeId: hoveredEdgeId, sourceId: source };
+    }
+    if (hoveredSourceId) return { sourceId: hoveredSourceId };
+    return null;
+  }, [hoveredEdgeId, hoveredSourceId, tree.edges]);
+
+  /** `metadata.multi_reference` of the selected node, when it has one. */
+  const selectedReferenceMetadata = useMemo<MultiReferenceMetadata | null>(() => {
+    if (!selectedNodeId) return null;
+    const node = tree.nodes.find((n) => n.id === selectedNodeId);
+    const metadata = node?.data?.metadata as Record<string, unknown> | undefined;
+    return normaliseMultiReferenceMetadata(metadata?.multi_reference);
+  }, [selectedNodeId, tree.nodes]);
+
+  /**
+   * Source lookup against the replica the canvas is already rendering —
+   * author, timestamp and body come from here, never from a second fetch.
+   */
+  const resolveSourceNode = useCallback(
+    (id: string): ReferenceSourceNodeInfo | null => {
+      const node = tree.nodes.find((n) => n.id === id);
+      if (!node) return null;
+      return {
+        authorId: String(node.data.authorId ?? ''),
+        createdAt: String(node.data.createdAt ?? ''),
+        content: String(node.data.content ?? ''),
+        label: String(node.data.label ?? ''),
+      };
+    },
+    [tree.nodes],
+  );
+
+  /**
+   * §5.2 renderer metadata for the selected reply's reference edges, keyed by
+   * source node. The edges are in the local replica (§7.1 hydration) — this
+   * is where the server-computed `color_key` / `source_label` live.
+   */
+  const referenceEdgeMeta = useCallback(
+    (sourceNodeId: string): { colorKey?: string; sourceLabel?: string } | null => {
+      if (!selectedNodeId) return null;
+      const edge = tree.edges.find(
+        (e) =>
+          e.target === selectedNodeId &&
+          e.source === sourceNodeId &&
+          flowEdgeIsReference(e),
+      );
+      if (!edge) return null;
+      const data = (edge.data ?? {}) as { colorKey?: string; sourceLabel?: string };
+      return data;
+    },
+    [tree.edges, selectedNodeId],
+  );
+
+  /**
+   * §7.1: the badge on a reply opens its source list. The list lives in the
+   * page (not in the node card), so it remains reachable when the canvas is
+   * the Canvas 2D fallback.
+   */
+  const handleOpenReferences = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setReferencePanelOpen(true);
+  }, []);
 
   // Handle message send from MessageComposer — creates a real node.
   //
@@ -444,6 +582,11 @@ export default function TreeView() {
           nodesDraggable={!isViewer}
           authorNames={authorNames}
           {...(isViewer ? {} : { onCreateReply: handleCreateReply })}
+          onOpenReferences={handleOpenReferences}
+          referenceHighlight={referenceHighlight}
+          onReferenceHighlightChange={(highlight) =>
+            setHoveredEdgeId(highlight?.edgeId ?? null)
+          }
           collaborativeCursors={
             <CollaborativeCursors
               remotePresence={remotePresence}
@@ -452,6 +595,24 @@ export default function TreeView() {
           }
         />
       </div>
+
+      {/*
+        SPEC-PL-06 §7.3 reference inspector — canonical source list, branch
+        grouping, manifest hash and token allocation for a multi-reference
+        reply. Renders nothing when the selection is not one (§7.1: the
+        source list must not require the graph canvas).
+      */}
+      <ReferenceInspectorPanel
+        nodeId={selectedNodeId}
+        metadata={selectedReferenceMetadata}
+        open={referencePanelOpen}
+        onOpenChange={setReferencePanelOpen}
+        resolveNode={resolveSourceNode}
+        edgeMeta={referenceEdgeMeta}
+        authorNames={authorNames}
+        highlightedNodeId={referenceHighlight?.sourceId ?? null}
+        onHighlightChange={(sourceId) => setHoveredSourceId(sourceId)}
+      />
 
       {/*
         Context manifest inspector (WIRE-002) — what the compiler would

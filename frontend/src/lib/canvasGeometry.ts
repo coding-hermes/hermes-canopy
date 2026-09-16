@@ -14,6 +14,7 @@
  */
 
 import { palette, alpha } from '../theme';
+import { REFERENCE_STROKE_WIDTH, referenceStroke } from './multiReference';
 
 // ─── Bezier geometry ───────────────────────────────────────────────────
 
@@ -109,8 +110,14 @@ export function jointDotPosition(
 
 // ─── Connector styling ─────────────────────────────────────────────────
 
-/** Which visual language a connector speaks. */
-export type ConnectorKind = 'reply' | 'fork' | 'synthesis';
+/**
+ * Which visual language a connector speaks.
+ *
+ * `reference` is the SPEC-PL-06 §7.2 convergence edge: it is the one kind
+ * whose colour is NOT a token — it is the server-computed `color_key`
+ * mapped through the fixed §7.2 palette.
+ */
+export type ConnectorKind = 'reply' | 'fork' | 'synthesis' | 'reference';
 
 export interface ConnectorStyle {
   /** Core stroke colour. */
@@ -126,12 +133,14 @@ export interface ConnectorStyle {
 }
 
 /** Accent per connector kind, straight off the token palette. */
-export function connectorAccent(kind: ConnectorKind): string {
+export function connectorAccent(kind: ConnectorKind, colorKey?: unknown): string {
   switch (kind) {
     case 'synthesis':
       return palette.warning;
     case 'fork':
       return palette.accent3;
+    case 'reference':
+      return referenceStroke(colorKey);
     case 'reply':
     default:
       return palette.accent;
@@ -144,14 +153,32 @@ export function connectorAccent(kind: ConnectorKind): string {
  * Selected connectors brighten and thicken (they are the path the user is
  * reading); connectors into a collapsed branch fade back so the collapsed
  * stub reads as "there is more here" rather than as an active thread.
+ *
+ * `colorKey` applies to `reference` only (§7.2) and never changes the
+ * geometry: the stroke stays exactly `REFERENCE_STROKE_WIDTH` so a hover
+ * highlights the edge without making the graph jump.
  */
 export function connectorStyle(
   kind: ConnectorKind,
   state: { selected?: boolean; dimmed?: boolean } = {},
+  colorKey?: unknown,
 ): ConnectorStyle {
-  const accent = connectorAccent(kind);
+  const accent = connectorAccent(kind, colorKey);
   const selected = state.selected === true;
   const dimmed = state.dimmed === true && !selected;
+
+  if (kind === 'reference') {
+    return {
+      stroke: alpha(accent, selected ? 1 : dimmed ? 0.22 : 0.92),
+      glow: alpha(accent, selected ? 0.45 : dimmed ? 0.04 : 0.18),
+      // §7.2 fixes 2.5px for every reference edge — highlight is opacity and
+      // halo, never a width change.
+      strokeWidth: REFERENCE_STROKE_WIDTH,
+      glowWidth: selected ? 11 : 8,
+      dash: undefined,
+      dot: alpha(accent, selected ? 1 : dimmed ? 0.35 : 0.85),
+    };
+  }
 
   const strokeAlpha = selected ? 0.95 : dimmed ? 0.28 : 0.6;
   const glowAlpha = selected ? 0.42 : dimmed ? 0.06 : 0.16;

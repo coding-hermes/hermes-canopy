@@ -536,10 +536,22 @@ GET /api/v1/graph/trees/{tree_id}/subtree/{node_id}
     { "id": "uuid", "parent_id": "uuid|null", "type": "string", "depth": 0 }
   ],
   "edges": [
-    { "source_id": "uuid", "target_id": "uuid", "edge_type": "string" }
+    {
+      "id": "uuid",
+      "source_id": "uuid",
+      "target_id": "uuid",
+      "edge_type": "string",
+      "metadata": { "reference_index": 0, "source_label": "R1", "color_key": "ref-6", "selection_order": 0, "role": "context_source" }
+    }
   ]
 }
 ```
+
+`edges[].id` is the persisted `edges.id` — React Flow renders convergence edges
+with the database identity (SPEC-PL-06 §7.1). `edges[].metadata` is the decoded
+JSONB object, omitted entirely when the column holds the `{}` default;
+`reference` edges carry the §5.2 renderer metadata (`reference_index`,
+`source_label`, `color_key`, `selection_order`, `role`).
 
 **Error codes:** `NODE_NOT_FOUND` (404), `SUBTREE_ERROR` (500)
 
