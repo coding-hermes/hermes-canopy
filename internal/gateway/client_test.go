@@ -135,6 +135,94 @@ func TestStartRunNon202ReturnsAPIError(t *testing.T) {
 	}
 }
 
+// TestListModels pins the GET /v1/models client added for GAP-080 phase 2a:
+// auth is inherited from the client, the per-model context window is decoded,
+// and BOTH response shapes internal/hermes' decodeList tolerates are accepted
+// (bare array, or an object wrapping the list under "models"). Anything else
+// is an error — callers fall back from it.
+func TestListModels(t *testing.T) {
+	t.Run("bare array", func(t *testing.T) {
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			if r.URL.Path != "/v1/models" {
+				return false
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"big-model","context_length":200000},{"id":"small-model","context_length":4096}]`))
+			return true
+		})
+		defer ts.Close()
+
+		c, err := NewClient(ts.URL, "sekret")
+		if err != nil {
+			t.Fatal(err)
+		}
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels: %v", err)
+		}
+		if len(models) != 2 {
+			t.Fatalf("want 2 models, got %d: %+v", len(models), models)
+		}
+		if models[0].ID != "big-model" || models[0].ContextLen != 200000 {
+			t.Fatalf("first model = %+v", models[0])
+		}
+		if models[1].ID != "small-model" || models[1].ContextLen != 4096 {
+			t.Fatalf("second model = %+v", models[1])
+		}
+		recs := ts.requestsFor(http.MethodGet, "/v1/models")
+		if len(recs) != 1 {
+			t.Fatalf("want 1 GET /v1/models, got %d", len(recs))
+		}
+		if recs[0].auth != "Bearer sekret" {
+			t.Fatalf("model list must carry the client's auth header, got %q", recs[0].auth)
+		}
+	})
+
+	t.Run("wrapped in a models field", func(t *testing.T) {
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"object":"list","models":[{"id":"big-model","context_length":200000}]}`))
+			return true
+		})
+		defer ts.Close()
+
+		c, _ := NewClient(ts.URL, "k")
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels: %v", err)
+		}
+		if len(models) != 1 || models[0].ID != "big-model" || models[0].ContextLen != 200000 {
+			t.Fatalf("wrapped shape decoded as %+v", models)
+		}
+	})
+
+	t.Run("unusable shapes error", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			status int
+			body   string
+		}{
+			{"non-2xx", http.StatusUnauthorized, `{"error":{"message":"invalid api key"}}`},
+			{"object without a models field", http.StatusOK, `{"object":"list","data":[]}`},
+			{"not JSON at all", http.StatusOK, `<html>nope</html>`},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tc.status)
+					w.Write([]byte(tc.body))
+					return true
+				})
+				defer ts.Close()
+				c, _ := NewClient(ts.URL, "k")
+				if _, err := c.ListModels(context.Background()); err == nil {
+					t.Fatalf("want an error for %s", tc.name)
+				}
+			})
+		}
+	})
+}
+
 func TestGetRunMapsStatusAndNotFound(t *testing.T) {
 	ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
 		w.Header().Set("Content-Type", "application/json")

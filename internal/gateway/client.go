@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,6 +100,52 @@ type StartRunRequest struct {
 	Instructions string `json:"instructions,omitempty"`
 	SessionID    string `json:"session_id,omitempty"`
 	Model        string `json:"model,omitempty"`
+}
+
+// ModelInfo describes one entry of the gateway's GET /v1/models response.
+// Only the fields this client consumes are decoded; any other key the
+// endpoint adds is ignored.
+type ModelInfo struct {
+	ID         string `json:"id"`
+	ContextLen int    `json:"context_length"`
+}
+
+// ListModels lists the models the gateway knows about via GET /v1/models
+// (the per-model context window is what makes a window-derived budget
+// possible — GAP-080 phase 2a). Auth, timeout and error mapping are inherited
+// from doJSON/newRequest, exactly like every other call on this client.
+//
+// The response shape is tolerant the same way internal/hermes' decodeList is:
+// a bare JSON array of models, or an object wrapping the list under a
+// "models" key. No third shape is invented — anything else is an error, which
+// callers treat as "catalog unreachable" and fall back from.
+func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	var raw json.RawMessage
+	if err := c.doJSON(ctx, http.MethodGet, "/v1/models", nil, &raw, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return decodeModelList(raw)
+}
+
+// decodeModelList decodes the two shapes GET /v1/models may answer with (see
+// ListModels).
+func decodeModelList(raw []byte) ([]ModelInfo, error) {
+	var out []ModelInfo
+	if err := json.Unmarshal(raw, &out); err == nil {
+		return out, nil
+	}
+	var wrapped map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return nil, errors.New("gateway: list models: not a JSON array or object")
+	}
+	items, ok := wrapped["models"]
+	if !ok {
+		return nil, errors.New(`gateway: list models: missing "models" field`)
+	}
+	if err := json.Unmarshal(items, &out); err != nil {
+		return nil, fmt.Errorf("gateway: list models: %q field: %w", "models", err)
+	}
+	return out, nil
 }
 
 // RunRef is the immediate result of starting a run (HTTP 202).

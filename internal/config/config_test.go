@@ -185,6 +185,66 @@ func TestFromEnvTrustedProxiesParsesListAndTrimsWhitespace(t *testing.T) {
 	}
 }
 
+// --- CONTEXT_BUDGET_PERCENT (GAP-080 phase 2a) ----------------------------
+
+func TestContextBudgetPercentDefault(t *testing.T) {
+	if got := Default().ContextBudgetPercent; got != 60 {
+		t.Fatalf("Default().ContextBudgetPercent = %d, want 60", got)
+	}
+}
+
+// TestContextBudgetPercentFromEnv pins the parse contract: 0..100 inclusive is
+// taken as given (0 means "window-derived path disabled", never "unset"), and
+// every out-of-range or non-numeric value silently keeps the default 60 —
+// matching the sibling context knobs, which never error at parse time.
+func TestContextBudgetPercentFromEnv(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want int
+	}{
+		{"unset keeps the default", "", 60},
+		{"explicit 60", "60", 60},
+		{"zero is preserved (window path disabled)", "0", 0},
+		{"100 is the inclusive upper bound", "100", 100},
+		{"above range keeps the default", "150", 60},
+		{"negative keeps the default", "-1", 60},
+		{"non-numeric keeps the default", "abc", 60},
+		{"blank keeps the default", " ", 60},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CONTEXT_BUDGET_PERCENT", tc.env)
+			if got := FromEnv().ContextBudgetPercent; got != tc.want {
+				t.Fatalf("FromEnv() with CONTEXT_BUDGET_PERCENT=%q = %d, want %d", tc.env, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateContextBudgetPercent pins the other half of the contract: a
+// value FromEnv would have ignored is a hard error on a Config built in code.
+func TestValidateContextBudgetPercent(t *testing.T) {
+	for _, pct := range []int{0, 1, 60, 100} {
+		c := Default()
+		c.ContextBudgetPercent = pct
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate() with CONTEXT_BUDGET_PERCENT=%d = %v, want nil", pct, err)
+		}
+	}
+	for _, pct := range []int{-1, 101, 1000} {
+		c := Default()
+		c.ContextBudgetPercent = pct
+		err := c.Validate()
+		if err == nil {
+			t.Fatalf("Validate() with CONTEXT_BUDGET_PERCENT=%d = nil, want error", pct)
+		}
+		if !strings.Contains(err.Error(), "CONTEXT_BUDGET_PERCENT") {
+			t.Fatalf("Validate() error %q does not name CONTEXT_BUDGET_PERCENT", err)
+		}
+	}
+}
+
 func TestValidateTrustedProxies(t *testing.T) {
 	valid := Default()
 	valid.TrustedProxies = []string{"10.0.0.0/8", "192.168.0.0/16", "2001:db8::/32"}

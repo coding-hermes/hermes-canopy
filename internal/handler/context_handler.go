@@ -1,7 +1,12 @@
 // Package handler — context compiler HTTP endpoint.
 //
-// GET /api/v1/context/{node_id}?budget=8000&includeCards=true
+// GET /api/v1/context/{node_id}?budget=8000&includeCards=true&model=<name>
 // Requires valid JWT via authMW.
+//
+// GAP-080 phase 2a: with no ?budget=, ?model= selects the model whose context
+// window sizes the default budget (percent of the window, configurable with
+// CONTEXT_BUDGET_PERCENT). An explicit ?budget= wins and keeps its historical
+// 10x-default clamp.
 //
 // Spec: SPEC-IMPL-GAP-001-context-compiler.md §4.2
 // SPEC-PL-06 §6 (multi-reference block): when the target node is a
@@ -14,6 +19,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -44,6 +50,12 @@ type ContextHandler struct {
 	// compiles its §6.1 block. A nil loader leaves compilation exactly as it
 	// was before multi-reference support (DB-free wiring harnesses).
 	selectionLoader ReferenceSelectionLoader
+	// windowCatalog (optional, GAP-080 phase 2a) derives the DEFAULT budget
+	// from the context window of the model named by ?model=; budgetPercent is
+	// that derivation's percentage (0 disables it). A nil catalog leaves the
+	// flat defaultBudget behaviour byte-identical.
+	windowCatalog *ModelWindowCatalog
+	budgetPercent int
 }
 
 // NewContextHandler returns a handler wired to the given context compiler.
@@ -61,6 +73,18 @@ func (h *ContextHandler) WithReferenceSelectionLoader(loader ReferenceSelectionL
 	return h
 }
 
+// WithModelWindowCatalog wires the model context-window catalog used to derive
+// the DEFAULT budget when the request carries no ?budget= (GAP-080 phase 2a),
+// plus the percentage of that window to use. Safe to call with nil (and with a
+// percent of 0), both of which keep the flat defaultBudget; the option form
+// keeps NewContextHandler(compiler, defaultBudget) working for existing
+// callers and tests.
+func (h *ContextHandler) WithModelWindowCatalog(catalog *ModelWindowCatalog, percent int) *ContextHandler {
+	h.windowCatalog = catalog
+	h.budgetPercent = percent
+	return h
+}
+
 // Compile handles GET /api/v1/context/{node_id}.
 func (h *ContextHandler) Compile(w http.ResponseWriter, r *http.Request) {
 	nodeID, ok := parseNodeID(w, r)
@@ -68,8 +92,27 @@ func (h *ContextHandler) Compile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse budget query param
-	budget := h.defaultBudget
+	// Budget resolution. An explicit ?budget= still wins VERBATIM: it is
+	// parsed and clamped exactly as it was before GAP-080, against the FLAT
+	// configured default (parsed > defaultBudget*10 → defaultBudget*10). The
+	// 10x ceiling is deliberately NOT raised by the window-derived default —
+	// a client must not be able to use a large model window to request an
+	// unbounded budget.
+	//
+	// With no ?budget= the default is derived from the model named by ?model=
+	// when a catalog is wired (GAP-080 phase 2a); an unknown model, an
+	// unreachable catalog, no model, or a percent of 0 all fall back to
+	// defaultBudget. The derived value needs no 10x clamp: it is already
+	// bounded by the model's own context window, and clamping it against
+	// defaultBudget*10 would silently defeat the derivation (a 200k window at
+	// 60% is 120k, far above 80k).
+	model := strings.TrimSpace(r.URL.Query().Get("model"))
+	// An empty ?model= is treated as absent: exactly as if the parameter had
+	// not been sent, never a 400.
+	var (
+		budget       int
+		budgetSource string
+	)
 	if b := r.URL.Query().Get("budget"); b != "" {
 		parsed, err := strconv.Atoi(b)
 		if err != nil || parsed < 1 {
@@ -81,7 +124,12 @@ func (h *ContextHandler) Compile(w http.ResponseWriter, r *http.Request) {
 			parsed = h.defaultBudget * 10
 		}
 		budget = parsed
+		budgetSource = budgetSourceExplicit
+	} else {
+		budget, budgetSource = resolveDefaultBudget(r.Context(), h.windowCatalog, h.budgetPercent, h.defaultBudget, model)
 	}
+	log.Ctx(r.Context()).Debug().Str("model", model).Str("source", budgetSource).Int("budget", budget).
+		Msg("context: resolved token budget")
 
 	includeCards := false
 	if ic := r.URL.Query().Get("includeCards"); ic == "true" || ic == "1" {

@@ -46,6 +46,16 @@ type Config struct {
 	ContextMaxRefs       int // CONTEXT_MAX_REFS, default 5 (soft) — hard cap is 2x this
 	ContextDefaultBudget int // CONTEXT_DEFAULT_BUDGET, default 8000 tokens
 
+	// ContextBudgetPercent is the percentage of the SELECTED model's context
+	// window used as the default compilation budget (GAP-080 phase 2a):
+	// CONTEXT_BUDGET_PERCENT, default 60. It is a ceiling-free default — the
+	// derived budget replaces ContextDefaultBudget only when the model is
+	// known to the gateway's model catalog. 0 DISABLES the window-derived
+	// path entirely, so the budget is always ContextDefaultBudget. Out of
+	// range or non-numeric values keep the default at parse time; a
+	// programmatically-built Config outside 0..100 is rejected by Validate().
+	ContextBudgetPercent int
+
 	// Plugin sandbox (GAP-002 §4.1)
 	PluginMaxSize int // PLUGIN_MAX_SIZE, default 1048576 (1MB)
 
@@ -104,6 +114,7 @@ func Default() *Config {
 		ContextMaxAncestors:  50,
 		ContextMaxRefs:       5,
 		ContextDefaultBudget: 8000,
+		ContextBudgetPercent: 60,
 		PluginMaxSize:        1048576,
 		GatewayBaseURL:       "http://127.0.0.1:8642",
 	}
@@ -170,6 +181,16 @@ func FromEnv() *Config {
 	if v := os.Getenv("CONTEXT_DEFAULT_BUDGET"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			c.ContextDefaultBudget = n
+		}
+	}
+	// CONTEXT_BUDGET_PERCENT (GAP-080 phase 2a): the window-derived default
+	// budget as a percentage of the selected model's context window. 0..100
+	// inclusive is accepted (0 = disabled, i.e. always the flat default);
+	// anything else keeps the default 60, matching the silent-keep behaviour
+	// of the sibling context knobs above.
+	if v := os.Getenv("CONTEXT_BUDGET_PERCENT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
+			c.ContextBudgetPercent = n
 		}
 	}
 	if v := os.Getenv("PLUGIN_MAX_SIZE"); v != "" {
@@ -279,12 +300,21 @@ func FromEnv() *Config {
 
 // Validate checks configuration invariants that must fail fast at startup.
 // A negative PLUGIN_MAX_SIZE is a hard error (GAP-002 §4.1); zero falls back
-// to the 1MB default in FromEnv. TrustedProxies entries must each parse as a
+// to the 1MB default in FromEnv. A CONTEXT_BUDGET_PERCENT outside 0..100 is
+// likewise a hard error (GAP-080 phase 2a) — FromEnv already ignores an
+// out-of-range env value, so reaching Validate() with one means the Config was
+// built in code. TrustedProxies entries must each parse as a
 // valid CIDR — a malformed entry is a startup error rather than a panic
 // inside chi's ClientIPFromXFF (which panics on invalid prefixes).
 func (c *Config) Validate() error {
 	if c.PluginMaxSize < 0 {
 		return fmt.Errorf("config: PLUGIN_MAX_SIZE must not be negative (got %d)", c.PluginMaxSize)
+	}
+	// GAP-080 phase 2a: CONTEXT_BUDGET_PERCENT is a percentage and is never
+	// silently clamped here — an out-of-range value on a programmatically
+	// built Config is a programming error, not a user preference.
+	if c.ContextBudgetPercent < 0 || c.ContextBudgetPercent > 100 {
+		return fmt.Errorf("config: CONTEXT_BUDGET_PERCENT must be between 0 and 100 (got %d)", c.ContextBudgetPercent)
 	}
 	for _, p := range c.TrustedProxies {
 		if _, _, err := net.ParseCIDR(p); err != nil {

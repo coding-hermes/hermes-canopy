@@ -183,6 +183,7 @@ type StartRunInput struct {
 	Message       string          // raw user message (always set)
 	Input         string          // what the gateway receives; "" => Message
 	SessionID     string          // conversation scope, "" for a fresh one
+	Model         string          // "" => gateway default model
 	SourceNodeID  string          // "" for a context-free run
 	TokenBudget   int             // 0 when none was applied
 	ContextTokens int             // compiler manifest TokensUsed; 0 when none
@@ -212,6 +213,13 @@ func (s *Service) StartRunWithContext(ctx context.Context, in StartRunInput) (*R
 	req := StartRunRequest{Input: input}
 	if in.SessionID != "" {
 		req.SessionID = in.SessionID
+	}
+	// GAP-080 phase 2a: a named model travels to the gateway verbatim so the
+	// run happens on the model the caller budgeted for. An empty model leaves
+	// the field out of the request JSON entirely (omitempty), so a
+	// context-free run's body is byte-identical to before this phase.
+	if in.Model != "" {
+		req.Model = in.Model
 	}
 	ref, err := s.client.StartRun(ctx, req)
 	if err != nil {

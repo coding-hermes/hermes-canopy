@@ -767,3 +767,63 @@ func TestServiceCloseConcurrentWithPersistIsRaceFree(t *testing.T) {
 	svc.noteEvent("run_test", RunEvent{Event: "run.failed", RunID: "run_test", Error: "late"})
 	assertSameDir(t, "after a post-Close write attempt", after, snapshotDir(t, dir))
 }
+
+// TestStartRunInputModelForwarded proves the plumbing half of GAP-080 phase 2a:
+// a non-empty StartRunInput.Model reaches the gateway's POST /v1/runs body
+// verbatim, and an empty one leaves the key out of that body entirely
+// (omitempty) — so a context-free run's request is byte-identical to before.
+func TestStartRunInputModelForwarded(t *testing.T) {
+	ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs":
+			w.WriteHeader(http.StatusAccepted)
+			w.Write([]byte(`{"run_id":"run_model","status":"started"}`))
+			return true
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/events"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Write([]byte(": stream closed\n\n"))
+			return true
+		}
+		return false
+	})
+	defer ts.Close()
+
+	c, err := NewClient(ts.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(c)
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRunWithContext(context.Background(), StartRunInput{
+		Message: "hello", Input: "hello", Model: "deepseek/deepseek-chat",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The model-less run: exactly today's shape.
+	if _, err := svc.StartRunWithContext(context.Background(), StartRunInput{
+		Message: "hello", Input: "hello",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recs := ts.requestsFor(http.MethodPost, "/v1/runs")
+	if len(recs) != 2 {
+		t.Fatalf("want 2 POST /v1/runs, got %d", len(recs))
+	}
+	var withModel map[string]any
+	if err := json.Unmarshal([]byte(recs[0].body), &withModel); err != nil {
+		t.Fatalf("first body not decodable (%v): %s", err, recs[0].body)
+	}
+	if withModel["model"] != "deepseek/deepseek-chat" {
+		t.Fatalf("model not forwarded to the gateway: %v", withModel)
+	}
+	var withoutModel map[string]any
+	if err := json.Unmarshal([]byte(recs[1].body), &withoutModel); err != nil {
+		t.Fatalf("second body not decodable (%v): %s", err, recs[1].body)
+	}
+	if _, present := withoutModel["model"]; present {
+		t.Fatalf("an empty model must stay out of the request body: %v", withoutModel)
+	}
+}

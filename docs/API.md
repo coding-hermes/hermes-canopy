@@ -968,9 +968,28 @@ GET /api/v1/context/{node_id}
 
 **Query params:**
 - `budget` — token budget (int, default 8000, max 10x default)
+- `model` — model whose context window sizes the **default** budget
+  (GAP-080); trimmed, and an empty value is treated as if it were absent
 - `includeCards` — bool, default false
 - `resolveRefs` — bool, default true
 - `maxAncestors` — int, default 0 (unbounded)
+
+**Default budget (`?model=` + `CONTEXT_BUDGET_PERCENT`).** With no `budget`
+parameter the default is `CONTEXT_DEFAULT_BUDGET` (8000) unless a model is
+named and the gateway's model catalog knows its context window, in which case
+it becomes `floor(window × CONTEXT_BUDGET_PERCENT / 100)` (60% by default;
+4096 → 2457, 200 000 → 120 000). `CONTEXT_BUDGET_PERCENT=0` disables the
+derivation, and an unknown model, an unreachable catalog, or no `model` at all
+falls back to `CONTEXT_DEFAULT_BUDGET` — the request never fails because the
+catalog is down.
+
+An explicit `budget` wins verbatim and keeps its historical parse and its
+historical 10× clamp against `CONTEXT_DEFAULT_BUDGET` (`budget=999999999` →
+80000). The window-derived default is **not** subject to that clamp (it is
+already bounded by the model's own window, and clamping it against
+`defaultBudget × 10` would silently undo the derivation), and the 10× ceiling
+is **not** raised by it — a large window cannot be used to request an
+unbounded budget.
 
 **Response (200):** Compiled context with visible manifest.
 
@@ -1855,8 +1874,11 @@ actual code:
     - `GET  /api/v1/gateway/runs` — run registry (newest first, live status
       refresh for non-terminal runs)
     - `POST /api/v1/gateway/runs` — `{message, session_id?, node_id?,
-      token_budget?}` → starts a REAL Hermes agent run (`POST /v1/runs` on the
-      gateway; 202 + run_id)
+      model?, token_budget?}` → starts a REAL Hermes agent run (`POST /v1/runs`
+      on the gateway; 202 + run_id). `model` is forwarded to the gateway
+      verbatim and — when `token_budget` is absent — selects the model whose
+      context window sizes the default budget (`CONTEXT_BUDGET_PERCENT`,
+      default 60%). An explicit `token_budget` always wins, unchanged
     - `GET  /api/v1/gateway/runs/{run_id}` — run record with event history
     - `GET  /api/v1/gateway/runs/{run_id}/events` — SSE stream (history
       replay + live fan-out of gateway lifecycle events)
@@ -1870,9 +1892,18 @@ actual code:
     `specs/SPEC-FTR-07-hermes-agent-gateway-integration.md` § "Context manifest
     assembly". With `node_id` the COMPILED payload — not the raw message —
     becomes the gateway's `input`, so the model call has a visible, auditable
-    manifest; `token_budget` overrides the default budget
-    (`CONTEXT_DEFAULT_BUDGET`, default 8000) for that call only. Compilation
-    never falls back to the raw message.
+    manifest; `token_budget` overrides the default budget for that call only.
+    Compilation never falls back to the raw message.
+
+    **Window-derived default budget (GAP-080).** With no `token_budget` the
+    default is `CONTEXT_DEFAULT_BUDGET` (8000) unless `model` names a model
+    whose context window the gateway's model catalog reports, in which case it
+    becomes `floor(window × CONTEXT_BUDGET_PERCENT / 100)` (60% by default).
+    `CONTEXT_BUDGET_PERCENT=0` disables the derivation; an unknown model, no
+    `model` at all, or an unreachable model catalog falls back to
+    `CONTEXT_DEFAULT_BUDGET` — the model list is cached for five minutes, and a
+    failed lookup never fails the run. An explicit `token_budget` is applied
+    verbatim (this route has never clamped it).
 
     The run record — the `run` object in the 202 response and the body of
     `GET /api/v1/gateway/runs/{run_id}` — then carries:

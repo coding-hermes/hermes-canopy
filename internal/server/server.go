@@ -35,6 +35,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// modelWindowCatalogTTL is how long one ModelWindowCatalog caches the live
+// gateway's model list (GAP-080 phase 2a). Five minutes is short enough that a
+// gateway restart or a new model is picked up within a tick of use, and long
+// enough that the model list is fetched once per window rather than once per
+// request on the compile surfaces.
+const modelWindowCatalogTTL = 5 * time.Minute
+
 // Server is the Canopy HTTP server.
 type Server struct {
 	httpServer      *http.Server
@@ -422,6 +429,29 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)
 		r.Mount("/mcp", mcpHandler.Routes())
 
+		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
+		// gateway api_server (hermes-webui pattern). The service is constructed
+		// here from config so no main.go signature churn is needed; a bad
+		// base_url falls back to the default so the UI can still show the
+		// gateway as offline instead of crashing the server.
+		//
+		// The client is built BEFORE the compile surfaces because one
+		// ModelWindowCatalog wraps it and serves both of them (GAP-080
+		// phase 2a); construction is pure (no I/O), so boot still never
+		// depends on the gateway being up.
+		gwClient, gwErr := gateway.NewClient(cfg.GatewayBaseURL, cfg.GatewayAPIKey)
+		if gwErr != nil {
+			log.Warn().Err(gwErr).Msg("gateway: invalid HERMES_WEBUI_GATEWAY_BASE_URL; using default")
+			gwClient, _ = gateway.NewClient(gateway.DefaultBaseURL, cfg.GatewayAPIKey)
+		}
+		// One catalog for the whole server: it resolves a model's context
+		// window so the DEFAULT compilation budget can be percent of that
+		// window instead of one flat number. Every failure mode (unreachable
+		// gateway, unknown model, no model, percent 0) falls back to
+		// cfg.ContextDefaultBudget, so it can only ever change the budget —
+		// never fail a request or block boot.
+		windowCatalog := handler.NewModelWindowCatalog(gwClient, modelWindowCatalogTTL)
+
 		// Context compiler (GAP-001) — budgeted context assembly with visible
 		// manifest. SPEC-PL-06 §6: the loader is wired here, on the only
 		// compile surface in the repo, so a multi-reference target compiles
@@ -430,6 +460,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// compilation is unchanged.
 		r.Get("/context/{node_id}",
 			handler.NewContextHandler(ctxCompiler, cfg.ContextDefaultBudget).
+				WithModelWindowCatalog(windowCatalog, cfg.ContextBudgetPercent).
 				WithReferenceSelectionLoader(treeSvc).Compile)
 
 		// Plugin sandbox (GAP-002) — register/list/source/install + instances.
@@ -451,16 +482,8 @@ func newRouter(deps *routeDeps) *chi.Mux {
 			})
 		}
 
-		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
-		// gateway api_server (hermes-webui pattern). The service is constructed
-		// here from config so no main.go signature churn is needed; a bad
-		// base_url falls back to the default so the UI can still show the
-		// gateway as offline instead of crashing the server.
-		gwClient, gwErr := gateway.NewClient(cfg.GatewayBaseURL, cfg.GatewayAPIKey)
-		if gwErr != nil {
-			log.Warn().Err(gwErr).Msg("gateway: invalid HERMES_WEBUI_GATEWAY_BASE_URL; using default")
-			gwClient, _ = gateway.NewClient(gateway.DefaultBaseURL, cfg.GatewayAPIKey)
-		}
+		// gwClient (and its catalog) were built above, next to the compile
+		// surfaces they serve.
 		// Restore the persisted run registry and refresh non-terminal records
 		// against the gateway (GAP-054). NewServiceWithState never fails: a
 		// gateway that is down or missing endpoints only logs, so canopyd still
@@ -470,9 +493,11 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// node-scoped run (POST /gateway/runs {node_id}) sends the COMPILED
 		// context to the model and records its manifest. Wiring it here is
 		// what makes the router carry the compiler — the compiler instance is
-		// the same one serving GET /context/{node_id}.
+		// the same one serving GET /context/{node_id}. GAP-080 phase 2a adds
+		// the model-window catalog, the same instance the read route uses.
 		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc,
-			handler.WithContextCompiler(ctxCompiler, cfg.ContextDefaultBudget)).Routes())
+			handler.WithContextCompiler(ctxCompiler, cfg.ContextDefaultBudget),
+			handler.WithContextBudget(windowCatalog, cfg.ContextBudgetPercent)).Routes())
 	})
 
 	// Federation handshake is P2P-authenticated, so it cannot inherit the

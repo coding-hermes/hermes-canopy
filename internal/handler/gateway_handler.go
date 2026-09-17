@@ -56,6 +56,12 @@ type GatewayHandler struct {
 	// defaultBudget is the compiler budget applied when a request does not
 	// carry token_budget (mirrors cfg.ContextDefaultBudget).
 	defaultBudget int
+	// windowCatalog (optional) derives the default budget from the context
+	// window of the model named on the request (GAP-080 phase 2a);
+	// budgetPercent is that derivation's percentage (0 disables it). A nil
+	// catalog leaves the flat defaultBudget behaviour byte-identical.
+	windowCatalog *ModelWindowCatalog
+	budgetPercent int
 }
 
 // GatewayHandlerOption configures the gateway handler.
@@ -68,6 +74,18 @@ func WithContextCompiler(c ContextCompiler, defaultBudget int) GatewayHandlerOpt
 	return func(h *GatewayHandler) {
 		h.compiler = c
 		h.defaultBudget = defaultBudget
+	}
+}
+
+// WithContextBudget wires the model context-window catalog that derives the
+// DEFAULT compiler budget from the model named on a request (GAP-080 phase
+// 2a) and the percentage of that window to use. A nil catalog — or a percent
+// of 0 — keeps the flat defaultBudget: an unknown model, an unreachable
+// catalog, and a disabled knob all resolve to the same fallback.
+func WithContextBudget(catalog *ModelWindowCatalog, percent int) GatewayHandlerOption {
+	return func(h *GatewayHandler) {
+		h.windowCatalog = catalog
+		h.budgetPercent = percent
 	}
 }
 
@@ -138,10 +156,16 @@ func (h *GatewayHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 // payload — not the raw message — becomes the gateway's `input`, and the
 // compiler's manifest is attached to the run record. `token_budget` overrides
 // the configured default budget for this call only.
+//
+// `model` (GAP-080 phase 2a) is forwarded to the gateway verbatim AND, when
+// no `token_budget` is given, selects the model whose context window sizes the
+// default budget. An explicit `token_budget` still wins unchanged — it is not
+// clamped on this route, before or after this phase.
 type startRunRequest struct {
 	Message     string `json:"message"`
 	SessionID   string `json:"session_id,omitempty"`
 	NodeID      string `json:"node_id,omitempty"`      // UUID; enables compilation
+	Model       string `json:"model,omitempty"`        // "" => gateway default model
 	TokenBudget int    `json:"token_budget,omitempty"` // 0 => handler default
 }
 
@@ -160,7 +184,13 @@ func (h *GatewayHandler) StartRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "message is required")
 		return
 	}
-	in := gateway.StartRunInput{Message: req.Message, SessionID: req.SessionID}
+	in := gateway.StartRunInput{
+		Message:   req.Message,
+		SessionID: req.SessionID,
+		// Trimmed so a whitespace-only model is "absent" and stays out of the
+		// gateway request JSON entirely (omitempty).
+		Model: strings.TrimSpace(req.Model),
+	}
 	if req.NodeID != "" && !h.resolveContext(w, r, &req, &in) {
 		return // the compile error response is already written
 	}
@@ -192,7 +222,14 @@ func (h *GatewayHandler) resolveContext(w http.ResponseWriter, r *http.Request, 
 	}
 	budget := req.TokenBudget
 	if budget <= 0 {
-		budget = h.defaultBudget
+		// GAP-080 phase 2a: with a catalog wired the default is percent of
+		// the named model's context window; otherwise (and on every fallback
+		// source) it is the flat configured default. An explicit
+		// token_budget never reaches here and is applied verbatim.
+		var source string
+		budget, source = resolveDefaultBudget(r.Context(), h.windowCatalog, h.budgetPercent, h.defaultBudget, req.Model)
+		log.Debug().Str("model", req.Model).Str("source", source).Int("budget", budget).
+			Msg("gateway run: resolved default token budget")
 	}
 	compiled, err := h.compiler.Compile(r.Context(), ctxpkg.CompileRequest{
 		NodeID:       nodeID,
