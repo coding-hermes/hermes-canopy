@@ -5,8 +5,9 @@
 //
 // GAP-080 phase 2a: with no ?budget=, ?model= selects the model whose context
 // window sizes the default budget (percent of the window, configurable with
-// CONTEXT_BUDGET_PERCENT). An explicit ?budget= wins and keeps its historical
-// 10x-default clamp.
+// CONTEXT_BUDGET_PERCENT). An explicit ?budget= wins verbatim as long as it
+// fits the ceiling — the model's own context window when the catalog knows it
+// (GAP-080 phase 2b), the historical 10x-default flat ceiling otherwise.
 //
 // Spec: SPEC-IMPL-GAP-001-context-compiler.md §4.2
 // SPEC-PL-06 §6 (multi-reference block): when the target node is a
@@ -92,12 +93,21 @@ func (h *ContextHandler) Compile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Budget resolution. An explicit ?budget= still wins VERBATIM: it is
-	// parsed and clamped exactly as it was before GAP-080, against the FLAT
-	// configured default (parsed > defaultBudget*10 → defaultBudget*10). The
-	// 10x ceiling is deliberately NOT raised by the window-derived default —
-	// a client must not be able to use a large model window to request an
-	// unbounded budget.
+	// Budget resolution. An explicit ?budget= still wins: it is parsed and
+	// then clamped, against the model's own context window when the
+	// catalog knows it (GAP-080 phase 2b) and against the flat configured
+	// default otherwise (parsed > defaultBudget*10 → defaultBudget*10) —
+	// the historical, live-verified ceiling.
+	//
+	// The window-aware ceiling exists because the two ceilings disagreed:
+	// the DERIVED default is deliberately exempt from the flat clamp (it is
+	// already bounded by the model's own window), so with ?model= a client
+	// could get 120k by asking for nothing and only 80k by asking for it.
+	// An explicit request may now ask for exactly what the same model gets
+	// by default. Everything else is unchanged, and a nil catalog, no
+	// model, an unknown model, or an unreachable catalog all keep the flat
+	// ceiling — the clamp fails CLOSED, so a catalog failure can never RAISE
+	// it.
 	//
 	// With no ?budget= the default is derived from the model named by ?model=
 	// when a catalog is wired (GAP-080 phase 2a); an unknown model, an
@@ -119,10 +129,7 @@ func (h *ContextHandler) Compile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "INVALID_BUDGET", "budget must be a positive integer")
 			return
 		}
-		// Defensive: clamp to 10x default (prevents malicious budget=999999999)
-		if parsed > h.defaultBudget*10 {
-			parsed = h.defaultBudget * 10
-		}
+		parsed = h.clampExplicitBudget(r.Context(), model, parsed)
 		budget = parsed
 		budgetSource = budgetSourceExplicit
 	} else {
@@ -237,6 +244,37 @@ func compileSelectionFrom(sel *service.CompileSelection, profileBudget int) *ctx
 		})
 	}
 	return out
+}
+
+// clampExplicitBudget applies the ceiling to an explicit ?budget= (GAP-080
+// phase 2b).
+//
+// When the request names a model whose context window W the catalog knows
+// (W > 0), the ceiling IS that window: an explicit request may ask for
+// exactly what the same model gets by default, and no more. Otherwise the
+// historical flat ceiling — defaultBudget*10 — applies unchanged, which is
+// the live-verified behaviour for a model-less request, an unknown model,
+// and a catalog failure.
+//
+// It fails CLOSED on every unknown: a nil catalog, no model, an unknown
+// model, and an unreachable catalog all keep the flat ceiling, so a catalog
+// failure can never RAISE a client's budget. Only a positive window the
+// catalog actually reported replaces it — and since a window smaller than
+// the flat ceiling only ever LOWERS a budget, the widest ceiling a client can
+// reach is still bounded by what the model itself can accept.
+func (h *ContextHandler) clampExplicitBudget(ctx context.Context, model string, budget int) int {
+	if h.windowCatalog != nil && model != "" {
+		if window, ok := h.windowCatalog.Window(ctx, model); ok && window > 0 {
+			if budget > window {
+				return window
+			}
+			return budget
+		}
+	}
+	if budget > h.defaultBudget*10 {
+		return h.defaultBudget * 10
+	}
+	return budget
 }
 
 // multiReferenceStatus maps a §9.4 compilation code onto its HTTP status.

@@ -4,6 +4,10 @@
 // Endpoints (mounted at /api/v1/gateway by server.go):
 //
 //	GET  /status                  — gateway connectivity + run counts
+//	GET  /models                  — the gateway's model catalog (id, context
+//	                                window, and the budget each model would
+//	                                get) for the UI's model choice (GAP-080
+//	                                phase 2b)
 //	GET  /runs                    — registry snapshot (newest first)
 //	POST /runs                    — start a REAL Hermes gateway run; with a
 //	                                node_id the model receives the COMPILED
@@ -102,6 +106,11 @@ func NewGatewayHandler(svc *gateway.Service, opts ...GatewayHandlerOption) *Gate
 func (h *GatewayHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/status", h.Status)
+	// GET /models (GAP-080 phase 2b): the gateway's model catalog with the
+	// budget each model would get, so the UI can offer a model choice. It
+	// lives on this router because the catalog IS the gateway's — see
+	// model_list_handler.go for the contract.
+	r.Get("/models", h.ListModels)
 	r.Get("/runs", h.ListRuns)
 	r.Post("/runs", h.StartRun)
 	r.Get("/runs/{run_id}", h.GetRun)

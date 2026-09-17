@@ -967,7 +967,9 @@ GET /api/v1/context/{node_id}
 ```
 
 **Query params:**
-- `budget` — token budget (int, default 8000, max 10x default)
+- `budget` — explicit token budget (int, ≥ 1). Omitted → the **derived
+  default** below; as a ceiling it is bounded by the named model's context
+  window when the catalog reports one, else by 10× `CONTEXT_DEFAULT_BUDGET`
 - `model` — model whose context window sizes the **default** budget
   (GAP-080); trimmed, and an empty value is treated as if it were absent
 - `includeCards` — bool, default false
@@ -989,13 +991,22 @@ actually answers with (`models` wins if an object carries both). The derivation
 is conditional on the gateway reporting a window: an entry with no context
 window counts as unknown, so the budget falls back to `CONTEXT_DEFAULT_BUDGET`.
 
-An explicit `budget` wins verbatim and keeps its historical parse and its
-historical 10× clamp against `CONTEXT_DEFAULT_BUDGET` (`budget=999999999` →
-80000). The window-derived default is **not** subject to that clamp (it is
-already bounded by the model's own window, and clamping it against
-`defaultBudget × 10` would silently undo the derivation), and the 10× ceiling
-is **not** raised by it — a large window cannot be used to request an
-unbounded budget.
+An explicit `budget` wins as long as it fits the ceiling, and the ceiling is
+**window-aware** (GAP-080 phase 2b): when the request names a `model` whose
+context window the catalog reports, the ceiling IS that window — a 200 000-token
+model accepts `budget=999999999` as 200000, which is exactly the budget the same
+model gets by default, and a 4 096-token model caps an explicit request at 4096.
+In every other case — no `model`, an unknown model, a model the catalog lists
+without a window, an unreachable catalog, or a server with no catalog wired —
+the ceiling stays the historical flat `CONTEXT_DEFAULT_BUDGET × 10`
+(`budget=999999999` → 80000). The clamp **fails closed**: no catalog failure can
+raise a client's budget, and the window path can only ever lower a budget below
+that flat ceiling. The window-derived default is **not** subject to the flat
+clamp (it is already bounded by the model's own window, and clamping it against
+`defaultBudget × 10` would silently undo the derivation).
+
+Non-integer and `< 1` budgets are still `400 INVALID_BUDGET` and never reach the
+compiler.
 
 **Response (200):** Compiled context with visible manifest.
 
@@ -1877,6 +1888,8 @@ actual code:
     or the `API_SERVER_KEY` fallback). Endpoints:
 
     - `GET  /api/v1/gateway/status` — gateway connectivity + run counts
+    - `GET  /api/v1/gateway/models` — the gateway's model catalog: every model
+      it reports, with the budget each would get (GAP-080 phase 2b; see below)
     - `GET  /api/v1/gateway/runs` — run registry (newest first, live status
       refresh for non-terminal runs)
     - `POST /api/v1/gateway/runs` — `{message, session_id?, node_id?,
@@ -1912,7 +1925,44 @@ actual code:
     `models` key, or the OpenAI-style `data` key the gateway sends (`models`
     wins if an object carries both); an entry that reports no context window is
     unknown, so the budget falls back rather than being invented. An explicit
-    `token_budget` is applied verbatim (this route has never clamped it).
+    `token_budget` is applied verbatim (this route has never clamped it — the
+    read route `GET /api/v1/context/{node_id}` is the only surface that clamps
+    an explicit budget, and it clamps against the model's window while this one
+    does not).
+
+    **Model catalog for the UI (GAP-080 phase 2b).** `GET /api/v1/gateway/models`
+    exposes the same catalog the budget derivation reads, so a client can offer
+    a model choice and size a budget control without guessing:
+
+    ```json
+    {
+      "models": [
+        {"id": "big-model", "context_window": 200000, "desired_budget": 120000},
+        {"id": "no-window", "context_window": 0,      "desired_budget": 8000}
+      ],
+      "percent": 60,
+      "default_budget": 8000,
+      "source": "window"
+    }
+    ```
+
+    - `desired_budget` — `floor(context_window × percent / 100)`, never below 1
+      for a positive window; the flat `default_budget` when `percent` is 0 or
+      the entry reports no usable window.
+    - `source` — `window` when at least one entry yields a window-derived
+      budget, `unknown_model` when the catalog answered but reports no window
+      for anything, `disabled` when `CONTEXT_BUDGET_PERCENT=0`, and
+      `catalog_error` / `no_catalog` when the list could not be read at all.
+      With `disabled` the models are still listed (the knob turns off the
+      derivation, not the catalog) and every `desired_budget` is the flat
+      default.
+    - The route **never answers 5xx because the catalog is down**: a failure is
+      `200` with `"models":[]` — an empty ARRAY, never `null` — and the matching
+      `source`, so a client degrades to "no model choice" instead of an error
+      state.
+    - Entries are sorted by `id`, and the list comes from the same five-minute
+      cache the two compile surfaces use (one gateway call per TTL for the whole
+      server).
 
     The run record — the `run` object in the 202 response and the body of
     `GET /api/v1/gateway/runs/{run_id}` — then carries:

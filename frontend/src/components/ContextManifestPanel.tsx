@@ -1,5 +1,5 @@
 /**
- * Hermes Canopy — Context Manifest Panel (WIRE-002)
+ * Hermes Canopy — Context Manifest Panel (WIRE-002, GAP-080 phase 2b)
  *
  * Surfaces the Context Compiler's manifest for the selected node: what
  * the model would actually be sent, how much of the token budget it
@@ -7,6 +7,7 @@
  *
  *   ┌ Context ────────────────── 1,240 / 8,000 tokens ─┐
  *   │ ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  16%   │
+ *   │ [Model ▾] [Budget ▬▬▬●▬] 8,000  Auto             │
  *   │ 3 items omitted (budget)                         │
  *   │ Ancestry · 4                                     │
  *   │   node   Welcome to Hermes Canopy        412 tok │
@@ -17,23 +18,52 @@
  * inspector that steals a third of it on every click is a worse default
  * than one click to open. Renders nothing at all with no selection.
  *
+ * GAP-080 phase 2b — the two knobs. This panel used to pin `budget=8000`
+ * on every request, which made the server's window-derived default
+ * unreachable from the product; it also could not name a model, so the
+ * window the budget derives from was unchoosable. Now:
+ *
+ *   Model      offered from `GET /api/v1/gateway/models` (fetched once per
+ *              mount). "Server default" = no `model` parameter. ANY failure
+ *              of that fetch degrades to the single Server-default option:
+ *              never an error state, never a spinner that stays forever.
+ *   Budget     Auto by default — NO `budget` parameter, so the server
+ *              derives its own default. Moving the slider sends an explicit
+ *              budget; the Auto button returns to the derived default. The
+ *              slider's maximum is the selected model's `desired_budget`
+ *              (what the server would derive for it) or the backend's
+ *              explicit-request ceiling when no model is chosen.
+ *
+ * HONESTY: the effective budget is always `manifest.tokenBudget`. When an
+ * explicit request came back lower than what was asked for, the panel says
+ * so, naming both numbers — a control that shows the requested value as if
+ * it were in force would be lying about what the model was sent.
+ *
  * All colour comes from the design tokens (theme.ts / index.css); the
  * only inline styles are the ones a Tailwind utility cannot express (the
  * meter's computed width, alpha-composed fills).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Scissors, AlertTriangle } from 'lucide-react';
 import { useContextManifest } from '../hooks/useContextManifest.ts';
+import { apiGet } from '../lib/api.ts';
 import {
+  CONTEXT_BUDGET_STEP,
   DEFAULT_CONTEXT_BUDGET,
+  MIN_CONTEXT_BUDGET,
+  budgetCappedNote,
   budgetSeverity,
   budgetUsageRatio,
+  contextBudgetCeiling,
   contextErrorNote,
   formatTokenCount,
   formatTokenUsage,
   manifestItemTitle,
+  normaliseBudget,
+  normaliseModelOptions,
   omissionNote,
+  type ContextModelOption,
   type Manifest,
   type ManifestItem,
 } from '../lib/contextManifest.ts';
@@ -45,7 +75,12 @@ import { token } from '../theme.ts';
 export interface ContextManifestPanelProps {
   /** Currently selected node, or `null` when the canvas has no selection. */
   nodeId: string | null;
-  /** Token budget requested from the compiler. */
+  /**
+   * Token budget requested from the compiler. When OMITTED the panel sends
+   * no budget parameter at all and the server derives its own default from
+   * the selected model's context window (GAP-080). The prop is the initial
+   * value: the slider takes over from it once the user moves it.
+   */
   budget?: number;
 }
 
@@ -83,6 +118,129 @@ function BudgetMeter({ manifest }: { manifest: Manifest }) {
           backgroundColor: SEVERITY_COLOR[severity],
         }}
       />
+    </div>
+  );
+}
+
+// ─── Budget + model controls (GAP-080 phase 2b) ────────────────────────
+
+const MODEL_SELECT_ID = 'context-model-select';
+const BUDGET_SLIDER_ID = 'context-budget-slider';
+
+interface BudgetControlsProps {
+  /** Models the gateway reports, or `[]` when the catalog is unavailable. */
+  options: ContextModelOption[];
+  model: string;
+  onModelChange: (model: string) => void;
+  /** `null` = Auto: no `budget` parameter is sent. */
+  requested: number | null;
+  onRequestedChange: (budget: number | null) => void;
+  /** The effective budget the last manifest reported, when there was one. */
+  effective: number | null;
+}
+
+/**
+ * The two request knobs, always visible — a control the user cannot reach
+ * while the detail is collapsed is not a control.
+ */
+function BudgetControls({
+  options,
+  model,
+  onModelChange,
+  requested,
+  onRequestedChange,
+  effective,
+}: BudgetControlsProps) {
+  const selected = options.find((option) => option.id === model);
+  const ceiling = contextBudgetCeiling(selected);
+
+  /*
+   * In Auto the slider FOLLOWS the effective budget the server granted (so
+   * the control shows what is in force rather than a stale guess); once the
+   * user moves it, it shows the value they asked for, and the capped note
+   * below reconciles the two when the server disagreed.
+   */
+  const raw = requested ?? effective ?? DEFAULT_CONTEXT_BUDGET;
+  const value = Math.min(Math.max(raw, MIN_CONTEXT_BUDGET), ceiling);
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <label
+        htmlFor={MODEL_SELECT_ID}
+        className="text-[11px] text-content-muted"
+      >
+        Model
+      </label>
+      <select
+        id={MODEL_SELECT_ID}
+        data-testid="context-model-select"
+        aria-label="Model whose context window sizes the budget"
+        className="max-w-48 min-w-0 rounded-md border border-line-subtle bg-surface-input px-1.5 py-0.5 text-[11px] text-content-secondary"
+        value={model}
+        onChange={(event) => onModelChange(event.target.value)}
+      >
+        {/* Empty value = no `model` parameter: the server's own default. */}
+        <option value="">Server default</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.id}
+          </option>
+        ))}
+      </select>
+
+      <label
+        htmlFor={BUDGET_SLIDER_ID}
+        className="text-[11px] text-content-muted"
+      >
+        Budget
+      </label>
+      <input
+        id={BUDGET_SLIDER_ID}
+        data-testid="context-budget-slider"
+        type="range"
+        min={MIN_CONTEXT_BUDGET}
+        max={ceiling}
+        step={CONTEXT_BUDGET_STEP}
+        value={value}
+        aria-label="Context token budget"
+        aria-valuemin={MIN_CONTEXT_BUDGET}
+        aria-valuemax={ceiling}
+        aria-valuenow={value}
+        className="h-1 w-24 rounded-full bg-surface-input"
+        onChange={(event) => onRequestedChange(Number(event.target.value))}
+      />
+      <span
+        data-testid="context-budget-value"
+        className="font-mono text-[11px] tabular-nums text-content-secondary"
+      >
+        {formatTokenCount(value)}
+      </span>
+
+      {requested === null ? (
+        <span
+          data-testid="context-budget-mode"
+          className="text-[11px] text-content-muted"
+        >
+          Auto
+        </span>
+      ) : (
+        <>
+          <span
+            data-testid="context-budget-mode"
+            className="text-[11px] text-content-muted"
+          >
+            Custom
+          </span>
+          <button
+            type="button"
+            data-testid="context-budget-auto"
+            onClick={() => onRequestedChange(null)}
+            className="rounded-md px-1.5 py-0.5 text-[11px] text-content-muted transition-colors hover:text-accent"
+          >
+            Auto
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -148,9 +306,42 @@ export default function ContextManifestPanel({
   budget,
 }: ContextManifestPanelProps) {
   const [open, setOpen] = useState(false);
+  const [model, setModel] = useState('');
+  const [options, setOptions] = useState<ContextModelOption[]>([]);
+  /*
+   * `null` means AUTO — no `budget` parameter is sent and the server applies
+   * its own default. The prop seeds the initial choice for callers that do
+   * request a specific budget; `normaliseBudget` turns an unusable value
+   * (0, NaN) into Auto rather than into a `?budget=0` the handler 400s.
+   */
+  const [requested, setRequested] = useState<number | null>(() =>
+    normaliseBudget(budget),
+  );
+
+  /*
+   * The model catalog, once per mount. Every failure is the same failure:
+   * an empty list, which renders as the single "Server default" option —
+   * the panel can always compile context, it just cannot offer a choice.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const body = await apiGet<unknown>('/gateway/models');
+        if (!cancelled) setOptions(normaliseModelOptions(body));
+      } catch {
+        if (!cancelled) setOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { manifest, loading, error } = useContextManifest(
     nodeId,
-    budget ?? DEFAULT_CONTEXT_BUDGET,
+    requested,
+    model,
   );
 
   // No selection — the inspector has nothing to inspect.
@@ -158,6 +349,7 @@ export default function ContextManifestPanel({
 
   const omission = manifest ? omissionNote(manifest) : null;
   const warnings = manifest?.warnings ?? [];
+  const capped = manifest ? budgetCappedNote(requested, manifest.tokenBudget) : null;
 
   return (
     <aside
@@ -214,6 +406,31 @@ export default function ContextManifestPanel({
         <div className="mt-1.5">
           <BudgetMeter manifest={manifest} />
         </div>
+      )}
+
+      {/* The request knobs — model + budget (GAP-080 phase 2b) */}
+      <BudgetControls
+        options={options}
+        model={model}
+        onModelChange={setModel}
+        requested={requested}
+        onRequestedChange={setRequested}
+        effective={manifest?.tokenBudget ?? null}
+      />
+
+      {/*
+       * An explicit request the server did not grant. Both numbers are
+       * named: the effective budget shown everywhere else is the server's,
+       * and silently displaying the requested value as if it were in force
+       * would misreport what the model was sent.
+       */}
+      {capped && (
+        <p
+          data-testid="context-budget-capped"
+          className="mt-1 text-[11px] text-status-warning"
+        >
+          {capped}
+        </p>
       )}
 
       {/*

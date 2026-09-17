@@ -66,6 +66,20 @@ function compiledBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * A realistic 200 body for `GET /api/v1/gateway/models` (GAP-080 phase 2b),
+ * shaped exactly as internal/handler marshals it.
+ */
+const MODELS_BODY = {
+  models: [
+    { id: 'big-model', context_window: 200000, desired_budget: 120000 },
+    { id: 'small-model', context_window: 4096, desired_budget: 2457 },
+  ],
+  percent: 60,
+  default_budget: 8000,
+  source: 'window',
+};
+
 function okResponse(body: unknown): Response {
   return {
     ok: true,
@@ -114,11 +128,71 @@ function requestedUrls(): string[] {
   return fetchMock.mock.calls.map((c) => String(c[0]));
 }
 
+function isModelsCall(url: string): boolean {
+  return url.includes('/gateway/models');
+}
+
+/** Only the manifest requests — the panel also fetches the model catalog. */
+function contextUrls(): string[] {
+  return requestedUrls().filter((url) => url.includes('/context/'));
+}
+
+function modelsUrls(): string[] {
+  return requestedUrls().filter(isModelsCall);
+}
+
+/** The most recent manifest request, or `''` when there is none. */
+function lastContextUrl(): string {
+  const urls = contextUrls();
+  return urls.length > 0 ? urls[urls.length - 1] : '';
+}
+
+/**
+ * Drive a controlled input the way a browser does.
+ *
+ * React's input value tracker records a plain `.value =` assignment, so the
+ * resulting event looks like "no change" and `onChange` never fires; the
+ * PROTOTYPE setter is the standard way around it. Selects emit `change`,
+ * range inputs emit `input`+`change`.
+ */
+function changeValue(
+  el: HTMLInputElement | HTMLSelectElement,
+  value: string,
+  events: string[],
+): void {
+  const proto =
+    el instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  act(() => {
+    setter?.call(el, value);
+    for (const type of events) {
+      el.dispatchEvent(new Event(type, { bubbles: true }));
+    }
+  });
+}
+
+function selectModel(value: string): void {
+  const select = q('[data-testid="context-model-select"]') as HTMLSelectElement;
+  changeValue(select, value, ['change']);
+}
+
+function moveSlider(value: number): void {
+  const slider = q('[data-testid="context-budget-slider"]') as HTMLInputElement;
+  changeValue(slider, String(value), ['input', 'change']);
+}
+
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  fetchMock = vi.fn(() => Promise.resolve(okResponse(compiledBody())));
+  // Two request surfaces share `fetch`: the manifest and the model catalog.
+  fetchMock = vi.fn((url: string) =>
+    Promise.resolve(
+      okResponse(isModelsCall(String(url)) ? MODELS_BODY : compiledBody()),
+    ),
+  );
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -132,26 +206,34 @@ afterEach(() => {
 // ─── The request ───────────────────────────────────────────────────────
 
 describe('ContextManifestPanel — request', () => {
-  it('calls the endpoint the backend actually serves', async () => {
+  /*
+   * GAP-080 phase 2b. This assertion used to lock the defect: the panel
+   * pinned `?budget=8000` on every request, so the server's window-derived
+   * default could never be observed from the product. It is REWRITTEN to
+   * the new contract — the absence of `budget=` IS the feature (it is what
+   * "Auto" means) — not deleted.
+   */
+  it('calls the endpoint the backend serves with NO budget parameter', async () => {
     mount({ nodeId: NODE_A });
     await settle();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(requestedUrls()[0]).toBe(`/api/v1/context/${NODE_A}?budget=8000`);
+    expect(contextUrls()).toHaveLength(1);
+    expect(contextUrls()[0]).toBe(`/api/v1/context/${NODE_A}`);
+    expect(contextUrls()[0]).not.toContain('budget=');
   });
 
   it('forwards a caller-supplied budget', async () => {
     mount({ nodeId: NODE_A, budget: 2000 });
     await settle();
 
-    expect(requestedUrls()[0]).toContain('budget=2000');
+    expect(contextUrls()[0]).toBe(`/api/v1/context/${NODE_A}?budget=2000`);
   });
 
-  it('renders nothing and fetches nothing without a selection', async () => {
+  it('renders nothing and fetches no context without a selection', async () => {
     mount({ nodeId: null });
     await settle();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(contextUrls()).toHaveLength(0);
     expect(q('[data-testid="context-manifest-panel"]')).toBeNull();
   });
 
@@ -165,7 +247,7 @@ describe('ContextManifestPanel — request', () => {
     mount({ nodeId: `ghost:${NODE_A}` });
     await settle();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(contextUrls()).toHaveLength(0);
   });
 });
 
@@ -355,7 +437,7 @@ describe('ContextManifestPanel — selection changes', () => {
     mount({ nodeId: NODE_A });
     await settle();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(contextUrls()).toHaveLength(1);
   });
 
   it('refetches when the selection moves to another node', async () => {
@@ -364,8 +446,8 @@ describe('ContextManifestPanel — selection changes', () => {
     mount({ nodeId: NODE_B });
     await settle();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(requestedUrls()[1]).toContain(NODE_B);
+    expect(contextUrls()).toHaveLength(2);
+    expect(contextUrls()[1]).toContain(NODE_B);
   });
 
   it('clears the panel when the selection is dropped', async () => {
@@ -387,22 +469,26 @@ describe('ContextManifestPanel — selection changes', () => {
    */
   it('ignores a stale response that lands after the selection moved', async () => {
     const deferred: Array<(r: Response) => void> = [];
-    fetchMock.mockImplementation(
-      (url: string) =>
-        new Promise<Response>((resolve) => {
-          deferred.push(() =>
-            resolve(
-              okResponse(
-                compiledBody(
-                  String(url).includes(NODE_B)
-                    ? { nodeId: NODE_B, tokensUsed: 77, ancestry: null }
-                    : { nodeId: NODE_A, tokensUsed: 1240 },
-                ),
+    fetchMock.mockImplementation((url: string) => {
+      // The catalog answers immediately; only the manifest calls are held,
+      // so `deferred` indexes CONTEXT requests (0 = node A, 1 = node B).
+      if (isModelsCall(String(url))) {
+        return Promise.resolve(okResponse(MODELS_BODY)) as unknown as Promise<Response>;
+      }
+      return new Promise<Response>((resolve) => {
+        deferred.push(() =>
+          resolve(
+            okResponse(
+              compiledBody(
+                String(url).includes(NODE_B)
+                  ? { nodeId: NODE_B, tokensUsed: 77, ancestry: null }
+                  : { nodeId: NODE_A, tokensUsed: 1240 },
               ),
             ),
-          );
-        }),
-    );
+          ),
+        );
+      });
+    });
 
     mount({ nodeId: NODE_A });
     mount({ nodeId: NODE_B });
@@ -452,5 +538,228 @@ describe('ContextManifestPanel — selection changes', () => {
 
     // Re-create so afterEach's unmount stays valid.
     root = createRoot(container);
+  });
+});
+
+// ─── The two request knobs (GAP-080 phase 2b) ──────────────────────────
+
+describe('ContextManifestPanel — model choice', () => {
+  it('offers the gateway models, Server default selected', async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    const select = q('[data-testid="context-model-select"]') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      '',
+      'big-model',
+      'small-model',
+    ]);
+    expect(select.value).toBe('');
+    expect(modelsUrls()).toHaveLength(1);
+  });
+
+  it('fetches the catalog once per mount, not once per render', async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+    mount({ nodeId: NODE_A });
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    expect(modelsUrls()).toHaveLength(1);
+  });
+
+  it('requests the model it was given, leaving the budget to the server', async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    selectModel('big-model');
+    await settle();
+
+    expect(lastContextUrl()).toBe(`/api/v1/context/${NODE_A}?model=big-model`);
+  });
+
+  /*
+   * The degraded path. Every failure of the catalog is the SAME failure: no
+   * choices, no error state, no spinner — and the manifest still compiles,
+   * because a panel that cannot list models can still show context.
+   */
+  it('degrades to Server default when the models route fails', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        isModelsCall(String(url))
+          ? errorResponse(503, 'SERVICE_UNAVAILABLE', 'database unavailable')
+          : okResponse(compiledBody()),
+      ),
+    );
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    const select = q('[data-testid="context-model-select"]') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['']);
+    expect(select.value).toBe('');
+    expect(lastContextUrl()).not.toContain('model=');
+    expect(q('[data-testid="context-token-usage"]')?.textContent).toBe(
+      '1,240 / 8,000 tokens',
+    );
+    expect(q('[data-testid="context-manifest-error"]')).toBeNull();
+  });
+
+  it('degrades to Server default when the models route answers junk', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url)) ? { models: null } : compiledBody(),
+        ),
+      ),
+    );
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    const select = q('[data-testid="context-model-select"]') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['']);
+  });
+});
+
+describe('ContextManifestPanel — budget control', () => {
+  it('exposes an accessible range: min, step, ceiling and the effective value', async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    const slider = q('[data-testid="context-budget-slider"]') as HTMLInputElement;
+    expect(slider).not.toBeNull();
+    expect(slider.type).toBe('range');
+    expect(slider.getAttribute('aria-valuemin')).toBe('256');
+    expect(slider.getAttribute('aria-valuemax')).toBe('80000');
+    // In Auto the control follows the budget the server granted.
+    expect(slider.getAttribute('aria-valuenow')).toBe('8000');
+    expect(slider.step).toBe('256');
+    expect(q('[data-testid="context-budget-value"]')?.textContent).toBe('8,000');
+    expect(q('[data-testid="context-budget-mode"]')?.textContent).toBe('Auto');
+  });
+
+  it("sizes the slider from the selected model's desired budget", async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    selectModel('small-model');
+    await settle();
+
+    expect(
+      q('[data-testid="context-budget-slider"]')?.getAttribute('aria-valuemax'),
+    ).toBe('2457');
+  });
+
+  it('sends an explicit budget when the slider moves', async () => {
+    mount({ nodeId: NODE_A });
+    await settle();
+    expect(contextUrls()).toHaveLength(1);
+    expect(lastContextUrl()).not.toContain('budget=');
+
+    moveSlider(4096);
+    await settle();
+
+    expect(contextUrls()).toHaveLength(2);
+    expect(lastContextUrl()).toBe(`/api/v1/context/${NODE_A}?budget=4096`);
+    expect(q('[data-testid="context-budget-mode"]')?.textContent).toBe('Custom');
+  });
+
+  it('returns to Auto — no budget parameter at all — on the Auto button', async () => {
+    mount({ nodeId: NODE_A, budget: 2000 });
+    await settle();
+    expect(contextUrls()[0]).toBe(`/api/v1/context/${NODE_A}?budget=2000`);
+    expect(q('[data-testid="context-budget-mode"]')?.textContent).toBe('Custom');
+
+    const auto = q('[data-testid="context-budget-auto"]');
+    expect(auto).not.toBeNull();
+    act(() => auto?.click());
+    await settle();
+
+    expect(contextUrls()).toHaveLength(2);
+    expect(lastContextUrl()).toBe(`/api/v1/context/${NODE_A}`);
+    expect(lastContextUrl()).not.toContain('budget=');
+  });
+
+  it('combines an explicit budget with a chosen model in a stable order', async () => {
+    mount({ nodeId: NODE_A, budget: 4096 });
+    await settle();
+
+    selectModel('small-model');
+    await settle();
+
+    expect(lastContextUrl()).toBe(
+      `/api/v1/context/${NODE_A}?budget=4096&model=small-model`,
+    );
+  });
+});
+
+/*
+ * The honesty requirement. The note is driven by the RESPONSE — the manifest's
+ * tokenBudget — never by what the panel asked for: a control that displays the
+ * requested number as if it were in force misreports what the model was sent.
+ */
+describe('ContextManifestPanel — capped requests', () => {
+  function respond(manifestOverrides: Record<string, unknown>) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url))
+            ? MODELS_BODY
+            : compiledBody(manifestOverrides),
+        ),
+      ),
+    );
+  }
+
+  it('names both numbers when the server granted less than requested', async () => {
+    respond({ tokenBudget: 4096 });
+
+    mount({ nodeId: NODE_A, budget: 8000 });
+    await settle();
+
+    const note = q('[data-testid="context-budget-capped"]');
+    expect(note).not.toBeNull();
+    expect(note?.textContent).toContain('4,096');
+    expect(note?.textContent).toContain('8,000');
+    // The effective budget everywhere else is the SERVER's.
+    expect(q('[data-testid="context-token-usage"]')?.textContent).toBe(
+      '1,240 / 4,096 tokens',
+    );
+    expect(
+      q('[data-testid="context-budget-meter"]')?.getAttribute('aria-valuemax'),
+    ).toBe('4096');
+  });
+
+  it('is silent when the request was granted exactly', async () => {
+    respond({ tokenBudget: 8000 });
+
+    mount({ nodeId: NODE_A, budget: 8000 });
+    await settle();
+
+    expect(q('[data-testid="context-budget-capped"]')).toBeNull();
+  });
+
+  it('is silent for an Auto request, with no number to be capped below', async () => {
+    respond({ tokenBudget: 4096 });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    expect(lastContextUrl()).not.toContain('budget=');
+    expect(q('[data-testid="context-budget-capped"]')).toBeNull();
+    expect(q('[data-testid="context-token-usage"]')?.textContent).toBe(
+      '1,240 / 4,096 tokens',
+    );
+  });
+
+  it('is silent when the server granted more than was requested', async () => {
+    respond({ tokenBudget: 120000 });
+
+    mount({ nodeId: NODE_A, budget: 2000 });
+    await settle();
+
+    expect(q('[data-testid="context-budget-capped"]')).toBeNull();
   });
 });

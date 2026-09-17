@@ -16,6 +16,7 @@ package handler
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,17 @@ const (
 	// default was resolved at all.
 	budgetSourceExplicit = "explicit"
 )
+
+// ModelWindow is one entry of the model catalog as a CLIENT sees it
+// (GAP-080 phase 2b): the model id, the context window the catalog reports
+// for it (0 when the catalog reports none), and the budget that model would
+// get at the catalog's percentage. The UI renders exactly these three fields,
+// so the JSON tags are the wire contract.
+type ModelWindow struct {
+	ID            string `json:"id"`
+	ContextWindow int    `json:"context_window"`
+	DesiredBudget int    `json:"desired_budget"`
+}
 
 // ModelLister lists the models the gateway knows about. Satisfied by
 // *gateway.Client; the interface lives here so the handler depends on the
@@ -122,27 +134,125 @@ func (c *ModelWindowCatalog) Budget(ctx context.Context, model string, percent i
 		// The catalog answered but has no usable window for this model.
 		return fallback, BudgetSourceUnknownModel
 	}
+	return windowBudget(window, percent, fallback), BudgetSourceWindow
+}
+
+// windowBudget is the ONE derivation of a window-derived budget: percent of
+// the context window, integer FLOOR, and never below 1 for a positive window
+// (a 50-token window at 1% is 1, not 0). It answers the flat fallback when
+// either input is unusable (the knob is off, or no window is known). Budget
+// and Models both call it, so the budget a model gets from the read route and
+// the budget the UI shows for that same model cannot drift apart.
+func windowBudget(window, percent, fallback int) int {
+	if percent <= 0 || window <= 0 {
+		return fallback
+	}
 	budget := window * percent / 100
 	if budget < 1 {
 		budget = 1
 	}
-	return budget, BudgetSourceWindow
+	return budget
+}
+
+// Window returns the context window the catalog knows for model.
+//
+// ok is false when there is no answer to report at all — no catalog, no
+// lister, no model name, or an unreachable catalog — and callers must treat
+// that as "no window is known" rather than as a zero window. A model the
+// catalog simply does not list (or lists without a window) yields (0, true):
+// asked and answered, nothing usable. This is the explicit-budget ceiling's
+// lookup (GAP-080 phase 2b), so it fails closed on every unknown.
+func (c *ModelWindowCatalog) Window(ctx context.Context, model string) (int, bool) {
+	if c == nil || c.lister == nil {
+		return 0, false
+	}
+	name := strings.TrimSpace(model)
+	if name == "" {
+		return 0, false
+	}
+	return c.window(ctx, name)
+}
+
+// Models lists the catalog's models with the budget each would get at percent,
+// plus the source that describes the answer.
+//
+// It is a CATALOG READ, not a derivation, and it reuses the same cached
+// snapshot as Budget — one five-minute TTL for the whole server, no second
+// cache and no per-request gateway call. Two deliberate differences from
+// Budget follow from that:
+//
+//   - it consults the lister even when percent <= 0, because the knob disables
+//     the window-derived BUDGET, not the model list a user picks from (every
+//     desired_budget is then the flat fallback, and the source is "disabled");
+//   - the source describes the LIST: "window" when at least one listed model
+//     yields a window-derived budget, "unknown_model" when the catalog
+//     answered but no entry carries a usable window (the live gateway's
+//     OpenAI-style envelope), "disabled" when the knob is off, and
+//     "catalog_error" / "no_catalog" when the list could not be read.
+//
+// The slice is never nil — an unreachable catalog answers `[]`, so the caller
+// has no nil to leak onto the wire — and it is sorted by model id so the same
+// catalog always renders in the same order.
+func (c *ModelWindowCatalog) Models(ctx context.Context, percent, fallback int) ([]ModelWindow, string) {
+	models := []ModelWindow{}
+	if c == nil || c.lister == nil {
+		return models, budgetSourceNoCatalog
+	}
+	windows, ok := c.snapshot(ctx)
+	if !ok {
+		return models, BudgetSourceCatalogError
+	}
+
+	ids := make([]string, 0, len(windows))
+	for id := range windows {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	source := BudgetSourceUnknownModel
+	if percent <= 0 {
+		source = BudgetSourceDisabled
+	}
+	for _, id := range ids {
+		window := windows[id]
+		if window > 0 && percent > 0 {
+			source = BudgetSourceWindow
+		}
+		models = append(models, ModelWindow{
+			ID:            id,
+			ContextWindow: window,
+			DesiredBudget: windowBudget(window, percent, fallback),
+		})
+	}
+	return models, source
 }
 
 // window returns a model's context window from the (possibly cached) model
 // list. ok is false when the catalog could not be reached; a model that is
 // simply absent yields (0, true), which Budget reports as unknown_model.
 func (c *ModelWindowCatalog) window(ctx context.Context, model string) (int, bool) {
+	windows, ok := c.snapshot(ctx)
+	if !ok {
+		return 0, false
+	}
+	return windows[model], true
+}
+
+// snapshot returns the model → context-window map, refreshing it when the ttl
+// has expired. ok is false only when the catalog could not be reached; the
+// returned map is never mutated in place (a refresh REPLACES it), so a caller
+// may keep reading it without holding the lock.
+func (c *ModelWindowCatalog) snapshot(ctx context.Context) (map[string]int, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.ttl > 0 && c.loaded && time.Since(c.cachedAt) < c.ttl {
-		return c.windows[model], true
+		return c.windows, true
 	}
 	infos, err := c.lister.ListModels(ctx)
 	if err != nil {
 		// Failures are not cached: the next call retries rather than being
 		// pinned to a stale "catalog unreachable" verdict.
-		return 0, false
+		return nil, false
 	}
 	windows := make(map[string]int, len(infos))
 	for _, info := range infos {
@@ -153,7 +263,7 @@ func (c *ModelWindowCatalog) window(ctx context.Context, model string) (int, boo
 	c.windows = windows
 	c.cachedAt = time.Now()
 	c.loaded = true
-	return windows[model], true
+	return windows, true
 }
 
 // resolveDefaultBudget is the single place both handlers resolve the DEFAULT

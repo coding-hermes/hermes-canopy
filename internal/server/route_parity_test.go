@@ -91,6 +91,10 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/trees/{}/reference-selections"},
 		{http.MethodPost, "/api/v1/trees/{}/multi-reference-replies"},
 		{http.MethodGet, "/api/v1/nodes/{}/reference-context"},
+		// GAP-080 phase 2b: the gateway's model catalog, documented in
+		// docs/API.md § Live Hermes gateway and consumed by the context
+		// manifest panel's model choice.
+		{http.MethodGet, "/api/v1/gateway/models"},
 	}
 
 	// Control: tree-scoped fork was mounted before GAP-065 and must stay

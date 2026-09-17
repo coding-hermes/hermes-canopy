@@ -26,12 +26,23 @@ import { shortNodeId } from './nodeShortId.ts';
 // ─── Constants ─────────────────────────────────────────────────────────
 
 /**
- * Budget requested by the UI. The handler clamps anything above 10× its
- * own default, and defaults to that same value when `budget` is absent —
- * sending it explicitly keeps the panel's label honest regardless of how
- * the server is configured.
+ * Budget requested by the UI when the user does NOT choose one, and the
+ * basis of the backend's explicit-request ceiling (`DEFAULT_CONTEXT_BUDGET *
+ * 10` = 80 000). The panel sends NO budget parameter unless the user moved
+ * the slider — the server derives its own default from the selected model's
+ * context window (GAP-080), and pinning this number in the UI made that
+ * derivation unreachable from the product.
  */
 export const DEFAULT_CONTEXT_BUDGET = 8000;
+
+/** Smallest budget the slider can request. Below this a compile is useless. */
+export const MIN_CONTEXT_BUDGET = 256;
+
+/** Slider granularity — the range moves in whole 256-token steps. */
+export const CONTEXT_BUDGET_STEP = 256;
+
+/** The backend's ceiling for an explicit budget with no known model window. */
+export const MAX_CONTEXT_BUDGET = DEFAULT_CONTEXT_BUDGET * 10;
 
 /** Usage ratio above which the meter warns. */
 const WARN_RATIO = 0.8;
@@ -114,13 +125,127 @@ export function isCompilableNodeId(id: string | null | undefined): boolean {
   );
 }
 
-/** Path passed to `apiGet` — `/context/{id}?budget=N`. */
+/**
+ * Path passed to `apiGet` — `/context/{id}`, optionally `?budget=N`, then
+ * `?model=…`.
+ *
+ * `budget` is OMITTED entirely when it is `undefined`/`null` (or unusable:
+ * non-finite, or below 1, which the handler answers 400 for). That absence
+ * is what "Auto" means: the server applies its own default, which for a
+ * named model is a percentage of that model's context window (GAP-080).
+ * An explicit budget is sent verbatim.
+ *
+ * Parameter order is stable and asserted by tests: `budget` first, then
+ * `model`, and no `?` at all when neither is present.
+ */
 export function contextRequestPath(
   nodeId: string,
-  budget: number = DEFAULT_CONTEXT_BUDGET,
+  budget?: number | null,
+  model?: string | null,
 ): string {
-  const b = Number.isFinite(budget) && budget >= 1 ? Math.floor(budget) : DEFAULT_CONTEXT_BUDGET;
-  return `/context/${encodeURIComponent(nodeId)}?budget=${b}`;
+  const params: string[] = [];
+  const b = normaliseBudget(budget);
+  if (b !== null) params.push(`budget=${b}`);
+  const name = typeof model === 'string' ? model.trim() : '';
+  if (name) params.push(`model=${encodeURIComponent(name)}`);
+  const query = params.length > 0 ? `?${params.join('&')}` : '';
+  return `/context/${encodeURIComponent(nodeId)}${query}`;
+}
+
+/**
+ * A budget the handler will accept, or `null` for "no budget parameter".
+ * `null`/`undefined` are the caller asking for Auto; a zero, negative or
+ * non-finite value is unusable and must NOT become `?budget=0` — the
+ * handler 400s that, and a request the server is guaranteed to reject is
+ * worse than no request.
+ */
+export function normaliseBudget(
+  budget: number | null | undefined,
+): number | null {
+  if (budget === null || budget === undefined) return null;
+  if (!Number.isFinite(budget) || budget < 1) return null;
+  return Math.floor(budget);
+}
+
+// ─── Model catalog (GET /api/v1/gateway/models — GAP-080 phase 2b) ─────
+
+/** One entry of the models route, as it arrives. */
+export interface RawGatewayModel {
+  id?: string | null;
+  context_window?: number | null;
+  desired_budget?: number | null;
+}
+
+/** The models route's envelope, as it arrives (nil slices → `null`). */
+export interface RawGatewayModelCatalog {
+  models?: RawGatewayModel[] | null;
+  percent?: number | null;
+  default_budget?: number | null;
+  source?: string | null;
+}
+
+/** One model the user can choose, with the budget it would get. */
+export interface ContextModelOption {
+  id: string;
+  contextWindow: number;
+  desiredBudget: number;
+}
+
+/**
+ * Wire body → the select's options. Never throws and never returns `null`:
+ * a failed fetch, a non-JSON body and a `models: null` envelope all degrade
+ * to `[]`, which the panel renders as its single "Server default" option.
+ * Ids are trimmed and de-duplicated (the gateway may list a model twice);
+ * entries are left in the order the server sent them (it sorts).
+ */
+export function normaliseModelOptions(body: unknown): ContextModelOption[] {
+  const raw = (body as RawGatewayModelCatalog | null | undefined)?.models;
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  const options: ContextModelOption[] = [];
+  for (const item of raw) {
+    const id = typeof item?.id === 'string' ? item.id.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    options.push({
+      id,
+      contextWindow: toCount(item?.context_window),
+      desiredBudget: toCount(item?.desired_budget),
+    });
+  }
+  return options;
+}
+
+/**
+ * Slider maximum: the selected model's `desired_budget` from the models
+ * route when the catalog knows one, else the backend's explicit-request
+ * ceiling. Floored at the slider minimum so a tiny model (a 50-token window
+ * derives a budget of 1) cannot produce a range whose min exceeds its max.
+ */
+export function contextBudgetCeiling(
+  selected: ContextModelOption | undefined,
+): number {
+  const desired = selected?.desiredBudget ?? 0;
+  return Math.max(MIN_CONTEXT_BUDGET, desired > 0 ? desired : MAX_CONTEXT_BUDGET);
+}
+
+/**
+ * The capped-request note, or `null` when nothing was capped.
+ *
+ * The whole point of the honesty requirement: when the panel ASKED for a
+ * budget the server did not grant, the effective number is the manifest's
+ * `tokenBudget`, and the difference has to be visible — a control that
+ * displays the requested number as if it were in force is lying about what
+ * the model was sent.
+ */
+export function budgetCappedNote(
+  requested: number | null,
+  effective: number,
+): string | null {
+  if (requested === null || !Number.isFinite(requested)) return null;
+  if (!Number.isFinite(effective) || effective >= requested) return null;
+  return `Server capped the request at ${formatTokenCount(effective)} tokens (requested ${formatTokenCount(requested)}).`;
 }
 
 // ─── Normalisation ─────────────────────────────────────────────────────

@@ -355,8 +355,9 @@ func TestGatewayContextBudgetNilCatalogUnchanged(t *testing.T) {
 
 // TestContextHandlerModelWindowBudget proves the read route's budget rules:
 // ?model= with no ?budget= compiles with the derived budget; an explicit
-// ?budget= keeps its historical parse AND its historical 10x-FLAT-default
-// clamp (the derived value does not raise the ceiling); and the two invalid
+// ?budget= is clamped to the model's own window when the catalog knows it
+// (GAP-080 phase 2b) and otherwise keeps its historical 10x-FLAT-default
+// ceiling (the derived value does not raise that ceiling); and the two invalid
 // budget forms still 400 INVALID_BUDGET without reaching the compiler.
 func TestContextHandlerModelWindowBudget(t *testing.T) {
 	const defaultBudget = 8000
@@ -374,7 +375,7 @@ func TestContextHandlerModelWindowBudget(t *testing.T) {
 		{"empty model is treated as absent", "?model=", http.StatusOK, defaultBudget},
 		{"unknown model falls back", "?model=ghost-model", http.StatusOK, defaultBudget},
 		{"an explicit budget wins", "?model=big-model&budget=5000", http.StatusOK, 5000},
-		{"the 10x clamp is unchanged by a larger derived budget", "?model=big-model&budget=999999999", http.StatusOK, defaultBudget * 10},
+		{"an explicit budget is clamped to the model window", "?model=big-model&budget=999999999", http.StatusOK, 200000},
 		{"a non-numeric budget still 400s", "?budget=abc", http.StatusBadRequest, 0},
 		{"a zero budget still 400s", "?budget=0", http.StatusBadRequest, 0},
 	}
@@ -524,4 +525,347 @@ func TestModelWindowCatalog_JSONShapeOfGatewayModels(t *testing.T) {
 			t.Fatalf("Budget(data envelope with a 200000 window, 60) = (%d, %q), want (120000, %q)", derived, src, BudgetSourceWindow)
 		}
 	})
+}
+
+// --- model catalog read (GAP-080 phase 2b) -----------------------------------
+
+// TestModelWindowCatalog_ModelsArithmeticAndOrder pins the per-entry contract
+// of the catalog read: window and desired_budget are the same derivation
+// Budget uses, an entry the catalog has no window for is a flat fallback
+// rather than an invented window, ids are trimmed and deduped, and the list is
+// sorted so the same catalog always renders in the same order.
+func TestModelWindowCatalog_ModelsArithmeticAndOrder(t *testing.T) {
+	const fallback = 8000
+	lister := &stubModelLister{models: []gateway.ModelInfo{
+		{ID: "small-model", ContextLen: 4096},
+		{ID: "big-model", ContextLen: 200000},
+		{ID: "no-window", ContextLen: 0},
+		{ID: "negative-window", ContextLen: -1},
+		{ID: "  padded  ", ContextLen: 1000},
+		{ID: "", ContextLen: 999},
+		{ID: "small-model", ContextLen: 4096},
+	}}
+	catalog := NewModelWindowCatalog(lister, time.Minute)
+
+	models, source := catalog.Models(context.Background(), 60, fallback)
+	if source != BudgetSourceWindow {
+		t.Fatalf("source = %q, want %q", source, BudgetSourceWindow)
+	}
+	want := []ModelWindow{
+		{ID: "big-model", ContextWindow: 200000, DesiredBudget: 120000},
+		{ID: "negative-window", ContextWindow: -1, DesiredBudget: fallback},
+		{ID: "no-window", ContextWindow: 0, DesiredBudget: fallback},
+		{ID: "padded", ContextWindow: 1000, DesiredBudget: 600},
+		{ID: "small-model", ContextWindow: 4096, DesiredBudget: 2457},
+	}
+	if len(models) != len(want) {
+		t.Fatalf("Models() returned %d entries, want %d: %+v", len(models), len(want), models)
+	}
+	for i := range want {
+		if models[i] != want[i] {
+			t.Fatalf("Models()[%d] = %+v, want %+v", i, models[i], want[i])
+		}
+	}
+
+	// The tilt window floor: 1% of a 50-token window is 1, never 0.
+	tiny := NewModelWindowCatalog(&stubModelLister{models: []gateway.ModelInfo{{ID: "tiny", ContextLen: 50}}}, time.Minute)
+	got, _ := tiny.Models(context.Background(), 1, fallback)
+	if len(got) != 1 || got[0].DesiredBudget != 1 {
+		t.Fatalf("Models(tiny, 1%%) = %+v, want a single entry with desired_budget 1", got)
+	}
+}
+
+// TestModelWindowCatalog_ModelsSources pins the source a catalog read reports
+// in each state: the knob off, an answered catalog with no usable window
+// anywhere (the live gateway's OpenAI-style envelope), an unreachable catalog,
+// and no catalog at all.
+func TestModelWindowCatalog_ModelsSources(t *testing.T) {
+	t.Run("percent 0 reports disabled and keeps the flat budget", func(t *testing.T) {
+		lister := &stubModelLister{models: []gateway.ModelInfo{{ID: "big-model", ContextLen: 200000}}}
+		models, source := NewModelWindowCatalog(lister, time.Minute).Models(context.Background(), 0, 8000)
+		if source != BudgetSourceDisabled {
+			t.Fatalf("source = %q, want %q", source, BudgetSourceDisabled)
+		}
+		if len(models) != 1 || models[0].DesiredBudget != 8000 {
+			t.Fatalf("Models(percent 0) = %+v, want one flat-budget entry", models)
+		}
+		if n := lister.calls.Load(); n != 1 {
+			t.Fatalf("a catalog READ must still consult the lister with the knob off; got %d calls", n)
+		}
+	})
+
+	t.Run("a catalog with no windows at all reports unknown_model", func(t *testing.T) {
+		lister := &stubModelLister{models: []gateway.ModelInfo{{ID: "Hermes Agent", ContextLen: 0}}}
+		models, source := NewModelWindowCatalog(lister, time.Minute).Models(context.Background(), 60, 8000)
+		if source != BudgetSourceUnknownModel {
+			t.Fatalf("source = %q, want %q", source, BudgetSourceUnknownModel)
+		}
+		if len(models) != 1 || models[0].DesiredBudget != 8000 {
+			t.Fatalf("Models(no windows) = %+v", models)
+		}
+	})
+
+	t.Run("an unreachable catalog reports catalog_error", func(t *testing.T) {
+		models, source := NewModelWindowCatalog(&stubModelLister{err: fmt.Errorf("gateway down")}, time.Minute).
+			Models(context.Background(), 60, 8000)
+		if source != BudgetSourceCatalogError {
+			t.Fatalf("source = %q, want %q", source, BudgetSourceCatalogError)
+		}
+		if models == nil || len(models) != 0 {
+			t.Fatalf("Models(error) = %#v, want an empty non-nil slice", models)
+		}
+	})
+
+	t.Run("no lister and no catalog report no_catalog", func(t *testing.T) {
+		models, source := NewModelWindowCatalog(nil, time.Minute).Models(context.Background(), 60, 8000)
+		if source != budgetSourceNoCatalog || models == nil || len(models) != 0 {
+			t.Fatalf("Models(nil lister) = (%#v, %q), want an empty slice and %q", models, source, budgetSourceNoCatalog)
+		}
+		var nilCatalog *ModelWindowCatalog
+		models, source = nilCatalog.Models(context.Background(), 60, 8000)
+		if source != budgetSourceNoCatalog || models == nil || len(models) != 0 {
+			t.Fatalf("nil receiver.Models() = (%#v, %q), want an empty slice and %q", models, source, budgetSourceNoCatalog)
+		}
+	})
+}
+
+// TestModelWindowCatalog_ModelsSharesTheCache proves the catalog read is not a
+// second cache: a Models call and a Budget call inside one ttl share the single
+// snapshot (ONE lister call for both), so the new route cannot double the
+// gateway traffic.
+func TestModelWindowCatalog_ModelsSharesTheCache(t *testing.T) {
+	lister := &stubModelLister{models: []gateway.ModelInfo{{ID: "big-model", ContextLen: 200000}}}
+	catalog := NewModelWindowCatalog(lister, time.Minute)
+	if _, src := catalog.Budget(context.Background(), "big-model", 60, 8000); src != BudgetSourceWindow {
+		t.Fatalf("Budget source = %q", src)
+	}
+	for i := 0; i < 3; i++ {
+		if models, src := catalog.Models(context.Background(), 60, 8000); src != BudgetSourceWindow || len(models) != 1 {
+			t.Fatalf("Models call %d = (%+v, %q)", i+1, models, src)
+		}
+	}
+	if n := lister.calls.Load(); n != 1 {
+		t.Fatalf("one snapshot must serve both surfaces: %d lister calls for 1 Budget + 3 Models", n)
+	}
+}
+
+// TestModelWindowCatalog_WindowLookup pins the explicit-budget ceiling's
+// lookup (GAP-080 phase 2b): a known model reports its window, an unknown one
+// reports "no window" with ok=true, and every unknown — no model, no catalog,
+// no lister, an unreachable catalog — reports ok=false so the caller can only
+// ever fall back to the flat ceiling.
+func TestModelWindowCatalog_WindowLookup(t *testing.T) {
+	catalog := NewModelWindowCatalog(&stubModelLister{models: []gateway.ModelInfo{
+		{ID: "big-model", ContextLen: 200000},
+		{ID: "no-window", ContextLen: 0},
+	}}, time.Minute)
+
+	cases := []struct {
+		name       string
+		catalog    *ModelWindowCatalog
+		model      string
+		wantWindow int
+		wantOK     bool
+	}{
+		{"a known model", catalog, "big-model", 200000, true},
+		{"padded name tolerated", catalog, "  big-model  ", 200000, true},
+		{"a model with no window", catalog, "no-window", 0, true},
+		{"an absent model", catalog, "ghost-model", 0, true},
+		{"no model named", catalog, "", 0, false},
+		{"blank model named", catalog, "   ", 0, false},
+		{"an unreachable catalog", NewModelWindowCatalog(&stubModelLister{err: fmt.Errorf("down")}, time.Minute), "big-model", 0, false},
+		{"no lister", NewModelWindowCatalog(nil, time.Minute), "big-model", 0, false},
+		{"no catalog", nil, "big-model", 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			window, ok := tc.catalog.Window(context.Background(), tc.model)
+			if window != tc.wantWindow || ok != tc.wantOK {
+				t.Fatalf("Window(%q) = (%d, %v), want (%d, %v)", tc.model, window, ok, tc.wantWindow, tc.wantOK)
+			}
+		})
+	}
+}
+
+// modelsEnvelope is GET /api/v1/gateway/models as the UI reads it.
+type modelsEnvelope struct {
+	Models []struct {
+		ID            string `json:"id"`
+		ContextWindow int    `json:"context_window"`
+		DesiredBudget int    `json:"desired_budget"`
+	} `json:"models"`
+	Percent       int    `json:"percent"`
+	DefaultBudget int    `json:"default_budget"`
+	Source        string `json:"source"`
+}
+
+// gatewayModelsRouter mounts the real gateway router where server.go mounts it
+// (/api/v1/gateway), so the path under test is the production path and not a
+// test-only one.
+func gatewayModelsRouter(opts ...GatewayHandlerOption) chi.Router {
+	r := chi.NewRouter()
+	r.Mount("/api/v1/gateway", NewGatewayHandler(nil, opts...).Routes())
+	return r
+}
+
+func getModels(t *testing.T, r chi.Router) (int, string, modelsEnvelope) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/gateway/models", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var env modelsEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("models body not decodable (%v): %s", err, w.Body.String())
+	}
+	return w.Code, w.Body.String(), env
+}
+
+// TestGatewayModelsRoute_Shape pins the wire contract of the new route: the
+// exact envelope, the per-model arithmetic, and the handler-level knobs echoed
+// back so the UI can size its budget control without a second call.
+func TestGatewayModelsRoute_Shape(t *testing.T) {
+	const defaultBudget = 8000
+	lister := &stubModelLister{models: []gateway.ModelInfo{
+		{ID: "small-model", ContextLen: 4096},
+		{ID: "big-model", ContextLen: 200000},
+		{ID: "no-window", ContextLen: 0},
+	}}
+	r := gatewayModelsRouter(
+		WithContextCompiler(nil, defaultBudget),
+		WithContextBudget(NewModelWindowCatalog(lister, time.Minute), 60))
+
+	code, _, env := getModels(t, r)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	want := []struct {
+		id     string
+		window int
+		budget int
+	}{
+		{"big-model", 200000, 120000},
+		{"no-window", 0, defaultBudget},
+		{"small-model", 4096, 2457},
+	}
+	if len(env.Models) != len(want) {
+		t.Fatalf("models = %+v, want %d entries", env.Models, len(want))
+	}
+	for i, w := range want {
+		got := env.Models[i]
+		if got.ID != w.id || got.ContextWindow != w.window || got.DesiredBudget != w.budget {
+			t.Fatalf("models[%d] = %+v, want {id:%s window:%d budget:%d}", i, got, w.id, w.window, w.budget)
+		}
+	}
+	if env.Percent != 60 {
+		t.Fatalf("percent = %d, want 60", env.Percent)
+	}
+	if env.DefaultBudget != defaultBudget {
+		t.Fatalf("default_budget = %d, want %d", env.DefaultBudget, defaultBudget)
+	}
+	if env.Source != BudgetSourceWindow {
+		t.Fatalf("source = %q, want %q", env.Source, BudgetSourceWindow)
+	}
+}
+
+// TestGatewayModelsRoute_EmptyListNeverNullOnFailure is the fail-soft half of
+// the contract: a catalog that cannot answer is a 200 with an EMPTY ARRAY and
+// a source that names why — never a 5xx, and never a JSON null for a client to
+// map over. The raw body is asserted, because `null` and `[]` decode
+// identically into a Go slice but differ catastrophically in the browser.
+func TestGatewayModelsRoute_EmptyListNeverNullOnFailure(t *testing.T) {
+	const defaultBudget = 8000
+	cases := []struct {
+		name       string
+		opts       []GatewayHandlerOption
+		wantSource string
+	}{
+		{
+			"an unreachable catalog",
+			[]GatewayHandlerOption{WithContextBudget(NewModelWindowCatalog(&stubModelLister{err: fmt.Errorf("gateway down")}, time.Minute), 60)},
+			BudgetSourceCatalogError,
+		},
+		{
+			"no lister wired",
+			[]GatewayHandlerOption{WithContextBudget(NewModelWindowCatalog(nil, time.Minute), 60)},
+			budgetSourceNoCatalog,
+		},
+		{
+			"no catalog wired at all",
+			[]GatewayHandlerOption{WithContextBudget(nil, 60)},
+			budgetSourceNoCatalog,
+		},
+		{
+			"no gateway options at all",
+			nil,
+			budgetSourceNoCatalog,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := append([]GatewayHandlerOption{WithContextCompiler(nil, defaultBudget)}, tc.opts...)
+			code, raw, env := getModels(t, gatewayModelsRouter(opts...))
+			if code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (the catalog must never 5xx): %s", code, raw)
+			}
+			if !strings.Contains(raw, `"models":[]`) {
+				t.Fatalf("body must carry an empty ARRAY, not null: %s", raw)
+			}
+			if env.Models == nil {
+				t.Fatalf("models decoded as nil: %s", raw)
+			}
+			if len(env.Models) != 0 {
+				t.Fatalf("models = %+v, want none", env.Models)
+			}
+			if env.Source != tc.wantSource {
+				t.Fatalf("source = %q, want %q: %s", env.Source, tc.wantSource, raw)
+			}
+			if env.DefaultBudget != defaultBudget {
+				t.Fatalf("default_budget = %d, want %d", env.DefaultBudget, defaultBudget)
+			}
+		})
+	}
+}
+
+// TestGatewayModelsRoute_PercentZero pins the knob's effect on the read: the
+// model list is still served (the UI needs a choice), every desired_budget is
+// the flat default, and the source says the derivation is off.
+func TestGatewayModelsRoute_PercentZero(t *testing.T) {
+	const defaultBudget = 8000
+	lister := &stubModelLister{models: []gateway.ModelInfo{{ID: "big-model", ContextLen: 200000}}}
+	r := gatewayModelsRouter(
+		WithContextCompiler(nil, defaultBudget),
+		WithContextBudget(NewModelWindowCatalog(lister, time.Minute), 0))
+
+	code, _, env := getModels(t, r)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	if env.Percent != 0 {
+		t.Fatalf("percent = %d, want 0", env.Percent)
+	}
+	if env.Source != BudgetSourceDisabled {
+		t.Fatalf("source = %q, want %q", env.Source, BudgetSourceDisabled)
+	}
+	if len(env.Models) != 1 || env.Models[0].ContextWindow != 200000 || env.Models[0].DesiredBudget != defaultBudget {
+		t.Fatalf("models = %+v, want the model listed with the flat budget", env.Models)
+	}
+}
+
+// TestGatewayModelsRoute_ConsultsCatalogOncePerTTL is the caching half: the
+// route is served from the SAME five-minute snapshot as the compile surfaces,
+// so a UI polling it does not multiply gateway traffic.
+func TestGatewayModelsRoute_ConsultsCatalogOncePerTTL(t *testing.T) {
+	lister := &stubModelLister{models: []gateway.ModelInfo{{ID: "big-model", ContextLen: 200000}}}
+	r := gatewayModelsRouter(
+		WithContextCompiler(nil, 8000),
+		WithContextBudget(NewModelWindowCatalog(lister, time.Minute), 60))
+
+	for i := 0; i < 4; i++ {
+		if code, raw, env := getModels(t, r); code != http.StatusOK || env.Source != BudgetSourceWindow {
+			t.Fatalf("request %d = (%d, %q): %s", i+1, code, env.Source, raw)
+		}
+	}
+	if n := lister.calls.Load(); n != 1 {
+		t.Fatalf("4 requests within the ttl made %d lister calls, want 1", n)
+	}
 }

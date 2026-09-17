@@ -9,15 +9,20 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_CONTEXT_BUDGET,
+  MIN_CONTEXT_BUDGET,
+  budgetCappedNote,
   budgetSeverity,
   budgetUsageRatio,
+  contextBudgetCeiling,
   contextErrorNote,
   contextRequestPath,
   formatTokenCount,
   formatTokenUsage,
   isCompilableNodeId,
   manifestItemTitle,
+  normaliseBudget,
   normaliseManifest,
+  normaliseModelOptions,
   omissionNote,
   type CompiledContext,
   type Manifest,
@@ -66,10 +71,16 @@ describe('isCompilableNodeId', () => {
 });
 
 describe('contextRequestPath', () => {
-  it('requests the budget explicitly', () => {
-    expect(contextRequestPath(NODE_ID)).toBe(
-      `/context/${NODE_ID}?budget=${DEFAULT_CONTEXT_BUDGET}`,
-    );
+  /*
+   * GAP-080 phase 2b — REWRITTEN, not deleted. The old contract pinned
+   * `?budget=<DEFAULT_CONTEXT_BUDGET>` on every request, which made the
+   * server's window-derived default unreachable from the product. The
+   * absence of the parameter is now the feature: it is what "Auto" means.
+   */
+  it('sends NO budget parameter when none is requested (Auto)', () => {
+    const path = contextRequestPath(NODE_ID);
+    expect(path).toBe(`/context/${NODE_ID}`);
+    expect(path).not.toContain('budget=');
   });
 
   it('honours a caller-supplied budget', () => {
@@ -78,13 +89,150 @@ describe('contextRequestPath', () => {
     );
   });
 
-  it('falls back rather than sending a budget the handler would 400', () => {
-    expect(contextRequestPath(NODE_ID, 0)).toContain(
-      `budget=${DEFAULT_CONTEXT_BUDGET}`,
+  it('names the model, URI-encoded', () => {
+    expect(contextRequestPath(NODE_ID, undefined, 'big-model')).toBe(
+      `/context/${NODE_ID}?model=big-model`,
     );
-    expect(contextRequestPath(NODE_ID, Number.NaN)).toContain(
-      `budget=${DEFAULT_CONTEXT_BUDGET}`,
+    expect(contextRequestPath(NODE_ID, undefined, 'vendor/model 2')).toBe(
+      `/context/${NODE_ID}?model=vendor%2Fmodel%202`,
     );
+  });
+
+  it('keeps a stable parameter order: budget then model', () => {
+    const path = contextRequestPath(NODE_ID, 4096, 'big-model');
+    expect(path).toBe(`/context/${NODE_ID}?budget=4096&model=big-model`);
+    expect(path.indexOf('budget=')).toBeLessThan(path.indexOf('model='));
+  });
+
+  /*
+   * A value the handler would 400 (`?budget=0`, `?budget=NaN`) must not be
+   * sent at all: omitting it asks the server to derive its own default,
+   * which is strictly better than a request guaranteed to fail.
+   */
+  it('omits an unusable budget rather than sending one the handler would 400', () => {
+    for (const unusable of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const path = contextRequestPath(NODE_ID, unusable);
+      expect(path).toBe(`/context/${NODE_ID}`);
+      expect(path).not.toContain('budget=');
+    }
+  });
+
+  it('treats an absent, empty or blank model as no model at all', () => {
+    for (const none of [undefined, null, '', '   ']) {
+      const path = contextRequestPath(NODE_ID, undefined, none);
+      expect(path).toBe(`/context/${NODE_ID}`);
+      expect(path).not.toContain('model=');
+    }
+  });
+});
+
+describe('normaliseBudget', () => {
+  it('keeps a usable budget, floored', () => {
+    expect(normaliseBudget(2000)).toBe(2000);
+    expect(normaliseBudget(2000.9)).toBe(2000);
+    expect(normaliseBudget(1)).toBe(1);
+  });
+
+  it('answers null — "no parameter" — for Auto and for unusable values', () => {
+    expect(normaliseBudget(undefined)).toBeNull();
+    expect(normaliseBudget(null)).toBeNull();
+    expect(normaliseBudget(0)).toBeNull();
+    expect(normaliseBudget(-5)).toBeNull();
+    expect(normaliseBudget(Number.NaN)).toBeNull();
+  });
+});
+
+describe('normaliseModelOptions', () => {
+  it('reads the models route envelope', () => {
+    const options = normaliseModelOptions({
+      models: [
+        { id: 'big-model', context_window: 200000, desired_budget: 120000 },
+        { id: 'small-model', context_window: 4096, desired_budget: 2457 },
+      ],
+      percent: 60,
+      default_budget: 8000,
+      source: 'window',
+    });
+
+    expect(options).toEqual([
+      { id: 'big-model', contextWindow: 200000, desiredBudget: 120000 },
+      { id: 'small-model', contextWindow: 4096, desiredBudget: 2457 },
+    ]);
+  });
+
+  /*
+   * The degraded paths. Each of these is a real wire state — the panel
+   * mounts with whatever `/gateway/models` answers, including a 500, an
+   * empty-but-non-null list, and (in the panel's own tests) a completely
+   * unrelated body from a mocked fetch.
+   */
+  it('degrades to no options instead of throwing', () => {
+    expect(normaliseModelOptions(null)).toEqual([]);
+    expect(normaliseModelOptions(undefined)).toEqual([]);
+    expect(normaliseModelOptions({})).toEqual([]);
+    expect(normaliseModelOptions({ models: null })).toEqual([]);
+    expect(normaliseModelOptions({ models: [] })).toEqual([]);
+    expect(normaliseModelOptions({ content: 'not a catalog' })).toEqual([]);
+    expect(normaliseModelOptions('nonsense')).toEqual([]);
+  });
+
+  it('drops entries with no usable id and de-duplicates the rest', () => {
+    const options = normaliseModelOptions({
+      models: [
+        { id: 'big-model', context_window: 200000, desired_budget: 120000 },
+        { id: '', context_window: 1, desired_budget: 1 },
+        { id: '   ', context_window: 1, desired_budget: 1 },
+        { id: null, context_window: 1, desired_budget: 1 },
+        { id: ' big-model ', context_window: 200000, desired_budget: 120000 },
+      ],
+    });
+
+    expect(options).toEqual([
+      { id: 'big-model', contextWindow: 200000, desiredBudget: 120000 },
+    ]);
+  });
+});
+
+describe('contextBudgetCeiling', () => {
+  it("is the selected model's desired budget", () => {
+    expect(
+      contextBudgetCeiling({ id: 'm', contextWindow: 200000, desiredBudget: 120000 }),
+    ).toBe(120000);
+  });
+
+  it('is the backend explicit ceiling with no model selected', () => {
+    expect(contextBudgetCeiling(undefined)).toBe(DEFAULT_CONTEXT_BUDGET * 10);
+  });
+
+  it('never drops below the slider minimum, whatever the model derives', () => {
+    // A 50-token window at 1% derives a budget of 1 — a range whose max is
+    // below its min is not a usable control.
+    expect(
+      contextBudgetCeiling({ id: 'tiny', contextWindow: 50, desiredBudget: 1 }),
+    ).toBe(MIN_CONTEXT_BUDGET);
+    expect(
+      contextBudgetCeiling({ id: 'zero', contextWindow: 0, desiredBudget: 0 }),
+    ).toBe(DEFAULT_CONTEXT_BUDGET * 10);
+  });
+});
+
+describe('budgetCappedNote', () => {
+  it('names both numbers when the server granted less than was asked', () => {
+    expect(budgetCappedNote(8000, 4096)).toBe(
+      'Server capped the request at 4,096 tokens (requested 8,000).',
+    );
+  });
+
+  it('is silent when nothing was requested (Auto)', () => {
+    expect(budgetCappedNote(null, 4096)).toBeNull();
+  });
+
+  it('is silent when the request was granted exactly', () => {
+    expect(budgetCappedNote(8000, 8000)).toBeNull();
+  });
+
+  it('is silent when the server granted more than was asked', () => {
+    expect(budgetCappedNote(2000, 8000)).toBeNull();
   });
 });
 

@@ -27,7 +27,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiUrl, authInit } from '../lib/api.ts';
 import {
-  DEFAULT_CONTEXT_BUDGET,
   contextRequestPath,
   isCompilableNodeId,
   normaliseManifest,
@@ -58,10 +57,11 @@ export interface UseContextManifestResult {
  */
 async function fetchManifest(
   nodeId: string,
-  budget: number,
+  budget: number | null | undefined,
+  model: string | null | undefined,
   signal: AbortSignal,
 ): Promise<Manifest | null> {
-  const res = await fetch(apiUrl(contextRequestPath(nodeId, budget)), authInit({
+  const res = await fetch(apiUrl(contextRequestPath(nodeId, budget, model)), authInit({
     signal,
   }));
 
@@ -94,10 +94,24 @@ async function fetchManifest(
  * request. Ids the compiler cannot parse — a locally-seeded demo node, a
  * ghost slot — are treated the same way rather than spending a guaranteed
  * 400 on them.
+ *
+ * `budget` and `model` are the request's TWO knobs (GAP-080 phase 2b):
+ *
+ *   budget   `undefined`/`null` means Auto — NO `budget` parameter is sent
+ *            and the server derives its own default from `model`'s context
+ *            window. A number is sent verbatim.
+ *   model    the model whose window sizes that derived default. Empty/absent
+ *            sends no `model` parameter.
+ *
+ * Both are part of the effect's dependency list, so moving either one
+ * re-requests. They are VALUES (numbers and a string), never objects or
+ * arrays — an identity that changes on every render would re-run the fetch
+ * forever, which is the UI-02 crash shape.
  */
 export function useContextManifest(
   nodeId: string | null,
-  budget: number = DEFAULT_CONTEXT_BUDGET,
+  budget?: number | null,
+  model?: string | null,
 ): UseContextManifestResult {
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [loading, setLoading] = useState(false);
@@ -126,7 +140,7 @@ export function useContextManifest(
 
     void (async () => {
       try {
-        const next = await fetchManifest(nodeId as string, budget, controller.signal);
+        const next = await fetchManifest(nodeId as string, budget, model, controller.signal);
         if (generation.current !== current) return; // stale
         setManifest(next);
         setError(null);
@@ -143,7 +157,7 @@ export function useContextManifest(
     return () => {
       controller.abort();
     };
-  }, [nodeId, budget]);
+  }, [nodeId, budget, model]);
 
   return { manifest, loading, error };
 }
