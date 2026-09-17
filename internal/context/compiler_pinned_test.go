@@ -269,17 +269,21 @@ func TestGAP080_NoPinsParity(t *testing.T) {
 		if res.Content != want {
 			t.Errorf("Content = %q, want %q", res.Content, want)
 		}
-		// The single newest node is kept even though it does not fit, exactly
-		// as pre-fix (the kept-anyway node is still counted in OmittedCount —
-		// pre-fix behaviour, preserved).
-		if res.Manifest.OmittedCount != 1 {
-			t.Errorf("OmittedCount = %d, want 1 (pre-fix behaviour preserved)", res.Manifest.OmittedCount)
+		// The single newest node is kept even though it does not fit, and it is
+		// NOT counted as omitted: a node that lands in manifest.Ancestry is
+		// never part of manifest.OmittedCount (DF-HERMES-CANOPY-21). Nothing
+		// was dropped here, so the whole omission accounting is empty.
+		if len(res.Manifest.Ancestry) != 1 || res.Manifest.Ancestry[0].ID != ids[0] {
+			t.Fatalf("ancestry = %v, want exactly the kept node %s", gap080AncestryIDs(res.Manifest.Ancestry), ids[0])
 		}
-		if res.Manifest.OmittedReason != "budget" {
-			t.Errorf("OmittedReason = %q, want budget", res.Manifest.OmittedReason)
+		if res.Manifest.OmittedCount != 0 {
+			t.Errorf("OmittedCount = %d, want 0 (the kept node is not omitted)", res.Manifest.OmittedCount)
 		}
-		if len(res.Manifest.TruncationMarkers) != 1 || res.Manifest.TruncationMarkers[0] != "1 messages omitted" {
-			t.Errorf("TruncationMarkers = %v, want [\"1 messages omitted\"]", res.Manifest.TruncationMarkers)
+		if res.Manifest.OmittedReason != "" {
+			t.Errorf("OmittedReason = %q, want \"\" (nothing was dropped)", res.Manifest.OmittedReason)
+		}
+		if len(res.Manifest.TruncationMarkers) != 0 {
+			t.Errorf("TruncationMarkers = %v, want none", res.Manifest.TruncationMarkers)
 		}
 		wantWarnings := []string{
 			"budget too small for single node",

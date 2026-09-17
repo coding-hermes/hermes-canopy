@@ -213,7 +213,18 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	// no-deduction the pre-fix single-node path had — so the pinned-overage
 	// warning cannot be tripped by it (see AC7).
 	if len(keptContent) == 0 && len(ancestryContent) > 0 {
-		// budget too small for even one node — keep the single newest anyway
+		// budget too small for even one node — keep the single newest anyway.
+		//
+		// The walk above counted that same node as omitted at the iteration
+		// that ended the prefix phase (index 0: keptContent is empty only when
+		// the NEWEST unpinned item did not fit), so undo its count here. The
+		// invariant this restores: a node that ends up in manifest.Ancestry is
+		// never counted in manifest.OmittedCount — OmittedCount is "nodes
+		// dropped by budget" (types.go), and the frontend renders it as
+		// "N items omitted". The guard keeps the total from going negative.
+		if totalOmittedByBudget > 0 {
+			totalOmittedByBudget--
+		}
 		keptContent = append(keptContent, ancestryContent[0])
 		keptItems = append(keptItems, ancestryItems[0])
 		manifest.Warnings = append(manifest.Warnings, "budget too small for single node")

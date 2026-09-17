@@ -662,6 +662,19 @@ func TestCompile_BudgetTooSmall(t *testing.T) {
 	if !foundWarning {
 		t.Errorf("expected 'budget too small' warning, got: %v", result.Manifest.Warnings)
 	}
+
+	// The kept node is not an omitted node: nothing was dropped here, so the
+	// whole omission accounting is empty (DF-HERMES-CANOPY-21). Locking this
+	// in the oldest test of the package keeps the single-node floor honest.
+	if result.Manifest.OmittedCount != 0 {
+		t.Errorf("expected OmittedCount=0 (the kept node is never counted as omitted), got %d", result.Manifest.OmittedCount)
+	}
+	if result.Manifest.OmittedReason != "" {
+		t.Errorf("expected empty OmittedReason, got %q", result.Manifest.OmittedReason)
+	}
+	if len(result.Manifest.TruncationMarkers) != 0 {
+		t.Errorf("expected no truncation markers, got %v", result.Manifest.TruncationMarkers)
+	}
 }
 
 // 16. Compiler merge: scope-membership topics + node_resolved_refs topics

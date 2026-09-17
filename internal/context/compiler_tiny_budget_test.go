@@ -195,19 +195,19 @@ func TestCompile_MultiNodeChain_TinyBudget_KeepsNewest(t *testing.T) {
 		t.Errorf("ancestry TokenCount: got %d, want %d", got, single)
 	}
 
-	// OmittedCount is 4 = the 3 older nodes genuinely dropped + the forced-kept
-	// newest node, which the pre-existing accounting counts as omitted at the
-	// point the prefix phase ends (the same single-node behaviour
-	// TestCompile_BudgetTooSmall has always had: 1 kept, OmittedCount 1). That
-	// accounting is explicitly out of scope here (DF-HERMES-CANOPY-19 AC7).
-	if result.Manifest.OmittedCount != 4 {
-		t.Errorf("expected OmittedCount=4 (3 dropped + 1 forced-kept, pre-existing accounting), got %d", result.Manifest.OmittedCount)
+	// OmittedCount is 3 = the 3 older nodes genuinely dropped by the budget.
+	// The forced-kept newest node is NOT one of them: a node that lands in
+	// manifest.Ancestry is never part of OmittedCount, so the walk's
+	// prefix-ending count for it is undone when the §7 floor keeps it
+	// (DF-HERMES-CANOPY-21).
+	if result.Manifest.OmittedCount != 3 {
+		t.Errorf("expected OmittedCount=3 (the 3 genuinely dropped nodes), got %d", result.Manifest.OmittedCount)
 	}
 	if result.Manifest.OmittedReason != "budget" {
 		t.Errorf("expected OmittedReason=budget, got %q", result.Manifest.OmittedReason)
 	}
-	if !tinyBudgetHasWarning(result.Manifest.TruncationMarkers, "messages omitted") {
-		t.Errorf("expected a truncation marker, got %v", result.Manifest.TruncationMarkers)
+	if len(result.Manifest.TruncationMarkers) != 1 || result.Manifest.TruncationMarkers[0] != "3 messages omitted" {
+		t.Errorf("expected truncation marker [\"3 messages omitted\"], got %v", result.Manifest.TruncationMarkers)
 	}
 
 	// AC4: the §7 warning is present; the pinned-overage warning is NOT (this
@@ -275,10 +275,27 @@ func TestCompile_MultiNodeChain_TinyBudget_EveryChainLength(t *testing.T) {
 			if tinyBudgetHasWarning(result.Manifest.Warnings, "pinned nodes exceed the token budget") {
 				t.Errorf("pinned-overage warning fired with no pins: %v", result.Manifest.Warnings)
 			}
-			// Every element is counted by the walk: the forced-kept newest plus
-			// the n-1 older nodes (pre-existing accounting, AC7 scope).
-			if result.Manifest.OmittedCount != n {
-				t.Errorf("expected OmittedCount=%d, got %d", n, result.Manifest.OmittedCount)
+			// Exactly the n-1 nodes the budget dropped are counted: the
+			// forced-kept newest node is not one of them (DF-HERMES-CANOPY-21).
+			if result.Manifest.OmittedCount != n-1 {
+				t.Errorf("expected OmittedCount=%d (the dropped nodes), got %d", n-1, result.Manifest.OmittedCount)
+			}
+			// The one-element chain drops nothing at all, so the whole
+			// omission accounting must be empty rather than reporting the
+			// node the floor kept.
+			if n == 1 {
+				if result.Manifest.OmittedReason != "" {
+					t.Errorf("single-node chain: OmittedReason = %q, want \"\"", result.Manifest.OmittedReason)
+				}
+				if len(result.Manifest.TruncationMarkers) != 0 {
+					t.Errorf("single-node chain: TruncationMarkers = %v, want none", result.Manifest.TruncationMarkers)
+				}
+			} else {
+				wantMarker := fmt.Sprintf("%d messages omitted", n-1)
+				if len(result.Manifest.TruncationMarkers) != 1 || result.Manifest.TruncationMarkers[0] != wantMarker {
+					t.Errorf("chain_%d: TruncationMarkers = %v, want [%q]",
+						n, result.Manifest.TruncationMarkers, wantMarker)
+				}
 			}
 		})
 	}
@@ -349,4 +366,78 @@ func TestCompile_MultiNodeChain_NormalBudget_ParityControl(t *testing.T) {
 	if result.Manifest.PinnedCount != 0 {
 		t.Errorf("expected PinnedCount=0, got %d", result.Manifest.PinnedCount)
 	}
+}
+
+// ── DF-HERMES-CANOPY-21 ──────────────────────────────────────────────────────
+//
+// AC3: the MaxAncestors ("depth") truncation and the §7 floor are counted
+// independently and must not double-count the node the floor keeps.
+//
+// Fixture: 5-node chain, MaxAncestors=3 → 2 oldest dropped by depth; budget 2
+// is smaller than one rendered node, so the walk drops the 3 newest it walked
+// and the §7 floor then keeps the newest of those three.
+// Observed: OmittedCount = 4 = 2 (depth) + 2 (genuinely dropped by budget),
+// OmittedReason "depth", marker ["2 messages omitted"].
+func TestCompile_FloorWithMaxAncestors_DepthReasonStays(t *testing.T) {
+	const budget = 2
+	const maxAncestors = 3
+	est := NewTokenEstimator()
+	ids := gap080IDs(5)
+	chain := make([]db.Node, 0, 5)
+	for i := 0; i < 5; i++ {
+		chain = append(chain, db.Node{ID: ids[i], AuthorID: gap080Author, Content: "m" + strings.Repeat("z", 30)})
+	}
+	if got := est.Estimate(renderNodeSection(chain[4])); got <= budget {
+		t.Fatalf("premise: newest rendered node is %d tokens, must exceed the %d-token budget", got, budget)
+	}
+
+	c := NewCompiler(gap080ChainStub(chain), &stubTopicReader{}, &stubCardReader{}, est, 5)
+	res, err := c.Compile(context.Background(), CompileRequest{
+		NodeID:       ids[4],
+		TokenBudget:  budget,
+		MaxAncestors: maxAncestors,
+		ResolveRefs:  false,
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+
+	// Depth dropped the 2 oldest (ids[0], ids[1]); the walk then dropped 2 of
+	// the 3 newest by budget (ids[2], ids[3]) and the floor kept ids[4].
+	const omittedByDepth = 2
+	const droppedByBudget = 2
+
+	if got := gap080AncestryIDs(res.Manifest.Ancestry); len(got) != 1 || got[0] != ids[4] {
+		t.Fatalf("ancestry = %v, want exactly the floor-kept newest node %s", got, ids[4])
+	}
+	if !strings.Contains(res.Content, ids[4].String()) {
+		t.Errorf("Content missing the floor-kept node %s", ids[4])
+	}
+	for _, id := range []uuid.UUID{ids[0], ids[1], ids[2], ids[3]} {
+		if strings.Contains(res.Content, id.String()) {
+			t.Errorf("Content contains dropped node %s", id)
+		}
+	}
+	if res.Manifest.OmittedCount != omittedByDepth+droppedByBudget {
+		t.Errorf("OmittedCount = %d, want %d (depth %d + genuinely dropped by budget %d; the floor-kept node is excluded)",
+			res.Manifest.OmittedCount, omittedByDepth+droppedByBudget, omittedByDepth, droppedByBudget)
+	}
+	// The depth truncation set the reason first and still owns it.
+	if res.Manifest.OmittedReason != "depth" {
+		t.Errorf("OmittedReason = %q, want depth", res.Manifest.OmittedReason)
+	}
+	// The marker describes the budget drops only (as before); the depth count
+	// travels through OmittedCount/OmittedReason.
+	if len(res.Manifest.TruncationMarkers) != 1 || res.Manifest.TruncationMarkers[0] != "2 messages omitted" {
+		t.Errorf("TruncationMarkers = %v, want [\"2 messages omitted\"]", res.Manifest.TruncationMarkers)
+	}
+	if !tinyBudgetHasWarning(res.Manifest.Warnings, "budget too small for single node") {
+		t.Errorf("missing %q warning: %v", "budget too small for single node", res.Manifest.Warnings)
+	}
+	if res.Manifest.PinnedCount != 0 {
+		t.Errorf("expected PinnedCount=0, got %d", res.Manifest.PinnedCount)
+	}
+	t.Logf("floor+depth: omitted=%d reason=%q markers=%v tokensUsed=%d budget=%d",
+		res.Manifest.OmittedCount, res.Manifest.OmittedReason, res.Manifest.TruncationMarkers,
+		res.Manifest.TokensUsed, res.Manifest.TokenBudget)
 }
