@@ -2442,3 +2442,17 @@ tasks:
   status: complete
   created_at: '2026-09-17T06:11:22.845497+00:00'
   completed_at: '2026-09-17T06:26:15.176429+00:00'
+- id: CI-006
+  title: 'CI flake class: internal/gateway TempDir RemoveAll cleanup races the post-test
+    persist of the gateway Service'
+  criteria:
+  - 'internal/gateway tests that pass a state file inside t.TempDir() leave the Service''s
+    observe goroutine alive past test-body return; it persists a .runs-*.tmp file
+    into that dir while t.TempDir() cleanup runs RemoveAll, so the run reds master
+    on commits that touch no Go. Fix: deterministic Service shutdown (Service.Close
+    cancels the service ctx, waits for observe goroutines, and blocks any further
+    persist), wired via t.Cleanup in every state-file test, plus a deterministic regression
+    test and a -count=20 -short loop of internal/gateway proving the race is gone.'
+  status: complete
+  created_at: '2026-09-17T07:02:34.213433+00:00'
+  completed_at: '2026-09-17T07:27:41.157384+00:00'
