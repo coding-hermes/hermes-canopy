@@ -589,3 +589,99 @@ criterion), then **GAP-080 phase 2** (needs a design pass first: where the model
 compile path). Parked on purpose: **GAP-076** (owner ruling, blocks GAP-077), **GAP-078** (ruling, not a worker),
 **GAP-081** (scope decision), **DF-20** (the §7 decision this tick filed), QA-HERMES-CANOPY-1/2/9/10
 (bunker/fleet-infra owned). Watch: the `canopy_<hex>` per-test DB residue and the E2E-001 cadence.
+
+
+## Tick 486 — 2026-09-17 ~20:52Z (WORK — DF-HERMES-CANOPY-21)
+
+**Verdict: OK.** Board at tick start: 343 rows / 307 unique ids / **288 complete / 19 pending / 0 parse failures**
+(last-wins per id; a non-last-wins scan is a false high, and grep-style counts are a false low on this file).
+
+**Pick + rationale:** DF-HERMES-CANOPY-21 (P4) — the only fresh, project-owned, single-repo **correctness** defect in the
+pending set. Every higher-priority row is either unwinnable from this repo or needs an owner ruling, not a dispatch:
+GAP-076 (P1) is the owner-ruling SQLite storage pivot and blocks GAP-077 (P2); GAP-078 (P2) needs a ruling;
+QA-HERMES-CANOPY-1/2/9/10 are bunker/fleet-infra owned; **DF-20 (P3) says so in its own title** ("needs one owner
+decision, not a worker"); GAP-080 (P3) needs its own phase split first; FTR-06 + PL-02..PL-06 are deferred post-MVP
+specs; GAP-081/GAP-083 are policy/export work. DF-17 (P3, `.gitignore`) is the cheapest row and is next in line, but a
+one-line ignore-pattern edit does not exercise a worker — DF-21 is a **user-visible manifest defect** in the product's
+flagship surface (`frontend/src/lib/contextManifest.ts` renders `omittedCount` as "N items omitted").
+
+**Premise re-verified at HEAD `eacd4c1` first-hand (not taken from the row):** step 4 of `internal/context/compiler.go`
+increments `totalOmittedByBudget` at the moment the prefix phase ends (the unpinned item that did not fit), and the
+SPEC-IMPL-GAP-001 §7 floor (~line 215) then **keeps that same item** without decrementing. Three sites had locked the
+wrong number in as "pre-existing accounting": `compiler_pinned_test.go:275` (single node kept, `OmittedCount 1`),
+`compiler_tiny_budget_test.go:203` (4-node chain, `OmittedCount 4` for 3 dropped) and `:280` (1..5 loop, `n`).
+
+**Dispatch:** `hermes chat -q "$(cat /tmp/brief-df21-hermes-canopy.txt)" -m gpt-5.6-luna --provider openai-codex
+-s coding-hermes-worker --ignore-rules -Q` (project's proven lane; pid 4133924, log `/tmp/worker-df21.log`).
+One attempt, exit 0, commit **`6197d9a`** — 4 files, **+142/−23**. Liveness: a 0-byte log for the first ~75 s with the
+tree already changing (`M compiler.go` + the 3 test files) = **live-but-quiet**, not a dead dispatch; the commit, not
+process exit, was the done-signal.
+
+**Change:** inside the §7 floor branch, `if totalOmittedByBudget > 0 { totalOmittedByBudget-- }` + the invariant stated
+in the comment ("a node that ends up in `manifest.Ancestry` is never counted in `manifest.OmittedCount`"). This makes
+the pre-existing comment's own claim true — it already said the walk "never counts a PINNED (kept) item as omitted",
+while the floor-kept item was being counted. `OmittedReason`/`TruncationMarkers` now fall out of the corrected total
+(single node → 0, empty reason, no marker). Three expectations corrected **by name**, all tightened rather than relaxed
+(`"messages omitted"` substring match → exact `["3 messages omitted"]`), plus one NEW test
+`TestCompile_FloorWithMaxAncestors_DepthReasonStays` (5 nodes, MaxAncestors 3, budget 2 → omitted 4 = 2 depth + 2 budget
+drops, reason stays `"depth"`, floor-kept node excluded) and three new assertions in `TestCompile_BudgetTooSmall`
+(`omittedCount 0` / `omittedReason ""` / no markers). No test deleted; no other production behaviour touched.
+
+**Independent verification (foreman, adversarial, not the worker's evidence):**
+- **Own property probe** (throwaway `zz_foreman486_probe_test.go`, removed afterwards, tree clean): swept
+  5 chain lengths × 8 budgets × 3 `MaxAncestors` = **120 combinations** asserting `len(ancestry) + omittedCount == len(chain)`
+  plus the reason/marker consistency rules → **0 failures at `6197d9a`**.
+- **Falsification (the real one):** the SAME probe against the **pre-fix** `compiler.go` (checked out from `eacd4c1`)
+  reports **72 ACCOUNTING LEAK failures** of the form `ancestry=1 + omitted=1 != chain=1`. Restore proven byte-identical
+  (`md5 3df390054e29c75a05ee297328146c55` == `git show HEAD:internal/context/compiler.go`).
+- **Parity (worker's evidence, spot-checked):** a 6-fixture digest pair against an `eacd4c1` worktree — Content,
+  ancestry ids, `tokensUsed`, warnings and `pinnedCount` byte-identical on all six; only the two floor fixtures' counts moved.
+- **Pinned semantics of GAP-080 phase 1 unchanged:** a pin keeps ≥1 item, so the floor never fires there; the sibling
+  GAP-080 subtests were not edited and pass.
+
+**Gates (fresh, foreman-run at `6197d9a`):** `gofmt -l internal/context/` clean · `go build ./...` 0 · `go vet ./...` 0 ·
+`golangci-lint run ./internal/context/...` **0 issues** (v2.12.2 = CI) · `go test -count=1 ./internal/context/...`
+**ok 0.009s** (focused `-v`: 45 top-level PASS / 0 FAIL / **0 SKIP**) · `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1`
+on every non-handler package: service 16.6s, server 0.007s, db 100.7s, gateway 0.518s, relay 4.3s, testutil 7.0s,
+transport 5.7s, card/cmd/collaboration/config/deploycheck/hermes/mls/plugin/reference/search/session/sse/sync/telemetry
+all ok.
+⚠️ **`internal/federation` + `internal/fileviewer` failed on the FIRST sweep** with `FATAL: the database system is
+shutting down (SQLSTATE 57P03)` — the `canopy-pg` container restarted mid-sweep (infrastructure, not the change). Both
+were re-run after `pg_isready` and went green (federation 26.6s, fileviewer 28.6s) — reported as a re-run, never as a
+clean first pass. `internal/handler` in one invocation: **ok 348.1s, RC=0**. `CANOPY_TEST_DB_URL` never set.
+
+**Live state:** live `canopy` DB **2|26|46** before and after, `0` nodes created in the last 2 hours, schema 47,
+`:8091` `/health` **200**. 8 `canopy_<hex>` test-DB residue present (pre-existing class — flagged, NOT dropped; not
+provably this tick's).
+
+**GitReins:** task created + started **before** implementation; `gitreins task complete DF-HERMES-CANOPY-21` after the
+commit → **tier1 PASS** (guard full: secrets clean / go_build ok / go_lint ok / go_tests, real 8.3 s run) +
+**tier2 PASS / COMPLETE**, verdict **`bc1d52ed`** (history `.gitreins/history/2026-09-17/291cc7df`). The task ledger now
+holds 177 `status: complete`.
+
+**CI:** run **35271436791** on `6197d9a` — **GREEN on the first attempt** (20:32:40Z → 20:35:33Z, no rerun). Inherited CI
+health at tick start: the last 5 completed runs were all `success` — nothing to file. The tick's board closeout commit
+gets its own run, recorded in the tick-486 addendum.
+
+**Off-by-one:** health `{"status":"ok","uptime":"19h1m15s"}`. Discover ran for real (not copied): 
+`context-compiler-omitted-count-accounting` → `not_found`, `canopy-maintenance-tick` → `not_found` (nothing cached, so
+nothing to apply). Debugged class submitted: **`sub_0041c7`** — `counter-counted-before-keep-decision` (cadence
+`post-debug`, queued): *a counting walk increments an omission counter when an item fails the fit test and a later
+fallback branch keeps that same item; decrement inside the keep branch rather than moving the increment, and verify with
+the invariant `kept + omitted == input size` swept across budgets (72/120 leak pre-fix, 0/120 post-fix).*
+
+**Push:** `origin/master` = `gitlab/master` = `6197d9a`; `git rev-list --count origin/master..HEAD` = **0**,
+`gitlab/master..HEAD` = **0**.
+
+**Bookkeeping:** `tasks.jsonl` — the DF-HERMES-CANOPY-21 row rewritten **in place** (physical line 344), compact style
+preserved, all other lines passed through byte-identically; 343 rows / 307 unique / **289 complete / 18 pending** / 0 parse
+failures after the edit. `events.jsonl` — 2 appended rows (ids **538** `task_completed`, **539** `audit`). `board.jsonl` —
+`ticks_total 485 → 486`, `last_commit 919c98d → 6197d9a`, `last_tick`/`updated_at` bumped. `boardctl validate`:
+**39 errors + 179 warnings** — every error is the inherited recycled-ID duplicate class (`QA-HERMES-CANOPY-*`,
+`DF-HERMES-CANOPY-1..5`, `PL02-P4` at lines 222-254), unchanged in kind from the tick-481 baseline of 39; the 4 extra
+warnings are the closure row's free-form `guard_result` vocabulary note (expected for a RICH closure).
+
+**Watch items (unchanged from tick 485 except where noted):** DF-20 still needs ONE owner decision (the §7 literal
+clause vs `TestGAP080_PinnedOverageKeepsAllPinned`) — this tick did **not** touch pinned semantics; GAP-076/077/078 parked
+on rulings; DF-17 next cheapest; QC of the new depth+floor behaviour is locked by a test now, so the next accounting
+question (if any) starts from a defensible baseline. No doc or spec asserted the old count, so nothing was amended.

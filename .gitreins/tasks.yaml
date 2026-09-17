@@ -2625,3 +2625,17 @@ tasks:
   status: complete
   created_at: '2026-09-17T19:56:48.282916+00:00'
   completed_at: '2026-09-17T20:01:42.584340+00:00'
+- id: DF-HERMES-CANOPY-21
+  title: 'Manifest accounting: a node KEPT by the section-7 tiny-budget floor is counted
+    as omitted (off by one)'
+  criteria:
+  - 'A node that survives into manifest.ancestry is never counted in manifest.omittedCount:
+    with the SPEC-IMPL-GAP-001 section 7 floor keeping the newest node on a budget
+    smaller than one node, omittedCount counts only the genuinely dropped nodes (single-node
+    chain -> 0, 4-node chain -> 3), omittedReason and truncationMarkers stay consistent
+    with that count, and every existing internal/context test that encoded the old
+    accounting is corrected with its new expected value (no test deleted, no behaviour
+    outside the accounting changed).'
+  status: complete
+  created_at: '2026-09-17T20:22:35.727600+00:00'
+  completed_at: '2026-09-17T20:32:45.141063+00:00'
