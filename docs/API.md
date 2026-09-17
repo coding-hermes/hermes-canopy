@@ -1825,8 +1825,9 @@ actual code:
     - `GET  /api/v1/gateway/status` — gateway connectivity + run counts
     - `GET  /api/v1/gateway/runs` — run registry (newest first, live status
       refresh for non-terminal runs)
-    - `POST /api/v1/gateway/runs` — `{message, session_id?}` → starts a REAL
-      Hermes agent run (`POST /v1/runs` on the gateway; 202 + run_id)
+    - `POST /api/v1/gateway/runs` — `{message, session_id?, node_id?,
+      token_budget?}` → starts a REAL Hermes agent run (`POST /v1/runs` on the
+      gateway; 202 + run_id)
     - `GET  /api/v1/gateway/runs/{run_id}` — run record with event history
     - `GET  /api/v1/gateway/runs/{run_id}/events` — SSE stream (history
       replay + live fan-out of gateway lifecycle events)
@@ -1834,6 +1835,35 @@ actual code:
     - `POST /api/v1/gateway/runs/{run_id}/approval` —
       `{choice: once|session|always|deny, approval_id?}` — resolve a pending
       approval
+
+    **Context manifests on model calls (GAP-075).** `node_id` (a UUID) opts a
+    run into the context compiler; the design authority is
+    `specs/SPEC-FTR-07-hermes-agent-gateway-integration.md` § "Context manifest
+    assembly". With `node_id` the COMPILED payload — not the raw message —
+    becomes the gateway's `input`, so the model call has a visible, auditable
+    manifest; `token_budget` overrides the default budget
+    (`CONTEXT_DEFAULT_BUDGET`, default 8000) for that call only. Compilation
+    never falls back to the raw message.
+
+    The run record — the `run` object in the 202 response and the body of
+    `GET /api/v1/gateway/runs/{run_id}` — then carries:
+
+    - `source_node_id` — the compile target the manifest describes
+    - `token_budget` — the effective budget applied
+    - `context_tokens` — the manifest's `tokensUsed`
+    - `manifest` — the compiler manifest verbatim
+
+    All four are `omitempty`: without `node_id` the raw message is sent and the
+    record keeps its previous shape.
+
+    Node-scoped failure modes:
+
+    - `400 invalid_request` — `node_id` is not a UUID (also a missing/blank
+      `message`)
+    - `404 node_not_found` — the compiler has no such node
+    - `422 context_compile_failed` — any other compile failure
+    - `503 context_compiler_unavailable` — the server was built without a
+      context compiler wired into the gateway surface
 
     The gateway API key is held server-side; the browser never sees it.
 

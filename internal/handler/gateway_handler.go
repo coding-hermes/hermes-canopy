@@ -5,7 +5,10 @@
 //
 //	GET  /status                  — gateway connectivity + run counts
 //	GET  /runs                    — registry snapshot (newest first)
-//	POST /runs                    — start a REAL Hermes gateway run
+//	POST /runs                    — start a REAL Hermes gateway run; with a
+//	                                node_id the model receives the COMPILED
+//	                                context and the run carries its manifest
+//	                                (GAP-075)
 //	GET  /runs/{run_id}           — single run record
 //	GET  /runs/{run_id}/events    — SSE stream (history replay + live fan-out)
 //	POST /runs/{run_id}/stop      — interrupt a run on the gateway
@@ -19,24 +22,62 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 )
+
+// ContextCompiler compiles a node's budgeted context. Satisfied by
+// context.Compiler. The interface is owned by the HTTP layer (like
+// ReferenceSelectionLoader in context_handler.go) so the gateway handler
+// depends on the capability it needs, and so gateway.Service keeps knowing
+// nothing about context compilation.
+type ContextCompiler interface {
+	Compile(ctx context.Context, req ctxpkg.CompileRequest) (*ctxpkg.CompiledContext, error)
+}
 
 // GatewayHandler exposes live Hermes gateway state to the Canopy frontend.
 type GatewayHandler struct {
 	svc *gateway.Service
+	// compiler is optional: when wired, POST /gateway/runs with a node_id
+	// sends the COMPILED context to the model instead of the raw message
+	// (GAP-075, SPEC-FTR-07 §"Context manifest assembly"). A nil compiler
+	// leaves every request on the raw path, except a node-scoped request,
+	// which fails closed with context_compiler_unavailable.
+	compiler ContextCompiler
+	// defaultBudget is the compiler budget applied when a request does not
+	// carry token_budget (mirrors cfg.ContextDefaultBudget).
+	defaultBudget int
+}
+
+// GatewayHandlerOption configures the gateway handler.
+type GatewayHandlerOption func(*GatewayHandler)
+
+// WithContextCompiler wires the context compiler used to assemble the
+// model-call payload for node-scoped runs, plus the default token budget
+// applied when a request omits token_budget.
+func WithContextCompiler(c ContextCompiler, defaultBudget int) GatewayHandlerOption {
+	return func(h *GatewayHandler) {
+		h.compiler = c
+		h.defaultBudget = defaultBudget
+	}
 }
 
 // NewGatewayHandler builds the handler around a gateway service.
-func NewGatewayHandler(svc *gateway.Service) *GatewayHandler {
-	return &GatewayHandler{svc: svc}
+func NewGatewayHandler(svc *gateway.Service, opts ...GatewayHandlerOption) *GatewayHandler {
+	h := &GatewayHandler{svc: svc}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Routes returns the chi router for the gateway surface.
@@ -90,14 +131,25 @@ func (h *GatewayHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"runs": recs})
 }
 
-// startRunRequest is the Canopy-side start-run body. `message` becomes the
-// gateway's `input`; `session_id` scopes the conversation when provided.
+// startRunRequest is the Canopy-side start-run body. `message` is the raw
+// user message; `session_id` scopes the conversation when provided.
+//
+// `node_id` opts the run into the context compiler (GAP-075): the compiled
+// payload — not the raw message — becomes the gateway's `input`, and the
+// compiler's manifest is attached to the run record. `token_budget` overrides
+// the configured default budget for this call only.
 type startRunRequest struct {
-	Message   string `json:"message"`
-	SessionID string `json:"session_id,omitempty"`
+	Message     string `json:"message"`
+	SessionID   string `json:"session_id,omitempty"`
+	NodeID      string `json:"node_id,omitempty"`      // UUID; enables compilation
+	TokenBudget int    `json:"token_budget,omitempty"` // 0 => handler default
 }
 
 // StartRun creates a real Hermes gateway run (HTTP 202 from the gateway).
+//
+// With a node_id the run is context-compiled first: compile failures are
+// answered here and NEVER fall back to the raw message, because a silent
+// fallback would send the model a payload the manifest does not describe.
 func (h *GatewayHandler) StartRun(w http.ResponseWriter, r *http.Request) {
 	var req startRunRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -108,7 +160,11 @@ func (h *GatewayHandler) StartRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "message is required")
 		return
 	}
-	rec, err := h.svc.StartRun(r.Context(), req.Message, req.SessionID)
+	in := gateway.StartRunInput{Message: req.Message, SessionID: req.SessionID}
+	if req.NodeID != "" && !h.resolveContext(w, r, &req, &in) {
+		return // the compile error response is already written
+	}
+	rec, err := h.svc.StartRunWithContext(r.Context(), in)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "gateway_unavailable", err.Error())
 		return
@@ -118,6 +174,70 @@ func (h *GatewayHandler) StartRun(w http.ResponseWriter, r *http.Request) {
 		"status": rec.Status,
 		"run":    rec,
 	})
+}
+
+// resolveContext compiles the node's budgeted context into the start input.
+// It reports false after writing the error response; the caller must then
+// return without touching the gateway.
+func (h *GatewayHandler) resolveContext(w http.ResponseWriter, r *http.Request, req *startRunRequest, in *gateway.StartRunInput) bool {
+	nodeID, err := uuid.Parse(req.NodeID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "node_id must be a valid UUID")
+		return false
+	}
+	if h.compiler == nil {
+		writeError(w, http.StatusServiceUnavailable, "context_compiler_unavailable",
+			"context compiler is not configured; a node-scoped run cannot be started")
+		return false
+	}
+	budget := req.TokenBudget
+	if budget <= 0 {
+		budget = h.defaultBudget
+	}
+	compiled, err := h.compiler.Compile(r.Context(), ctxpkg.CompileRequest{
+		NodeID:       nodeID,
+		TokenBudget:  budget,
+		MaxAncestors: 0,
+		IncludeCards: false,
+		ResolveRefs:  true,
+	})
+	if err != nil {
+		if errors.Is(err, ctxpkg.ErrNodeNotFound) {
+			writeError(w, http.StatusNotFound, "node_not_found", "node not found")
+			return false
+		}
+		writeError(w, http.StatusUnprocessableEntity, "context_compile_failed", err.Error())
+		return false
+	}
+	if compiled == nil {
+		writeError(w, http.StatusUnprocessableEntity, "context_compile_failed", "compiler returned no context")
+		return false
+	}
+	manifestJSON, tokensUsed, err := manifestPayload(compiled)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "context_compile_failed", err.Error())
+		return false
+	}
+	in.Input = compiled.Content
+	in.SourceNodeID = req.NodeID
+	in.TokenBudget = budget
+	in.ContextTokens = tokensUsed
+	in.ManifestJSON = manifestJSON
+	return true
+}
+
+// manifestPayload serialises the compiled manifest for the run record and
+// reports the manifest's own TokensUsed. A nil manifest is legal (degraded
+// compiled contexts still carry content) and yields no manifest payload.
+func manifestPayload(compiled *ctxpkg.CompiledContext) (json.RawMessage, int, error) {
+	if compiled.Manifest == nil {
+		return nil, 0, nil
+	}
+	raw, err := json.Marshal(compiled.Manifest)
+	if err != nil {
+		return nil, 0, fmt.Errorf("manifest encode failed: %w", err)
+	}
+	return raw, compiled.Manifest.TokensUsed, nil
 }
 
 // GetRun returns a single run record.

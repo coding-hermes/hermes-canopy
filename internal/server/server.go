@@ -450,7 +450,13 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// gateway that is down or missing endpoints only logs, so canopyd still
 		// boots and the /gateway routes still mount.
 		gatewaySvc := gateway.NewServiceWithState(gwClient, gateway.DefaultStateFile())
-		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc).Routes())
+		// GAP-075: the compiler is wired into the gateway surface so a
+		// node-scoped run (POST /gateway/runs {node_id}) sends the COMPILED
+		// context to the model and records its manifest. Wiring it here is
+		// what makes the router carry the compiler — the compiler instance is
+		// the same one serving GET /context/{node_id}.
+		r.Mount("/gateway", handler.NewGatewayHandler(gatewaySvc,
+			handler.WithContextCompiler(ctxCompiler, cfg.ContextDefaultBudget)).Routes())
 	})
 
 	// Federation handshake is P2P-authenticated, so it cannot inherit the

@@ -40,6 +40,16 @@ type RunRecord struct {
 	Error     string         `json:"error,omitempty"`
 	Usage     map[string]any `json:"usage,omitempty"`
 	Events    []RunEvent     `json:"events"`
+
+	// Context provenance (GAP-075). All four fields are additive and
+	// omitempty, so a context-free run keeps the pre-GAP-075 JSON shape
+	// byte-for-byte. SourceNodeID/TokenBudget describe the compile request,
+	// ContextTokens is the compiler manifest's TokensUsed, and Manifest
+	// carries the manifest verbatim — this package never interprets it.
+	SourceNodeID  string          `json:"source_node_id,omitempty"`
+	TokenBudget   int             `json:"token_budget,omitempty"`
+	ContextTokens int             `json:"context_tokens,omitempty"`
+	Manifest      json.RawMessage `json:"manifest,omitempty"`
 }
 
 // IsTerminal reports whether the run reached a terminal gateway state.
@@ -111,24 +121,66 @@ func (s *Service) Connected(ctx context.Context) error {
 	return s.client.Health(ctx)
 }
 
+// StartRunInput is the context-aware start request. ManifestJSON carries the
+// compiler's manifest verbatim (opaque to this package).
+type StartRunInput struct {
+	Message       string          // raw user message (always set)
+	Input         string          // what the gateway receives; "" => Message
+	SessionID     string          // conversation scope, "" for a fresh one
+	SourceNodeID  string          // "" for a context-free run
+	TokenBudget   int             // 0 when none was applied
+	ContextTokens int             // compiler manifest TokensUsed; 0 when none
+	ManifestJSON  json.RawMessage // nil for a context-free run
+}
+
 // StartRun creates a real Hermes gateway run and begins observing it. The
 // returned record reflects the immediate 202 response; events arrive
 // asynchronously.
 func (s *Service) StartRun(ctx context.Context, message, sessionID string) (*RunRecord, error) {
-	req := StartRunRequest{Input: message}
-	if sessionID != "" {
-		req.SessionID = sessionID
+	return s.StartRunWithContext(ctx, StartRunInput{Message: message, Input: message, SessionID: sessionID})
+}
+
+// StartRunWithContext is the context-aware start path (GAP-075): the model
+// call's payload is the COMPILED context (in.Input) rather than the raw user
+// message, and the compiler's manifest travels with the run record so the
+// call is auditable after the fact. A context-free StartRunInput (Input and
+// ManifestJSON empty) behaves exactly like StartRun.
+//
+// The gateway itself is unchanged: it receives a string `input` either way
+// and never learns whether that string was compiled.
+func (s *Service) StartRunWithContext(ctx context.Context, in StartRunInput) (*RunRecord, error) {
+	input := in.Input
+	if input == "" {
+		input = in.Message
+	}
+	req := StartRunRequest{Input: input}
+	if in.SessionID != "" {
+		req.SessionID = in.SessionID
 	}
 	ref, err := s.client.StartRun(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	// A zero-length json.RawMessage is poison for any consumer that encodes it
+	// (json: error calling MarshalJSON ... unexpected end of JSON input).
+	// RunRecord's omitempty tag already skips an empty slice on the wire, so
+	// this is belt-and-braces: it keeps the in-memory invariant "Manifest is
+	// nil or valid JSON" true for the record itself, not just its wire form.
+	var manifest json.RawMessage
+	if len(in.ManifestJSON) > 0 {
+		manifest = make(json.RawMessage, len(in.ManifestJSON))
+		copy(manifest, in.ManifestJSON)
+	}
 	rec := &RunRecord{
-		RunID:     ref.RunID,
-		SessionID: sessionID,
-		Message:   message,
-		Status:    "started",
-		CreatedAt: time.Now().UTC(),
+		RunID:         ref.RunID,
+		SessionID:     in.SessionID,
+		Message:       in.Message,
+		Status:        "started",
+		CreatedAt:     time.Now().UTC(),
+		SourceNodeID:  in.SourceNodeID,
+		TokenBudget:   in.TokenBudget,
+		ContextTokens: in.ContextTokens,
+		Manifest:      manifest,
 	}
 	s.mu.Lock()
 	s.runs[ref.RunID] = rec
