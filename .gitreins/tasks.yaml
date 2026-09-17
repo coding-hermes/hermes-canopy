@@ -2529,3 +2529,20 @@ tasks:
   status: complete
   created_at: '2026-09-17T13:23:02.651860+00:00'
   completed_at: '2026-09-17T13:29:48.352385+00:00'
+- id: GAP-079
+  title: Resume-time metric carrier (first of the four MVP success metrics)
+  criteria:
+  - 'internal/telemetry gains a resume_duration_seconds histogram (buckets including
+    the 30s SLO line) plus resume_started_total, fed by a ResumeTracker + chi middleware
+    wired into the production router inside r.Route(/api/v1) after authMW and gated
+    on metrics != nil: a window opens on the first 2xx tree-scoped read after a 5-minute
+    idle gap and completes on the next 2xx GET /api/v1/context/{node_id}; README +
+    docs/SELF_HOST.md document the metric, its semantics and its honest limitation
+    (server-observable only, browser render excluded) and the README metric list is
+    corrected to the registered names; resume_test.go pins idle-gap boundary, single
+    observation per window, non-2xx opens nothing, empty-key skip and the 256-key
+    prune bound; go build/vet/gofmt, go test -race ./internal/telemetry/..., go test
+    ./internal/server/... and golangci-lint on both packages all green'
+  status: complete
+  created_at: '2026-09-17T14:13:13.364844+00:00'
+  completed_at: '2026-09-17T14:25:28.695522+00:00'
