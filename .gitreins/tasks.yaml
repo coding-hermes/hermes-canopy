@@ -2505,3 +2505,15 @@ tasks:
   status: complete
   created_at: '2026-09-17T11:05:27.073230+00:00'
   completed_at: '2026-09-17T11:09:44.591486+00:00'
+- id: DF-HERMES-CANOPY-14
+  title: Resolve file stream URLs through the auth'd fetch path
+  criteria:
+  - 'A token-resolving build never hands a bare /api/v1/files/{id}/stream URL to the
+    DOM: resolveStreamUrl returns a blob: object URL (released on unmount/file change)
+    and streamUrl(id) only in the no-token dev-proxy case; ViewerHost download anchor
+    + srcDoc + viewer.get_stream_url use the resolved form; README + docs/INTEGRATION.md
+    updated to the new behaviour; fileApi + ViewerHost tests, full vitest, tsc -b
+    and oxlint green'
+  status: complete
+  created_at: '2026-09-17T12:16:53.239400+00:00'
+  completed_at: '2026-09-17T12:24:30.205292+00:00'
