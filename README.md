@@ -89,8 +89,9 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
-# The canopyd binary is API-only in MVP — the PWA is served separately:
-# production: serve frontend/dist/ with any static server (see "Deployment").
+# The canopyd binary is API-only in MVP — the PWA is served separately, and a
+# production build needs a same-origin reverse proxy, NOT "any static server":
+# see the Note under "Production (Manual)" below, or deploy/reference-proxy.py.
 ```
 
 ## Authentication (dev mode)
@@ -163,6 +164,25 @@ never mints users, workspaces or profiles. Provisioning is what makes the
 **MUST** set a real `JWT_SECRET` environment variable. The dev secret
 `dev-secret-change-me` must never leave the dev environment (see the comment in
 `frontend/vite.config.ts`).
+
+**The PWA has no login flow** (multi-user auth is deferred post-MVP — there is no
+`/api/v1/auth/register|login` endpoint), and the Vite **dev** proxy is the only
+component that injects a JWT today. A production static build therefore
+authenticates in exactly one of these ways:
+
+1. **The browser carries the token.** Build the PWA with
+   `VITE_API_TOKEN=<jwt>`, or paste a token into the browser's
+   `localStorage['canopy.token']`. `frontend/src/lib/api.ts` then sends
+   `Authorization: Bearer <jwt>` on every API call (see README §"Production
+   (Manual)" for the full recipe).
+2. **The reverse proxy injects the token** — `deploy/reference-proxy.py --token`,
+   or the commented block in `deploy/nginx.canopy.conf` / `deploy/Caddyfile`.
+   Only ever behind explicit authentication (HTTP Basic / auth gate): injecting a
+   JWT on an open route hands a live canopyd credential to every anonymous
+   caller, and the reference proxy refuses to start in that configuration.
+
+Either way the JWT is minted by you (below) — deployment is **single-user** in
+MVP.
 
 For full auth details (claims, error codes, middleware), see [docs/API.md](docs/API.md) §Auth.
 
@@ -498,20 +518,47 @@ METRICS_ENABLED=true \
 > **Note:** `canopyd` is **API-only** in MVP — it does not serve the PWA.
 > The binary exposes the REST/SSE API on `HTTP_ADDR` (`:8091` via `make run`
 > and compose; the raw binary defaults to `:8080`);
-> the frontend must be served separately. Production setup:
+> the frontend must be served separately, and it must be served by a SAME-ORIGIN
+> reverse proxy — **not** by "any static server":
 >
 > ```bash
-> cd frontend && npm ci && npm run build   # produces frontend/dist/
-> # serve the static build with any static server, e.g.:
-> npx serve -s -l 3000 frontend/dist        # SPA fallback → http://localhost:3000
+> cd frontend && npm ci && npm run build   # produces frontend/dist/ (NOT frontend/frontend/dist)
+> cd ..                                    # run the proxy from the repo root
+> python3 deploy/reference-proxy.py --dist frontend/dist --port 3000 \
+>     --api http://127.0.0.1:8091
+> # → http://localhost:3000
 > ```
 >
-> The `-s` flag (single-page fallback) matters: the PWA uses `BrowserRouter`,
-> so deep links such as `/trees` or `/tree/<id>` must return `index.html`,
-> not 404.
+> **Why a plain static server does not work.** An SPA fallback (`npx serve -s`,
+> CDN "SPA mode") answers *every* unknown path with `index.html` — including
+> `GET /api/v1/trees`. The app then runs `res.json()` over `<!doctype html>` and
+> fails with `Unexpected token '<', "<!doctype "... is not valid JSON` while the
+> UI reports "Backend: unreachable". The fallback is only for app routes
+> (`/trees`, `/tree/<id>`, so `BrowserRouter` deep links survive a refresh);
+> `/api/` and `/health` must always reach canopyd. For a real deployment use
+> `deploy/nginx.canopy.conf` (`proxy_buffering off`) or `deploy/Caddyfile`
+> (`flush_interval -1`) — both implement that split plus SSE-safe streaming.
 >
-> Point the deployed PWA at the API base URL (`VITE_API_URL` at build time, or
-> the Vite proxy target in dev). See docs/INTEGRATION.md §5 for details.
+> **The example port is not reserved.** `:3000` is a convention, not a
+> guarantee — it is occupied on plenty of hosts. Set `--port` (or the nginx/Caddy
+> listener) to something free; `deploy/reference-proxy.py` refuses to start on a
+> busy port.
+>
+> **Pointing the PWA at the API.** The frontend reads `VITE_API_BASE_URL`
+> (`frontend/src/lib/api.ts`), **not** `VITE_API_URL` — that name is only the
+> Vite **dev** proxy target (`frontend/vite.config.ts`). Leaving
+> `VITE_API_BASE_URL` unset is correct for the same-origin proxy above: the app
+> calls the relative `/api/v1`. See docs/INTEGRATION.md §5 for details.
+>
+> **Production auth is single-user in MVP.** There are no
+> `/api/v1/auth/register|login` endpoints, and the Vite **dev** proxy is the only
+> thing that injects a JWT today, so a static build authenticates in one of two
+> ways: bake a token at build time (`VITE_API_TOKEN=<jwt>`, or paste one into
+> `localStorage['canopy.token']` in the browser), or let the reverse proxy inject
+> `Authorization: Bearer <jwt>` — which `deploy/reference-proxy.py` and the nginx
+> configs only do **behind explicit authentication** (HTTP Basic / auth gate).
+> Mint the JWT yourself with `JWT_SECRET` (see
+> [Authentication (dev mode)](#authentication-dev-mode) → "Direct API access").
 
 ### Environment Variables
 

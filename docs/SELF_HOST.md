@@ -48,23 +48,54 @@ curl http://localhost:8091/health
 
 The server auto-runs database migrations on startup, so the schema is created automatically the first time it connects.
 
-**Serving the frontend:** `canopyd` is **API-only** in MVP — it does not embed or serve the PWA. The React frontend must be served separately:
+**Serving the frontend:** `canopyd` is **API-only** in MVP — it does not embed or serve the PWA. The React frontend must be served separately, and in production it must be served by a **same-origin reverse proxy** — a plain static server does *not* work:
 
 ```bash
 # Development: Vite dev server (proxies /api to :8091 by default)
 cd frontend && npm install && npm run dev
 # → http://localhost:5173
 
-# Production: build static files, then serve frontend/dist/ with any static server
-cd frontend && npm ci && npm run build   # produces frontend/dist/
-npx serve -s -l 3000 frontend/dist        # SPA fallback → http://localhost:3000
+# Production: build, then serve dist/ through a same-origin reverse proxy
+cd frontend && npm ci && npm run build    # produces frontend/dist/ (NOT frontend/frontend/dist)
+cd ..                                     # run the proxy from the repo root
+python3 deploy/reference-proxy.py --dist frontend/dist --port 3000 \
+    --api http://127.0.0.1:8091
+# → http://localhost:3000
 ```
 
-The `-s` flag (single-page fallback) matters: the PWA uses `BrowserRouter`,
-so deep links such as `/trees` or `/tree/<id>` must return `index.html`,
-not 404.
+**Why not `npx serve -s` (or any other SPA-mode static server).** The SPA fallback
+those servers enable answers *every* unknown path with `index.html` — including
+`GET /api/v1/trees`. The app then tries to `JSON.parse("<!doctype html>")` and
+fails with `Unexpected token '<', "<!doctype "... is not valid JSON`, while the UI
+reports "Backend: unreachable". The `BrowserRouter` fallback is only needed for
+**app routes** (`/trees`, `/tree/<id>` — so deep links survive a refresh);
+`/api/` and `/health` must always be reverse-proxied to canopyd. `:3000` is a
+convention, not a reserved port — it is often already taken, and
+`deploy/reference-proxy.py` refuses to start on a busy port, so pick a free one.
 
-Point the deployed PWA at the API base URL (`VITE_API_URL` at build time, or the Vite proxy target in dev). See docs/INTEGRATION.md §5 for details.
+For a real deployment use one of the shipped reference configs, which implement
+the same split plus SSE-safe streaming (no response buffering):
+
+| Config | Notes |
+|--------|-------|
+| `deploy/reference-proxy.py` | python3 stdlib only, no dependencies — dev-grade, single-user |
+| `deploy/nginx.canopy.conf` | `proxy_buffering off`, long read timeout for `/api/` event streams |
+| `deploy/Caddyfile` | `flush_interval -1`, `read_timeout 1h` |
+
+**Pointing the PWA at the API.** The frontend reads `VITE_API_BASE_URL`
+(`frontend/src/lib/api.ts`) — `VITE_API_URL` is **only** the Vite **dev** proxy
+target (`frontend/vite.config.ts`). For the same-origin proxy above, leave
+`VITE_API_BASE_URL` unset: the app then calls the relative `/api/v1`. See
+docs/INTEGRATION.md §5 for details.
+
+**Production auth (single-user).** There is no `/api/v1/auth/*` endpoint and the
+Vite **dev** proxy is the only thing that injects a JWT today, so a static build
+authenticates either by carrying the token itself (`VITE_API_TOKEN=<jwt>` at build
+time, or `localStorage['canopy.token']` in the browser) or by having the reverse
+proxy inject `Authorization: Bearer <jwt>` **behind explicit authentication**
+(`--require-auth-user/--require-auth-password` for the reference proxy; the
+commented `auth_request`/`basicauth` blocks in the nginx/Caddy configs). Mint the
+token yourself with `JWT_SECRET` — see [README §Authentication](../README.md#authentication-dev-mode).
 
 ---
 

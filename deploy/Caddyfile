@@ -1,0 +1,81 @@
+# Hermes Canopy — reference production reverse proxy (Caddy).
+#
+# THE TWO TRAPS THIS FILE EXISTS TO FIX (DF-HERMES-CANOPY-7)
+#
+#  1. THE SPA FALLBACK MUST EXCLUDE /api. A catch-all `try_files {path} /index.html`
+#     answers GET /api/v1/trees with the HTML shell; the client then JSON-parses
+#     "<!doctype html>" and shows "Unexpected token '<' ... is not valid JSON" /
+#     "Backend: unreachable". The `@api` matcher below is handled BEFORE the
+#     fallback, and it also covers /health, which the PWA parses as JSON too.
+#     The `route` block is used (not sibling `handle` blocks) so the evaluation
+#     order here is exactly the order written — no reliance on matcher sorting.
+#
+#  2. A STATIC BUILD CANNOT AUTHENTICATE BY ITSELF. The Vite DEV server is what
+#     injects the dev JWT; canopyd has no /api/v1/auth/* endpoints. Either the
+#     browser carries the token itself (build with VITE_API_TOKEN=<jwt>, or paste
+#     one into localStorage['canopy.token']) — nothing to configure here — or this
+#     proxy injects it, which is shown COMMENTED below and must sit behind
+#     `basicauth` (or any real auth module) or it hands a live canopyd credential
+#     to every anonymous visitor. deploy/reference-proxy.py refuses to start in
+#     that state; Caddy cannot stop you, so read the comment before enabling it.
+#
+# Install:  sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+# Then edit: the site address below (or keep it and let Caddy fetch a cert), and
+# `root` — the PWA build lands in frontend/dist (NOT frontend/frontend/dist).
+# The docs' old `:3000` example is not a reserved port; Caddy's own listener is
+# whatever you put in the site address.
+
+canopy.example.com {
+	encode gzip
+
+	root * /srv/canopy/frontend/dist
+
+	# index.html and the service worker must never be cached hard, or a deploy
+	# never reaches the browser; the hashed /assets/* bundles may be.
+	@immutable path /assets/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+	@shell path / /index.html /sw.js
+	header @shell Cache-Control "no-cache"
+
+	# ── /api/* and /health: proxied, streamed, NEVER the SPA fallback ──────
+	@api path /api/* /health
+
+	route {
+		reverse_proxy @api 127.0.0.1:8091 {
+			# SSE: -1 disables buffering/flushing delays so /api/v1/... event
+			# streams arrive incrementally instead of all at once at the end.
+			flush_interval -1
+			transport http {
+				# Event streams may sit idle between events.
+				read_timeout 1h
+				write_timeout 1h
+			}
+
+			# AUTHORIZATION PASS-THROUGH: Caddy forwards the client's headers
+			# (including Authorization) by default — the token from
+			# VITE_API_TOKEN or localStorage['canopy.token'] reaches canopyd
+			# unchanged. Stated explicitly so it is not mistaken for an omission.
+			header_up Authorization {http.request.header.Authorization}
+
+			# ── OPTION: proxy-injected token — ONLY behind real auth ──────────
+			# `basicauth` gates the WHOLE site (address, then the bcrypt hash —
+			# `caddy hash-password` to generate one). Only with a gate in place is
+			# injecting a shared JWT defensible:
+			#
+			#   basicauth {
+			#       canopy $2a$14$<bcrypt-hash>
+			#   }
+			#   header_up Authorization "Bearer <JWT>"
+			#
+			# The JWT has to be minted out-of-band: canopyd has no login endpoint.
+		}
+
+		# ── app routes: SPA fallback for deep links (/trees, /tree/<id>) ──────
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Plain HTTP is redirected to HTTPS automatically by Caddy's default site policy
+# when the site address has no scheme; add `http://canopy.example.com { redir
+# https://{host}{uri} }` only if you serve plain HTTP behind another terminator.

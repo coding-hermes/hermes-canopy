@@ -188,7 +188,10 @@ The Vite dev server is configured in `frontend/vite.config.ts`. Key details:
 
 - **Dev port:** `:5173` (Vite default)
 - **API proxy:** All `/api` requests are proxied to the backend
-- **Proxy target:** `VITE_API_URL` env var, defaults to `http://localhost:8091`
+- **Proxy target (DEV ONLY):** `VITE_API_URL` env var, defaults to `http://localhost:8091`.
+  This variable is read by `frontend/vite.config.ts` for the **Vite dev server
+  proxy only** — a production build ignores it (the build-time equivalent is
+  `VITE_API_BASE_URL`, see §5 Production Build).
 - **Dev JWT:** A pre-generated HS256 JWT is injected into every proxied request
   via the `Authorization` header. The token is set by `VITE_DEV_JWT` env var,
   falling back to a hardcoded dev token in `vite.config.ts`.
@@ -221,23 +224,56 @@ npm run build
 **Serving the PWA:** `canopyd` is **API-only** in MVP — the binary serves the
 REST/SSE API on `HTTP_ADDR` (raw binary default `:8080`; `make run` and
 compose use `:8091`) and does **not** embed or serve
-the frontend. The PWA must be served separately:
+the frontend. The PWA must be served separately, by a **same-origin reverse
+proxy** — a plain SPA-mode static server answers `/api/v1/*` with `index.html`,
+and the app then dies on `JSON.parse("<!doctype html>")`:
 
 ```bash
-# Option A — any static file server
-npx serve -s -l 3000 frontend/dist        # SPA fallback → http://localhost:3000
+# Build (from the repo root: frontend/dist, NOT frontend/frontend/dist)
+cd frontend && npm run build && cd ..
 
-# Option B — nginx / Caddy / your CDN pointed at frontend/dist/
+# Option A — shipped reference proxy (python3 stdlib only, dev-grade/single-user)
+python3 deploy/reference-proxy.py --dist frontend/dist --port 3000 \
+    --api http://127.0.0.1:8091
+# Option B — your own nginx / Caddy: copy deploy/nginx.canopy.conf or
+#            deploy/Caddyfile as the starting point.
 ```
 
-The `-s` flag (single-page fallback) matters: the PWA uses `BrowserRouter`,
-so deep links such as `/trees` or `/tree/<id>` must return `index.html`,
-not 404.
+Three things the server in front of `dist/` must do (all three configs above do
+them): (1) SPA fallback for **app routes only** (`/trees`, `/tree/<id>` — the PWA
+uses `BrowserRouter`, so deep links must return `index.html`, not 404) while
+`/api/` and `/health` are **never** answered with `index.html`; (2) stream `/api`
+responses unbuffered (nginx `proxy_buffering off`, Caddy `flush_interval -1`,
+reference proxy chunked relay) so SSE event streams arrive incrementally; (3) pass
+the client's `Authorization` header through (token injection only behind explicit
+authentication — see below). The example port `:3000` is not reserved; choose a
+free one (the reference proxy refuses a busy port).
 
-The deployed PWA talks to the API through a reverse proxy or by setting the
-API base URL at build time (`VITE_API_URL`, see §5 Configuration above). The
-Docker deployment builds `frontend/dist` as a release artifact in the image
-builder stage for exactly this purpose (deploy/Dockerfile).
+The deployed PWA talks to the API on its **own origin** through that proxy, so
+the build needs no API base URL at all. The build-time variable is
+`VITE_API_BASE_URL` (`frontend/src/lib/api.ts`) — `VITE_API_URL` is only the Vite
+**dev** proxy target (§5 Configuration above) and does nothing in a production
+build. The Docker deployment builds `frontend/dist` as a release artifact in the
+image builder stage for exactly this purpose (deploy/Dockerfile).
+
+**Production auth — single-user in MVP.** The proxy boundary above has no idea about
+tokens — it only relays `Authorization`. Since there is **no** `/api/v1/auth/*`
+endpoint, and the Vite dev proxy (the only JWT injector today) is gone in
+production, a deployed PWA authenticates in one of two ways:
+
+1. **The browser carries the token.** Build with `VITE_API_TOKEN=<jwt>`, or paste
+   a token into the browser's `localStorage['canopy.token']`;
+   `frontend/src/lib/api.ts` then sends `Authorization: Bearer <jwt>` on every API
+   call (and sends no header at all when the entry is missing/blank).
+2. **The proxy injects the token** — `deploy/reference-proxy.py --token <jwt>`
+   (with `--require-auth-user/--require-auth-password`) or the commented
+   `auth_request` / `basicauth` blocks in `deploy/nginx.canopy.conf` /
+   `deploy/Caddyfile`. Only behind explicit authentication: an injected JWT on an
+   open route is a credential handout. The reference proxy refuses to start if
+   `--token` is combined with a non-loopback bind and no Basic auth.
+
+Mint the token out-of-band (mint one with `JWT_SECRET` — §6 below), and treat the
+whole deployment as single-user; multi-user auth is deferred post-MVP.
 
 ## 6. API Walkthrough (curl)
 
@@ -910,7 +946,9 @@ returns HTTP 201 (not 503).
 | `JWT_SECRET`          | `dev-secret-change-me`| HS256 JWT signing secret                 |
 | `LOG_LEVEL`           | `info`                | Log level                                |
 | `METRICS_ENABLED`     | `false`               | Enable Prometheus metrics on `/metrics`  |
-| `VITE_API_URL`        | `http://localhost:8091`| Frontend proxy target (frontend only)   |
-| `VITE_DEV_JWT`        | (hardcoded dev token) | Dev JWT for proxy auth (frontend only)   |
+| `VITE_API_URL`        | `http://localhost:8091`| Vite **DEV** proxy target (`vite.config.ts` only; ignored by production builds) |
+| `VITE_DEV_JWT`        | (hardcoded dev token) | Dev JWT injected by the Vite **dev** proxy (frontend only) |
+| `VITE_API_BASE_URL`   | — (relative `/api/v1`) | Frontend API base URL read at **build** time (`frontend/src/lib/api.ts`); leave unset behind a same-origin reverse proxy |
+| `VITE_API_TOKEN`      | — (unset)             | Bearer token baked into a **production build**; `api.ts` falls back to `localStorage['canopy.token']` |
 | `CANOPY_SERVER_URL`   | `http://localhost:8091`| CLI API base URL (CLI only). An explicit value wins over `HTTP_ADDR`/`DB_*`; with those set and no URL the CLI fails before any request (§4) |
 | `CANOPY_TOKEN`        | —                     | CLI auth token (CLI only)                |
