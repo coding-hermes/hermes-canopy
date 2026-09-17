@@ -146,7 +146,7 @@ WHERE e.id IS NULL AND n.parent_id IS NULL AND n.deleted_at IS NULL;
 |---------|---------|
 | Canopy uptime | No downtime required — import runs as canopyd subcommand against the same DB |
 | PG load | Import is INSERT-heavy. Run at low-load hours. Batch with COMMIT every 100 rows to avoid long-running transactions. |
-| Hermes uptime | No downtime. Export reads Hermes storage (JSONL files or DuckDB) with no locks. |
+| Hermes uptime | No downtime. Export reads Hermes storage (JSONL files or DuckDB) with no locks. *(Amended 2026-09-17: this row concerns the **Hermes Agent** store being migrated from, not Canopy's own store — Canopy reality today is cards on per-type SQLite and the graph on PostgreSQL; see `specs/ARCHITECTURE.md` §3.2.)* |
 | Rollback | Simple: `DELETE FROM trees WHERE id IN (<imported-ids>); CASCADE handles nodes/edges.` |
 
 ---

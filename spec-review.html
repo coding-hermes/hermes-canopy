@@ -31,6 +31,10 @@
   .tag.ts { background: rgba(49,120,198,0.12); color: #3178c6; }
   .tag.sql { background: rgba(255,193,7,0.12); color: #ffc107; }
   .tag.diagram { background: rgba(244,114,182,0.12); color: #f472b6; }
+  /* GAP-074 storage-reality amendment (2026-09-17): marks statements the shipped
+     code has superseded. Original text stays readable (struck through). */
+  .superseded { display: inline-block; margin: 0 0.2rem; padding: 0.1rem 0.45rem; border-radius: 4px; background: rgba(220,150,30,0.16); border: 1px solid rgba(220,150,30,0.5); color: #e0a83c; font-size: 0.72rem; letter-spacing: 0.02em; }
+  .amendment { border-left: 3px solid #e0a83c; background: rgba(220,150,30,0.07); padding: 0.9rem 1.1rem; margin: 0.75rem 0 0; border-radius: 0 6px 6px 0; font-size: 0.88rem; color: var(--muted); }
   .summary-bar { background: var(--card-bg); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
   .stat { text-align: center; }
   .stat .num { font-size: 2rem; font-weight: 800; color: var(--accent); }
@@ -218,8 +222,9 @@
 </div>
 <div class="spec phase3c">
   <div class="spec-header"><span class="spec-name">SPEC-PL-03 — App Card System + Database-per-Card</span><span class="spec-meta">65KB · ✓ Complete</span></div>
-  <div class="spec-desc">Card model (compact/expanded/iteration). DuckDB per card type + JSONL storage + pgREST-style API. SSE card_created/updated/action. Card state machine: sending→pending→bench→active→archived.</div>
-  <div class="spec-tags"><span class="tag go">GO</span><span class="tag ts">TS</span><span class="tag duckdb">DUCKDB</span><span class="tag cards">CARDS</span></div>
+  <div class="spec-desc">Card model (compact/expanded/iteration). <s>DuckDB per card type + JSONL storage</s> <span class="superseded">superseded (2026-09-17) — cards ship on per-type SQLite; no card JSONL path</span> + pgREST-style API. SSE card_created/updated/action. Card state machine: sending→pending→bench→active→archived.</div>
+  <div class="spec-tags"><span class="tag go">GO</span><span class="tag ts">TS</span><span class="tag duckdb">DUCKDB</span><span class="tag cards">CARDS</span><span class="superseded">DUCKDB tag archived (2026-09-17) — internal/card/duckdb is cgo-only, zero importers</span></div>
+  <div class="amendment"><strong>Storage reality (amended 2026-09-17):</strong> cards ship on per-type SQLite, not DuckDB and not JSONL; the graph store is PostgreSQL today, with the 2026-09-16 SQLite-first ruling as declared direction tracked as board row GAP-076 (not landed). See specs/ARCHITECTURE.md §3.2.</div>
 </div>
 <div class="spec phase3c">
   <div class="spec-header"><span class="spec-name">SPEC-PL-04 — Dynamic Thinking Interface</span><span class="spec-meta">86KB · ✓ Complete</span></div>

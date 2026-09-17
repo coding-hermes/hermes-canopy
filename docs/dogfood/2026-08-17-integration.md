@@ -15,7 +15,7 @@ CLI session. Board tasks: **GAP-040..GAP-045** (see `.coding-hermes/board/tasks.
 **Canopy OS** — a graph-native collaboration surface for human-agent work. Messages are
 nodes in a DAG; every model call has a visible context manifest; Cards are graph nodes
 with structured data. Single-user desktop-first PWA + local Go server (`canopyd`),
-PostgreSQL-backed, Yjs/SSE sync, DuckDB cards.
+PostgreSQL-backed, Yjs/SSE sync, ~~DuckDB cards~~ *[superseded 2026-09-17 — cards ship on per-type SQLite (`modernc.org/sqlite`), not DuckDB; there is no card JSONL path. See `specs/ARCHITECTURE.md` §3.2]*.
 
 **The promise (null hypothesis):** *A user can run the local server + PWA, create a
 tree, post/branch/synthesize messages, see a visible context manifest, and use topics

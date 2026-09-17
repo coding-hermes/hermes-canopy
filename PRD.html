@@ -191,6 +191,30 @@
   .cross { color: var(--red); }
   .partial { color: var(--amber); }
   
+  /* GAP-074 storage-reality amendment (2026-09-17): marks PRD statements the
+     shipped code has superseded. Original text stays readable (struck through). */
+  .superseded {
+    display: inline-block;
+    margin: 0 0.2rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(220, 150, 30, 0.16);
+    border: 1px solid rgba(220, 150, 30, 0.5);
+    color: #e0a83c;
+    font-size: 0.72rem;
+    font-style: normal;
+    letter-spacing: 0.02em;
+  }
+  .amendment {
+    border-left: 3px solid #e0a83c;
+    background: rgba(220, 150, 30, 0.07);
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .amendment h3 { margin-top: 0; color: #e0a83c; }
+  .amendment p { font-size: 0.92rem; }
+  
   /* Images */
   .mockup {
     width: 100%;
@@ -485,7 +509,7 @@
       <div class="feature">
         <div class="icon">🗄️</div>
         <h4>Database-per-Card</h4>
-        <p>Each Card type stores data as git-friendly JSONL files. DuckDB queries them directly — no import step, no binary blob. pgREST-style API for the Card's JS to call. Neither the model nor the Card ever writes raw SQL.</p>
+        <p><s>Each Card type stores data as git-friendly JSONL files.</s> <span class="superseded">superseded (2026-09-17) — cards persist to per-type SQLite <code>.db</code> files; there is no card JSONL path today</span> <s>DuckDB queries them directly — no import step, no binary blob.</s> <span class="superseded">superseded (2026-09-17) — cards ship on per-type SQLite, not DuckDB</span> pgREST-style API for the Card's JS to call. Neither the model nor the Card ever writes raw SQL.</p>
       </div>
       <div class="feature">
         <div class="icon">🧩</div>
@@ -633,7 +657,7 @@
         <tr><td>Backend</td><td>Go (canopyd)</td><td>Single binary, low memory, fast SSE, WebUI native integration</td></tr>
         <tr><td>Frontend</td><td>React + TypeScript + Vite</td><td>PWA with Service Worker, Yjs CRDT integration</td></tr>
         <tr><td>Tree Database</td><td>PostgreSQL</td><td>Relational tree state, approval audit log, FTS for topic search</td></tr>
-        <tr><td>Card Database</td><td>DuckDB + JSONL files</td><td>Git-friendly, OLAP queries directly on files, no import step</td></tr>
+        <tr><td>Card Database</td><td><s>DuckDB + JSONL files</s> <span class="superseded">superseded (2026-09-17) — per-type SQLite databases</span></td><td><s>Git-friendly, OLAP queries directly on files, no import step</s> <span class="superseded">superseded — no card JSONL files; card queries run against per-type SQLite</span></td></tr>
         <tr><td>CRDT Layer</td><td>Yjs (Y.Map)</td><td>Local-first collaborative tree editing, IndexedDB persistence</td></tr>
         <tr><td>Primary Transport</td><td>Server-Sent Events (SSE)</td><td>HTTP/2 native, auto-reconnect, no sticky sessions, resilient on bad connections</td></tr>
         <tr><td>Encryption</td><td>MLS (RFC 9420)</td><td>MLS-only — every Canopy conversation is a group by design. O(log n) key rotation. Single dependency (mls-rs via CGo). No Signal Protocol.</td></tr>
@@ -642,6 +666,25 @@
         <tr><td>Plugin System</td><td>JavaScript files</td><td>Agent-installable, hot-reload to all devices, sandboxed with permissions</td></tr>
       </tbody>
     </table>
+    </div>
+    
+    <div class="amendment">
+    <h3>Storage Reality — amendment (added 2026-09-17)</h3>
+    <p><strong>This block amends the original PRD text above. The struck-through
+    sentences are the product brief as written; the rows below are what the
+    shipped code actually does.</strong></p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Claim in the original text</th><th>Shipped reality</th></tr></thead>
+      <tbody>
+        <tr><td>Cards are stored in / queried by DuckDB</td><td><strong>DuckDB was abandoned for cards.</strong> Cards ship on <strong>per-type SQLite databases</strong> (<code>modernc.org/sqlite</code>, CGo-free, pure Go) under <code>~/.hermes/canopy/cards/</code>, overridable with <code>CANOPY_CARD_DATA_DIR</code>. <code>internal/card/duckdb/</code> is cgo-only (<code>//go:build cgo</code>) and has <strong>zero importers</strong> repo-wide — ARCHIVED.</td></tr>
+        <tr><td>Card data is JSONL files, diffable and version-controlled</td><td><strong>Not implemented.</strong> There is no card JSONL path: each card type is one SQLite <code>.db</code> file under <code>~/.hermes/canopy/cards/</code> (<code>grep -rn -i jsonl internal/card/</code> returns nothing).</td></tr>
+        <tr><td>DuckDB stores the authoritative graph (embedded, one process)</td><td><strong>Not implemented.</strong> The authoritative graph store today is <strong>PostgreSQL</strong>.</td></tr>
+        <tr><td>"No binary blob databases", one embedded DB, no separate DB process</td><td><strong>Declared direction, not current state.</strong> The <strong>2026-09-16 owner ruling</strong> is <strong>SQLite-first</strong> (<code>modernc.org/sqlite</code>, pure Go, WAL) as the authoritative graph store. Status: <strong>declared direction only, NOT landed</strong>; tracked as board row <strong>GAP-076</strong>. PostgreSQL stays authoritative until it lands.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Storage reality (amended 2026-09-17):</strong> cards ship on per-type SQLite, not DuckDB and not JSONL; the graph store is PostgreSQL today, with the 2026-09-16 SQLite-first ruling as declared direction tracked as board row GAP-076 (not landed).</p>
     </div>
     
     <h3>Deployment Modes — Seven Ways to Run Canopy</h3>
@@ -689,7 +732,7 @@
         <tr><td>Approval gates</td><td><span class="check">✓ Full audit</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td></tr>
         <tr><td>Offline-first</td><td><span class="check">✓ CRDT + sync</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="check">✓</span></td><td><span class="partial">◐ Local</span></td><td><span class="cross">✗</span></td></tr>
         <tr><td>Self-hosted</td><td><span class="check">✓ 7 modes</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="check">✓</span></td><td><span class="partial">◐ Vault</span></td><td><span class="cross">✗</span></td></tr>
-        <tr><td>Git-native data</td><td><span class="check">✓ JSONL + DuckDB</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="check">✓ MD</span></td><td><span class="cross">✗</span></td></tr>
+        <tr><td>Git-native data</td><td><s><span class="check">✓ JSONL + DuckDB</span></s> <span class="superseded">superseded (2026-09-17) — cards: per-type SQLite; graph: PostgreSQL</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="check">✓ MD</span></td><td><span class="cross">✗</span></td></tr>
         <tr><td>Agent-designed UI</td><td><span class="check">✓ Cards + Plugins</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td></tr>
         <tr><td>Topic search + #refs</td><td><span class="check">✓ 1-click context</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="partial">◐ Links</span></td><td><span class="cross">✗</span></td></tr>
         <tr><td>Visible agent context</td><td><span class="check">✓ Tree IS memory</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td><td><span class="cross">✗</span></td></tr>
@@ -782,7 +825,7 @@
     </div>
     
     <div class="principle">
-      <p>"Git-native data. Card data is JSONL files — diffable, version-controlled, append-only. DuckDB queries directly from files. No binary blob databases. Your data is yours, in formats you can read."</p>
+      <p>"Git-native data. <s>Card data is JSONL files — diffable, version-controlled, append-only.</s> <span class="superseded">superseded (2026-09-17) — cards persist to per-type SQLite <code>.db</code> files; there is no card JSONL path today</span> <s>DuckDB queries directly from files.</s> <span class="superseded">superseded (2026-09-17) — cards ship on per-type SQLite, not DuckDB</span> <s>No binary blob databases.</s> <span class="superseded">superseded — each card type is one SQLite <code>.db</code> file</span> Your data is yours, in formats you can read."</p>
     </div>
     
     <div class="principle">

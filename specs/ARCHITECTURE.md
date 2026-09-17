@@ -54,7 +54,7 @@ Canopy replaces the linear chat log with a navigable conversation tree. Users dr
 |-----------|-----------|---------|-----------|--------|
 | Authoritative DB | PostgreSQL | 17+ | Tree nodes, edges, approvals, audit trail | AGENTS.md |
 | Local replica | IndexedDB (browser) | N/A | Via y-indexeddb — no server dependency for offline | T1.4 |
-| Card DB | DuckDB | 1.2+ | In-process, per-card-type SQLite files | AGENTS.md |
+| Card DB | ~~DuckDB~~ per-type SQLite | — | **SUPERSEDED (2026-09-17):** cards ship on per-type SQLite databases (`modernc.org/sqlite`, CGo-free) under `~/.hermes/canopy/cards/`, override `CANOPY_CARD_DATA_DIR`; `internal/card/duckdb/` is cgo-only with zero importers — ARCHIVED. This row was self-contradictory as written: it named DuckDB and "per-card-type SQLite files" in the same row. See the storage-reality amendment in §3.2. | AGENTS.md |
 | Message queue | NATS | 2.10+ | Reliable delivery, offline queue, pub/sub | T1.1 |
 | Relay server | canopyd binary | N/A | Single Go binary, self-hosted | T1.8 |
 | Native packaging | Wails v3 | post-MVP | Go-native, 28K stars, WebView2/WKWebView/WebKitGTK | T1.6 |
@@ -100,12 +100,27 @@ Context compiler: Traverses DAG, assembles budgeted window
 │  Offline writes via y-indexeddb                  │
 │  Sync via custom SSE Yjs provider                │
 ├─────────────────────────────────────────────────┤
-│                   DuckDB                          │
+│          DuckDB [SUPERSEDED 2026-09-17]           │
 │  Card database: per-card-type SQLite files       │
 │  Files, Tasks, Code cards                        │
 │  Agent writes events, UI reads via SSE           │
 └─────────────────────────────────────────────────┘
 ```
+
+> **Storage reality (amended 2026-09-17).** Cards ship on **per-type SQLite**
+> databases (`modernc.org/sqlite`, CGo-free) under `~/.hermes/canopy/cards/`,
+> override `CANOPY_CARD_DATA_DIR` — **not DuckDB and not JSONL**. The DuckDB
+> layer drawn above and the Card DB row in §2.3 are kept as written and marked
+> SUPERSEDED; they record the pre-implementation decision, not the shipped code.
+> `internal/card/duckdb/` is cgo-only (`//go:build cgo`) and has **zero
+> importers** repo-wide — ARCHIVED. The graph store is **PostgreSQL** today,
+> with the 2026-09-16 SQLite-first ruling as declared direction tracked as board
+> row **GAP-076** (not landed).
+>
+> Checkable with: `grep -rn "card/duckdb" --include=*.go .` (no importers);
+> `head -1 internal/card/duckdb/duckdb_repo.go` (`//go:build cgo`);
+> `grep -n 'modernc.org/sqlite\|CANOPY_CARD_DATA_DIR' internal/card/database.go`;
+> `grep -rn -i jsonl internal/card/` (no matches).
 
 ### 3.3 CRDT Model
 
@@ -472,7 +487,13 @@ Conflict: two rules match → most specific wins (thread > user > profile)
 | Small project | 1,000 | 1,050 | ~2MB | ~1MB |
 | Medium project | 10,000 | 10,500 | ~20MB | ~10MB |
 | Large project | 100,000 | 105,000 | ~200MB | ~100MB |
-| Canopy (card DB) | N/A | N/A | ~5MB/card type | DuckDB in-process |
+| Canopy (card DB) | N/A | N/A | ~5MB/card type | ~~DuckDB in-process~~ **SUPERSEDED (2026-09-17)** — per-type SQLite, not DuckDB |
+
+**Storage reality (amended 2026-09-17).** The "DuckDB in-process" cell above is
+superseded: cards ship on **per-type SQLite**, not DuckDB and not JSONL; the
+graph store is **PostgreSQL** today, with the 2026-09-16 SQLite-first ruling as
+declared direction tracked as board row **GAP-076** (not landed). Full amendment
+and its proof commands: §3.2.
 
 ---
 
