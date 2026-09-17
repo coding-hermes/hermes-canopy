@@ -54,3 +54,10 @@ Promise: {"entry_point":"Go single binary `canopyd` (HTTP/JSON REST API server o
 **Off-by-one:** health `{"status":"ok","uptime":"3h50m"}`; `POST /api/v1/problems/discover` for `spa-static-fallback-swallows-api-paths` → `not_found` (no cached answer) — no lab submission owed this tick (the fix class is project-specific, not a reusable debugging answer).
 
 **Next tick:** the pending set is 26 rows — P1: DF-8 (documented defaults collide with the host's live service; no scratch-instance recipe), DF-9 (isolation not real + docs/schema drift), GAP-074 (docs truth pass on card-DB claims), GAP-076 (storage pivot, needs the owner ruling read carefully), **DF-13** (production auth across the remaining call sites). P2: GAP-077/078/079, DF-11/DF-12, GAP-084, **CI-006**. Watch items: `:8091` live canopyd + `:3000` occupancy; the growing `canopy_<hex>` test-DB residue; E2E-001 cadence on the next battery tick.
+
+
+### Tick 470 — CI follow-up (final state)
+- `24d7840` (board closeout) → run **35187164663**: **success**.
+- `30c2194` (rework) → run **35186701777** **re-run**: **success** — the earlier red was `internal/gateway TestStartRunEmptyManifestSurvivesPersist` (`TempDir RemoveAll cleanup: directory not empty`), a package the commit never touched; the rerun passing on the same sha confirms the flake, and **CI-006** therefore stands as a real (if intermittent) test-teardown defect.
+- `f782adf` (content) → run **35185715382**: **success**.
+- No outstanding CI failures for this tick.
