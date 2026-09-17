@@ -10,6 +10,11 @@
 
 /// <reference lib="webworker" />
 
+import {
+  classifyReplayResult,
+  nextReplayDecision,
+} from './src/lib/offlineQueuePolicy';
+
 const SW_VERSION = '1.0.1';
 const CACHE_NAME = `canopy-static-v${SW_VERSION}`;
 const API_CACHE_NAME = `canopy-api-v${SW_VERSION}`;
@@ -132,6 +137,21 @@ const DB_NAME = 'canopy-offline-queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'requests';
 
+/** One queued mutating request, as stored in IndexedDB. */
+type QueuedRequest = {
+  id: number;
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  timestamp: number;
+  /**
+   * Replay attempts that reached the server (DF-HERMES-CANOPY-16). Absent on
+   * entries queued before this field existed — read back as 0.
+   */
+  attempts?: number;
+};
+
 function openQueueDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -162,6 +182,8 @@ async function queueRequest(request: Request): Promise<void> {
         ? await request.clone().text()
         : undefined,
       timestamp: Date.now(),
+      // Fresh entry: no replay has reached the server yet.
+      attempts: 0,
     });
   } catch {
     // Best-effort queueing — if IndexedDB is unavailable, drop the request
@@ -181,20 +203,43 @@ async function replayQueuedRequests(): Promise<void> {
       req.onerror = () => reject(req.error);
     });
 
-    for (const entry of all as Array<{ id: number; method: string; url: string; headers: Record<string, string>; body?: string }>) {
+    for (const entry of all as QueuedRequest[]) {
+      let status: number | null = null;
       try {
         const response = await fetch(entry.url, {
           method: entry.method,
           headers: entry.headers,
           body: entry.body,
         });
-        if (response.ok) {
-          // Remove from queue
-          const deleteTx = db.transaction(STORE_NAME, 'readwrite');
-          deleteTx.objectStore(STORE_NAME).delete(entry.id);
-        }
+        status = response.status;
       } catch {
-        // Still offline — leave in queue for next attempt
+        // No response at all — still offline. Explicitly null: a thrown
+        // request must not consume the attempt budget (the server never saw
+        // it), or an offline device would burn the budget while unable to
+        // reach anything.
+        status = null;
+      }
+
+      const decision = nextReplayDecision(
+        entry.attempts,
+        classifyReplayResult(status),
+      );
+
+      if (decision.warn !== null) {
+        console.warn(decision.warn, entry.method, entry.url);
+      }
+
+      const writeTx = db.transaction(STORE_NAME, 'readwrite');
+      const writeStore = writeTx.objectStore(STORE_NAME);
+      if (decision.action === 'delete') {
+        // Either delivered, or the entry exhausted its attempt budget — a
+        // stale bearer token can never heal itself by retrying, so keeping it
+        // forever only leaks IndexedDB and hides the sync failure.
+        writeStore.delete(entry.id);
+      } else {
+        // Write the advanced counter back under the same key so it persists
+        // across replays instead of restarting at 0 every 60 seconds.
+        writeStore.put({ ...entry, attempts: decision.attempts });
       }
     }
   } catch {
