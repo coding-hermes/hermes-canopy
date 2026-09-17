@@ -73,6 +73,7 @@ func TestStartRunWithContextSendsCompiledInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewService(c)
+	t.Cleanup(svc.Close) // free teardown: the service owns its observe goroutines
 
 	manifest := json.RawMessage(`{"requestId":"req-1","tokensUsed":42,"tokenBudget":8000}`)
 	rec, err := svc.StartRunWithContext(context.Background(), StartRunInput{
@@ -123,6 +124,7 @@ func TestStartRunLegacyPathUnchanged(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	rec, err := svc.StartRun(context.Background(), "raw text", "sess-2")
 	if err != nil {
@@ -165,6 +167,7 @@ func TestStartRunContextFieldsPersistRoundTrip(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close) // LIFO: before t.TempDir's RemoveAll
 
 	manifest := json.RawMessage(`{"requestId":"req-rt","tokensUsed":123,"warnings":["5+ references"]}`)
 	if _, err := svc.StartRunWithContext(context.Background(), StartRunInput{
@@ -181,6 +184,7 @@ func TestStartRunContextFieldsPersistRoundTrip(t *testing.T) {
 	// Restart-style: a fresh service on the same state file.
 	c2, _ := NewClient(stub.URL, "k")
 	svc2 := NewServiceWithState(c2, stateFile)
+	t.Cleanup(svc2.Close)
 	rec, ok := svc2.Run("run_ctx")
 	if !ok {
 		t.Fatal("run lost across restart")
@@ -218,6 +222,7 @@ func TestStartRunEmptyManifestSurvivesPersist(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close) // LIFO: before t.TempDir's RemoveAll
 
 	rec, err := svc.StartRunWithContext(context.Background(), StartRunInput{
 		Message:      "hello",
@@ -238,6 +243,7 @@ func TestStartRunEmptyManifestSurvivesPersist(t *testing.T) {
 	}
 	c2, _ := NewClient(stub.URL, "k")
 	svc2 := NewServiceWithState(c2, stateFile)
+	t.Cleanup(svc2.Close)
 	if _, ok := svc2.Run("run_ctx"); !ok {
 		t.Fatal("record was dropped from the persisted registry")
 	}

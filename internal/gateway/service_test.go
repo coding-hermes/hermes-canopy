@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -92,6 +95,7 @@ func TestServiceStartRunObservesEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	rec, err := svc.StartRun(context.Background(), "hello", "sess-1")
 	if err != nil {
@@ -136,6 +140,7 @@ func TestServiceStartRunGatewayDown(t *testing.T) {
 	// Point at a closed port: connection refused.
 	c, _ := NewClient("http://127.0.0.1:1", "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 	if _, err := svc.StartRun(context.Background(), "x", ""); err == nil {
 		t.Fatal("want error when gateway is down")
 	}
@@ -149,6 +154,7 @@ func TestServiceStopAndApproval(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
@@ -176,6 +182,7 @@ func TestServiceFanoutDeliversLiveEvents(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	rec, err := svc.StartRun(context.Background(), "hello", "")
 	if err != nil {
@@ -212,6 +219,7 @@ func TestServiceEventsHistory(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -234,6 +242,7 @@ func TestServiceEventsHistory(t *testing.T) {
 func TestServiceSubscribeUnknownRun(t *testing.T) {
 	c, _ := NewClient("http://127.0.0.1:1", "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 	if _, _, err := svc.Subscribe("nope"); err == nil {
 		t.Fatal("want error for unknown run")
 	}
@@ -286,6 +295,7 @@ func TestServicePersistRestoreTerminalRun(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close) // LIFO: before t.TempDir's RemoveAll
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
@@ -312,6 +322,7 @@ func TestServicePersistRestoreTerminalRun(t *testing.T) {
 	defer stub2.Close()
 	c2, _ := NewClient(stub2.URL, "k")
 	svc2 := NewServiceWithState(c2, stateFile)
+	t.Cleanup(svc2.Close)
 	list := svc2.ListRuns(context.Background())
 	if len(list) != 1 || list[0].RunID != "run_test" {
 		t.Fatalf("run lost across restart: %+v", list)
@@ -335,6 +346,7 @@ func TestServiceBackfillRefreshesNonTerminal(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close)
 
 	// Run() returns the registry record without live refresh, so the
 	// refreshed status proves Backfill wrote it back.
@@ -362,6 +374,7 @@ func TestServiceBackfillSweptRunNotMissing(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close)
 
 	rec, ok := svc.Run("run_test")
 	if !ok {
@@ -383,6 +396,7 @@ func TestServiceBackfillGatewayDownNonFatal(t *testing.T) {
 	})
 	c, _ := NewClient("http://127.0.0.1:1", "k") // connection refused
 	svc := NewServiceWithState(c, stateFile)     // must not panic
+	t.Cleanup(svc.Close)                         // and must be safe to close
 
 	rec, ok := svc.Run("run_test")
 	if !ok {
@@ -403,6 +417,7 @@ func TestServiceStopRunTerminalIdempotent(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
@@ -436,6 +451,7 @@ func TestServiceStopRunSweptRaceMarksNotFound(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 	svc.mu.Lock()
 	svc.runs["run_test"] = &RunRecord{RunID: "run_test", Status: "running", CreatedAt: time.Now().UTC()}
 	svc.mu.Unlock()
@@ -456,6 +472,7 @@ func TestServiceStopRunNonTerminalStillCallsGateway(t *testing.T) {
 	defer stub.Close()
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
+	t.Cleanup(svc.Close)
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
@@ -470,4 +487,283 @@ func TestServiceStopRunNonTerminalStillCallsGateway(t *testing.T) {
 	if rec.Status != "stopping" {
 		t.Fatalf("status = %q, want stopping", rec.Status)
 	}
+}
+
+// ─── lifecycle: Close stops background writes (CI-006) ───────────────────
+//
+// The flake this guards: a state-file test ends, its deferred stub.Close()
+// wakes observe's error path, and persist() drops a .runs-*.jsonl.tmp into the
+// test's t.TempDir() exactly while t.TempDir()'s cleanup os.RemoveAll is
+// between "remove children" and "unlinkat(dir)" — "directory not empty". The
+// tests below make that window deterministic instead of timing-dependent.
+
+// liveGatewayStub is a gateway whose /events endpoint holds the SSE connection
+// OPEN: it streams one event, flushes it, then blocks until the client hangs
+// up. That is the state a real in-flight run leaves observe() in — parked in a
+// body read — which is what makes the teardown race reproducible on demand
+// (the client, not the server, ends the read).
+type liveGatewayStub struct {
+	*httptest.Server
+
+	stopped atomic.Int64
+}
+
+func newLiveGatewayStub(firstEvent string) *liveGatewayStub {
+	g := &liveGatewayStub{}
+	g.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs":
+			w.WriteHeader(http.StatusAccepted)
+			fmt.Fprint(w, `{"run_id":"run_test","status":"started"}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/runs/run_test/events":
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "data: %s\n\n", firstEvent)
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			// No close sentinel and no EOF: hold the stream until the client
+			// goes away (or the test tears the stub down).
+			<-r.Context().Done()
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/runs/run_test":
+			fmt.Fprint(w, `{"status":"running","last_event":"message.delta"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs/run_test/stop":
+			g.stopped.Add(1)
+			fmt.Fprint(w, `{"run_id":"run_test","status":"stopping"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"error":{"message":"not found"}}`)
+		}
+	}))
+	return g
+}
+
+// dirEntry is one entry of a temp dir, captured so a test can prove that
+// nothing was written after a point in time. The content hash is the load
+// bearing part: a state file rewritten with different bytes must never compare
+// equal, whatever the filesystem's mtime granularity is.
+type dirEntry struct {
+	name    string
+	size    int64
+	modTime time.Time
+	sha256  string
+}
+
+func (e dirEntry) String() string {
+	return fmt.Sprintf("%s size=%d mtime=%s sha256=%s",
+		e.name, e.size, e.modTime.Format(time.RFC3339Nano), e.sha256)
+}
+
+func snapshotDir(t *testing.T, dir string) []dirEntry {
+	t.Helper()
+	entries, err := os.ReadDir(dir) // sorted by name: deterministic order
+	if err != nil {
+		t.Fatalf("snapshot %s: %v", dir, err)
+	}
+	out := make([]dirEntry, 0, len(entries))
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil {
+			t.Fatalf("stat %s: %v", e.Name(), err)
+		}
+		sum := ""
+		if !e.IsDir() {
+			raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				t.Fatalf("read %s: %v", e.Name(), err)
+			}
+			h := sha256.Sum256(raw)
+			sum = hex.EncodeToString(h[:])
+		}
+		out = append(out, dirEntry{name: e.Name(), size: info.Size(), modTime: info.ModTime(), sha256: sum})
+	}
+	return out
+}
+
+func dirSignature(entries []dirEntry) string {
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		parts = append(parts, e.String())
+	}
+	return strings.Join(parts, "\n")
+}
+
+func assertSameDir(t *testing.T, when string, want, got []dirEntry) {
+	t.Helper()
+	if dirSignature(want) != dirSignature(got) {
+		t.Fatalf("state dir changed %s\nbefore:\n%s\nafter:\n%s", when, dirSignature(want), dirSignature(got))
+	}
+}
+
+// TestServiceCloseStopsWritesAfterTeardown is the CI-006 regression guard: the
+// moment a test calls Close, the service must stop touching its state
+// directory — because the very next thing a test does is t.TempDir()'s
+// RemoveAll, and a temp file landing in that window is the flake.
+//
+// Deterministic by construction: the stub holds the SSE connection open, so
+// the observer is parked in a body read when Close cancels the service
+// context. The cancellation drives observe's error path — the one that
+// persists — strictly inside the Close call, so a missing closed-guard shows
+// up here on every run instead of one in ten.
+func TestServiceCloseStopsWritesAfterTeardown(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "runs.jsonl")
+
+	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
+	defer stub.Close()
+	c, _ := NewClient(stub.URL, "k")
+	svc := NewServiceWithState(c, stateFile)
+	// LIFO: this runs BEFORE t.TempDir's RemoveAll, which is exactly the
+	// ordering the callers in this file rely on.
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Synchronise on "the observer is live and parked in the body read" — the
+	// first event reached the record, which is what makes teardown a race.
+	waitForStatus(t, svc, "run_test", "running")
+
+	// Premise: the legitimate persist path really wrote the file, otherwise
+	// "nothing changed" below would prove nothing.
+	raw, err := os.ReadFile(stateFile)
+	if err != nil || !strings.Contains(string(raw), `"status":"running"`) {
+		t.Fatalf("premise broken: state file not written before Close (err=%v body=%q)", err, raw)
+	}
+
+	before := snapshotDir(t, dir)
+
+	svc.Close()
+
+	afterClose := snapshotDir(t, dir)
+	// Close must be idempotent: the second call returns without panicking.
+	svc.Close()
+
+	time.Sleep(250 * time.Millisecond)
+	settled := snapshotDir(t, dir)
+
+	assertSameDir(t, "as Close returned", before, afterClose)
+	assertSameDir(t, "250ms after Close returned", before, settled)
+	for _, e := range settled {
+		if strings.Contains(e.name, ".tmp") {
+			t.Fatalf("temp state file left behind after Close: %s", e.String())
+		}
+	}
+}
+
+// TestServiceCloseIdempotentWithoutStatePath pins the two shapes every test
+// cleanup relies on: Close on a service with persistence DISABLED, and Close
+// called more than once (including on a service that never started a run).
+func TestServiceCloseIdempotentWithoutStatePath(t *testing.T) {
+	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
+	defer stub.Close()
+	c, _ := NewClient(stub.URL, "k")
+
+	svc := NewService(c) // no state path at all
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus(t, svc, "run_test", "running")
+	svc.Close()
+	svc.Close()
+
+	// Never started a run, and statePath explicitly empty.
+	idle := NewService(c)
+	idle.Close()
+	idle.Close()
+
+	stateless := NewServiceWithState(c, "")
+	stateless.Close()
+	stateless.Close()
+}
+
+// TestServicePersistAfterCloseIsNoOp pins the half that cancellation alone
+// cannot cover: observe's disconnect path persists AFTER the context is
+// already cancelled, so the closed flag — not the context — is what stops the
+// write. Both drivers below change the record in memory (asserted: the path
+// really ran) and must leave the file untouched.
+func TestServicePersistAfterCloseIsNoOp(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "runs.jsonl")
+
+	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
+	defer stub.Close()
+	c, _ := NewClient(stub.URL, "k")
+	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus(t, svc, "run_test", "running")
+	svc.Close()
+
+	before := snapshotDir(t, dir)
+
+	// Driver 1: the normal UI path for stopping a live run. It forwards to the
+	// gateway and then persists the "stopping" transition.
+	if err := svc.StopRun(context.Background(), "run_test"); err != nil {
+		t.Fatalf("stop after close: %v", err)
+	}
+	if stub.stopped.Load() != 1 {
+		t.Fatalf("premise broken: stop was not forwarded to the gateway")
+	}
+	if rec, _ := svc.Run("run_test"); rec.Status != "stopping" {
+		t.Fatalf("premise broken: StopRun did not update the record (status=%q)", rec.Status)
+	}
+
+	// Driver 2: a terminal event applied straight to the record.
+	svc.noteEvent("run_test", RunEvent{Event: "run.completed", RunID: "run_test", Output: "done", Timestamp: 2})
+	if rec, _ := svc.Run("run_test"); rec.Status != "completed" {
+		t.Fatalf("premise broken: noteEvent did not update the record (status=%q)", rec.Status)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	assertSameDir(t, "after post-Close persist attempts", before, snapshotDir(t, dir))
+}
+
+// TestServiceCloseConcurrentWithPersistIsRaceFree drives Close against every
+// path that writes the registry — StartRun's spawn+persist, StopRun, noteEvent
+// — so the race detector sees the lifecycle fields under the contention
+// production shutdown actually has: a service being closed while runs are
+// still arriving and finishing. The WaitGroup contract is the point: a
+// goroutine may only register while mu is held and the service is not closed,
+// so an Add can never race the Wait inside Close.
+func TestServiceCloseConcurrentWithPersistIsRaceFree(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "runs.jsonl")
+
+	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
+	defer stub.Close()
+	c, _ := NewClient(stub.URL, "k")
+	svc := NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close)
+
+	var workers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			_, _ = svc.StartRun(context.Background(), "hello", "")
+			svc.noteEvent("run_test", RunEvent{Event: "run.completed", RunID: "run_test", Output: "done"})
+			_ = svc.StopRun(context.Background(), "run_test")
+		}()
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		svc.Close()
+	}()
+
+	workers.Wait()
+	<-closed
+	svc.Close() // idempotent, now under real contention history
+
+	// Whatever the interleaving, the service is quiescent: a last write
+	// attempt after everything settled must still be a no-op.
+	after := snapshotDir(t, dir)
+	svc.noteEvent("run_test", RunEvent{Event: "run.failed", RunID: "run_test", Error: "late"})
+	assertSameDir(t, "after a post-Close write attempt", after, snapshotDir(t, dir))
 }

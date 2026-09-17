@@ -327,6 +327,7 @@ func TestGatewayListAfterRestore(t *testing.T) {
 
 	c, _ := gateway.NewClient(stub.URL, "k")
 	svc := gateway.NewServiceWithState(c, stateFile)
+	t.Cleanup(svc.Close) // LIFO: before t.TempDir's RemoveAll
 	rr := chi.NewRouter()
 	rr.Mount("/", NewGatewayHandler(svc).Routes())
 

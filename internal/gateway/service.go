@@ -74,6 +74,20 @@ type Service struct {
 	// persistence). Defaults to DefaultStateFile() via NewServiceWithState.
 	statePath string
 
+	// Background lifecycle (CI-006). ctx is the SERVICE-scoped context every
+	// observe goroutine runs on, so cancelling it (Close) aborts an in-flight
+	// SSE body read instead of leaving a reader parked on a stream nobody
+	// owns. wg tracks those goroutines so Close can wait for them to exit,
+	// closeOnce makes Close idempotent, and closed (guarded by mu) makes every
+	// later persist a no-op — the disconnect path in observe persists AFTER
+	// ctx cancellation, so cancellation alone cannot stop the write that
+	// raced the caller's teardown.
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	closeOnce sync.Once
+	closed    bool
+
 	mu   sync.RWMutex
 	runs map[string]*RunRecord
 	subs map[string]map[chan StreamEvent]struct{}
@@ -89,10 +103,16 @@ func DefaultStateFile() string {
 	return filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl")
 }
 
-// NewService builds a gateway Service around a client.
+// NewService builds a gateway Service around a client. The service owns a
+// cancellable background context (see Close) used by every goroutine it
+// starts; a caller that never calls Close keeps today's behaviour exactly,
+// because nothing about production correctness depends on Close being called.
 func NewService(client *Client) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{
 		client: client,
+		ctx:    ctx,
+		cancel: cancel,
 		runs:   make(map[string]*RunRecord),
 		subs:   make(map[string]map[chan StreamEvent]struct{}),
 	}
@@ -110,6 +130,32 @@ func NewServiceWithState(client *Client, statePath string) *Service {
 	s.loadState()
 	s.Backfill(context.Background())
 	return s
+}
+
+// Close releases the service's background lifecycle: it marks the service
+// closed (no further persists), cancels the service-scoped context (aborting
+// any in-flight SSE body read in observe), then waits for the observe
+// goroutines to exit. It is idempotent — a second call is a no-op — and safe
+// on a service with no state path, or one that never started a run.
+//
+// After Close returns no persist can happen: every write goes through
+// persist/persistLocked holding mu, and each of those either completed before
+// Close took mu, or observes the closed flag and returns. Waiting for the
+// goroutines is what closes the second half of the window — the disconnect
+// path in observe persists after the context is already cancelled.
+//
+// Close must not hold mu while waiting: the goroutines it waits for take mu
+// on their way out, so holding it would deadlock.
+func (s *Service) Close() {
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.closed = true
+		s.mu.Unlock()
+		if s.cancel != nil {
+			s.cancel()
+		}
+		s.wg.Wait()
+	})
 }
 
 // Client exposes the underlying gateway client (used by the handler for
@@ -182,13 +228,23 @@ func (s *Service) StartRunWithContext(ctx context.Context, in StartRunInput) (*R
 		ContextTokens: in.ContextTokens,
 		Manifest:      manifest,
 	}
+	// Register the observer with the service lifecycle while holding mu — the
+	// same lock Close uses to set closed. A goroutine registered after Close's
+	// wait had already returned would escape the lifecycle entirely (and its
+	// persist would be exactly the teardown race Close exists to stop).
 	s.mu.Lock()
 	s.runs[ref.RunID] = rec
 	s.pruneLocked()
+	spawn := !s.closed
+	if spawn {
+		s.wg.Add(1)
+	}
 	s.mu.Unlock()
 	s.persist()
 
-	go s.observe(ref.RunID)
+	if spawn {
+		go s.observe(ref.RunID)
+	}
 	return rec, nil
 }
 
@@ -357,9 +413,17 @@ func (s *Service) Subscribe(runID string) (<-chan StreamEvent, func(), error) {
 }
 
 // observe consumes the run's SSE stream in the background, updating the
-// record and fanning events out to subscribers.
+// record and fanning events out to subscribers. It runs on the SERVICE
+// context (CI-006): Close cancels it, which aborts the in-flight body read
+// instead of leaving this goroutine parked on a stream nobody owns.
 func (s *Service) observe(runID string) {
-	ctx := context.Background()
+	defer s.wg.Done()
+	ctx := s.ctx
+	if ctx == nil {
+		// Only reachable for a Service not built by NewService (all real
+		// construction goes through the constructors, which always set it).
+		ctx = context.Background()
+	}
 	body, err := s.client.ObserveRun(ctx, runID)
 	if err != nil {
 		s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
@@ -584,7 +648,9 @@ func (s *Service) Backfill(ctx context.Context) {
 }
 
 // persist writes the registry to the state file atomically (tmp + rename).
-// A failed write only logs; it never fails the caller.
+// A failed write only logs; it never fails the caller. Once Close has run
+// this is a no-op (see persistLocked): a store that is being torn down must
+// not drop a temp file into a directory its owner is removing.
 func (s *Service) persist() {
 	if s.statePath == "" {
 		return
@@ -594,8 +660,14 @@ func (s *Service) persist() {
 	s.persistLocked()
 }
 
-// persistLocked writes the registry while the caller holds mu.
+// persistLocked writes the registry while the caller holds mu. It is a no-op
+// on a closed service (CI-006): the flag is read under the same lock that
+// Close takes before cancelling, so a persist racing Close either completes
+// before Close returns or is skipped — never lands after it.
 func (s *Service) persistLocked() {
+	if s.closed {
+		return
+	}
 	if s.statePath == "" {
 		return
 	}
