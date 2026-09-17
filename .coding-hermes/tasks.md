@@ -175,3 +175,5 @@ DuckBrain: /ticks/474, namespace hermes-canopy, UUID 1a2207aa-e749-4f56-990d-230
 **DuckBrain:** keys written this tick (pre-write state + ids in the block below).
 
 **Next tick:** tractable P2s = **DF-HERMES-CANOPY-14** (`streamUrl(fileId)` is browser-loaded → 401 in a token-only build; the row allows either fetch-to-blob or an explicitly documented proxy requirement), **GAP-084** (node-scoped composer so the context manifest is reachable from the UI), **DF-HERMES-CANOPY-11** (`dogfood-findings` writer emitted a raw newline), **GAP-078/079**. Watch: E2E-001 cadence, `canopy_<hex>` residue, DF-17 when a new CLI file is added. GAP-076 stays parked on the owner ruling.
+
+**CI addendum (same tick):** both runs finished GREEN on the first attempt, no rerun — **35214220514** covers the content commit `6ceedac`, **35214405169** covers this closeout commit `27bae8c`; the DF-12 row's `ci_result` was flipped `pending_on_push → GREEN` and the run ids were appended to `events.jsonl` in the follow-up bookkeeping commit.
