@@ -295,11 +295,15 @@ the feeds work; with a header-injecting proxy they also work; either way they
 are **not** public. `/health`, `/healthz` and `/version` are the only public
 paths (`isPublicPath()`).
 
-One exception to the "every call site" claim: `streamUrl(fileId)` — the
-`GET /api/v1/files/{id}/stream` URL handed to `<a href>` and to the sandboxed
-viewer iframes — is loaded by the browser itself, so it cannot carry a bearer
-header. It works in dev and behind a token-injecting proxy, but not from a build
-whose only token lives in `localStorage`.
+The file-stream hand-off is no longer an exception: `resolveStreamUrl(fileId)`
+(`frontend/src/lib/fileApi.ts`) keeps the bare `GET /api/v1/files/{id}/stream`
+URL only when **no** token resolves (the `vite dev` case, where the dev proxy
+injects the JWT). When a token does resolve, the viewer host fetches the bytes
+through the authenticated path first and hands the DOM a `blob:` object URL
+instead — for `<a href download>`, the sandboxed iframe's
+`canopy.__bootstrap.streamUrl` and `viewer.get_stream_url` alike — revoking it
+when the file changes or the host unmounts. So those loads carry the bearer
+token in `VITE_API_TOKEN` / `localStorage` builds without a proxy.
 
 Mint the token out-of-band (mint one with `JWT_SECRET` — §6 below), and treat the
 whole deployment as single-user; multi-user auth is deferred post-MVP.

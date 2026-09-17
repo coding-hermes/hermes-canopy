@@ -18,10 +18,13 @@ import {
   listRecentFiles,
   mapFileApiError,
   postFileAccess,
+  releaseStreamUrl,
   resolveByHash,
+  resolveStreamUrl,
   streamUrl,
 } from '../fileApi';
 import { parseViewersResponse } from '../../types/fileviewer';
+import { TOKEN_STORAGE_KEY } from '../api';
 
 // ── Fixtures (shapes as served by internal/fileviewer) ─────
 
@@ -380,5 +383,109 @@ describe('fileApi — error envelope mapping', () => {
     const err = await mapFileApiError(new Response('', { status: 503 }));
     expect(err.code).toBe('UNKNOWN_ERROR');
     expect(err.message).toBe('HTTP 503');
+  });
+});
+
+// ── DF-HERMES-CANOPY-14: DOM-usable stream URLs ───────────────────────────
+//
+// The three hand-off points (`<a href download>`, the sandbox doc's
+// canopy.__bootstrap.streamUrl, `viewer.get_stream_url`) are loaded by the
+// BROWSER, which cannot attach a bearer header — in a token-only build they
+// 401 TOKEN_MISSING. resolveStreamUrl moves the bytes through the auth'd
+// fetch path and returns a blob: object URL instead; with no token (the vite
+// dev proxy injects the JWT) the bare URL is returned unchanged.
+
+describe('fileApi — resolveStreamUrl / releaseStreamUrl (DF-HERMES-CANOPY-14)', () => {
+  const fetchMock = vi.fn();
+  const createObjectURL = vi.fn<(blob: Blob | MediaSource) => string>(() => 'blob:http://localhost/canopy-obj-1');
+  const revokeObjectURL = vi.fn();
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(new Response('pdf-bytes', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
+    // jsdom implements neither createObjectURL nor revokeObjectURL.
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+  });
+
+  it('returns a blob: URL fetched through the auth’d path when VITE_API_TOKEN resolves', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+
+    const url = await resolveStreamUrl(FILE_ID);
+
+    expect(url).toBe('blob:http://localhost/canopy-obj-1');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requested, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(requested).toBe(`/api/v1/files/${FILE_ID}/stream`);
+    const headers = new Headers(init.headers);
+    expect(headers.get('Authorization')).toBe('Bearer build-token-123');
+    // Open-ended whole-file range: the suffix form with no length would be
+    // "bytes=-0", which the backend rejects as malformed (400).
+    expect(headers.get('Range')).toBe('bytes=0-');
+    // The DOM gets the Blob, not the bytes.
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const [blob] = createObjectURL.mock.calls[0] as [Blob];
+    // Node's (undici) Blob and jsdom's Blob are distinct constructors, so the
+    // shape is asserted rather than the identity.
+    expect(blob.size).toBe('pdf-bytes'.length);
+    expect(await blob.text()).toBe('pdf-bytes');
+  });
+
+  it('returns a blob: URL for a pasted localStorage token', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'stored-token-456');
+
+    await expect(resolveStreamUrl(FILE_ID)).resolves.toBe('blob:http://localhost/canopy-obj-1');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer stored-token-456');
+  });
+
+  it('returns exactly streamUrl(id) — and fetches nothing — when no token resolves', async () => {
+    vi.stubEnv('VITE_API_TOKEN', '');
+
+    const url = await resolveStreamUrl(FILE_ID);
+
+    expect(url).toBe(streamUrl(FILE_ID));
+    expect(url).toBe(`/api/v1/files/${FILE_ID}/stream`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed fetch instead of handing the DOM a bare URL', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'TOKEN_MISSING', message: 'missing bearer token' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(resolveStreamUrl(FILE_ID)).rejects.toMatchObject({ code: 'TOKEN_MISSING', status: 401 });
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('releaseStreamUrl revokes blob: URLs only', () => {
+    releaseStreamUrl('blob:http://localhost/canopy-obj-1');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/canopy-obj-1');
+
+    // A plain URL is not an object URL — nothing to release.
+    releaseStreamUrl('/api/v1/files/file-1/stream');
+    releaseStreamUrl('https://canopy.test/api/v1/files/file-1/stream');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
   });
 });

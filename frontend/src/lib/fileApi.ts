@@ -12,7 +12,7 @@
  * the message, so callers can branch on e.g. FILE_QUARANTINED.
  */
 
-import { apiUrl, authInit } from './api';
+import { apiUrl, authInit, resolveApiToken } from './api';
 import {
   FileAccessEntrySchema,
   FileListPageSchema,
@@ -203,6 +203,47 @@ export async function listRecentFiles(limit = 50): Promise<FileMetadataSlim[]> {
  */
 export function streamUrl(fileId: string): string {
   return apiUrl(`/files/${encodeURIComponent(fileId)}/stream`);
+}
+
+/**
+ * Resolve a DOM-usable URL for `GET /files/{id}/stream` (DF-HERMES-CANOPY-14).
+ *
+ * The browser issues these loads itself — `<img src>`, `<video src>`,
+ * `<a href download>` and the sandboxed viewer iframe — so it cannot attach an
+ * `Authorization` header. In a build whose only token is `VITE_API_TOKEN` /
+ * `localStorage['canopy.token']` the bare URL therefore 401s with
+ * TOKEN_MISSING (internal/handler/auth.go reads the bearer from the header
+ * only). This resolver moves the bytes through the authenticated fetch path
+ * and returns a `blob:` object URL instead, which the viewer sandbox CSP
+ * already admits (`img-src … blob:`, `media-src 'self' blob:`,
+ * `worker-src 'self' blob:` in ViewerHost).
+ *
+ * No token (the `vite dev` proxy injects the JWT) → the bare URL is returned
+ * unchanged, so the dev-proxy path keeps its pre-fix behaviour.
+ *
+ * The whole body is buffered in memory — fine for preview-sized files; a
+ * Range-addressed object URL is out of scope for this row. Callers must hand
+ * the result to `releaseStreamUrl` on file change / unmount.
+ *
+ * Range note: this reads the file with the OPEN-ENDED form
+ * (`fetchFileRange(fileId, 0)` → `Range: bytes=0-`). The suffix form with no
+ * length (`bytes=-0`) is rejected as malformed by the backend
+ * (internal/fileviewer/streaming.go: `n <= 0` → ErrInvalidRangeHeader → 400
+ * INVALID_RANGE_HEADER).
+ */
+export async function resolveStreamUrl(fileId: string): Promise<string> {
+  if (resolveApiToken() === null) return streamUrl(fileId);
+  const { blob } = await fetchFileRange(fileId, 0);
+  return URL.createObjectURL(blob);
+}
+
+/**
+ * Release a URL produced by `resolveStreamUrl`. Only `blob:` object URLs are
+ * revoked — a plain URL (the no-token dev-proxy path, where nothing was
+ * created) is left untouched.
+ */
+export function releaseStreamUrl(url: string): void {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url);
 }
 
 /**

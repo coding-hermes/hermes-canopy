@@ -13,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchFileRange, postFileAccess, streamUrl } from '../lib/fileApi';
+import { resolveApiToken } from '../lib/api';
+import { fetchFileRange, postFileAccess, releaseStreamUrl, resolveStreamUrl, streamUrl } from '../lib/fileApi';
 import { PDFJS_ASSETS } from '../lib/viewers/pdfAssets';
 import { viewerBodyForSlug } from '../lib/viewerBodies';
 import { DEFAULT_FILE_VIEWER_CONFIG, FileViewerConfigSchema, type FileMetadata, type ViewerRegistration } from '../types/fileviewer';
@@ -50,6 +51,13 @@ export interface ViewerHostProps {
    */
   fetchRange?: typeof fetchFileRange;
   postAccess?: typeof postFileAccess;
+  /**
+   * Resolves the DOM-usable stream URL (DF-HERMES-CANOPY-14). The default is
+   * the real `resolveStreamUrl`: a `blob:` object URL when a bearer token
+   * resolves, or the bare stream URL when none does (the `vite dev` proxy
+   * injects the JWT, so the browser-issued load is authenticated for us).
+   */
+  resolveStream?: typeof resolveStreamUrl;
 }
 
 export interface ViewerMessage {
@@ -271,6 +279,7 @@ export default function ViewerHost({
   onClose,
   fetchRange = fetchFileRange,
   postAccess = postFileAccess,
+  resolveStream = resolveStreamUrl,
 }: ViewerHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [nonce] = useState(() => crypto.randomUUID());
@@ -280,6 +289,94 @@ export default function ViewerHost({
   const ctxRef = useRef({ file, viewer, nonce, parentOrigin });
   ctxRef.current = { file, viewer, nonce, parentOrigin };
 
+  // ── DF-HERMES-CANOPY-14: the DOM never receives a bare stream URL ──────
+  //
+  // `<a href download>`, the sandboxed iframe's `canopy.__bootstrap.streamUrl`
+  // (img/video/pdf.js source) and `viewer.get_stream_url` are all loaded by the
+  // BROWSER, which cannot attach an Authorization header — in a token-only
+  // build (VITE_API_TOKEN / localStorage['canopy.token']) every one of them
+  // 401s with TOKEN_MISSING. So when a token resolves we fetch the bytes
+  // through the auth'd path and hand the DOM a `blob:` object URL instead
+  // (`resolveStreamUrl`), releasing it when the file changes or we unmount.
+  //
+  // With NO token — the `vite dev` proxy injects the JWT for us — the bare URL
+  // is used synchronously, byte-identical to the pre-fix behaviour.
+  const noToken = resolveApiToken() === null;
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  /** The URL the DOM is allowed to see: blob: when a token resolved. */
+  const streamUrlFor = noToken ? streamUrl(file.id) : resolvedUrl;
+
+  /** The one object URL this mount holds (per file), revoked on cleanup. */
+  const heldUrlRef = useRef<{ fileId: string; url: string } | null>(null);
+  /** In-flight resolution, shared by the mount effect and the bridge method. */
+  const pendingRef = useRef<{ fileId: string; promise: Promise<string> } | null>(null);
+  /** Bumped on every mount/file change; a stale resolution must not adopt. */
+  const generationRef = useRef(0);
+  /** The file the host is mounted for right now (see the adoption guard). */
+  const mountedFileIdRef = useRef(file.id);
+
+  /**
+   * Resolve (once) and cache the DOM-usable URL for `fileId`. A second caller
+   * — typically `viewer.get_stream_url` arriving before the first paint —
+   * shares the in-flight promise instead of issuing a second fetch.
+   */
+  const ensureResolved = useCallback(
+    async (fileId: string): Promise<string> => {
+      const held = heldUrlRef.current;
+      if (held !== null && held.fileId === fileId) return held.url;
+      const pending = pendingRef.current;
+      if (pending !== null && pending.fileId === fileId) return pending.promise;
+
+      const generation = generationRef.current;
+      const promise = resolveStream(fileId).catch((err: unknown) => {
+        setResolveError(err instanceof Error ? err.message : String(err));
+        throw err;
+      });
+      pendingRef.current = { fileId, promise };
+      let url: string;
+      try {
+        url = await promise;
+      } finally {
+        if (pendingRef.current?.fileId === fileId) pendingRef.current = null;
+      }
+      if (generation !== generationRef.current || mountedFileIdRef.current !== fileId) {
+        // The host moved to another file (or unmounted) while this fetch was
+        // in flight. The late URL never reaches the DOM, and the effect
+        // cleanup cannot see it — release it here so nothing leaks.
+        releaseStreamUrl(url);
+        throw Object.assign(new Error('stream URL resolution superseded by a newer file'), {
+          code: 'VIEWER_STREAM_SUPERSEDED',
+        });
+      }
+      heldUrlRef.current = { fileId, url };
+      setResolvedUrl(url);
+      return url;
+    },
+    [resolveStream],
+  );
+
+  // Resolve on mount / file change; revoke the previous object URL on the way
+  // out (file switch AND unmount share this one cleanup — no leak either way).
+  useEffect(() => {
+    mountedFileIdRef.current = file.id;
+    if (noToken) return undefined; // dev-proxy build: bare URL, nothing to release
+    generationRef.current += 1;
+    void ensureResolved(file.id).catch(() => {
+      // Surfaced through resolveError (and, for the bridge, in the response).
+    });
+    return () => {
+      generationRef.current += 1; // invalidate in-flight resolutions
+      pendingRef.current = null;
+      const held = heldUrlRef.current;
+      if (held !== null) {
+        releaseStreamUrl(held.url);
+        heldUrlRef.current = null;
+      }
+      setResolvedUrl(null);
+    };
+  }, [file.id, noToken, ensureResolved]);
+
   const parsedConfig = useMemo(() => {
     const result = FileViewerConfigSchema.safeParse(config ?? {});
     return result.success ? result.data : DEFAULT_FILE_VIEWER_CONFIG;
@@ -287,17 +384,17 @@ export default function ViewerHost({
 
   const srcDoc = useMemo(
     () =>
-      viewer === null
+      viewer === null || streamUrlFor === null
         ? ''
         : buildViewerDoc({
             file,
             viewer,
             nonce,
             parentOrigin,
-            streamUrl: streamUrl(file.id),
+            streamUrl: streamUrlFor,
             config: parsedConfig,
           }),
-    [file, viewer, nonce, parentOrigin, parsedConfig],
+    [file, viewer, nonce, parentOrigin, parsedConfig, streamUrlFor],
   );
 
   const apiResponse = useCallback((id: string, body: { result?: unknown; error?: { code: string; message: string } }) => {
@@ -345,9 +442,15 @@ export default function ViewerHost({
             apiResponse(id, { result: await blob.arrayBuffer() });
             break;
           }
-          case 'viewer.get_stream_url':
-            apiResponse(id, { result: { url: streamUrl(currentFile.id) } });
+          case 'viewer.get_stream_url': {
+            // The RESOLVED URL (blob: when a token resolves). Resolved on
+            // demand when the frame asks before the host's own resolution
+            // settled — same cache and same revoke discipline as the
+            // bootstrap hand-off.
+            const url = await ensureResolved(currentFile.id);
+            apiResponse(id, { result: { url } });
             break;
+          }
           case 'viewer.log_access': {
             if (p.params === null || typeof p.params !== 'object' || Array.isArray(p.params)) {
               throw viewerValidationError('VIEWER_INVALID_ACCESS_PARAMS', 'access-log params must be an object');
@@ -380,7 +483,7 @@ export default function ViewerHost({
         apiResponse(id, { error: { code, message } });
       }
     },
-    [apiResponse, fetchRange, parsedConfig, postAccess],
+    [apiResponse, ensureResolved, fetchRange, parsedConfig, postAccess],
   );
 
   useEffect(() => {
@@ -434,9 +537,32 @@ export default function ViewerHost({
           <p style={{ margin: 0, opacity: 0.7 }}>
             {file.filename} · {file.mimeType}
           </p>
-          <a href={streamUrl(file.id)} download={file.filename}>
+          <a
+            href={streamUrlFor ?? undefined}
+            download={file.filename}
+            // While the token'd resolution is in flight the anchor carries NO
+            // href at all — never the bare API path, which would 401. A click
+            // then kicks the resolution instead of navigating; once the blob
+            // URL lands the href is a normal authenticated download.
+            aria-disabled={streamUrlFor === null ? true : undefined}
+            onClick={
+              streamUrlFor === null
+                ? (event) => {
+                    event.preventDefault();
+                    void ensureResolved(file.id).catch(() => {
+                      /* reported through the error line below */
+                    });
+                  }
+                : undefined
+            }
+          >
             Download original
           </a>
+          {resolveError !== null && (
+            <p role="alert" style={{ margin: 0, opacity: 0.7 }}>
+              Could not prepare an authenticated download: {resolveError}
+            </p>
+          )}
           {onClose && (
             <button type="button" onClick={onClose}>
               Close
@@ -456,20 +582,24 @@ export default function ViewerHost({
               </button>
             )}
           </div>
-          {!ready && (
+          {(streamUrlFor === null || !ready) && (
             <div role="status" style={{ padding: '0.5rem' }}>
-              Loading viewer…
+              {streamUrlFor === null && resolveError !== null
+                ? `Could not load the file: ${resolveError}`
+                : 'Loading viewer…'}
             </div>
           )}
-          <iframe
-            ref={iframeRef}
-            name={viewerIframeName(viewer.viewerSlug, file.id)}
-            sandbox="allow-scripts allow-same-origin"
-            referrerPolicy="no-referrer"
-            srcDoc={srcDoc}
-            title={`${viewer.displayName}: ${file.filename}`}
-            style={{ width: '100%', height: '100%', border: 0, display: 'block', flex: 1 }}
-          />
+          {streamUrlFor !== null && (
+            <iframe
+              ref={iframeRef}
+              name={viewerIframeName(viewer.viewerSlug, file.id)}
+              sandbox="allow-scripts allow-same-origin"
+              referrerPolicy="no-referrer"
+              srcDoc={srcDoc}
+              title={`${viewer.displayName}: ${file.filename}`}
+              style={{ width: '100%', height: '100%', border: 0, display: 'block', flex: 1 }}
+            />
+          )}
         </>
       )}
     </section>

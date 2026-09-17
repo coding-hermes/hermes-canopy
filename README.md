@@ -217,13 +217,19 @@ Two consequences worth knowing:
 - A deployment that lets the **proxy** inject the token needs no frontend
   support for streaming at all — the proxy adds the header to the feed request
   too ("authenticate the proxy, not the browser").
-- `streamUrl(fileId)` (`frontend/src/lib/fileApi.ts`) is still a bare URL handed
-  to `<a href>` and to the sandboxed viewer iframes for
-  `GET /api/v1/files/{id}/stream`. Those loads are issued by the browser itself
-  and cannot carry a bearer header, so they work in dev and behind a
-  token-injecting proxy, but **not** from a build whose only token lives in
-  `localStorage['canopy.token']` — that path needs the proxy, or a fetch-to-blob
-  indirection.
+- The file-stream hand-off follows the same rule: `resolveStreamUrl(fileId)`
+  (`frontend/src/lib/fileApi.ts`) is what the viewer host hands to the DOM for
+  `GET /api/v1/files/{id}/stream` — `<a href download>`, the sandboxed iframe's
+  `canopy.__bootstrap.streamUrl` (the `img`/`video`/pdf.js source) and
+  `viewer.get_stream_url`. Those loads are issued by the browser itself and
+  cannot carry a bearer header, so **when a token resolves** the host fetches
+  the bytes through the authenticated `fetch` path first and hands the DOM a
+  `blob:` object URL instead — the viewer sandbox CSP already admits `blob:`
+  (`img-src`, `media-src`, `worker-src`), and the host revokes the object URL on
+  file change or unmount. With **no** token (the `vite dev` proxy case) the bare
+  URL is retained unchanged. That path therefore works from a build whose only
+  token lives in `VITE_API_TOKEN` / `localStorage['canopy.token']` too, with no
+  proxy required.
 
 For full auth details (claims, error codes, middleware), see [docs/API.md](docs/API.md) §Auth.
 

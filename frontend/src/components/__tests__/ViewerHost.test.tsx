@@ -114,6 +114,8 @@ afterEach(() => {
   container.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  window.localStorage.clear();
 });
 
 function q(selector: string): Element | null {
@@ -469,5 +471,188 @@ describe('ViewerHost — message validation', () => {
     ).not.toThrow();
     await settle();
     expect(q('[data-empty-state]')).not.toBeNull();
+  });
+});
+
+// ─── DF-HERMES-CANOPY-14: no bare stream URL reaches the DOM ─────────────
+//
+// All three hand-off points are loaded by the BROWSER (no Authorization
+// header possible): the sandbox doc's canopy.__bootstrap.streamUrl, the
+// download-only empty state's <a href download>, and viewer.get_stream_url.
+// In a build whose only token is VITE_API_TOKEN / localStorage['canopy.token']
+// the bare URL 401s TOKEN_MISSING, so the host must hand the DOM a blob:
+// object URL resolved through the auth'd fetch path — and keep the bare URL
+// (dev-proxy behaviour) when no token resolves.
+
+describe('ViewerHost — authenticated stream URL hand-off (DF-HERMES-CANOPY-14)', () => {
+  const SECOND_FILE_ID = '0198a7b6-c5d4-7321-8abc-def01234567a';
+  const BARE_PATH = `/api/v1/files/${FILE_ID}/stream`;
+  const BARE_SUFFIX = `/files/${FILE_ID}/stream`;
+  const OBJECT_URL_1 = 'blob:http://localhost/canopy-obj-1';
+  const OBJECT_URL_2 = 'blob:http://localhost/canopy-obj-2';
+
+  const createObjectURL = vi.fn<(blob: Blob | MediaSource) => string>();
+  const revokeObjectURL = vi.fn();
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  beforeEach(() => {
+    let seq = 0;
+    createObjectURL.mockReset();
+    createObjectURL.mockImplementation(() => `blob:http://localhost/canopy-obj-${(seq += 1)}`);
+    revokeObjectURL.mockReset();
+    // jsdom implements neither createObjectURL nor revokeObjectURL.
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    window.localStorage.clear();
+    // A fresh Response per call — a Response body can only be read once.
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('pdf-bytes', { status: 200 })));
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+  });
+
+  /** Flushes the mount effect → fetch → blob → setState chain. */
+  async function settleResolution(): Promise<void> {
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+      });
+    }
+  }
+
+  it('hands the sandbox doc a blob: URL — never the bare stream path — when a token resolves', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+    // Pending: the sandbox doc is not built until the URL resolves.
+    expect(q('iframe')).toBeNull();
+
+    await settleResolution();
+
+    const iframe = q('iframe');
+    expect(iframe).not.toBeNull();
+    const srcDoc = iframe!.getAttribute('srcdoc') ?? '';
+    expect(srcDoc).toContain('blob:');
+    expect(srcDoc).toContain(OBJECT_URL_1);
+    expect(srcDoc).not.toContain(BARE_PATH);
+    expect(srcDoc).not.toContain(BARE_SUFFIX);
+    // Nothing anywhere in the rendered DOM carries the bare API path.
+    expect(container.innerHTML).not.toContain(BARE_SUFFIX);
+
+    // The bytes came through the auth'd fetch path with the token, as one
+    // whole-file open-ended range.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requested, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(requested).toBe(BARE_PATH);
+    const headers = new Headers(init.headers);
+    expect(headers.get('Authorization')).toBe('Bearer build-token-123');
+    expect(headers.get('Range')).toBe('bytes=0-');
+  });
+
+  it('gives the download-only empty state a blob: href (aria-disabled, no href, while pending)', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    mountViewer({ file: makeFile(), viewer: null });
+
+    const pendingLink = q('[data-empty-state] a');
+    expect(pendingLink).not.toBeNull();
+    expect(pendingLink!.getAttribute('href')).toBeNull();
+    expect(pendingLink!.getAttribute('aria-disabled')).toBe('true');
+
+    await settleResolution();
+
+    const link = q('[data-empty-state] a');
+    expect(link!.getAttribute('href')).toBe(OBJECT_URL_1);
+    expect(link!.getAttribute('aria-disabled')).toBeNull();
+    expect(link!.getAttribute('download')).toBe('report.pdf');
+    expect(container.innerHTML).not.toContain(BARE_SUFFIX);
+  });
+
+  it('answers viewer.get_stream_url with the resolved blob: URL (cached, no second fetch)', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+    await settleResolution();
+
+    const iframe = q('iframe') as HTMLIFrameElement;
+    const responses = interceptFrame(iframe);
+    const nonce = (iframe.getAttribute('srcdoc') ?? '').match(/var NONCE = "([^"]+)"/)![1];
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          data: {
+            type: 'viewer_api_call',
+            id: 'stream-call-1',
+            target: 'host',
+            nonce,
+            payload: { method: 'viewer.get_stream_url', params: { range: null } },
+            timestamp: Date.now(),
+          },
+        }),
+      );
+    });
+    await settle();
+
+    expect(responses).toHaveLength(1);
+    expect((responses[0].m as Record<string, unknown>).result).toEqual({ url: OBJECT_URL_1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // the mount resolution is reused
+  });
+
+  it('keeps the bare URL and creates no object URL when no token resolves (dev proxy)', async () => {
+    vi.stubEnv('VITE_API_TOKEN', '');
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+
+    // Synchronous — the dev-proxy path resolves nothing.
+    const srcDoc = q('iframe')!.getAttribute('srcdoc') ?? '';
+    expect(srcDoc).toContain(BARE_PATH);
+    // No object URL was handed over (the CSP meta legitimately contains the
+    // bare "blob:" keyword, so assert on the object-URL form).
+    expect(srcDoc).not.toContain('blob:http://localhost');
+
+    await settleResolution();
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    act(() => root.render(createElement(ViewerHost, { file: makeFile(), viewer: null })));
+    const link = q('[data-empty-state] a');
+    expect(link!.getAttribute('href')).toBe(BARE_PATH);
+    expect(link!.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('revokes the object URL on unmount (AC6)', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+    await settleResolution();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith(OBJECT_URL_1);
+
+    // Leave a live root behind for the shared afterEach unmount.
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  it('revokes the previous object URL when the file changes (AC6)', async () => {
+    vi.stubEnv('VITE_API_TOKEN', 'build-token-123');
+    mountViewer({ file: makeFile(), viewer: makeViewer() });
+    await settleResolution();
+    expect(q('iframe')!.getAttribute('srcdoc')).toContain(OBJECT_URL_1);
+
+    const second = makeFile({ id: SECOND_FILE_ID, filename: 'other.pdf' });
+    act(() => root.render(createElement(ViewerHost, { file: second, viewer: makeViewer() })));
+    await settleResolution();
+
+    expect(revokeObjectURL).toHaveBeenCalledWith(OBJECT_URL_1);
+    const srcDoc = q('iframe')!.getAttribute('srcdoc') ?? '';
+    expect(srcDoc).toContain(OBJECT_URL_2);
+    expect(srcDoc).not.toContain(`/files/${SECOND_FILE_ID}/stream`);
   });
 });
