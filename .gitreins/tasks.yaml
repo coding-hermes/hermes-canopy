@@ -2517,3 +2517,15 @@ tasks:
   status: complete
   created_at: '2026-09-17T12:16:53.239400+00:00'
   completed_at: '2026-09-17T12:24:30.205292+00:00'
+- id: GAP-084
+  title: Frontend node-scoped gateway run composer + context manifest indicator
+  criteria:
+  - The thread view (TreeView) supplies node_id to POST /api/v1/gateway/runs via startGatewayRun,
+    and the run's context provenance (source_node_id, context_tokens, token_budget,
+    manifest) is rendered in the UI; vitest proves the request body carries node_id
+    when a node is selected and omits it otherwise, and that the indicator renders
+    the context window line for context-bearing runs and renders nothing for context-free
+    runs.
+  status: complete
+  created_at: '2026-09-17T13:23:02.651860+00:00'
+  completed_at: '2026-09-17T13:29:48.352385+00:00'
