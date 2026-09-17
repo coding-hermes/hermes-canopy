@@ -36,6 +36,9 @@ USAGE
         --require-auth-user canopy --require-auth-password secret
 
 Env fallbacks: CANOPY_DIST, CANOPY_API, CANOPY_PROXY_PORT, CANOPY_PROXY_TOKEN.
+
+VERIFICATION
+    python3 -m unittest discover -s deploy/tests -v      # or: make test-proxy
 """
 
 from __future__ import annotations

@@ -6,6 +6,7 @@
 #   test               — Run tests
 #   test-short         — Run tests skipping integration
 #   test-chaos-disconnect — QA chaos-disconnect probe (runs test-short)
+#   test-proxy         — Run the deploy/reference-proxy.py end-to-end suite
 #   vet                — Run go vet
 #   lint               — Run golangci-lint
 #   tidy               — Tidy go.mod/go.sum
@@ -22,7 +23,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed test test-short test-chaos-disconnect vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed test test-short test-chaos-disconnect test-proxy vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -77,6 +78,15 @@ test-short:
 # prerequisite — single source of truth for the flags, no drift. The full
 # suite remains `make test`.
 test-chaos-disconnect: test-short
+
+# Reference proxy end-to-end tests (DF-HERMES-CANOPY-7): starts the real
+# deploy/reference-proxy.py as a subprocess in front of a throwaway stdlib
+# upstream (no canopyd, no PostgreSQL, no host services) and asserts static
+# assets, the SPA fallback, unauthenticated rejection, bearer injection/
+# pass-through, upstream error preservation, incremental SSE and the startup
+# refusals. python3 stdlib only — no pytest, no pip.
+test-proxy:
+	python3 -m unittest discover -s deploy/tests -v
 
 vet:
 	$(GO) vet ./...
