@@ -972,16 +972,19 @@ When `METRICS_ENABLED=true`, the `/metrics` endpoint exposes:
 - `tree_count` — Number of trees in the database
 - `node_count` — Number of nodes in the database
 - `resume_duration_seconds` — Seconds between a user's first tree-scoped read
-  after an idle gap and the compiled context they resume with (histogram; the
-  buckets include the 30 second SLO line)
+  (GET/HEAD) after an idle gap and the compiled context they resume with
+  (histogram; the buckets include the 30 second SLO line)
 - `resume_started_total` — Resume windows opened
 
 `resume_duration_seconds` carries the resume metric behind the product's
 "resume work in <30 seconds" claim. Semantics: a resume window **opens** on a
-user's first successful (HTTP 2xx) tree-scoped read after at least 5 minutes
-with no tree-scoped read by that user, and **completes** when that same user's
-next successful `GET /api/v1/context/{node_id}` returns — the compiled context,
-i.e. the point where the server has handed the user back their working context.
+user's first successful (HTTP 2xx) tree-scoped read (GET/HEAD) after at least 5
+minutes with no tree-scoped read by that user, and **completes** when that same
+user's next successful `GET /api/v1/context/{node_id}` returns — the compiled
+context, i.e. the point where the server has handed the user back their working
+context. Only reads count: the tree-scoped routes include writes (PATCH/DELETE
+`/api/v1/trees/{tree_id}` and the `POST` routes under it), and those never open,
+refresh or complete a window.
 `resume_started_total` counts windows opened, so a resume that never reaches a
 context compile is visible as started-but-never-observed.
 

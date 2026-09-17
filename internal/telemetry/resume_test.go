@@ -100,6 +100,50 @@ func TestResumePredicates(t *testing.T) {
 	}
 }
 
+// TestIsResumeReadMethodMethodsTable pins the method gate itself. Only GET and
+// HEAD are resume reads, and every write the pattern predicate accepts would
+// otherwise reach the tracker.
+func TestIsResumeReadMethodMethodsTable(t *testing.T) {
+	for _, m := range []string{http.MethodGet, http.MethodHead} {
+		if !IsResumeReadMethod(m) {
+			t.Errorf("IsResumeReadMethod(%q) = false, want true", m)
+		}
+	}
+	for _, m := range []string{
+		http.MethodPost,
+		http.MethodPatch,
+		http.MethodPut,
+		http.MethodDelete,
+		http.MethodOptions,
+		http.MethodConnect,
+		http.MethodTrace,
+		"",
+	} {
+		if IsResumeReadMethod(m) {
+			t.Errorf("IsResumeReadMethod(%q) = true, want false", m)
+		}
+	}
+
+	// The patterns the gate exists for: each is tree-scoped BY PATTERN, so the
+	// pattern predicate alone would let the write through. They are the routes
+	// server.go registers as POST/PATCH/DELETE under /api/v1/trees/{tree_id}.
+	for _, p := range []string{
+		"/api/v1/trees/{tree_id}",
+		"/api/v1/trees/{tree_id}/share",
+		"/api/v1/trees/{tree_id}/presence",
+		"/api/v1/trees/{tree_id}/presence/leave",
+		"/api/v1/trees/{tree_id}/topics/inject",
+		"/api/v1/trees/{tree_id}/references/resolve",
+		"/api/v1/trees/{tree_id}/references/inject",
+		"/api/v1/trees/{tree_id}/reference-selections",
+		"/api/v1/trees/{tree_id}/multi-reference-replies",
+	} {
+		if !IsTreeScopedRead(p) {
+			t.Errorf("IsTreeScopedRead(%q) = false, want true: the pattern predicate is deliberately method-blind", p)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Mini router: the real mounting shape, driven with real requests
 // ---------------------------------------------------------------------------
@@ -140,9 +184,20 @@ func newResumeTestRouter(sink ResumeSink, t *ResumeTracker, user string) *chi.Mu
 
 		trees := chi.NewRouter()
 		trees.Get("/{tree_id}", resumeTestOK)
+		// The tree mount is NOT all reads: server.go's treeHandler.Routes()
+		// registers these writes on the SAME mount, so they resolve to the same
+		// /api/v1/trees/{tree_id}/... prefix.
+		trees.Head("/{tree_id}", resumeTestOK)
+		trees.Patch("/{tree_id}", resumeTestOK)
+		trees.Delete("/{tree_id}", resumeTestOK)
+		trees.Post("/{tree_id}/share", resumeTestOK)
 		r.Mount("/trees", trees)
 
 		r.Get("/context/{node_id}", resumeTestOK)
+		// Non-GET on the compile path: server.go registers only the GET, so this
+		// mirrors the mount shape while giving the method gate a non-read to
+		// reject at the compile branch.
+		r.Post("/context/{node_id}", resumeTestOK)
 		// Non-tree-scoped 2xx control.
 		r.Get("/nodes/{node_id}", resumeTestOK)
 	})
@@ -151,13 +206,24 @@ func newResumeTestRouter(sink ResumeSink, t *ResumeTracker, user string) *chi.Mu
 
 func resumeTestGet(t *testing.T, url string, wantStatus int) {
 	t.Helper()
-	resp, err := http.Get(url)
+	resumeTestDo(t, http.MethodGet, url, wantStatus)
+}
+
+// resumeTestDo drives a real request with an explicit method. HEAD needs the
+// explicit form: http.Get cannot send it, and a HEAD response carries no body.
+func resumeTestDo(t *testing.T, method, url string, wantStatus int) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		t.Fatalf("GET %s: %v", url, err)
+		t.Fatalf("%s %s: building request: %v", method, url, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != wantStatus {
-		t.Fatalf("GET %s: status %d, want %d", url, resp.StatusCode, wantStatus)
+		t.Fatalf("%s %s: status %d, want %d", method, url, resp.StatusCode, wantStatus)
 	}
 }
 
@@ -249,6 +315,102 @@ func TestResumeMiddlewareMiniRouterOpensNewWindowAfterIdle(t *testing.T) {
 		if d < 0 {
 			t.Fatalf("durations[%d]=%v, want a non-negative wall-clock reading", i, d)
 		}
+	}
+}
+
+// TestResumeMiddlewareIgnoresTreeWrites pins the fixed GAP-079 contract through
+// real requests: a 2xx WRITE whose route pattern is tree-scoped is not a resume
+// read, so resume_started_total stays at 0 and the tracker is never reached.
+func TestResumeMiddlewareIgnoresTreeWrites(t *testing.T) {
+	// A one-hour idle gap is load-bearing. If a write counted as a tree read it
+	// would seed the user's entry with lastTreeRead=now, so the GET milliseconds
+	// later would fall INSIDE the gap and open nothing; with a zero gap the GET
+	// would open a window either way and the two behaviours would be
+	// indistinguishable.
+	sink := &fakeSink{}
+	tracker := NewResumeTracker(time.Hour)
+	srv := httptest.NewServer(newResumeTestRouter(sink, tracker, "user-w"))
+	defer srv.Close()
+
+	// (a) 2xx writes on the tree mount open no window. fakeSink mirrors
+	// resume_started_total/resume_duration_seconds without touching Prometheus.
+	for _, w := range []struct{ method, path string }{
+		{http.MethodPost, "/api/v1/trees/t1/share"},
+		{http.MethodPatch, "/api/v1/trees/t1"},
+		{http.MethodDelete, "/api/v1/trees/t1"},
+	} {
+		resumeTestDo(t, w.method, srv.URL+w.path, http.StatusOK)
+		started, durations := sink.snapshot()
+		if started != 0 || len(durations) != 0 {
+			t.Fatalf("2xx %s %s acted: started=%d durations=%v, want 0 and []", w.method, w.path, started, durations)
+		}
+		if n := resumeTestTrackedKeys(tracker); n != 0 {
+			t.Fatalf("2xx %s %s was tracked: %d keys, want 0", w.method, w.path, n)
+		}
+	}
+
+	// (b) The writes did not move the idle-gap clock either: the next 2xx GET is
+	// this user's FIRST tree read, so it opens the window.
+	resumeTestGet(t, srv.URL+"/api/v1/trees/t1", http.StatusOK)
+	started, durations := sink.snapshot()
+	if started != 1 || len(durations) != 0 {
+		t.Fatalf("write then read: started=%d durations=%v, want started=1 durations=[]", started, durations)
+	}
+	// The window that read opened is a working one.
+	resumeTestGet(t, srv.URL+"/api/v1/context/n1", http.StatusOK)
+	_, durations = sink.snapshot()
+	if len(durations) != 1 {
+		t.Fatalf("the window opened by the read did not complete: durations=%v", durations)
+	}
+}
+
+// TestResumeMiddlewareHeadTreeReadOpensWindow pins that HEAD is a resume read:
+// the gate is GET-or-HEAD, not GET-only.
+func TestResumeMiddlewareHeadTreeReadOpensWindow(t *testing.T) {
+	sink := &fakeSink{}
+	srv := httptest.NewServer(newResumeTestRouter(sink, NewResumeTracker(time.Hour), "user-h"))
+	defer srv.Close()
+
+	resumeTestDo(t, http.MethodHead, srv.URL+"/api/v1/trees/t1", http.StatusOK)
+	started, durations := sink.snapshot()
+	if started != 1 || len(durations) != 0 {
+		t.Fatalf("HEAD tree read: started=%d durations=%v, want started=1 durations=[]", started, durations)
+	}
+
+	// Its window completes on the compiled context exactly like a GET's.
+	resumeTestGet(t, srv.URL+"/api/v1/context/n1", http.StatusOK)
+	_, durations = sink.snapshot()
+	if len(durations) != 1 {
+		t.Fatalf("the window opened by HEAD did not complete: durations=%v", durations)
+	}
+}
+
+// TestResumeMiddlewareIgnoresNonReadContextCompile pins the same gate on the
+// compile branch: a non-GET on the compile path observes nothing and, crucially,
+// leaves the open window OPEN (a window consumed by a write would be a resume
+// that never reaches a context compile).
+func TestResumeMiddlewareIgnoresNonReadContextCompile(t *testing.T) {
+	sink := &fakeSink{}
+	srv := httptest.NewServer(newResumeTestRouter(sink, NewResumeTracker(time.Hour), "user-c2"))
+	defer srv.Close()
+
+	// Open a window with a real read.
+	resumeTestGet(t, srv.URL+"/api/v1/trees/t1", http.StatusOK)
+	if started, _ := sink.snapshot(); started != 1 {
+		t.Fatalf("setup: started=%d, want 1", started)
+	}
+
+	// A 2xx POST on the compile path must not complete it...
+	resumeTestDo(t, http.MethodPost, srv.URL+"/api/v1/context/n1", http.StatusOK)
+	if _, durations := sink.snapshot(); len(durations) != 0 {
+		t.Fatalf("a POST on the compile path observed a resume: durations=%v", durations)
+	}
+
+	// ...so the GET still completes it, exactly once.
+	resumeTestGet(t, srv.URL+"/api/v1/context/n1", http.StatusOK)
+	_, durations := sink.snapshot()
+	if len(durations) != 1 {
+		t.Fatalf("the window was consumed by the write: durations=%v, want 1", durations)
 	}
 }
 

@@ -478,17 +478,20 @@ When `METRICS_ENABLED=true`, `canopyd` exposes a `/metrics` endpoint with the fo
 | `active_connections`            | Gauge     | Current concurrent HTTP connections.      |
 | `tree_count`                    | Gauge     | Number of trees in the database.          |
 | `node_count`                    | Gauge     | Number of nodes in the database.          |
-| `resume_duration_seconds`       | Histogram | Seconds between a user's first tree-scoped read after an idle gap and the compiled context they resume with. Buckets include the 30 second SLO line. |
+| `resume_duration_seconds`       | Histogram | Seconds between a user's first tree-scoped read (GET/HEAD) after an idle gap and the compiled context they resume with. Buckets include the 30 second SLO line. |
 | `resume_started_total`          | Counter   | Resume windows opened.                    |
 
 `resume_duration_seconds` is the **server-observable** part of the product's
 "resume work in <30 seconds" claim, and nothing more: browser render time is not
 included, and a resume a user performs entirely from their local cache never
 reaches the server, so it is invisible here. A resume window opens on a user's
-first successful (HTTP 2xx) tree-scoped read after at least 5 minutes with no
-tree-scoped read by that user, and completes when that same user's next
+first successful (HTTP 2xx) tree-scoped read (GET/HEAD) after at least 5 minutes
+with no tree-scoped read by that user, and completes when that same user's next
 successful `GET /api/v1/context/{node_id}` returns — the compiled context, i.e.
 the point where the server has handed the user back their working context.
+Only reads count: the tree-scoped routes include writes (PATCH/DELETE
+`/api/v1/trees/{tree_id}` and the `POST` routes under it), and those never open,
+refresh or complete a window.
 `resume_started_total` counts windows opened, so a window that never reaches a
 context compile shows up as started-but-never-observed.
 
