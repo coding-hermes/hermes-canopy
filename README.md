@@ -381,8 +381,9 @@ endpoint is **stateless**: it issues no session id, `initialize` is not
 required before `tools/list`, and a client may reconnect without
 re-initializing.
 
-Handshake (`$TOKEN` is a dev JWT from `canopyd serve` startup output — see
-§ Authentication (dev mode)):
+Handshake (`$TOKEN` is a dev JWT you sign yourself — see § Authentication
+(dev mode); nothing prints a token at startup, so mint one with the snippet there
+and `export CANOPY_TOKEN=<token>`):
 
 ```bash
 # 1. initialize — negotiate a protocol revision
