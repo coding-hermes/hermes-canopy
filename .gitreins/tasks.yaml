@@ -2413,3 +2413,17 @@ tasks:
   status: complete
   created_at: '2026-09-17T03:26:23.863735+00:00'
   completed_at: '2026-09-17T03:41:22.827685+00:00'
+- id: DF-HERMES-CANOPY-7
+  title: Repair production PWA deployment contract
+  criteria:
+  - Provide a runnable same-origin reverse-proxy deployment template serving frontend/dist
+    with SPA deep links, routing /api and /health to canopyd without HTML fallback,
+    and streaming SSE without buffering. Protect the entire public origin with explicit
+    authentication before server-side injection of an operator-provisioned Canopy
+    JWT; never ship credentials or inject JWT on an unprotected public route. Tests
+    exercise the real proxy with static assets, unauthenticated rejection, authenticated
+    API JSON, upstream error preservation and SSE delivery. README and INTEGRATION
+    replace the broken standalone static-server recipe with exact working paths, TLS/auth/provisioning
+    requirements and limitations; production frontend build passes.
+  status: in_progress
+  created_at: '2026-09-17T04:12:59.405187+00:00'
