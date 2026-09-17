@@ -2479,3 +2479,12 @@ tasks:
   status: complete
   created_at: '2026-09-17T08:52:24.865003+00:00'
   completed_at: '2026-09-17T09:25:07.526032+00:00'
+- id: GAP-074
+  title: 'Docs truth pass: storage/crypto/merge claims match shipped reality'
+  criteria:
+  - 'grep-able: no doc asserts cards are stored in DuckDB; AGENTS.md/reality lines
+    reconciled; merge->multi-reference substitution declared; 2026-09-16 SQLite-first
+    storage ruling recorded'
+  status: complete
+  created_at: '2026-09-17T09:39:09.444758+00:00'
+  completed_at: '2026-09-17T09:46:43.095415+00:00'
