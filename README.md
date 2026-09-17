@@ -289,7 +289,7 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 | Snapshot | PostgreSQL | Point-in-time tree state for recovery |
 | Event | PostgreSQL | Audit trail of all operations |
 | Profile | PostgreSQL | User profiles and routing |
-| Card | Per-type SQLite + JSONL | Structured data nodes with interactive behavior |
+| Card | Per-type SQLite | Structured data nodes with interactive behavior |
 | Transport | PostgreSQL | Multi-transport connection management (SSE, WebSocket, NATS) |
 
 **Storage reality.** Graph data (trees, nodes, edges, topics, profiles, approvals,

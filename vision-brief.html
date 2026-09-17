@@ -412,7 +412,7 @@
       <div class="feature">
         <div class="icon">🗄️</div>
         <h4>Database-per-Card</h4>
-        <p>Each Card type stores data as git-friendly JSONL files. <s>DuckDB queries them directly — no import step.</s> <span class="superseded">superseded — Cards ship on per-type SQLite, not DuckDB</span> pgREST-style fixed API. Neither the model nor the Card ever writes raw SQL.</p>
+        <p><s>Each Card type stores data as git-friendly JSONL files.</s> <span class="superseded">superseded — cards persist to per-type SQLite <code>.db</code> files; there is no JSONL path for cards today</span> <s>DuckDB queries them directly — no import step.</s> <span class="superseded">superseded — Cards ship on per-type SQLite, not DuckDB</span> pgREST-style fixed API. Neither the model nor the Card ever writes raw SQL.</p>
       </div>
       <div class="feature">
         <div class="icon">🔄</div>
@@ -580,7 +580,7 @@
         <tr><td>Backend</td><td>Go (canopyd) + Hermes Gateway</td><td>Thin gateway binary. Serves PWA, <s>queries DuckDB</s><span class="superseded">superseded — queries PostgreSQL</span>. Forwards all agent/model/tool calls to Hermes Agent Gateway API. Hermes handles the heavy lifting.</td></tr>
         <tr><td>Frontend</td><td>Preact + Web Components</td><td>3KB React-compatible API. Cards ARE Web Components — same component model as the framework. PWA with Service Worker for caching + Background Sync for offline queue.</td></tr>
         <tr><td>Graph Database</td><td><s>DuckDB (embedded)</s> <span class="superseded">superseded — PostgreSQL today</span></td><td><s>Authoritative graph state, Card data, topic FTS — all in one embedded database. No separate DB process.</s> <span class="superseded">PostgreSQL is authoritative today; SQLite-first is the declared direction (GAP-076, not landed)</span> Yjs/IndexedDB is a local browser replica for offline reads.</td></tr>
-        <tr><td>Card Database</td><td><s>DuckDB in-process via Go</s> <span class="superseded">superseded — per-type SQLite</span></td><td><s>Same embedded DuckDB instance. Graph and Cards share one database.</s> <span class="superseded">Cards ship on per-type SQLite (modernc.org/sqlite) under ~/.hermes/canopy/cards/</span> JSONL files are the durable format.</td></tr>
+        <tr><td>Card Database</td><td><s>DuckDB in-process via Go</s> <span class="superseded">superseded — per-type SQLite</span></td><td><s>Same embedded DuckDB instance. Graph and Cards share one database.</s> <span class="superseded">Cards ship on per-type SQLite (modernc.org/sqlite) under ~/.hermes/canopy/cards/</span> <s>JSONL files are the durable format.</s> <span class="superseded">superseded — no card JSONL path: each card type is one SQLite <code>.db</code> file with <code>_journal_mode=WAL</code></span></td></tr>
         <tr><td>Transport</td><td>SSE (server→client) + HTTP POST (client→server)</td><td>SSE for real-time updates, POST for writes. One channel per direction — no half-duplex confusion.</td></tr>
         <tr><td>Encryption</td><td><s>None in MVP / MLS post-MVP</s> <span class="superseded">superseded — MLS has shipped</span></td><td>MLS group encryption for workspace collaboration (SPEC-FTR-03) has shipped at <code>/api/v1/workspaces/{workspace_id}/mls</code>. Local node/edge/card data at rest is still unencrypted — not end-to-end encryption of all data.</td></tr>
         <tr><td>Plugin Sandbox</td><td>Sandboxed iframes + CSP + permissions</td><td>Shadow DOM is encapsulation, not a security boundary. Cards run in isolated iframes with capability-scoped APIs.</td></tr>
@@ -636,7 +636,7 @@
     </div>
     <div class="card blue">
       <h4>Git-Friendly + Permanent Deletion</h4>
-      <p>JSONL files are append-only and git-friendly. "Deletion" is a tombstone marker in the append-only log — the record of deletion exists in git history, but the data is no longer served. For truly permanent deletion, the JSONL log is compacted with tombstones removed — a new commit that replaces the old history. Both modes are explicit and user-controlled.</p>
+      <p><span class="superseded">not shipped — vision goal, not current behaviour: there is no card JSONL path today (cards persist to per-type SQLite <code>.db</code> files)</span> JSONL files are append-only and git-friendly. "Deletion" is a tombstone marker in the append-only log — the record of deletion exists in git history, but the data is no longer served. For truly permanent deletion, the JSONL log is compacted with tombstones removed — a new commit that replaces the old history. Both modes are explicit and user-controlled.</p>
     </div>
   </div>
 </section>
@@ -668,7 +668,7 @@
     </div>
     
     <div class="principle">
-      <p>"Data lives in formats you can read: JSONL for Cards, <s>DuckDB for the graph</s><span class="superseded">superseded — PostgreSQL for the graph today</span>. <s>One embedded database, no separate processes.</s> git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
+      <p>"Data lives in formats you can read: <s>JSONL for Cards</s><span class="superseded">superseded — cards are per-type SQLite <code>.db</code> files; no card JSONL path today</span>, <s>DuckDB for the graph</s><span class="superseded">superseded — PostgreSQL for the graph today</span>. <s>One embedded database, no separate processes.</s> git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
     </div>
   </div>
 </section>

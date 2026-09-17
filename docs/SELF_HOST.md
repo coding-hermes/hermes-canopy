@@ -460,7 +460,7 @@ systemctl start canopyd
 | Data              | Method      | Notes                                       |
 |-------------------|-------------|---------------------------------------------|
 | PostgreSQL DB     | `pg_dump`   | All trees, nodes, edges, topics, profiles.  |
-| Card data         | Filesystem  | Card data is stored as JSONL files under `~/.hermes/canopy/cards/`. Back up this directory as well. |
+| Card data         | Filesystem  | Card data is stored in per-type SQLite `.db` files under `~/.hermes/canopy/cards/`. Back up this directory as well. |
 | JWT secret        | File/secret manager | Without it, existing tokens become invalid. |
 
 ---
@@ -811,6 +811,6 @@ For context while operating the server:
 - **Database:** PostgreSQL is the authoritative store for all graph data (trees, nodes, edges, topics, profiles, approvals, events, snapshots). Migrations run automatically.
 - **Storage direction (2026-09-16 ruling):** PostgreSQL contradicts the product vision (single binary, no Docker, no PostgreSQL, no external dependencies) and the SQLite-native Hermes ecosystem. The owner ruling is **SQLite-first** — `modernc.org/sqlite` (pure Go, WAL) as the authoritative graph store inside one zero-external-dependency binary. **Status: declared direction, NOT landed** — tracked as board row **GAP-076**; PostgreSQL stays authoritative until it does.
 - **SSE Hub:** In-memory ring buffer per tree, 10K connection cap, 1-hour event retention.
-- **Cards:** per-type **SQLite** databases (`modernc.org/sqlite`, CGo-free, pure Go) under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`; JSONL export is git-friendly. The `internal/card/duckdb/` package is cgo-only and ARCHIVED — zero importers repo-wide, and no shipped build selects it.
+- **Cards:** per-type **SQLite** databases (`modernc.org/sqlite`, CGo-free, pure Go) under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`. Each card type is one `<dir>/<card-type>.db` file opened with `_journal_mode=WAL` (`internal/card/database.go`); there is no JSONL path for cards. The `internal/card/duckdb/` package is cgo-only and ARCHIVED — zero importers repo-wide, and no shipped build selects it.
 - **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. Built to `frontend/dist/` as a release artifact and served separately — `canopyd` is API-only in MVP and does not embed it (see [Quick Start](#quick-start)).
 - **Graceful shutdown:** 30 seconds — drains SSE connections, then shuts down HTTP.
