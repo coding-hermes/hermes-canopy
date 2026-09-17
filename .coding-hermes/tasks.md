@@ -554,8 +554,9 @@ tier2 **PASS / COMPLETE**; the judge independently confirmed the pre-fix RED (`g
 non-empty Content for a multi-node chain with a 30-token budget, got empty") and the normal-budget parity sha.
 Verdict history `.gitreins/history/2026-09-17/4f172db4/verdict.json`. Task kept for audit (fleet default).
 
-**CI.** Run **35268337248** on `919c98d` — **GREEN on the FIRST attempt, no rerun**. Inherited health at tick start
-was clean, so no CI-breakage row was filed.
+**CI.** Run **35268337248** on `919c98d` (content) and run **35268829602** on `1759161` (board closeout) — **both
+GREEN on the FIRST attempt, no reruns**, verified after each run concluded. Inherited health at tick start was
+clean, so no CI-breakage row was filed.
 
 **Off-by-one.** Health `{"status":"ok","uptime":"18h35m55s"}`. Discover fired for real before designing anything:
 `canopy-context-compiler-tiny-budget-newest-node` -> **not_found** and
