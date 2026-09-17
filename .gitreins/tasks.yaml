@@ -2469,3 +2469,13 @@ tasks:
   status: complete
   created_at: '2026-09-17T08:03:04.549675+00:00'
   completed_at: '2026-09-17T08:15:52.567095+00:00'
+- id: DF-HERMES-CANOPY-9
+  title: 'Isolation not real: card+gateway stores lack env overrides; docs drift'
+  criteria:
+  - CANOPY_CARD_DATA_DIR env var overrides card.DataDir(); CANOPY_GATEWAY_STATE_FILE
+    overrides gateway DefaultStateFile(); README /health example reports the real
+    schema_version; VITE_API_URL doc mentions verified correct; go tests cover both
+    overrides
+  status: complete
+  created_at: '2026-09-17T08:52:24.865003+00:00'
+  completed_at: '2026-09-17T09:25:07.526032+00:00'

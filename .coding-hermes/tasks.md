@@ -99,3 +99,16 @@ Promise: {"entry_point":"Go single binary `canopyd` (HTTP/JSON REST API server o
 - **GitReins:** tier1 **PASS**, tier2 **PASS / COMPLETE**, verdict **`f9e7799b`** (`~/.hermes`-side history `.gitreins/history/2026-09-17/9fd1646d/verdict.json`). The judge did not take the row's word: it re-ran `go test -count=20 -short ./internal/gateway/` (**ok 10.2s**), `-race`, the four new tests, and its **own** falsification — guard removed ⇒ `TestServiceCloseStopsWritesAfterTeardown` + `TestServicePersistAfterCloseIsNoOp` FAIL, restored ⇒ PASS — and it enumerated the call sites — **24** `t.Cleanup(svc…Close)` registrations (`context_test.go` 6, `service_test.go` 17, `handler/gateway_handler_test.go` 1) covering all **7** `filepath.Join(t.TempDir(), "runs.jsonl")` state-file sites and every `t.TempDir()` site in the package (12) — to confirm each carries the LIFO cleanup, plus that `wg.Add` sits under the same mutex `Close` uses so `Add` can never race `Wait`.
 - **Bookkeeping follow-up:** the `CI-006` row now carries `judge_verdict: f9e7799b`, `judge_result`, `ci_result: GREEN` and the judge note; `events.jsonl` += id **509** (`ci`).
 - **Class closed:** the flake is not "gone because CI happened to pass" — the deterministic regression tests fail without the guard, and the red→green was demonstrated on the same `-count=100` loop at the same HEAD lineage.
+
+
+### Tick 474 — 2026-09-17: DF-HERMES-CANOPY-9 stewardship closeout
+
+Existing code commit b2ca8bb was already judged and pushed to origin and gitlab, but the board still marked DF-9 pending. No new worker dispatched and no implementation changed. Prior session termination cause was not established.
+
+Fresh verification: canopyd build PASS; nine focused override test functions plus their subtests PASS with no skips; gitreins task complete DF-HERMES-CANOPY-9 rerun PASS COMPLETE (7e385cb7); gitreins guard --full PASS (secrets/build/lint/tests). The prior /tmp/df9-sweep.log exits zero, but does not establish shared-DB coverage. No DB-backed coverage claim is made from it.
+
+Code CI: run 35202822348 on b2ca8bb success; latest three checked runs success, no inherited failure to file. Board-only closeout CI will be checked after push and reported separately.
+
+Bookkeeping: one task row closed; event 512 appended; ticks_total 473 -> 474; content last_commit b2ca8bb. Last-wins board now 277 complete / 25 pending / 302 unique, no parse failures. Closeout script tested against a fresh pre-closeout fixture: only one task line changes, expected event/header result, repeated execution refuses before any writes. No product debugging or fix design occurred, so no Off-by-One discovery/submission was needed.
+
+DuckBrain: /ticks/474, namespace hermes-canopy, UUID 1a2207aa-e749-4f56-990d-2303bef1b5f6. Remaining backlog includes GAP-074 docs truth and GAP-076 storage pivot.
