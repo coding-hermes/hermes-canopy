@@ -138,7 +138,11 @@ curl -H "Authorization: Bearer <token>" http://localhost:8091/api/v1/trees
 
 ### Public paths (no auth)
 
-`/health`, `/healthz`, `/version` — no token required.
+`/health`, `/healthz`, `/version` — no token required (`isPublicPath()` in
+`internal/handler/auth.go`). Everything else under `/api/v1` needs the
+`Authorization: Bearer <jwt>` header — including the SSE feeds, which is why the
+frontend streams them with `fetch` rather than native `EventSource` (see
+[SSE and authentication](#sse-and-authentication)).
 
 ### Dev-mode provisioning (fresh database)
 
@@ -172,9 +176,12 @@ authenticates in exactly one of these ways:
 
 1. **The browser carries the token.** Build the PWA with
    `VITE_API_TOKEN=<jwt>`, or paste a token into the browser's
-   `localStorage['canopy.token']`. `frontend/src/lib/api.ts` then sends
-   `Authorization: Bearer <jwt>` on every API call (see README §"Production
-   (Manual)" for the full recipe).
+   `localStorage['canopy.token']`. **Every** call site in `frontend/src` then
+   sends `Authorization: Bearer <jwt>`: REST through the shared helpers in
+   `frontend/src/lib/api.ts` (`apiUrl` + `authInit`/`authHeaders`), and the four
+   SSE feeds through the fetch-based client in `frontend/src/lib/sse.ts` (see
+   README §"Production (Manual)" for the full recipe, and §"SSE and
+   authentication" below for why streaming needs its own client).
 2. **The reverse proxy injects the token** — `deploy/reference-proxy.py --token`,
    or the commented block in `deploy/nginx.canopy.conf` / `deploy/Caddyfile`.
    Only ever behind explicit authentication (HTTP Basic / auth gate): injecting a
@@ -183,6 +190,37 @@ authenticates in exactly one of these ways:
 
 Either way the JWT is minted by you (below) — deployment is **single-user** in
 MVP.
+
+### SSE and authentication
+
+The streaming routes — `GET /api/v1/trees/{id}/events`,
+`GET /api/v1/workspace/channels/{id}/feed`, `GET /api/v1/gateway/runs/{id}/events`
+and `GET /api/v1/plugins/{id}/events` — are auth-gated exactly like the REST
+routes (`AuthMiddleware` in `internal/handler/auth.go` reads the bearer token
+from the `Authorization` header only). Native `EventSource` **cannot set request
+headers**, so it has no authentication story in a static build: it returns
+`TOKEN_MISSING` no matter which token the build carries. That is why
+`frontend/src/lib/sse.ts` exists:
+
+- **a token resolves** (production) → the feed is read with `fetch`, which does
+  send `Authorization: Bearer <jwt>`; the `text/event-stream` wire format is
+  parsed by that module;
+- **no token resolves** (the `vite dev` proxy case, where the dev server injects
+  the JWT) → it falls back to native `EventSource`, so dev behaviour is
+  unchanged.
+
+Two consequences worth knowing:
+
+- A deployment that lets the **proxy** inject the token needs no frontend
+  support for streaming at all — the proxy adds the header to the feed request
+  too ("authenticate the proxy, not the browser").
+- `streamUrl(fileId)` (`frontend/src/lib/fileApi.ts`) is still a bare URL handed
+  to `<a href>` and to the sandboxed viewer iframes for
+  `GET /api/v1/files/{id}/stream`. Those loads are issued by the browser itself
+  and cannot carry a bearer header, so they work in dev and behind a
+  token-injecting proxy, but **not** from a build whose only token lives in
+  `localStorage['canopy.token']` — that path needs the proxy, or a fetch-to-blob
+  indirection.
 
 For full auth details (claims, error codes, middleware), see [docs/API.md](docs/API.md) §Auth.
 
@@ -557,6 +595,11 @@ METRICS_ENABLED=true \
 > `localStorage['canopy.token']` in the browser), or let the reverse proxy inject
 > `Authorization: Bearer <jwt>` — which `deploy/reference-proxy.py` and the nginx
 > configs only do **behind explicit authentication** (HTTP Basic / auth gate).
+> Either way the header reaches **every** call site, REST and SSE alike (the
+> streaming feeds use the fetch-based client in `frontend/src/lib/sse.ts`,
+> because native `EventSource` cannot set headers — see
+> [SSE and authentication](#sse-and-authentication)). Only `/health`, `/healthz`
+> and `/version` are public.
 > Mint the JWT yourself with `JWT_SECRET` (see
 > [Authentication (dev mode)](#authentication-dev-mode) → "Direct API access").
 

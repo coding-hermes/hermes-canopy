@@ -262,15 +262,36 @@ endpoint, and the Vite dev proxy (the only JWT injector today) is gone in
 production, a deployed PWA authenticates in one of two ways:
 
 1. **The browser carries the token.** Build with `VITE_API_TOKEN=<jwt>`, or paste
-   a token into the browser's `localStorage['canopy.token']`;
-   `frontend/src/lib/api.ts` then sends `Authorization: Bearer <jwt>` on every API
-   call (and sends no header at all when the entry is missing/blank).
+   a token into the browser's `localStorage['canopy.token']`. Every call site in
+   `frontend/src` then sends `Authorization: Bearer <jwt>` — REST via the shared
+   helpers in `frontend/src/lib/api.ts` (`apiUrl` + `authInit`/`authHeaders`,
+   which send no header at all when the token is missing/blank), and the SSE
+   feeds via `frontend/src/lib/sse.ts` (see "SSE streams" below).
 2. **The proxy injects the token** — `deploy/reference-proxy.py --token <jwt>`
    (with `--require-auth-user/--require-auth-password`) or the commented
    `auth_request` / `basicauth` blocks in `deploy/nginx.canopy.conf` /
    `deploy/Caddyfile`. Only behind explicit authentication: an injected JWT on an
    open route is a credential handout. The reference proxy refuses to start if
    `--token` is combined with a non-loopback bind and no Basic auth.
+
+**SSE streams.** `GET /api/v1/trees/{id}/events`,
+`GET /api/v1/workspace/channels/{id}/feed`,
+`GET /api/v1/gateway/runs/{id}/events` and `GET /api/v1/plugins/{id}/events` are
+auth-gated by the same middleware, which accepts the bearer token from the
+`Authorization` header only. Native `EventSource` cannot set headers, so in a
+static build it can never authenticate. `frontend/src/lib/sse.ts` therefore
+streams with `fetch` (adding the header) whenever a token resolves, and falls
+back to native `EventSource` when none does — the `vite dev` case, where the dev
+proxy injects the JWT. So: with `VITE_API_TOKEN`/`localStorage['canopy.token']`
+the feeds work; with a header-injecting proxy they also work; either way they
+are **not** public. `/health`, `/healthz` and `/version` are the only public
+paths (`isPublicPath()`).
+
+One exception to the "every call site" claim: `streamUrl(fileId)` — the
+`GET /api/v1/files/{id}/stream` URL handed to `<a href>` and to the sandboxed
+viewer iframes — is loaded by the browser itself, so it cannot carry a bearer
+header. It works in dev and behind a token-injecting proxy, but not from a build
+whose only token lives in `localStorage`.
 
 Mint the token out-of-band (mint one with `JWT_SECRET` — §6 below), and treat the
 whole deployment as single-user; multi-user auth is deferred post-MVP.
@@ -949,6 +970,6 @@ returns HTTP 201 (not 503).
 | `VITE_API_URL`        | `http://localhost:8091`| Vite **DEV** proxy target (`vite.config.ts` only; ignored by production builds) |
 | `VITE_DEV_JWT`        | (hardcoded dev token) | Dev JWT injected by the Vite **dev** proxy (frontend only) |
 | `VITE_API_BASE_URL`   | — (relative `/api/v1`) | Frontend API base URL read at **build** time (`frontend/src/lib/api.ts`); leave unset behind a same-origin reverse proxy |
-| `VITE_API_TOKEN`      | — (unset)             | Bearer token baked into a **production build**; `api.ts` falls back to `localStorage['canopy.token']` |
+| `VITE_API_TOKEN`      | — (unset)             | Bearer token baked into a **production build**; honoured by every call site (REST via `lib/api.ts`, SSE via `lib/sse.ts`), with `localStorage['canopy.token']` as the runtime fallback |
 | `CANOPY_SERVER_URL`   | `http://localhost:8091`| CLI API base URL (CLI only). An explicit value wins over `HTTP_ADDR`/`DB_*`; with those set and no URL the CLI fails before any request (§4) |
 | `CANOPY_TOKEN`        | —                     | CLI auth token (CLI only)                |
