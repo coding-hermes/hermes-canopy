@@ -2546,3 +2546,15 @@ tasks:
   status: complete
   created_at: '2026-09-17T14:13:13.364844+00:00'
   completed_at: '2026-09-17T14:25:28.695522+00:00'
+- id: DF-HERMES-CANOPY-16
+  title: Bound the offline-queue replay so a stale bearer token cannot wedge entries
+    forever
+  criteria:
+  - A queued request whose replays all answer 401/403 is deleted after MAX_AUTH_ATTEMPTS
+    (3) attempts with one warn naming the auth failure; a network-error replay never
+    deletes and never consumes the attempt budget; any other non-2xx answer is capped
+    at MAX_ATTEMPTS (5); the attempt count persists across replays; full vitest suite
+    + tsc -b + the SW bundle build are green.
+  status: complete
+  created_at: '2026-09-17T14:53:57.765294+00:00'
+  completed_at: '2026-09-17T14:57:48.752612+00:00'
