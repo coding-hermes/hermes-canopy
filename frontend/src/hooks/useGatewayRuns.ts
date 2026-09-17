@@ -38,7 +38,7 @@ export interface UseGatewayRunsReturn {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  startRun: (message: string, sessionId?: string) => Promise<string>;
+  startRun: (message: string, sessionId?: string, nodeId?: string) => Promise<string>;
   stopRun: (runId: string) => Promise<void>;
   respondApproval: (
     runId: string,
@@ -75,8 +75,14 @@ export function useGatewayRuns(): UseGatewayRunsReturn {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  const startRun = useCallback(async (message: string, sessionId?: string) => {
-    const resp = await startGatewayRun(message, sessionId);
+  /*
+   * GAP-084: `nodeId` switches the run onto the context-aware path — the
+   * gateway receives the node's COMPILED context and canopyd records the
+   * compiler manifest on the run. Omitted (undefined) the call is exactly
+   * the raw-text start it has always been.
+   */
+  const startRun = useCallback(async (message: string, sessionId?: string, nodeId?: string) => {
+    const resp = await startGatewayRun(message, sessionId, nodeId);
     await refresh();
     return resp.run_id;
   }, [refresh]);

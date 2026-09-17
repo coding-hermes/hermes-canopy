@@ -23,6 +23,13 @@
  * state, keeps the user's text if the promise rejects, and surfaces the
  * server's own message in an inline error row instead of throwing.
  *
+ * GAP-084 adds a SECOND, additive action beside Send — "Run with context" —
+ * rendered only when the receiver supplies `onRunWithContext`. It carries
+ * the same text down the gateway's context-aware path (the model is sent
+ * the selected node's COMPILED context) and obeys the receiver's
+ * `runWithContextDisabled` gate, so the run can never fire without a live
+ * context target. Send's semantics are untouched.
+ *
  * Colour comes from the token layer exclusively (`theme.ts` / index.css);
  * every pairing below is ≥ 4.5:1 (white on accent-2-600 is 5.70, the
  * badge's purple-100 on the same fill is 4.80, muted content on the panel
@@ -40,7 +47,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { Send, Paperclip, Pin, X, AtSign, Hash, Smile } from 'lucide-react';
+import { Send, Paperclip, Pin, X, AtSign, Hash, Smile, Sparkles } from 'lucide-react';
 import { token, palette, alpha, nodeTypeColor } from '../theme.ts';
 import {
   DEFAULT_PLACEHOLDER,
@@ -73,6 +80,19 @@ export interface MessageComposerProps {
   readOnly?: boolean;
   /** Placeholder text for the textarea */
   placeholder?: string;
+  /**
+   * GAP-084: run the typed message through the gateway's CONTEXT-AWARE
+   * path instead of the raw-text one — the receiver supplies a node id and
+   * the model is sent that node's compiled context. Optional and additive:
+   * with no handler, no such affordance is rendered.
+   */
+  onRunWithContext?: (message: string) => void | Promise<void>;
+  /**
+   * Disable the context run for a reason the composer cannot know (no node
+   * selected, tree not ready, viewer). The button stays visible — so the
+   * capability is discoverable — disabled, with the reason as its title.
+   */
+  runWithContextDisabled?: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -230,6 +250,8 @@ export default function MessageComposer({
   disabled = false,
   readOnly = false,
   placeholder = DEFAULT_PLACEHOLDER,
+  onRunWithContext,
+  runWithContextDisabled = false,
 }: MessageComposerProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -271,6 +293,18 @@ export default function MessageComposer({
   const tokenEstimate = Math.max(0, Math.ceil(charCount / 4));
   const isInputDisabled = disabled || readOnly;
   const canSend = !isInputDisabled && !isSending && text.trim().length > 0;
+
+  /**
+   * GAP-084 context run: same local preconditions as Send (text present,
+   * not mid-send, input writable) PLUS the receiver's own gate — the run
+   * must never fire without a live context target.
+   */
+  const canRunWithContext =
+    onRunWithContext !== undefined &&
+    !isInputDisabled &&
+    !isSending &&
+    !runWithContextDisabled &&
+    text.trim().length > 0;
 
   // ─── Caret insertion (@ / # / emoji) ──────────────────────────────
 
@@ -336,6 +370,31 @@ export default function MessageComposer({
       setIsSending(false);
     }
   }, [canSend, text, files, pinnedNodes, onSend]);
+
+  /**
+   * GAP-084 — send the same text down the context-aware path. Mirrors
+   * `handleSend` exactly: the textarea is cleared only after the receiver's
+   * promise resolves (a failed compile keeps the user's words), and the
+   * server's own message lands in the existing inline error row. Files and
+   * pinned nodes stay on the raw-text path — the context-aware run compiles
+   * its context server-side from the node, so composer attachments would be
+   * silently dropped and must not be implied by this button.
+   */
+  const handleRunWithContext = useCallback(async () => {
+    if (!onRunWithContext || !canRunWithContext) return;
+    const sentText = text;
+
+    setIsSending(true);
+    setSendError(null);
+    try {
+      await onRunWithContext(sentText);
+      setText('');
+    } catch (err) {
+      setSendError(describeSendError(err));
+    } finally {
+      setIsSending(false);
+    }
+  }, [onRunWithContext, canRunWithContext, text]);
 
   // ─── Keyboard shortcut ────────────────────────────────────────────
 
@@ -418,6 +477,32 @@ export default function MessageComposer({
     cursor: canSend ? 'pointer' : 'not-allowed',
     outlineColor: token.accent2,
   };
+
+  /**
+   * GAP-084 context run — a SECONDARY surface: Send stays the one primary
+   * accent action in the bar, so this never competes with it. Accent-2 on
+   * surface-input measures 5.5:1 (AA for the 14px label).
+   */
+  const contextRunStyle: CSSProperties = {
+    backgroundColor: token.surfaceInput,
+    color: canRunWithContext ? token.accent2 : token.contentFaint,
+    borderColor: token.lineSubtle,
+    borderRadius: 'var(--radius-lg)',
+    cursor: canRunWithContext ? 'pointer' : 'not-allowed',
+    opacity: canRunWithContext ? 1 : 0.6,
+    outlineColor: token.accent2,
+  };
+
+  /**
+   * Why the context run is unavailable. The receiver's gate wins the
+   * explanation: it knows the reason the composer cannot see (no selected
+   * node, tree not ready, viewer).
+   */
+  const contextRunTitle = runWithContextDisabled
+    ? 'Select a node to run with its compiled context'
+    : canRunWithContext
+      ? 'Run this through the selected node’s compiled context'
+      : 'Type a message to run with context';
 
   return (
     <div className="shrink-0 px-4 pb-4 pt-1">
@@ -606,6 +691,28 @@ export default function MessageComposer({
                 </div>
               )}
             </div>
+
+            {/*
+              GAP-084 — context-aware run, rendered only when the receiver
+              supplies a handler (additive prop). Secondary surface: Send
+              remains the single primary action.
+            */}
+            {onRunWithContext && (
+              <button
+                type="button"
+                onClick={() => void handleRunWithContext()}
+                disabled={!canRunWithContext}
+                data-testid="composer-run-with-context"
+                className="ml-1 flex items-center gap-1.5 px-2.5 h-8 text-sm font-medium border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={contextRunStyle}
+                title={contextRunTitle}
+                aria-label="Run with context"
+                aria-disabled={!canRunWithContext}
+              >
+                <Sparkles className="w-4 h-4" aria-hidden="true" />
+                <span>Run with context</span>
+              </button>
+            )}
 
             {/* Send — prominent accent action with its shortcut badge */}
             <button

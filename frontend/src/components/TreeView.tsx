@@ -23,6 +23,8 @@ import PresenceBar from '../components/PresenceBar.tsx';
 import CollaborativeCursors from '../components/CollaborativeCursors.tsx';
 import ShareDialog from '../components/ShareDialog.tsx';
 import ContextManifestPanel from '../components/ContextManifestPanel.tsx';
+import ContextRunIndicator from '../components/ContextRunIndicator.tsx';
+import { useGatewayRuns } from '../hooks/useGatewayRuns.ts';
 import {
   createTreeDoc,
   bindIndexedDB,
@@ -349,6 +351,64 @@ export default function TreeView() {
   /** Whether the source-list inspector below the canvas is expanded. */
   const [referencePanelOpen, setReferencePanelOpen] = useState(false);
 
+  // ── GAP-084: node-scoped gateway runs ───────────────────────────────
+
+  /**
+   * The live run registry. TreeView is the ONLY surface where a node is
+   * selected, so it is the only place a run can honestly be started
+   * against a compiled context — the composer here posts `node_id`, and
+   * the registry is where the manifest that came back is read from.
+   */
+  const { runs: gatewayRuns, startRun } = useGatewayRuns();
+
+  /** Run id of the last context-aware run started from this page. */
+  const [contextRunId, setContextRunId] = useState<string | null>(null);
+
+  /**
+   * Failure of the last context run, in the server's own wording. The
+   * composer already shows it inline (it re-throws so the text is kept);
+   * this copy lives beside the indicator so the provenance surface does
+   * not silently disagree with what the user just saw.
+   */
+  const [contextRunError, setContextRunError] = useState<string | null>(null);
+
+  /**
+   * The run record for a run started from here, once the registry has it.
+   *
+   * `useGatewayRuns` polls `/gateway/runs`, so between the POST returning
+   * the new id and the next poll the record does not exist yet. That
+   * window is the honest reason the indicator renders nothing: a run whose
+   * provenance has not been read back yet must not be described.
+   */
+  const latestContextRun = useMemo(() => {
+    if (!contextRunId) return null;
+    return gatewayRuns.find((run) => run.run_id === contextRunId) ?? null;
+  }, [gatewayRuns, contextRunId]);
+
+  /**
+   * Start a run against the selected node's compiled context.
+   *
+   * Throws on failure so `MessageComposer` keeps the user's text and
+   * renders the server's message in its existing inline error row — the
+   * same contract `onSend` has.
+   */
+  const handleRunWithContext = useCallback(
+    async (message: string) => {
+      if (!selectedNodeId) {
+        throw new Error('Select a node to run with its compiled context.');
+      }
+      setContextRunError(null);
+      try {
+        const runId = await startRun(message, undefined, selectedNodeId);
+        setContextRunId(runId);
+      } catch (err) {
+        setContextRunError(err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    },
+    [selectedNodeId, startRun],
+  );
+
   /**
    * §7.2 hover sync. Two independent pointers feed one highlight: the source
    * list (a row) and the canvas (an edge). The edge id is resolved back to
@@ -621,13 +681,34 @@ export default function TreeView() {
         composer: it describes the node you are about to reply to.
         Renders nothing when there is no selection.
       */}
+      {/* BEFORE — what the compiler WOULD send for the selected node. */}
       <ContextManifestPanel nodeId={selectedNodeId} />
+
+      {/*
+        AFTER (GAP-084) — the manifest of the run that ACTUALLY happened,
+        read back from the run registry. Same promise, other side: the
+        panel above previews a compile, this reports one. Renders nothing
+        for a context-free run, and nothing while the run it was started
+        from has not been polled back into the registry yet.
+      */}
+      <ContextRunIndicator run={latestContextRun} />
+
+      {contextRunError && (
+        <p
+          data-testid="context-run-error"
+          className="shrink-0 px-3 py-1 text-[11px] text-status-danger"
+        >
+          Context run failed: {contextRunError}
+        </p>
+      )}
 
       {/* Message composer — bottom-docked, disabled for viewers */}
       <MessageComposer
         onSend={handleSendMessage}
         disabled={!tree.isReady}
         readOnly={isViewer}
+        onRunWithContext={handleRunWithContext}
+        runWithContextDisabled={selectedNodeId === null || !tree.isReady || isViewer}
         placeholder={composerPlaceholder({
           readOnly: isViewer,
           isReply: replyToNodeId !== null,
