@@ -2595,3 +2595,22 @@ tasks:
   status: complete
   created_at: '2026-09-17T17:14:32.994481+00:00'
   completed_at: '2026-09-17T17:24:48.976270+00:00'
+- id: GAP-080-P1
+  title: Pinned messages in the context compiler (GAP-080 phase 1)
+  criteria:
+  - A node whose metadata carries {"pinned":true} is never dropped by the compiler's
+    token-budget walk (including when it sits at the oldest end of a chain that overflows),
+    appears in Manifest.ancestry with pinned:true, and a compile whose pinned content
+    alone exceeds the budget keeps every pinned node, sets TokensUsed > TokenBudget
+    and warns with the exact overage; with no node pinned the compiled Content/OmittedCount/OmittedReason/TruncationMarkers
+    are byte-identical to pre-fix for the same inputs; PATCH /api/v1/nodes/{id} with
+    {"pinned":true} merges that key into the node's existing metadata JSON object
+    preserving the reserved multi_reference object, {"pinned":false} removes exactly
+    that key, and NULL/empty/non-object metadata never errors and never marks a node
+    pinned; docs/API.md documents the field and SPEC-IMPL-GAP-001 carries a dated
+    pin rule plus the amended budget algorithm with the original text preserved/marked;
+    go build, go vet, golangci-lint run ./... (0 issues) and the touched packages'
+    tests under CANOPY_TEST_ALLOW_SHARED_DB=1 are green
+  status: complete
+  created_at: '2026-09-17T17:54:27.999312+00:00'
+  completed_at: '2026-09-17T18:14:22.387430+00:00'
