@@ -2649,3 +2649,16 @@ tasks:
   status: complete
   created_at: '2026-09-17T21:23:25.002579+00:00'
   completed_at: '2026-09-17T21:28:27.785441+00:00'
+- id: GAP-080-P2A
+  title: Context budget default = percent of the selected model window (GAP-080 phase
+    2a)
+  criteria:
+  - CONTEXT_BUDGET_PERCENT knob (default 60, 0=disabled) parses; ModelWindowCatalog
+    derives floor(window*percent/100) with sources disabled|window|unknown_model|catalog_error
+    and never fails a request; the gateway run resolves its budget from the request
+    model and records it on the run record; the read route accepts ?model= and the
+    10x clamp on an explicit ?budget= is unchanged; go build/vet/lint clean; new unit
+    + handler tests PASS with CANOPY_TEST_ALLOW_SHARED_DB=1
+  status: complete
+  created_at: '2026-09-17T21:48:40.202028+00:00'
+  completed_at: '2026-09-17T22:06:52.912823+00:00'
