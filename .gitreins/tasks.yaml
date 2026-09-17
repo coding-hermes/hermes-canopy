@@ -2568,3 +2568,14 @@ tasks:
   status: complete
   created_at: '2026-09-17T15:29:00.460346+00:00'
   completed_at: '2026-09-17T15:33:58.057071+00:00'
+- id: DF-HERMES-CANOPY-18
+  title: Implement the spec-promised 'N pending changes' badge from the IndexedDB
+    offline queue
+  criteria:
+  - A pure, testable helper reads the service worker's canopy-offline-queue/requests
+    store count and OfflineIndicator renders 'N pending changes' with unit tests green
+    (jsdom has no IndexedDB, so the helper is injectable) and specs/T1.4:225 no longer
+    describes an unimplemented badge
+  status: complete
+  created_at: '2026-09-17T16:01:16.357089+00:00'
+  completed_at: '2026-09-17T16:09:17.196766+00:00'
