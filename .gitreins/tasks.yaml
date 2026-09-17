@@ -2428,3 +2428,17 @@ tasks:
   status: complete
   created_at: '2026-09-17T04:12:59.405187+00:00'
   completed_at: '2026-09-17T05:41:33.478931+00:00'
+- id: DF-HERMES-CANOPY-13
+  title: Production auth across all frontend call sites (DF-HERMES-CANOPY-13)
+  criteria:
+  - 'Every API call site in frontend/src honours one token source: grep proves no
+    bare fetch/EventSource to the API outside the shared auth path (apiUrl + authHeaders
+    + the SSE client); a vitest test covers at least one previously-unauthenticated
+    call site and asserts Authorization: Bearer <token> is sent when a token resolves
+    and absent in dev-proxy mode; the EventSource auth story is decided and documented
+    in README.md + docs/INTEGRATION.md (fetch-based SSE client in production, native
+    EventSource in dev, proxy injection as the documented alternative); frontend tsc
+    -b, vitest run and vite build all green.'
+  status: complete
+  created_at: '2026-09-17T06:11:22.845497+00:00'
+  completed_at: '2026-09-17T06:26:15.176429+00:00'
