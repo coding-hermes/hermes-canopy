@@ -763,3 +763,84 @@ describe('ContextManifestPanel — capped requests', () => {
     expect(q('[data-testid="context-budget-capped"]')).toBeNull();
   });
 });
+
+/*
+ * GAP-080 phase 5a. The panel is the BEFORE side of the manifest-digest
+ * comparison: it shows the digest of the payload the compiler WOULD send, and
+ * the run indicator shows the digest of the manifest a run WAS given, in the
+ * same short form — equal short forms are the visible proof that the preview
+ * and the run describe the same content.
+ *
+ * The digest is visible while the panel is COLLAPSED: the comparison is made
+ * at a glance or not at all.
+ */
+describe('ContextManifestPanel — manifest digest', () => {
+  /** A realistic 64-hex digest, as internal/context emits it. */
+  const HASH =
+    '91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f';
+  const SHORT = HASH.slice(0, 12);
+
+  function respond(manifestOverrides: Record<string, unknown>) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url))
+            ? MODELS_BODY
+            : compiledBody(manifestOverrides),
+        ),
+      ),
+    );
+  }
+
+  it('renders the short digest with the full value in title, while collapsed', async () => {
+    respond({ manifestHash: HASH });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    const chip = q('[data-testid="context-manifest-hash"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toBe(SHORT);
+    // The full 64-char value is the copyable one (no click handler needed).
+    expect(chip?.getAttribute('title')).toBe(HASH);
+    // Collapsed by default — the digest is not behind a disclosure.
+    expect(q('[data-testid="context-manifest-detail"]')).toBeNull();
+  });
+
+  it('renders nothing when the manifest carries no digest (an older record)', async () => {
+    // The default body predates the field: no `manifestHash` key at all.
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    expect(q('[data-testid="context-manifest-panel"]')).not.toBeNull();
+    expect(q('[data-testid="context-manifest-hash"]')).toBeNull();
+  });
+
+  it('renders nothing for an empty digest rather than an empty chip', async () => {
+    respond({ manifestHash: '' });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    expect(q('[data-testid="context-manifest-hash"]')).toBeNull();
+  });
+
+  /*
+   * The point of the feature, driven end to end through the panel: the digest
+   * a reader sees is the digest of the manifest the server sent, so it can be
+   * compared against a run record's.
+   */
+  it('shows the digest of the manifest the response carried', async () => {
+    respond({ manifestHash: HASH, tokensUsed: 999 });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+
+    expect(q('[data-testid="context-manifest-hash"]')?.textContent).toBe(
+      '91a2e5d22c17',
+    );
+    expect(q('[data-testid="context-token-usage"]')?.textContent).toBe(
+      '999 / 8,000 tokens',
+    );
+  });
+});

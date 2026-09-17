@@ -30,6 +30,7 @@ import { ChevronDown, ChevronRight, Scissors, Sparkles } from 'lucide-react';
 import {
   formatTokenCount,
   formatTokenUsage,
+  manifestHashShort,
   manifestItemTitle,
   normaliseManifest,
   omissionNote,
@@ -122,6 +123,11 @@ export default function ContextRunIndicator({
   const omission = manifest ? omissionNote(manifest) : null;
   const source = run.source_node_id ? shortNodeId(run.source_node_id) : '';
   const warnings = manifest?.warnings ?? [];
+  // The digest of the manifest this run was ACTUALLY given — the AFTER half of
+  // the comparison the panel renders the BEFORE half of (GAP-080 phase 5a).
+  // `null` when the record carries none (a run recorded before the field
+  // existed, or a degraded compile): nothing renders for it.
+  const hashShort = manifest ? manifestHashShort(manifest.manifestHash) : null;
 
   return (
     <aside
@@ -162,6 +168,21 @@ export default function ContextRunIndicator({
         >
           {source || 'unknown node'}
         </span>
+
+        {/*
+         * The digest of the manifest this run was GIVEN — same short form as
+         * the panel's, so the two read side by side (GAP-080 phase 5a).
+         * Absent digest → nothing at all, never a placeholder hash.
+         */}
+        {manifest && hashShort && (
+          <span
+            data-testid="context-run-hash"
+            title={manifest.manifestHash}
+            className="shrink-0 font-mono text-[11px] text-content-muted"
+          >
+            {hashShort}
+          </span>
+        )}
       </div>
 
       {/* Detail — what the model was actually given, and what was dropped */}

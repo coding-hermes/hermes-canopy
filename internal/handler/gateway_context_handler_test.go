@@ -133,6 +133,20 @@ func assertRunProvenance(t *testing.T, rec gateway.RunRecord, wantNode string, w
 	if !reflect.DeepEqual(&got, wantManifest) {
 		t.Fatalf("manifest deep-equal failed:\n got %+v\nwant %+v", &got, wantManifest)
 	}
+	if got.ManifestHash != wantManifest.ManifestHash {
+		t.Fatalf("manifestHash = %q, want %q (the digest must survive the wire)", got.ManifestHash, wantManifest.ManifestHash)
+	}
+	// GAP-080 phase 5a: the digest must be recomputable from the JSON the
+	// record CARRIES — that is the audit primitive, and it is a different path
+	// from hashing the value (the JSON path has to clear `compiledAt` after it
+	// round-trips through RFC3339).
+	recomputed, err := ctxpkg.ManifestDigestFromJSON(rec.Manifest)
+	if err != nil {
+		t.Fatalf("manifest digest not recomputable from the record (%v): %s", err, rec.Manifest)
+	}
+	if want := ctxpkg.ManifestDigest(*wantManifest); recomputed != want {
+		t.Fatalf("record digest = %q, want %q (the digest of the manifest itself)", recomputed, want)
+	}
 }
 
 func decodeRunEnvelope(t *testing.T, body string) gateway.RunRecord {
@@ -244,6 +258,85 @@ func TestGatewayContextRunSendsCompiledInput(t *testing.T) {
 	assertRunProvenance(t, rec, nodeID.String(), manifest, 8000)
 	if rec.Message != "hello" {
 		t.Fatalf("run record must keep the raw message, got %q", rec.Message)
+	}
+}
+
+// TestGatewayRunRecordManifestDigest proves GAP-080 phase 5a through the HTTP
+// surface: a compiled manifest's digest reaches the run record (202 body and
+// GET /gateway/runs/{run_id}), and the audit primitive recomputes the SAME
+// value from the JSON the record carries — which is what lets a reader compare
+// the preview compile against the manifest a run was given.
+func TestGatewayRunRecordManifestDigest(t *testing.T) {
+	stub := newContextGatewayStub()
+	defer stub.Close()
+	nodeID := uuid.New()
+
+	// Built exactly the way the compiler builds it: the digest OF the manifest.
+	manifest := &ctxpkg.Manifest{
+		RequestID:   "req-digest",
+		NodeID:      nodeID,
+		CompiledAt:  time.Now().UTC(),
+		TokenBudget: 8000,
+		TokensUsed:  42,
+		Ancestry: []ctxpkg.ManifestItem{
+			{ID: nodeID, Kind: "node", Title: "hello", TokenCount: 12},
+		},
+	}
+	manifest.ManifestHash = ctxpkg.ManifestDigest(*manifest)
+
+	comp := &capturingCompiler{content: "COMPILED:hello", manifest: manifest}
+	r, _ := newContextGatewayRouter(t, stub, WithContextCompiler(comp, 8000))
+
+	resp, body := gwDoJSON(t, r, http.MethodPost, "/runs",
+		fmt.Sprintf(`{"message":"hello","node_id":%q}`, nodeID.String()))
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("start: %d %s", resp.StatusCode, body)
+	}
+
+	hash := manifest.ManifestHash
+	if len(hash) != 64 || hash != strings.ToLower(hash) {
+		t.Fatalf("manifestHash = %q, want a lowercase 64-hex digest", hash)
+	}
+	for _, ru := range hash {
+		if !strings.ContainsRune("0123456789abcdef", ru) {
+			t.Fatalf("manifestHash = %q, want lowercase hex", hash)
+		}
+	}
+
+	// The 202 body carries it…
+	assertRunProvenance(t, decodeRunEnvelope(t, body), nodeID.String(), manifest, 8000)
+
+	// …and so does the record the reader comes back for.
+	resp, recBody := gwDoJSON(t, r, http.MethodGet, "/runs/run_ctx", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get run: %d %s", resp.StatusCode, recBody)
+	}
+	var rec gateway.RunRecord
+	if err := json.Unmarshal([]byte(recBody), &rec); err != nil {
+		t.Fatal(err)
+	}
+	assertRunProvenance(t, rec, nodeID.String(), manifest, 8000)
+
+	// The comparison the digest exists for: a SECOND manifest describing the
+	// same content — different requestId, different compiledAt — recomputes to
+	// the same value from its own record.
+	same := *manifest
+	same.RequestID = "req-later"
+	same.CompiledAt = manifest.CompiledAt.Add(90 * time.Minute)
+	sameRaw, err := json.Marshal(same)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := ctxpkg.ManifestDigestFromJSON(sameRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromRecord, err := ctxpkg.ManifestDigestFromJSON(rec.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if later != fromRecord {
+		t.Fatalf("same content, different requestId/compiledAt: %q != %q", later, fromRecord)
 	}
 }
 

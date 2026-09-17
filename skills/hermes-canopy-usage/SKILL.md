@@ -66,6 +66,12 @@ output appears. Zero console errors in the 2026-08-27 probe.
 - **Context manifest (headline feature):** `GET /api/v1/context/{node_id}` →
   `{content, manifest:{tokenBudget, tokensUsed, ancestry:[...]}}`. In the UI: click a
   canvas node → "Context | N / 8,000 tokens" panel.
+  → *Amended 2026-09-17 (GAP-080 phase 5a):* the manifest object above is
+  unchanged; it now also carries `manifestHash`, a stable 64-hex sha256 over
+  the content-bearing fields (excluding `requestId`/`compiledAt` and itself).
+  The panel and the run indicator both render its first 12 chars, so a preview
+  compile and a run record can be compared at a glance; the full value is in
+  each element's `title`. See `docs/API.md` § Compile Context.
 - **Topics:** list `GET /api/v1/topics?tree_id=...`; create `POST /api/v1/topics`
   camelCase `{treeId, rootNodeId, title, description}`.
 - **Export:** `GET /api/v1/trees/{id}/export` (NOT `/api/v1/export`); import

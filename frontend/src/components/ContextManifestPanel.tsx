@@ -59,6 +59,7 @@ import {
   contextErrorNote,
   formatTokenCount,
   formatTokenUsage,
+  manifestHashShort,
   manifestItemTitle,
   normaliseBudget,
   normaliseModelOptions,
@@ -350,6 +351,10 @@ export default function ContextManifestPanel({
   const omission = manifest ? omissionNote(manifest) : null;
   const warnings = manifest?.warnings ?? [];
   const capped = manifest ? budgetCappedNote(requested, manifest.tokenBudget) : null;
+  // The digest of THIS preview compile — the BEFORE side a reader compares
+  // against the run record's manifest (GAP-080 phase 5a). `null` for a
+  // manifest that carries none: nothing renders, no placeholder.
+  const hashShort = manifest ? manifestHashShort(manifest.manifestHash) : null;
 
   return (
     <aside
@@ -388,6 +393,22 @@ export default function ContextManifestPanel({
             </span>
           )}
         </button>
+
+        {/*
+         * The digest of THIS preview compile — the BEFORE half of a
+         * comparison whose AFTER half the run indicator renders with the
+         * same short form (GAP-080 phase 5a). Absent digest → nothing at
+         * all: an empty chip would read as a digest of "nothing".
+         */}
+        {manifest && hashShort && (
+          <span
+            data-testid="context-manifest-hash"
+            title={manifest.manifestHash}
+            className="shrink-0 font-mono text-[11px] text-content-muted"
+          >
+            {hashShort}
+          </span>
+        )}
 
         {manifest && warnings.length > 0 && (
           <span

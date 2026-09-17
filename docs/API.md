@@ -1010,6 +1010,30 @@ compiler.
 
 **Response (200):** Compiled context with visible manifest.
 
+**The manifest's `manifestHash` (GAP-080 phase 5a, 2026-09-17).** Every
+compiled manifest carries `manifestHash`: a stable, lowercase 64-hex sha256
+digest of the manifest's content-bearing fields. It exists so two manifests can
+be COMPARED — the `GET /api/v1/context/{node_id}` preview (before a run) and
+the manifest attached to a run record (after it) hash equally when they
+describe the same compiled payload.
+
+The digest covers `nodeId`, `tokenBudget`, `tokensUsed`, `ancestry`,
+`references`, `cards`, `omittedCount`, `omittedReason`, `truncationMarkers`,
+`warnings`, `pinnedCount` and `multiReference` (including each source's own
+fields). It EXCLUDES the volatile, per-compile fields `requestId` and
+`compiledAt` — they differ on every compile of identical content, so including
+them would defeat the comparison — and it excludes `manifestHash` itself, so the
+digest stays recomputable from the record it is stored on. The recipe is: copy
+the manifest, clear `requestId`, `compiledAt` and `manifestHash`, then
+`json.Marshal` and sha256 the bytes (`internal/context.ManifestDigest`).
+
+`manifestHash` is NOT `omitempty`: a manifest that exists always carries its
+digest. A run record written **before** this field existed has no
+`manifestHash` key at all; it still yields the same digest as a new record
+describing the same content, because the absent field decodes to the zero value
+that the recipe clears anyway (`ManifestDigestFromJSON`). Clients must not
+invent a digest for a record that carries none.
+
 **Error codes:** `NODE_NOT_FOUND` (404), `INVALID_BUDGET` (400),
 `SERVICE_UNAVAILABLE` (503), `CONTEXT_COMPILE_ERROR` (500)
 
@@ -1974,6 +1998,15 @@ actual code:
 
     All four are `omitempty`: without `node_id` the raw message is sent and the
     record keeps its previous shape.
+
+    > **Amended 2026-09-17 (GAP-080 phase 5a).** The manifest carried here now
+    > also includes `manifestHash` — the stable 64-hex digest of the compiled
+    > payload — so a reader can recompute it from this record and compare it
+    > with the preview compile from `GET /api/v1/context/{node_id}` (see
+    > [§ Compile Context](#compile-context)). The field list above is unchanged;
+    > this note is additive, and records written before the field existed are
+    > unaffected (they simply carry no `manifestHash`, and still recompute to
+    > the same digest for the same content).
 
     Node-scoped failure modes:
 

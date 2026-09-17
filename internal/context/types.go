@@ -74,6 +74,19 @@ type Manifest struct {
 	TruncationMarkers []string       `json:"truncationMarkers"` // e.g. "3 messages omitted"
 	Warnings          []string       `json:"warnings"`          // e.g. "5+ references: context becoming unfocused"
 
+	// ManifestHash is the stable digest of this manifest's content-bearing
+	// fields (GAP-080 phase 5a): lowercase 64-hex sha256 over everything
+	// except RequestID, CompiledAt and this field itself — see
+	// ManifestDigest for the exact recipe and why each exclusion is required.
+	//
+	// It binds the manifest a user READS to the payload a run was GIVEN: the
+	// panel's preview compile and the run record's manifest hash equally when
+	// they describe the same compiled content, and the digest is recomputable
+	// from the record's JSON by anyone (ManifestDigestFromJSON).
+	//
+	// NOT omitempty: a manifest that exists always carries its digest.
+	ManifestHash string `json:"manifestHash"`
+
 	// PinnedCount is the number of PINNED ancestry items the budget walk kept
 	// (GAP-080 phase 1). Pinned items are exempt from the budget: they are
 	// never dropped and never counted as omitted, so TokensUsed may exceed

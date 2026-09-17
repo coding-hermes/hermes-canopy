@@ -326,6 +326,15 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 			fmt.Sprintf("tokens used (%d) exceeds budget (%d)", manifest.TokensUsed, req.TokenBudget))
 	}
 
+	// ── Step 8: Manifest digest (GAP-080 phase 5a) ──────────────────────
+	// Every compile path returns through here — ordinary, pinned, truncated,
+	// multi-reference and degraded (nil MultiReference) alike — so the digest
+	// is sealed once, over the finished manifest, after every content-bearing
+	// field has been set. It excludes the volatile RequestID/CompiledAt so two
+	// compiles of the same content compare equal, and it excludes itself so
+	// the value stays recomputable from the record's JSON.
+	manifest.ManifestHash = ManifestDigest(*manifest)
+
 	return &CompiledContext{
 		Content:  finalContent,
 		Manifest: manifest,

@@ -222,6 +222,50 @@ describe('ContextRunIndicator — context-bearing run', () => {
   });
 });
 
+describe('ContextRunIndicator — manifest digest (GAP-080 phase 5a)', () => {
+  /** The digest of the payload this run was given. */
+  const HASH =
+    '91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f';
+
+  /** A context-bearing run whose manifest carries a digest. */
+  function runWithDigest(hash: string): GatewayRun {
+    const base = contextRun();
+    return contextRun({
+      manifest: { ...(base.manifest ?? {}), manifestHash: hash },
+    });
+  }
+
+  it('renders the SAME short form as the panel, with the full value in title', () => {
+    mount(runWithDigest(HASH));
+
+    const chip = q('[data-testid="context-run-hash"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toBe(HASH.slice(0, 12));
+    expect(chip?.textContent).toHaveLength(12);
+    expect(chip?.getAttribute('title')).toBe(HASH);
+    // Visible while collapsed: the BEFORE/AFTER comparison is the feature.
+    expect(q('[data-testid="context-run-detail"]')).toBeNull();
+  });
+
+  /*
+   * A run recorded before the field existed has no digest, and nothing may be
+   * rendered for it — not an empty chip, not a placeholder hash, which would
+   * read as a digest the reader can compare.
+   */
+  it('renders nothing for a record with no digest', () => {
+    mount(contextRun());
+
+    expect(q('[data-testid="context-run-indicator"]')).not.toBeNull();
+    expect(q('[data-testid="context-run-hash"]')).toBeNull();
+  });
+
+  it('renders nothing for a degraded compile with no manifest at all', () => {
+    mount(contextRun({ manifest: null, context_tokens: 0, token_budget: 8000 }));
+
+    expect(q('[data-testid="context-run-hash"]')).toBeNull();
+  });
+});
+
 describe('ContextRunIndicator — context-free run', () => {
   it('renders nothing for a run with no provenance fields', () => {
     mount(rawRun());

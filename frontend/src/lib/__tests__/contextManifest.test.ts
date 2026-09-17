@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_CONTEXT_BUDGET,
+  MANIFEST_HASH_SHORT_LENGTH,
   MIN_CONTEXT_BUDGET,
   budgetCappedNote,
   budgetSeverity,
@@ -19,6 +20,7 @@ import {
   formatTokenCount,
   formatTokenUsage,
   isCompilableNodeId,
+  manifestHashShort,
   manifestItemTitle,
   normaliseBudget,
   normaliseManifest,
@@ -29,6 +31,10 @@ import {
 } from '../contextManifest';
 
 const NODE_ID = '019fb0c2-cab0-70c5-a477-fa10f136e000';
+
+/** A realistic 64-hex digest (the API.md example value). */
+const MANIFEST_HASH =
+  '91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f';
 
 function manifest(overrides: Partial<Manifest> = {}): Manifest {
   return {
@@ -44,6 +50,7 @@ function manifest(overrides: Partial<Manifest> = {}): Manifest {
     omittedReason: '',
     truncationMarkers: [],
     warnings: [],
+    manifestHash: '',
     ...overrides,
   };
 }
@@ -325,6 +332,83 @@ describe('normaliseManifest', () => {
       },
     });
     expect(m?.ancestry[0]?.kind).toBe('node');
+  });
+});
+
+// ─── Manifest digest (GAP-080 phase 5a) ────────────────────────────────
+
+describe('manifest hash', () => {
+  it('uses a 64-character fixture (the digest the backend sends)', () => {
+    expect(MANIFEST_HASH).toHaveLength(64);
+    expect(MANIFEST_HASH).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  /*
+   * The type round trip: a full wire body normalises to exactly the view
+   * shape, so a field added to the interface without a line in
+   * `normaliseManifest` fails here rather than surfacing as `undefined` in a
+   * component.
+   */
+  it('normalises the whole manifest, digest included', () => {
+    const m = normaliseManifest({
+      content: '--- node … ---',
+      manifest: {
+        requestId: 'req-1',
+        nodeId: NODE_ID,
+        compiledAt: '2026-08-08T10:00:00Z',
+        tokenBudget: 8000,
+        tokensUsed: 1240,
+        ancestry: null,
+        references: null,
+        cards: null,
+        omittedCount: 0,
+        omittedReason: '',
+        truncationMarkers: null,
+        warnings: null,
+        manifestHash: MANIFEST_HASH,
+      },
+    });
+
+    expect(m).toEqual(manifest({ manifestHash: MANIFEST_HASH }));
+    expect(m?.manifestHash).toBe(MANIFEST_HASH);
+  });
+
+  /*
+   * A manifest recorded before the field existed carries no digest, and the
+   * normaliser must not invent one: an invented hash is a claim about a
+   * payload nobody hashed.
+   */
+  it('degrades an absent digest to empty, never an invented one', () => {
+    expect(normaliseManifest({ manifest: {} })?.manifestHash).toBe('');
+    expect(
+      normaliseManifest({ manifest: { manifestHash: null } })?.manifestHash,
+    ).toBe('');
+  });
+});
+
+describe('manifestHashShort', () => {
+  it('shows the first 12 hex characters', () => {
+    const short = manifestHashShort(MANIFEST_HASH);
+    expect(short).toBe(MANIFEST_HASH.slice(0, 12));
+    expect(short).toHaveLength(MANIFEST_HASH_SHORT_LENGTH);
+  });
+
+  /*
+   * The components branch on `null` to render NOTHING. An empty chip or a
+   * placeholder would read as a digest the reader can compare — and there is
+   * nothing to compare.
+   */
+  it('returns null for an absent or blank digest', () => {
+    expect(manifestHashShort('')).toBeNull();
+    expect(manifestHashShort('   ')).toBeNull();
+    expect(manifestHashShort(null)).toBeNull();
+    expect(manifestHashShort(undefined)).toBeNull();
+  });
+
+  it('trims a stray-whitespace digest before shortening', () => {
+    expect(manifestHashShort(`  ${MANIFEST_HASH}  `)).toBe(
+      MANIFEST_HASH.slice(0, 12),
+    );
   });
 });
 

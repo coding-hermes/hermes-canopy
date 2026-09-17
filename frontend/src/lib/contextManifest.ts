@@ -44,6 +44,14 @@ export const CONTEXT_BUDGET_STEP = 256;
 /** The backend's ceiling for an explicit budget with no known model window. */
 export const MAX_CONTEXT_BUDGET = DEFAULT_CONTEXT_BUDGET * 10;
 
+/**
+ * Hex characters of `manifestHash` shown in the compact form (GAP-080
+ * phase 5a). 12 chars = 48 bits, spot-the-difference long enough for a human
+ * comparing two manifests, short enough to sit inline; the full 64-char value
+ * is always in the element's `title`.
+ */
+export const MANIFEST_HASH_SHORT_LENGTH = 12;
+
 /** Usage ratio above which the meter warns. */
 const WARN_RATIO = 0.8;
 
@@ -72,6 +80,11 @@ export interface RawManifest {
   omittedReason?: string | null;
   truncationMarkers?: string[] | null;
   warnings?: string[] | null;
+  /**
+   * Stable digest of the compiled payload (GAP-080 phase 5a). Optional on the
+   * wire: a manifest recorded before the field existed carries no key at all.
+   */
+  manifestHash?: string | null;
 }
 
 /** `internal/context.CompiledContext` — the endpoint's 200 body. */
@@ -106,6 +119,17 @@ export interface Manifest {
   omittedReason: string;
   truncationMarkers: string[];
   warnings: string[];
+  /**
+   * Stable digest of the compiled payload (GAP-080 phase 5a) — lowercase
+   * 64-hex sha256 over the manifest's content-bearing fields. It is what makes
+   * the panel's preview compile and a run record's manifest comparable, and it
+   * is recomputable from the record's JSON by anyone.
+   *
+   * `''` means the record carried no digest (a manifest recorded before the
+   * field existed). Never invent one — an invented hash is a claim about a
+   * payload nobody hashed.
+   */
+  manifestHash: string;
 }
 
 // ─── Request ───────────────────────────────────────────────────────────
@@ -301,7 +325,36 @@ export function normaliseManifest(
     omittedReason: raw.omittedReason ?? '',
     truncationMarkers: toStrings(raw.truncationMarkers),
     warnings: toStrings(raw.warnings),
+    // A record from before GAP-080 phase 5a has no digest at all. `''` is the
+    // honest degradation: the components render nothing for it rather than a
+    // placeholder hash nothing can be compared against.
+    manifestHash: raw.manifestHash ?? '',
   };
+}
+
+// ─── Manifest digest (GAP-080 phase 5a) ────────────────────────────────
+
+/**
+ * The compact, comparable form of a manifest digest — `null` when the record
+ * carries none.
+ *
+ * Two surfaces render it with the SAME short form on purpose: the panel's
+ * preview compile (the BEFORE side) and the run record's manifest (the AFTER
+ * side). Equal short forms mean the payload the run was given is the payload
+ * that was previewed; the full 64-char value rides in the element's `title`
+ * for the copy-paste case.
+ *
+ * `null` — not `''`, not a placeholder — is the absent case, and callers render
+ * NOTHING for it. A manifest recorded before this field existed has no digest;
+ * an empty chip would read as "digest = nothing", and a placeholder would be a
+ * claim about a payload nobody hashed.
+ */
+export function manifestHashShort(
+  hash: string | null | undefined,
+): string | null {
+  const value = typeof hash === 'string' ? hash.trim() : '';
+  if (!value) return null;
+  return value.slice(0, MANIFEST_HASH_SHORT_LENGTH);
 }
 
 // ─── Budget phrasing ───────────────────────────────────────────────────
