@@ -196,13 +196,27 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		// Unpinned and does not fit: the prefix phase ends here.
 		tailPhase = true
 		totalOmittedByBudget++
-		// still include at least the NEWEST node (the last one)
-		if len(keptContent) == 0 && i == len(ancestryContent)-1 {
-			// budget too small for even one node — keep the single newest anyway
-			keptContent = append(keptContent, ancestryContent[i])
-			keptItems = append(keptItems, ancestryItems[i])
-			manifest.Warnings = append(manifest.Warnings, "budget too small for single node")
-		}
+	}
+
+	// SPEC-IMPL-GAP-001 §7 — "Budget smaller than one node": when the walk kept
+	// NOTHING at all, the newest node is included regardless and `TokensUsed`
+	// may exceed the budget. Step 3 renders the chain newest-first, so the
+	// newest node is index 0 — the pre-fix code tested `i == len-1` (the
+	// OLDEST item) and therefore only ever fired on a one-element chain, so any
+	// longer chain came back with empty Content.
+	//
+	// The floor is applied only when nothing was kept: when older PINNED nodes
+	// were kept (GAP-080 phase 1), Content is already non-empty and the
+	// unpinned newest node stays subject to the ordinary budget rule.
+	//
+	// The forced node is not deducted from remainingBudget — the same
+	// no-deduction the pre-fix single-node path had — so the pinned-overage
+	// warning cannot be tripped by it (see AC7).
+	if len(keptContent) == 0 && len(ancestryContent) > 0 {
+		// budget too small for even one node — keep the single newest anyway
+		keptContent = append(keptContent, ancestryContent[0])
+		keptItems = append(keptItems, ancestryItems[0])
+		manifest.Warnings = append(manifest.Warnings, "budget too small for single node")
 	}
 
 	// Pinned content alone can push the accounted tokens past the budget: the
