@@ -13,7 +13,11 @@
 __pycache__/
 
 # Go build artifacts
-canopyd
+# Root-anchored on purpose: a bare `canopyd` also matches the DIRECTORY
+# cmd/canopyd/, which silently makes every NEW file under it unaddable
+# (`git add` exits 1 with "paths are ignored"). `/canopyd` keeps the
+# `go build` artifact at the repo root ignored and nothing else.
+/canopyd
 bin/
 *.exe
 *.test
