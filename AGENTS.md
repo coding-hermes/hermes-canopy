@@ -15,18 +15,21 @@ Technical power users working with AI agents across multi-session projects who n
 ## Architecture
 - **Backend:** Go (canopyd) — single binary, built-in HTTP server
 - **Frontend:** React + TypeScript + Vite — PWA with Service Worker
-- **Graph DB:** PostgreSQL (authoritative) + Yjs/IndexedDB (local replica)
-- **Card DB:** DuckDB in-process + JSONL files (git-friendly)
+- **Graph DB:** PostgreSQL (authoritative today) + Yjs/IndexedDB (local replica). Ruling 2026-09-16: SQLite-first (`modernc.org/sqlite`, pure Go, WAL) is the declared direction — tracked as board row GAP-076, **not landed**.
+- **Card DB:** per-type SQLite databases (`modernc.org/sqlite`, CGo-free) under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`. `internal/card/duckdb/` is ARCHIVED — cgo-only, zero importers repo-wide. Cards do not use DuckDB and there is no card JSONL path.
 - **Transport:** SSE (server→client) + HTTP POST (client→server)
-- **Encryption:** None in MVP (local data). MLS post-MVP for multi-user.
+- **Encryption:** MLS group encryption for workspace collaboration has SHIPPED (SPEC-FTR-03, mounted at `/api/v1/workspaces/{workspace_id}/mls`). Local node/edge/card data at rest is still unencrypted — this is not end-to-end encryption of all data.
 - **Plugin Sandbox:** Sandboxed iframes + CSP + capability-scoped APIs
 - **Deployment:** `canopyd serve` + local PostgreSQL + PWA in browser
 
 ## MVP Scope
 Single-user, desktop-first PWA + local server. Branch from any message. Multi-node synthesis. Searchable topics with #references. Visible context manifest + token budget. Three Cards (compact, expanded, iteration). Import/export. Basic plugin sandbox.
 
+## Shipped beyond the MVP framing
+Workspace CRUD, profiles, workspace channels, membership checks and MLS group encryption (SPEC-FTR-01/03) are live behind auth. The primary UX is still desktop-first single-user, but the multi-user surfaces are no longer "deferred".
+
 ## Deferred (Post-MVP)
-Multi-user collaboration, approval gates, arbitrary JS plugins, multi-agent federation, MLS encryption, multi-user CRDTs, all deployment modes beyond local server.
+The full multi-user collaboration UX and multi-user CRDTs (the workspace/profile/channel/MLS surfaces listed above have shipped), approval gates, arbitrary JS plugins, multi-agent federation, all deployment modes beyond local server.
 
 ## Terminology (Post-Review)
 - **DAG** (data model), **tree** (UI metaphor) — not interchangeable
