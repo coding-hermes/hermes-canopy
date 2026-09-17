@@ -2456,3 +2456,16 @@ tasks:
   status: complete
   created_at: '2026-09-17T07:02:34.213433+00:00'
   completed_at: '2026-09-17T07:27:41.157384+00:00'
+- id: DF-HERMES-CANOPY-8
+  title: Safe documented scratch-instance setup
+  criteria:
+  - Scratch recipe uses explicit distinct API/database/store paths and CANOPY_SERVER_URL;
+    includes fresh build, readiness, dev auth, authenticated create/list, and scoped
+    cleanup. Real isolated execution succeeds with schema_version matching embedded_migrations,
+    no live writes, own process/database cleaned up. Compose docs correctly use host
+    8092 and require fresh image rebuild; schema guard remains intact. Docs clearly
+    distinguish current PG requirement from pending SQLite pivot. Changes confined
+    to setup docs/recipe/test files.
+  status: complete
+  created_at: '2026-09-17T08:03:04.549675+00:00'
+  completed_at: '2026-09-17T08:15:52.567095+00:00'
