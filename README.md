@@ -522,20 +522,35 @@ Full reference (exit codes, thresholds, systemd units): see
 # Optional but recommended: copy the env template (API_SERVER_KEY etc.)
 cp .env.example .env
 
-# Build and run with Docker Compose
+# Build the API image from THIS checkout, then start it. The image is compiled
+# from your working tree and carries its own embedded migrations, so (re)build it
+# after every pull or schema change: `docker compose up -d` on its own can reuse a
+# cached image built from older HEAD, and that stale binary refuses to start
+# against a newer database with
+#   STALE BUILD: database schema is newer than this binary's embedded migrations
+# The schema guard is deliberate — rebuild the image, never bypass it.
+docker compose build canopyd
 docker compose up -d
 
 # This starts:
-#   - canopyd on :8091 (host) → :8080 (container)
+#   - canopyd on :8092 (host) → :8080 (container) — :8091 belongs to the host
+#     systemd `canopy-canopyd.service` primary instance; compose is the
+#     containerized alternative and must not fight it for the port
 #   - PostgreSQL on :5437 (host) → :5432 (container) — note the non-standard host port!
 #   - Health-gated startup (canopyd waits for PG)
 
-# Verify
-curl http://localhost:8091/health
+# Verify (compose answers on :8092 — NOT the :8091 quick-start port)
+curl http://localhost:8092/health
 
 # View logs
 docker compose logs -f canopyd
 ```
+
+> **Compose is not isolated by `-p`.** `docker-compose.yml` hard-codes the
+> container names (`canopy-server`, `canopy-pg`), the host port (`8092`) and the
+> `pgdata` volume, so `docker compose -p <name>` collides with the running stack
+> instead of forking it. For a throwaway instance beside the live one, use the
+> native recipe in [docs/SCRATCH_INSTANCE.md](docs/SCRATCH_INSTANCE.md).
 
 ### Production (Manual)
 
@@ -884,18 +899,30 @@ export CANOPY_TOKEN=your-jwt-token
 ```
 
 ```bash
-# Scratch target: address a SECOND, already-running canopyd instead of :8091.
-# Start it once (its own HTTP_ADDR and database), then give the CLI its URL.
-HTTP_ADDR=:8092 DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy \
-  DB_NAME=canopy_scratch ./bin/canopyd serve &
+# Scratch instance: a SECOND canopyd next to the one on :8091, with its own
+# database, its own API port, its own HOME (cards + gateway registry) and its own
+# file root. All four are required — a fresh database alone still shares the card
+# store, the gateway run registry and uploaded files. The runnable recipe does the
+# whole loop (preflight → build → start → auth → create/list → cleanup) and proves
+# the live instance was untouched:
+#   scripts/scratch-instance.sh
+# Full walkthrough and the by-hand version: docs/SCRATCH_INSTANCE.md.
+# The shape of it:
+HTTP_ADDR=127.0.0.1:8093 DB_HOST=127.0.0.1 DB_PORT=5437 \
+  DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy_scratch_$(date +%s) \
+  HOME=/tmp/canopy-scratch/home CANOPY_FILE_ROOT=/tmp/canopy-scratch/files \
+  ./bin/canopyd serve &
 
-CANOPY_SERVER_URL=http://localhost:8092 CANOPY_TOKEN=$TOKEN \
+# Then point the CLI at THAT API explicitly:
+CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
   ./bin/canopyd tree create "Scratch tree" --content 'write target check'
 ```
 
 > Setting `CANOPY_SERVER_URL` selects **which running instance** the CLI talks to;
 > it does not create, reset, or otherwise isolate that instance's data — start the
-> scratch server/database you want to target yourself.
+> scratch server/database you want to target yourself
+> ([docs/SCRATCH_INSTANCE.md](docs/SCRATCH_INSTANCE.md)). Do not use `:8091`
+> (the native/live default) or `:8092` (the compose API) for a scratch server.
 
 > `session import` and `session associations-backfill` are the exception: they run
 > in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly, plus

@@ -144,20 +144,33 @@ The repository includes a `docker-compose.yml` that runs `canopyd` + PostgreSQL 
 git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 
-# Build and start (production-ready)
+# Build the API image from THIS checkout, then start it (production-ready).
+# The image carries the migrations embedded at build time, so rebuild after a
+# pull or a schema change: `docker compose up -d` alone can reuse a cached image
+# built from older HEAD, and that stale binary refuses to start with `STALE BUILD`.
+docker compose build canopyd
 docker compose up -d
 
 # View logs
 docker compose logs -f canopyd
 
-# Verify
-curl http://localhost:8091/health
+# Verify (compose publishes the API on :8092 — see below)
+curl http://localhost:8092/health
 ```
 
 This starts:
-- **canopyd** on host port `8091` (container `:8080`)
+- **canopyd** on host port `8092` (container `:8080`) — `:8091` is reserved for
+  the host systemd `canopy-canopyd.service` primary instance, and `:8080` is the
+  raw binary's default. The compose stack is the containerized alternative and
+  must not fight the host instance for its port.
 - **PostgreSQL 16** on host port `5437` (container `:5432`)
 - Health-gated startup — canopyd waits for PG to pass `pg_isready` before starting
+
+> **Isolating a second stack:** `docker compose -p <name>` does **not** isolate
+> this file — the container names (`canopy-server`, `canopy-pg`), the published
+> host port and the `pgdata` volume are hard-coded. For a throwaway instance
+> beside the live one, use the native-binary recipe in
+> [docs/SCRATCH_INSTANCE.md](SCRATCH_INSTANCE.md).
 
 ### Option 3: Build from Source
 
@@ -226,7 +239,7 @@ The `canopyd` binary doubles as a CLI client for remote servers. These are only 
 
 | Variable            | Default                      | Description                            |
 |---------------------|------------------------------|----------------------------------------|
-| `CANOPY_SERVER_URL` | `http://localhost:8080`      | Base URL of the Canopy API server. The quick-start / compose flows in this guide serve the API on host port `8091` — set `CANOPY_SERVER_URL=http://localhost:8091` for CLI commands against them. The CLI is an HTTP client: `HTTP_ADDR` and `DB_*` configure a *server* process and never redirect the CLI — with any of them set and no `CANOPY_SERVER_URL`, the CLI exits nonzero before sending a request instead of guessing a destination. |
+| `CANOPY_SERVER_URL` | `http://localhost:8091`      | Base URL of the Canopy API server. The quick-start / native flows serve the API on host port `8091`; the compose stack publishes `8092` (container `:8080`) — set `CANOPY_SERVER_URL=http://localhost:8092` for CLI commands against compose. The CLI is an HTTP client: `HTTP_ADDR` and `DB_*` configure a *server* process and never redirect the CLI — with any of them set and no `CANOPY_SERVER_URL`, the CLI exits nonzero before sending a request instead of guessing a destination. |
 | `CANOPY_TOKEN`      | *(none)*                     | Bearer token for authenticated requests. Without it, the CLI sends requests without auth (dev mode). |
 
 ### Example: Full Production Config
@@ -525,12 +538,16 @@ DB_HOST=... DB_USER=... DB_PASSWORD=... DB_NAME=... JWT_SECRET=... ./canopyd
 # Pull latest code
 git pull
 
-# Rebuild and restart
+# Rebuild and restart. The rebuild is REQUIRED, not optional: the image compiles
+# the migrations embedded in the binary, and `docker compose up -d` alone can reuse
+# an image built from older HEAD — which then refuses to start against the newer
+# database with `STALE BUILD` (see Troubleshooting). Never bypass that guard.
 docker compose build --no-cache
 docker compose up -d
 
-# Verify
+# Verify the API and the schema pair (compose publishes :8092)
 docker compose logs canopyd | grep "canopyd starting"
+curl -s http://localhost:8092/health   # schema_version must equal embedded_migrations
 ```
 
 ### Migration Safety
@@ -573,9 +590,46 @@ cp /usr/local/bin/canopyd.previous /usr/local/bin/canopyd
 # Find what's on the port
 sudo ss -tlnp | grep 8091
 
-# Kill it, or change the Canopy port
-HTTP_ADDR=:8092 ./canopyd
+# Kill it, or change the Canopy port. Do NOT reuse :8091 (the native/live default)
+# or :8092 (the port docker-compose publishes) — pick a free scratch port:
+HTTP_ADDR=127.0.0.1:8093 ./canopyd
 ```
+
+See [SCRATCH_INSTANCE.md](SCRATCH_INSTANCE.md) before starting a second instance:
+a different port alone is not isolation (the database, the card store, the
+gateway run registry and the file root are shared too).
+
+### `STALE BUILD` at startup
+
+**Symptom:** the server exits immediately with
+
+```
+STALE BUILD: database schema is newer than this binary's embedded migrations —
+rebuild (make build) or redeploy a current image; refusing to start against a
+schema this binary cannot understand
+```
+
+**Cause:** the database was created (or migrated) by a *newer* canopyd than the
+binary you just ran — a `git pull` without a rebuild, a reused docker image built
+from older HEAD, or a container left over from a previous checkout. This is the
+deliberate schema guard (DF-HERMES-CANOPY-1): an older binary against a newer
+schema fails silently deeper in the request path, so it refuses to boot instead.
+
+**Fix — rebuild, never bypass.** Compare both versions and rebuild from your
+checkout:
+
+```bash
+curl -s http://localhost:8091/health   # or :8092 for the compose stack
+# → {"status":"ok",…,"schema_version":47,"embedded_migrations":47}
+#   schema_version > embedded_migrations means this binary is stale.
+
+make build            # native: rebuild from HEAD, then restart your instance
+make deploy           # …or the atomic path for the systemd instance
+
+docker compose build canopyd && docker compose up -d   # compose: rebuild the image
+```
+
+There is no flag to skip the check, and none should be added.
 
 ### PostgreSQL Connection Refused
 

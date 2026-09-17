@@ -169,6 +169,13 @@ malformed one also fails before any request. `session import` /
 `session associations-backfill` are the exception: they run in-process against
 PostgreSQL and do use `DB_*` / `CANOPY_DB_URL`.
 
+> **Isolating a scratch instance.** A distinct `CANOPY_SERVER_URL` only picks a
+> destination — it does not isolate anything. A second instance needs its own
+> database, API port, `HOME` (card store + gateway run registry) and
+> `CANOPY_FILE_ROOT`; and do not reuse `:8091` (native/live), `:8092` (compose) or
+> `:8080` (raw default). Runnable recipe:
+> [SCRATCH_INSTANCE.md](SCRATCH_INSTANCE.md) / `scripts/scratch-instance.sh`.
+
 Server configuration is **environment-only** — there are no server flags
 (only `-version`). See the "Environment Variables" table in the README and
 §4 above. `canopyd serve --help` lists the key variables.
@@ -222,8 +229,8 @@ npm run build
 ```
 
 **Serving the PWA:** `canopyd` is **API-only** in MVP — the binary serves the
-REST/SSE API on `HTTP_ADDR` (raw binary default `:8080`; `make run` and
-compose use `:8091`) and does **not** embed or serve
+REST/SSE API on `HTTP_ADDR` (raw binary default `:8080`; `make run` uses `:8091`;
+the compose stack publishes `:8092`) and does **not** embed or serve
 the frontend. The PWA must be served separately, by a **same-origin reverse
 proxy** — a plain SPA-mode static server answers `/api/v1/*` with `index.html`,
 and the app then dies on `JSON.parse("<!doctype html>")`:
