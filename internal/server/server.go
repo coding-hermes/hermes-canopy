@@ -275,6 +275,22 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
+		// GAP-079: server-observable resume time. Registered immediately
+		// after authMW because the authenticated user id lands in the
+		// request context THERE — keyFn reads it, so this middleware
+		// cannot be registered before it. A resume window opens on the
+		// first 2xx tree-scoped read after DefaultResumeIdleGap of
+		// silence for that user and completes on their next 2xx
+		// GET /api/v1/context/{node_id}.
+		if metrics != nil {
+			r.Use(telemetry.ResumeMiddleware(metrics, func(r *http.Request) string {
+				if uid := handler.UserIDFromContext(r.Context()); uid != uuid.Nil {
+					return uid.String()
+				}
+				return ""
+			}, telemetry.NewResumeTracker(telemetry.DefaultResumeIdleGap)))
+		}
+
 		// Topic search + context injection (TM-03). Tree-scoped, membership-gated.
 		// Registered BEFORE the /trees mount so chi's radix router resolves
 		// these specific patterns before the wildcard subrouter.
