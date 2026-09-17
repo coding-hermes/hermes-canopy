@@ -2397,3 +2397,19 @@ tasks:
   status: complete
   created_at: '2026-09-16T23:48:23.689886+00:00'
   completed_at: '2026-09-17T00:09:16.016915+00:00'
+- id: GAP-075
+  title: Wire the context compiler to the model-call path (StartRun submits the compiled
+    budgeted manifest)
+  criteria:
+  - POST /api/v1/gateway/runs accepts optional node_id+token_budget; when node_id
+    is present the handler compiles context via the injected context.Compiler and
+    the gateway receives the compiled content as input; the manifest is persisted
+    on the run record and returned by GET /api/v1/gateway/runs/{run_id} (manifest
+    + source_node_id + token_budget + context_tokens); absent node_id keeps legacy
+    raw-message behaviour byte-identical; a compile failure returns 422 context_compile_failed
+    (404 node_not_found for a missing node) with NO gateway call; httptest-based tests
+    cover all four paths; go build ./... + go vet ./... green; docs/API.md gateway
+    section documents the new fields and codes
+  status: complete
+  created_at: '2026-09-17T03:26:23.863735+00:00'
+  completed_at: '2026-09-17T03:41:22.827685+00:00'
