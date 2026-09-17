@@ -2558,3 +2558,13 @@ tasks:
   status: complete
   created_at: '2026-09-17T14:53:57.765294+00:00'
   completed_at: '2026-09-17T14:57:48.752612+00:00'
+- id: DF-HERMES-CANOPY-15
+  title: Build the gateway run-events SSE URL through the shared base helper
+  criteria:
+  - gatewayRunEventsUrl() returns apiUrl('/gateway/runs/<encoded>/events') so it tracks
+    VITE_API_BASE_URL; a new vitest asserts a stubbed non-default base lands in the
+    URL and goes RED against the pre-fix literal; npx vitest run + npx tsc -b + npx
+    oxlint src all exit 0; the commit contains exactly gatewayApi.ts and gatewayApi.test.ts
+  status: complete
+  created_at: '2026-09-17T15:29:00.460346+00:00'
+  completed_at: '2026-09-17T15:33:58.057071+00:00'
