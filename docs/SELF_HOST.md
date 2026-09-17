@@ -802,14 +802,15 @@ For context while operating the server:
 │                        │                             │
 │  ┌─────────────────────┴──────────────────────────┐  │
 │  │              Data Layer                          │  │
-│  │  PostgreSQL (primary) + DuckDB (cards)          │  │
+│  │  PostgreSQL (primary) + SQLite (cards)          │  │
 │  │  Migrations auto-run on startup                │  │
 │  └────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
 
 - **Database:** PostgreSQL is the authoritative store for all graph data (trees, nodes, edges, topics, profiles, approvals, events, snapshots). Migrations run automatically.
+- **Storage direction (2026-09-16 ruling):** PostgreSQL contradicts the product vision (single binary, no Docker, no PostgreSQL, no external dependencies) and the SQLite-native Hermes ecosystem. The owner ruling is **SQLite-first** — `modernc.org/sqlite` (pure Go, WAL) as the authoritative graph store inside one zero-external-dependency binary. **Status: declared direction, NOT landed** — tracked as board row **GAP-076**; PostgreSQL stays authoritative until it does.
 - **SSE Hub:** In-memory ring buffer per tree, 10K connection cap, 1-hour event retention.
-- **Cards:** DuckDB-in-process + JSONL files under `~/.hermes/canopy/cards/` (git-friendly).
+- **Cards:** per-type **SQLite** databases (`modernc.org/sqlite`, CGo-free, pure Go) under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`; JSONL export is git-friendly. The `internal/card/duckdb/` package is cgo-only and ARCHIVED — zero importers repo-wide, and no shipped build selects it.
 - **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. Built to `frontend/dist/` as a release artifact and served separately — `canopyd` is API-only in MVP and does not embed it (see [Quick Start](#quick-start)).
 - **Graceful shutdown:** 30 seconds — drains SSE connections, then shuts down HTTP.

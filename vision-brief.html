@@ -202,6 +202,29 @@
     .container { padding: 0 1.2rem; }
     section { padding: 2.5rem 0; }
   }
+
+  /* GAP-074 storage-reality amendment: marks vision statements the shipped
+     code has superseded. Original vision text stays readable (struck through). */
+  .superseded {
+    display: inline-block;
+    margin: 0 0.2rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(220, 150, 30, 0.16);
+    border: 1px solid rgba(220, 150, 30, 0.5);
+    color: #e0a83c;
+    font-size: 0.72rem;
+    font-style: normal;
+    letter-spacing: 0.02em;
+  }
+  .amendment {
+    border-left: 3px solid #e0a83c;
+    background: rgba(220, 150, 30, 0.07);
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .amendment h3 { margin-top: 0; color: #e0a83c; }
 </style>
 </head>
 <body>
@@ -389,7 +412,7 @@
       <div class="feature">
         <div class="icon">🗄️</div>
         <h4>Database-per-Card</h4>
-        <p>Each Card type stores data as git-friendly JSONL files. DuckDB queries them directly — no import step. pgREST-style fixed API. Neither the model nor the Card ever writes raw SQL.</p>
+        <p>Each Card type stores data as git-friendly JSONL files. <s>DuckDB queries them directly — no import step.</s> <span class="superseded">superseded — Cards ship on per-type SQLite, not DuckDB</span> pgREST-style fixed API. Neither the model nor the Card ever writes raw SQL.</p>
       </div>
       <div class="feature">
         <div class="icon">🔄</div>
@@ -543,27 +566,47 @@
       <div class="feature">
         <div class="icon">🔌</div>
         <h4>canopyd (Gateway)</h4>
-        <p>Thin Go binary. Serves PWA frontend. Routes graph queries to DuckDB. Forwards all agent/model calls to Hermes API. Translates Hermes tool outputs into Card events.</p>
+        <p>Thin Go binary. Serves PWA frontend. <s>Routes graph queries to DuckDB.</s> <span class="superseded">superseded — graph queries go to PostgreSQL</span> Forwards all agent/model calls to Hermes API. Translates Hermes tool outputs into Card events.</p>
       </div>
     </div>
     
     <h3>Canonical Data Flow</h3>
-    <p>In the MVP, the local Go server — with DuckDB embedded in-process — is the <strong>single source of truth.</strong> DuckDB stores the authoritative graph (nodes, edges, snapshots) and Card data (JSONL files queried directly). The local browser's IndexedDB holds a Yjs CRDT replica for responsive offline editing and reading past messages on bad connections. On reconnect, the server reconciles — the server wins conflicts. SSE is the server→client channel. Client writes use HTTP POST. Background Sync queues outgoing messages when offline — they auto-send when connectivity returns.</p>
+    <p>In the MVP, the local Go server <s>— with DuckDB embedded in-process —</s> is the <strong>single source of truth.</strong> <s>DuckDB stores the authoritative graph (nodes, edges, snapshots) and Card data (JSONL files queried directly).</s> <span class="superseded">superseded — PostgreSQL stores the authoritative graph; Cards live in per-type SQLite; DuckDB is abandoned</span> The local browser's IndexedDB holds a Yjs CRDT replica for responsive offline editing and reading past messages on bad connections. On reconnect, the server reconciles — the server wins conflicts. SSE is the server→client channel. Client writes use HTTP POST. Background Sync queues outgoing messages when offline — they auto-send when connectivity returns.</p>
     
     <div class="table-wrap">
     <table>
       <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
       <tbody>
-        <tr><td>Backend</td><td>Go (canopyd) + Hermes Gateway</td><td>Thin gateway binary. Serves PWA, queries DuckDB. Forwards all agent/model/tool calls to Hermes Agent Gateway API. Hermes handles the heavy lifting.</td></tr>
+        <tr><td>Backend</td><td>Go (canopyd) + Hermes Gateway</td><td>Thin gateway binary. Serves PWA, <s>queries DuckDB</s><span class="superseded">superseded — queries PostgreSQL</span>. Forwards all agent/model/tool calls to Hermes Agent Gateway API. Hermes handles the heavy lifting.</td></tr>
         <tr><td>Frontend</td><td>Preact + Web Components</td><td>3KB React-compatible API. Cards ARE Web Components — same component model as the framework. PWA with Service Worker for caching + Background Sync for offline queue.</td></tr>
-        <tr><td>Graph Database</td><td>DuckDB (embedded)</td><td>Authoritative graph state, Card data, topic FTS — all in one embedded database. No separate DB process. Yjs/IndexedDB is a local browser replica for offline reads.</td></tr>
-        <tr><td>Card Database</td><td>DuckDB in-process via Go</td><td>Same embedded DuckDB instance. Graph and Cards share one database. JSONL files are the durable format — DuckDB queries them directly.</td></tr>
+        <tr><td>Graph Database</td><td><s>DuckDB (embedded)</s> <span class="superseded">superseded — PostgreSQL today</span></td><td><s>Authoritative graph state, Card data, topic FTS — all in one embedded database. No separate DB process.</s> <span class="superseded">PostgreSQL is authoritative today; SQLite-first is the declared direction (GAP-076, not landed)</span> Yjs/IndexedDB is a local browser replica for offline reads.</td></tr>
+        <tr><td>Card Database</td><td><s>DuckDB in-process via Go</s> <span class="superseded">superseded — per-type SQLite</span></td><td><s>Same embedded DuckDB instance. Graph and Cards share one database.</s> <span class="superseded">Cards ship on per-type SQLite (modernc.org/sqlite) under ~/.hermes/canopy/cards/</span> JSONL files are the durable format.</td></tr>
         <tr><td>Transport</td><td>SSE (server→client) + HTTP POST (client→server)</td><td>SSE for real-time updates, POST for writes. One channel per direction — no half-duplex confusion.</td></tr>
-        <tr><td>Encryption</td><td>None in MVP / MLS post-MVP</td><td>All data local to user's machine in MVP. MLS for multi-user post-MVP. No Signal — MLS handles any group size.</td></tr>
+        <tr><td>Encryption</td><td><s>None in MVP / MLS post-MVP</s> <span class="superseded">superseded — MLS has shipped</span></td><td>MLS group encryption for workspace collaboration (SPEC-FTR-03) has shipped at <code>/api/v1/workspaces/{workspace_id}/mls</code>. Local node/edge/card data at rest is still unencrypted — not end-to-end encryption of all data.</td></tr>
         <tr><td>Plugin Sandbox</td><td>Sandboxed iframes + CSP + permissions</td><td>Shadow DOM is encapsulation, not a security boundary. Cards run in isolated iframes with capability-scoped APIs.</td></tr>
-        <tr><td>Deployment</td><td>Single Go binary + PWA</td><td><code>canopyd serve</code> — starts HTTP server with DuckDB embedded. Open browser. Works on desktop and mobile. No Docker, no PostgreSQL, no external dependencies.</td></tr>
+        <tr><td>Deployment</td><td>Single Go binary + PWA</td><td><code>canopyd serve</code> — starts HTTP server <s>with DuckDB embedded</s><span class="superseded">superseded — no DuckDB</span>. Open browser. Works on desktop and mobile. <s>No Docker, no PostgreSQL, no external dependencies.</s> <span class="superseded">declared direction only — PostgreSQL is still required today (GAP-076)</span></td></tr>
       </tbody>
     </table>
+    </div>
+    
+    <div class="amendment">
+    <h3>Storage Reality + 2026-09-16 Ruling — amendment (added 2026-09-17)</h3>
+    <p><strong>This block amends the original brief above. The vision text is kept readable
+    as vision; the rows below are what the shipped code actually does.</strong></p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Claim in the vision above</th><th>Shipped reality</th></tr></thead>
+      <tbody>
+        <tr><td>Cards are stored in / queried by DuckDB</td><td><strong>DuckDB was abandoned.</strong> Cards ship on <strong>per-type SQLite databases</strong> (<code>modernc.org/sqlite</code>, CGo-free, pure Go) under <code>~/.hermes/canopy/cards/</code>, overridable with <code>CANOPY_CARD_DATA_DIR</code>. <code>internal/card/duckdb/</code> is cgo-only and has <strong>zero importers</strong> repo-wide; no shipped build selects it.</td></tr>
+        <tr><td>DuckDB stores the authoritative graph (embedded, no separate DB process)</td><td><strong>Not implemented.</strong> The authoritative graph store today is <strong>PostgreSQL</strong> (<code>internal/db/</code>, pgx, migrations auto-run on startup).</td></tr>
+        <tr><td>"No Docker, no PostgreSQL, no external dependencies"</td><td><strong>Declared direction, not current state.</strong> The <strong>2026-09-16 owner ruling</strong> is <strong>SQLite-first</strong> — <code>modernc.org/sqlite</code> (pure Go, WAL) as the authoritative graph store inside one zero-external-dependency binary. Status: <strong>declared direction only, NOT landed</strong>; tracked as board row <strong>GAP-076</strong>. PostgreSQL stays authoritative until it lands.</td></tr>
+        <tr><td>Encryption: "None in MVP / MLS post-MVP"</td><td><strong>MLS has shipped</strong> — MLS group encryption for workspace collaboration (SPEC-FTR-03), mounted at <code>/api/v1/workspaces/{workspace_id}/mls</code>. Local node/edge/card data at rest is still <strong>unencrypted</strong>; this is not end-to-end encryption of all data.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><em>Reading rule:</em> any <span class="superseded">superseded</span>-marked statement above —
+    DuckDB storage in particular — belongs to the original July-2026 vision, not to the
+    shipped system.</p>
     </div>
     
     <h3>Deployment: What Each Term Actually Means</h3>
@@ -571,7 +614,7 @@
     <table>
       <thead><tr><th>Mode</th><th>What It Is</th><th>MVP?</th></tr></thead>
       <tbody>
-        <tr><td>Local Server + PWA</td><td>canopyd binary running locally. DuckDB embedded — no external DB. Browser connects to localhost. PWA installs to home screen on mobile.</td><td><span class="check">✓ MVP</span></td></tr>
+        <tr><td>Local Server + PWA</td><td>canopyd binary running locally. <s>DuckDB embedded — no external DB.</s> <span class="superseded">superseded — PostgreSQL required today (GAP-076)</span> Browser connects to localhost. PWA installs to home screen on mobile.</td><td><span class="check">✓ MVP</span></td></tr>
         <tr><td>Cloud Tunnel</td><td>Exposure mechanism: Cloudflare/ngrok maps a public URL to your local server. You still run the server.</td><td><span class="cross">Post-MVP</span></td></tr>
         <tr><td>P2P (WebRTC)</td><td>Transport mechanism: direct browser-to-browser for multi-user. Requires STUN/TURN infrastructure.</td><td><span class="cross">Post-MVP</span></td></tr>
         <tr><td>Message Queue</td><td>Reliability mechanism: NATS/Redis for guaranteed delivery in multi-user mode.</td><td><span class="cross">Post-MVP</span></td></tr>
@@ -625,7 +668,7 @@
     </div>
     
     <div class="principle">
-      <p>"Data lives in formats you can read: JSONL for Cards, DuckDB for the graph. One embedded database, no separate processes. git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
+      <p>"Data lives in formats you can read: JSONL for Cards, <s>DuckDB for the graph</s><span class="superseded">superseded — PostgreSQL for the graph today</span>. <s>One embedded database, no separate processes.</s> git-friendly where possible. Tombstones for deletion. Compaction when you mean it."</p>
     </div>
   </div>
 </section>

@@ -455,6 +455,13 @@ A multi-reference reply is created through the two write endpoints of the same
 spec (§9.1 `POST /api/v1/trees/{tree_id}/reference-selections` preflight, §9.2
 `POST /api/v1/trees/{tree_id}/multi-reference-replies` create).
 
+**Spec drift — the merge endpoint.** The spec'd `POST /trees/{tree_id}/merge` is
+**not implemented**: `internal/server/server.go` registers no `merge` route at all.
+Multi-reference replies — `POST /api/v1/trees/{tree_id}/multi-reference-replies`
+(SPEC-PL-06 §9.2), preceded by `POST /api/v1/trees/{tree_id}/reference-selections`
+(§9.1) — are the **shipped path for merging multiple sources into one node**, and
+the resulting node is the multi-parent synthesis node (`is_synthetic_merge_point`).
+
 **Query params:**
 - `include_content` — bool, default `true`. When `false` each source's
   `content` key is **omitted** (not returned empty), so a client can tell
@@ -658,7 +665,10 @@ DELETE /api/v1/topics/{topic_id}
 ## Cards
 
 Mounted at `/api/v1/cards`. All require auth. Cards are structured data nodes
-stored in DuckDB (per-type SQLite databases under `~/.hermes/canopy/cards/`).
+stored in **per-type SQLite databases** (`modernc.org/sqlite`, CGo-free, pure Go)
+under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`.
+DuckDB is **not** used: `internal/card/duckdb/` is cgo-only and has zero importers
+repo-wide — it is archived, not the card backend.
 
 ### List Cards
 

@@ -36,9 +36,9 @@ git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
 make build
 
-# The DuckDB card backend (internal/card/duckdb, go-duckdb) is cgo-only and is
-# build-tagged `//go:build cgo`, so it is excluded when CGO_ENABLED=0; the
-# default SQLite card backend (modernc.org/sqlite) is pure Go and unaffected.
+# Cards are stored in per-type SQLite databases (modernc.org/sqlite), pure Go.
+# internal/card/duckdb (go-duckdb) is ARCHIVED: cgo-only, build-tagged
+# `//go:build cgo`, zero importers repo-wide, no shipped build selects it.
 
 # Start PostgreSQL (Docker) — standalone option.
 # Already running the compose stack? Skip this block: `docker compose up -d`
@@ -248,7 +248,7 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 │  ┌─────────────────────┴──────────────────────────┐  │
 │  │              Data Layer (db/)                    │  │
 │  │  Repositories | Migrations | Models            │  │
-│  │  PostgreSQL (primary) + DuckDB (cards)         │  │
+│  │  PostgreSQL (primary) + SQLite (cards)         │  │
 │  └────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -285,12 +285,27 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 | Edge | PostgreSQL | Directed relationship between nodes (reply, fork, synthesis) |
 | Topic | PostgreSQL | Named, searchable subgraph with #references |
 | Approval | PostgreSQL | Multi-step approval workflow for merge operations |
-| MLS Group | PostgreSQL | Encrypted group messaging (post-MVP) |
+| MLS Group | PostgreSQL | MLS group encryption for workspace collaboration (SPEC-FTR-03) — SHIPPED, mounted at `/api/v1/workspaces/{workspace_id}/mls`; local node/edge/card data at rest is still unencrypted |
 | Snapshot | PostgreSQL | Point-in-time tree state for recovery |
 | Event | PostgreSQL | Audit trail of all operations |
 | Profile | PostgreSQL | User profiles and routing |
-| Card | DuckDB+JSONL | Structured data nodes with interactive behavior |
+| Card | Per-type SQLite + JSONL | Structured data nodes with interactive behavior |
 | Transport | PostgreSQL | Multi-transport connection management (SSE, WebSocket, NATS) |
+
+**Storage reality.** Graph data (trees, nodes, edges, topics, profiles, approvals,
+events, snapshots) lives in **PostgreSQL** today. **Cards do not use DuckDB:** they
+ship on **per-type SQLite databases** (`modernc.org/sqlite`, CGo-free, pure Go)
+under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`
+(`internal/card/database.go`). `internal/card/duckdb/` still exists but is cgo-only
+and has **zero importers repo-wide** — it is archived, not a shipped card backend.
+
+**2026-09-16 storage ruling.** PostgreSQL contradicts the product vision (single
+binary, no Docker, no PostgreSQL, no external dependencies) and the SQLite-native
+Hermes ecosystem. The owner ruling is **SQLite-first** — `modernc.org/sqlite`
+(pure Go, WAL) as the authoritative graph store inside one
+zero-external-dependency binary. **Status: declared direction only.** It is tracked
+as board row **GAP-076** and has **not landed**; PostgreSQL remains the authoritative
+graph store until it does.
 
 ## API Reference
 
@@ -333,6 +348,12 @@ resolved per node:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/nodes/{node_id}/reference-context` | Stored provenance of a multi-reference reply — `include_content`, `max_source_tokens` (max 2048), `verify_hash`; `404 REFERENCE_CONTEXT_NOT_FOUND` for a node that is not a multi-reference reply |
+
+> **Merge endpoint (spec drift):** the spec'd `POST /trees/{tree_id}/merge` is
+> **NOT implemented** — no merge route exists in `internal/server/server.go`.
+> Merging multiple sources into one node ships as **multi-reference replies**:
+> `POST /api/v1/trees/{tree_id}/reference-selections` (preflight) then
+> `POST /api/v1/trees/{tree_id}/multi-reference-replies` (create), SPEC-PL-06.
 
 > Edges are managed **implicitly** through node operations (reply/fork/synthesis)
 > — there is no standalone edge API.
@@ -840,7 +861,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 │   │   └── hooks/           — Custom hooks
 │   └── tests/               — Playwright E2E tests
 ├── internal/
-│   ├── card/                — Card subsystem (DuckDB)
+│   ├── card/                — Card subsystem (per-type SQLite)
 │   ├── config/              — Configuration loading
 │   ├── db/                  — Data layer
 │   │   ├── migrations.go    — Embedded SQL migrations
