@@ -100,8 +100,26 @@ func TestMissingTokenHint(t *testing.T) {
 		}
 		return 0
 	})
-	if !strings.Contains(out, "CANOPY_TOKEN") || !strings.Contains(out, "canopyd serve") {
-		t.Fatalf("missing-token hint lacks env var or dev-token source: %q", out)
+	// The hint must name a token source that actually exists: the README's
+	// "Authentication (dev mode)" recipe (HS256 with JWT_SECRET), not a
+	// startup print. Nothing in canopyd prints a token at startup.
+	want := []string{
+		"CANOPY_TOKEN",
+		"Authentication (dev mode)",
+		"dev-secret-change-me",
+		"00000000-0000-0000-0000-000000000001",
+		"continuing without auth",
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Fatalf("missing-token hint lacks %q: %q", w, out)
+		}
+	}
+	// Honesty invariant: the hint must not point at output that never appears.
+	for _, unwanted := range []string{"startup output", "canopyd serve"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("missing-token hint still claims a nonexistent source %q: %q", unwanted, out)
+		}
 	}
 }
 

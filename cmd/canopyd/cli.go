@@ -336,7 +336,7 @@ func redactURLCredentials(raw string) string {
 func authHeader() string {
 	tok := os.Getenv("CANOPY_TOKEN")
 	if tok == "" {
-		fmt.Fprintln(os.Stderr, "Warning: CANOPY_TOKEN is not set; get a dev token from `canopyd serve` startup output and export CANOPY_TOKEN (continuing without auth)")
+		fmt.Fprintln(os.Stderr, "Warning: CANOPY_TOKEN is not set; mint a dev JWT (README section \"Authentication (dev mode)\", sub-section \"Direct API access\": sign HS256 with JWT_SECRET, default dev-secret-change-me, sub=00000000-0000-0000-0000-000000000001) and export CANOPY_TOKEN (continuing without auth)")
 		return ""
 	}
 	return "Bearer " + tok
