@@ -502,3 +502,89 @@ DuckBrain: /ticks/474, namespace hermes-canopy, UUID 1a2207aa-e749-4f56-990d-230
 **Next tick.** Cheapest rows: **DF-HERMES-CANOPY-17** (anchor `.gitignore`'s bare `canopyd` to `/canopyd`; the Makefile's `BINARY ?= canopyd` keeps the root artifact ignored) and the new **DF-HERMES-CANOPY-19** (§7 small-budget empty-content, with the fix shape already named). **GAP-080 phase 2** needs a design pass first (where the model context window comes from on the compile path). **GAP-076 stays parked on the owner ruling** and keeps blocking GAP-077; **GAP-078 needs a ruling, not a worker**; **GAP-081** is a scope decision. Watch items: the `canopy_<hex>` per-test DB residue (flag, never drop another run's state) and E2E-001 cadence.
 
 **Tick 484 closeout (same tick, follow-up commit).** GitReins judge verdict **`a7d8e245`** — **tier1 PASS** (guard: secrets clean / go_build ok / go_lint ok / go_tests) + **tier2 PASS / COMPLETE**; the judge ran its own battery (`internal/context` ok 0.015s, `internal/service` ok 15.0s, `internal/handler` ok 341.1s) and independently re-read `compiler.go`, `node_service.go`, `node_handler.go` and the SPEC-IMPL-GAP-001 amendment lines (`verdict.json` under `.gitreins/history/2026-09-17/a7d8e245/`). **CI: run `35257591128` on `d82dae1` and run `35257803083` on the board closeout `50cb1f1` — both GREEN on the FIRST attempt, no reruns.** Inherited CI health at tick start was clean (last 5 completed runs all `success`), so nothing needed filing. Board: event **530** flipped from `pending_on_push` to the verified verdict + both run ids, event **532** added (type `ci`), and `GAP-080.phases[0]` now carries `judge` + `ci`. Only the board files moved in this commit — the content commit is `d82dae1`.
+
+## Tick 485 — 2026-09-17 ~20:06Z (WORK — DF-HERMES-CANOPY-19)
+
+**Verdict.** Board read directly from `.coding-hermes/board/tasks.jsonl` (343 rows / 307 unique ids / 0 parse failures;
+**288 complete / 19 pending** after this tick's closeout). Start state: clean tree, `origin/master..HEAD` = 0,
+both remotes at `57b85b7` (tick 484), last 5 CI runs all `success` — nothing to file. Pick: **DF-HERMES-CANOPY-19**
+(P3, the row the tick-484 probe filed) over the other cheap candidate DF-HERMES-CANOPY-17. Rationale: DF-19 is a
+product-correctness defect with a spec citation and a documented live probe (empty Content on a multi-node chain at a
+tiny budget), while DF-17 is repo hygiene behind a `.gitignore` pattern. Both premises were re-verified at HEAD before
+the pick: `git check-ignore -v cmd/canopyd/__probe_df17.go` -> `.gitignore:16:canopyd` with `git add` refusing (probe
+file removed, tree clean), and the compiler's escape-hatch condition read line-by-line at
+`internal/context/compiler.go:200` (`i == len(ancestryContent)-1`, the OLDEST index, while step 3 renders
+newest-first so index 0 is the newest node).
+
+**Dispatch/Worker.** `gpt-5.6-luna` @ `openai-codex` (the project's default lane; `glm-5.3-flash` stays
+fallback-only). Brief `/tmp/brief-canopy-df19.md`, log `/tmp/worker-df19.log` — the lane was live-but-quiet as usual
+(0-byte log at 75s, `internal/context/compiler_tiny_budget_test.go` already on disk = liveness, never judged on the
+log alone). Worker exit 0 with a report; commit `919c98d` = `internal/context/compiler.go` (+28/-7) +
+`internal/context/compiler_tiny_budget_test.go` (+352), 2 files, +373/-7, one commit, co-author trailer from
+`.gitmessage` (not hand-written, not swept into `.gitreins/tasks.yaml`).
+
+**The worker's deliberate deviation (judged acceptable).** The brief said "fire §7 for index 0 whenever nothing has
+been kept". The worker implemented exactly that first and `TestGAP080_PinnedOverageKeepsAllPinned`
+(`compiler_pinned_test.go:337`, landed `d82dae1`) went RED: `ancestry ids = [...33333333 22222222 11111111], want
+[22222222 11111111]`. I read that test first-hand to check the claim rather than take the report's word — it does
+assert `!strings.Contains(res.Content, ids[2].String())` for the unpinned newest node at budget 30, so the conflict is
+real. Resolution shipped: the §7 escape is a **post-walk floor** — if the walk kept nothing, `ancestryContent[0]`
+(the newest node) is included and the warning appended. No-pin chains behave exactly as §7 requires; the GAP-080
+pinned semantics are untouched; the one-node path is byte-identical to pre-fix.
+
+**Gates (fresh at HEAD, run by the foreman).** `go build -o /dev/null ./cmd/canopyd` OK · `go vet ./...` OK ·
+`go test -count=1 -v ./internal/context/...` -> `ok 0.009s`, 44 top-level PASS / 0 FAIL / 0 SKIP ·
+`golangci-lint run ./internal/context/...` -> `0 issues.` (the binary whose version matches CI). No handler package
+run was needed (diff touches one pure package).
+
+**Independent verification (the load-bearing part).** I wrote my OWN throwaway probe
+(`internal/context/zz_foreman_probe_df19_test.go`, deleted afterwards — tree clean) with fixtures the worker never
+saw: 2-, 4- and 5-node chains at budget 30, a single-node chain at budget 2, a 4-node chain at budget 5000, and a
+pinned-boundary fixture. Post-fix digests: tiny chains -> `content_len=147 tokensUsed=37 ancestry=[exactly the newest
+node] warnings=[budget too small for single node, tokens used (37) exceeds budget (30)]`, **no** bogus pinned-overage
+warning; normal budget -> `content_len=579 tokensUsed=145 ancestry=4 warnings=[]`. **Falsification:** with
+`compiler.go` reverted to `HEAD~1` and the SAME probe, the multi-node chains give `content_len=0 tokensUsed=0
+ancestry=[]` (the reported defect reproduced), while the single-node digest (147/37) and the normal-budget digest
+(579/145/4 items) are IDENTICAL pre and post fix — parity proven, not assumed. `compiler.go` was then restored and
+`md5sum` matched `git show HEAD:internal/context/compiler.go` (2024a5dc1109f5fd84ae26eca24c7027).
+
+**GitReins.** `task create` + `task start` before the dispatch; `task complete DF-HERMES-CANOPY-19` after the commit
+verified in `git log`. Verdict **`44829770`** — tier1 **PASS** (secrets clean / go_build ok / go_lint ok / go_tests),
+tier2 **PASS / COMPLETE**; the judge independently confirmed the pre-fix RED (`git checkout 919c98d^` -> "expected
+non-empty Content for a multi-node chain with a 30-token budget, got empty") and the normal-budget parity sha.
+Verdict history `.gitreins/history/2026-09-17/4f172db4/verdict.json`. Task kept for audit (fleet default).
+
+**CI.** Run **35268337248** on `919c98d` — **GREEN on the FIRST attempt, no rerun**. Inherited health at tick start
+was clean, so no CI-breakage row was filed.
+
+**Off-by-one.** Health `{"status":"ok","uptime":"18h35m55s"}`. Discover fired for real before designing anything:
+`canopy-context-compiler-tiny-budget-newest-node` -> **not_found** and
+`off-by-one-newest-vs-oldest-index-in-budget-walk` -> **not_found** (no cached answer existed; the general class is
+a `post-debug` submission for the newest-vs-oldest inversion is queued rather than invented here:
+`sub_167828` (`newest-vs-oldest-index-inversion-in-budget-walk`, status `queued`).
+
+**Push health.** `git push origin master` and `git push gitlab master` both `57b85b7..919c98d`;
+`git rev-list --count origin/master..HEAD` = 0; `git ls-remote gitlab master` = `919c98d`. Board closeout commit
+pushed the same way (verified again after it landed).
+
+**Bookkeeping.** `tasks.jsonl`: the DF-HERMES-CANOPY-19 row rewritten IN PLACE (spaced/compact style preserved per
+line, 343 rows, every other line byte-identical) to `status: complete` with commit `919c98d`, files, +373/-7,
+`guard_result`, `judge_verdict 44829770`, `ci_result GREEN` + run id, `worker_summary`, `foreman_note`,
+`review_notes`; then TWO new rows appended — **DF-HERMES-CANOPY-20** (P3: §7's literal "include the newest node
+regardless" vs the GAP-080 pinned scenario — one owner decision, with my probe's pinned-boundary digest attached) and
+**DF-HERMES-CANOPY-21** (P4: `OmittedCount` counts the forced-kept node as omitted — manifest accounting off by one).
+`events.jsonl`: ids **533** `task_completed` DF-19, **534**/**535** `task_created` DF-20/DF-21, **536** `ci` for
+DF-19 (flipped to the verified GREEN run after the run concluded). `board.jsonl`: `ticks_total` 484 -> **485**,
+`last_commit` `919c98d` (content commit), `last_tick`/`updated_at` refreshed. `boardctl validate` = the inherited
+baseline (39 errors, all recycled-ID duplicates on DF-1..5/QA-*/GAP-065/GAP-071; 179 warnings, +2 of which are this
+row's free-form `guard_result`/`ci_result` vocabulary notes — the documented rich-closure effect).
+
+**DuckBrain.** Pre-write: `/ticks/` contiguous through 484, status keys through `2026-09-17-tick482-audit`.
+Written: `/ticks/485` (event) + `/project/hermes-canopy/status/2026-09-17` (config), UUIDs recorded below.
+
+**Next tick.** Cheapest real rows: **DF-HERMES-CANOPY-17** (`.gitignore` bare `canopyd` -> `/canopyd`; the Makefile's
+root `BINARY ?= canopyd` keeps the binary ignored), **DF-HERMES-CANOPY-21** (small accounting fix with a named
+criterion), then **GAP-080 phase 2** (needs a design pass first: where the model context window comes from on the
+compile path). Parked on purpose: **GAP-076** (owner ruling, blocks GAP-077), **GAP-078** (ruling, not a worker),
+**GAP-081** (scope decision), **DF-20** (the §7 decision this tick filed), QA-HERMES-CANOPY-1/2/9/10
+(bunker/fleet-infra owned). Watch: the `canopy_<hex>` per-test DB residue and the E2E-001 cadence.

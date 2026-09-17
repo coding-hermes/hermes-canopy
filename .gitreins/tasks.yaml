@@ -2614,3 +2614,14 @@ tasks:
   status: complete
   created_at: '2026-09-17T17:54:27.999312+00:00'
   completed_at: '2026-09-17T18:14:22.387430+00:00'
+- id: DF-HERMES-CANOPY-19
+  title: Honour SPEC-IMPL-GAP-001 section 7 for a multi-node chain under a tiny token
+    budget
+  criteria:
+  - 'A token budget smaller than one node on a multi-node chain must never return
+    empty Content: the newest node is kept, TokensUsed may exceed the budget, and
+    the warning ''budget too small for single node'' is appended. Regression test
+    on a >=3-node chain; single-node behaviour and normal-budget output unchanged.'
+  status: complete
+  created_at: '2026-09-17T19:56:48.282916+00:00'
+  completed_at: '2026-09-17T20:01:42.584340+00:00'
