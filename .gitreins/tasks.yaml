@@ -2579,3 +2579,19 @@ tasks:
   status: complete
   created_at: '2026-09-17T16:01:16.357089+00:00'
   completed_at: '2026-09-17T16:09:17.196766+00:00'
+- id: GAP-082
+  title: 'PWA installability: ship the web app manifest + raster icons + link, precache
+    the shell'
+  criteria:
+  - frontend/public/manifest.webmanifest exists and parses with name/short_name/id/start_url/scope/display=standalone/theme_color+background_color=#0B0D17
+    and icons[] carrying 192x192 any + 512x512 any + 512x512 maskable; frontend/index.html
+    links rel=manifest /manifest.webmanifest and an apple-touch-icon; the three PNGs
+    exist under frontend/public/ with real IHDR dimensions matching the manifest sizes;
+    frontend/sw.ts STATIC_URLS precaches the manifest + icons; a vitest spec asserts
+    the link, the manifest fields, icon existence on disk and the SW list, and fails
+    RED when the link is removed; npx vitest run, npx tsc -b, npx oxlint src and npm
+    run build all exit 0 with the manifest + icons present in dist; no new npm dependency;
+    specs/ARCHITECTURE.md PWA row carries a dated amendment
+  status: complete
+  created_at: '2026-09-17T17:14:32.994481+00:00'
+  completed_at: '2026-09-17T17:24:48.976270+00:00'
