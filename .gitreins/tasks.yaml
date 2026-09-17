@@ -2488,3 +2488,20 @@ tasks:
   status: complete
   created_at: '2026-09-17T09:39:09.444758+00:00'
   completed_at: '2026-09-17T09:54:52.502658+00:00'
+- id: DF-HERMES-CANOPY-12
+  title: CLI auth hint points at a nonexistent token source (canopyd serve startup
+    output)
+  criteria:
+  - 'AC1 zero hits: grep -rn ''startup output'' cmd/ internal/ README.md docs/ = 0.
+    AC2 the stderr hint names README section ''Authentication (dev mode)'' and the
+    concrete dev recipe (JWT_SECRET default dev-secret-change-me, sub=00000000-0000-0000-0000-000000000001)
+    while keeping ''(continuing without auth)''. AC3 authHeader behavior unchanged
+    (empty when unset, Bearer when set). AC4 cmd/canopyd/cli_test.go TestMissingTokenHint
+    asserts the new content and asserts the message contains neither ''startup output''
+    nor ''canopyd serve''. AC5 go build ./... + go vet ./cmd/canopyd/ + go test -count=1
+    ./cmd/canopyd/ PASS (exit 0 printed). AC6 golangci-lint run ./cmd/canopyd/ = 0
+    issues. AC7 README/docs premise check reported with line numbers (no stale copy
+    rewritten). AC8 exactly one worker commit with the co-author trailer.'
+  status: complete
+  created_at: '2026-09-17T11:05:27.073230+00:00'
+  completed_at: '2026-09-17T11:09:44.591486+00:00'
