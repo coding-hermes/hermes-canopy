@@ -115,10 +115,13 @@ type ModelInfo struct {
 // possible — GAP-080 phase 2a). Auth, timeout and error mapping are inherited
 // from doJSON/newRequest, exactly like every other call on this client.
 //
-// The response shape is tolerant the same way internal/hermes' decodeList is:
-// a bare JSON array of models, or an object wrapping the list under a
-// "models" key. No third shape is invented — anything else is an error, which
-// callers treat as "catalog unreachable" and fall back from.
+// The response shape is tolerant: a bare JSON array of models, or an object
+// wrapping the list under either a "models" key (the shape internal/hermes'
+// decodeList tolerates) or an OpenAI-style "data" key — which is what the LIVE
+// gateway api_server actually answers, so neither spelling may be dropped.
+// A "models" key wins when an object carries both (see decodeModelList).
+// Anything else is an error, which callers treat as "catalog unreachable" and
+// fall back from.
 func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	var raw json.RawMessage
 	if err := c.doJSON(ctx, http.MethodGet, "/v1/models", nil, &raw, http.StatusOK); err != nil {
@@ -127,8 +130,18 @@ func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return decodeModelList(raw)
 }
 
-// decodeModelList decodes the two shapes GET /v1/models may answer with (see
-// ListModels).
+// decodeModelList decodes the shapes GET /v1/models may answer with (see
+// ListModels), in this precedence order:
+//
+//  1. a bare JSON array of models;
+//  2. an object wrapping the list under "models";
+//  3. an object wrapping the list under "data" (the OpenAI-style envelope the
+//     live gateway api_server answers with, e.g.
+//     {"object":"list","data":[{"id":"Hermes Agent","object":"model",...}]}).
+//
+// The order is load-bearing for the case an object carries BOTH keys: "models"
+// wins deterministically rather than by map-iteration luck. Any other object
+// (neither key) and any non-JSON body are errors.
 func decodeModelList(raw []byte) ([]ModelInfo, error) {
 	var out []ModelInfo
 	if err := json.Unmarshal(raw, &out); err == nil {
@@ -138,14 +151,17 @@ func decodeModelList(raw []byte) ([]ModelInfo, error) {
 	if err := json.Unmarshal(raw, &wrapped); err != nil {
 		return nil, errors.New("gateway: list models: not a JSON array or object")
 	}
-	items, ok := wrapped["models"]
-	if !ok {
-		return nil, errors.New(`gateway: list models: missing "models" field`)
+	for _, key := range []string{"models", "data"} {
+		items, ok := wrapped[key]
+		if !ok {
+			continue
+		}
+		if err := json.Unmarshal(items, &out); err != nil {
+			return nil, fmt.Errorf("gateway: list models: %q field: %w", key, err)
+		}
+		return out, nil
 	}
-	if err := json.Unmarshal(items, &out); err != nil {
-		return nil, fmt.Errorf("gateway: list models: %q field: %w", "models", err)
-	}
-	return out, nil
+	return nil, errors.New(`gateway: list models: missing "models" or "data" field`)
 }
 
 // RunRef is the immediate result of starting a run (HTTP 202).

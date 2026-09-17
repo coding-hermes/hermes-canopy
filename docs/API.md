@@ -983,6 +983,12 @@ derivation, and an unknown model, an unreachable catalog, or no `model` at all
 falls back to `CONTEXT_DEFAULT_BUDGET` — the request never fails because the
 catalog is down.
 
+The catalog is the gateway's `GET /v1/models`, and its list is read from a bare
+JSON array, from a `models` key, or from the OpenAI-style `data` key the gateway
+actually answers with (`models` wins if an object carries both). The derivation
+is conditional on the gateway reporting a window: an entry with no context
+window counts as unknown, so the budget falls back to `CONTEXT_DEFAULT_BUDGET`.
+
 An explicit `budget` wins verbatim and keeps its historical parse and its
 historical 10× clamp against `CONTEXT_DEFAULT_BUDGET` (`budget=999999999` →
 80000). The window-derived default is **not** subject to that clamp (it is
@@ -1902,8 +1908,11 @@ actual code:
     `CONTEXT_BUDGET_PERCENT=0` disables the derivation; an unknown model, no
     `model` at all, or an unreachable model catalog falls back to
     `CONTEXT_DEFAULT_BUDGET` — the model list is cached for five minutes, and a
-    failed lookup never fails the run. An explicit `token_budget` is applied
-    verbatim (this route has never clamped it).
+    failed lookup never fails the run. The list is read from a bare array, a
+    `models` key, or the OpenAI-style `data` key the gateway sends (`models`
+    wins if an object carries both); an entry that reports no context window is
+    unknown, so the budget falls back rather than being invented. An explicit
+    `token_budget` is applied verbatim (this route has never clamped it).
 
     The run record — the `run` object in the 202 response and the body of
     `GET /api/v1/gateway/runs/{run_id}` — then carries:

@@ -453,10 +453,13 @@ func TestModelWindowBudgetSourcesAreStable(t *testing.T) {
 	}
 }
 
-// TestModelWindowCatalog_JSONShapeOfGatewayModels guards the one wire detail
-// this file's stub does not exercise end to end: the catalog is fed by
+// TestModelWindowCatalog_JSONShapeOfGatewayModels guards the wire details this
+// file's stub does not exercise end to end: the catalog is fed by
 // gateway.ModelInfo, whose JSON tag is context_length — the field the real
-// GET /v1/models answer uses.
+// GET /v1/models answer would use — and, live, by the deployed gateway's
+// OpenAI-style "data" envelope, whose entries carry NO context window at all.
+// Window 0 is not a derivation: that list must fall back flat, with the
+// unknown_model source, rather than have a window invented for it.
 func TestModelWindowCatalog_JSONShapeOfGatewayModels(t *testing.T) {
 	var info gateway.ModelInfo
 	if err := json.Unmarshal([]byte(`{"id":"m","context_length":8192}`), &info); err != nil {
@@ -465,4 +468,60 @@ func TestModelWindowCatalog_JSONShapeOfGatewayModels(t *testing.T) {
 	if info.ID != "m" || info.ContextLen != 8192 {
 		t.Fatalf("gateway.ModelInfo decoded as %+v", info)
 	}
+
+	t.Run("the live gateway envelope through the catalog", func(t *testing.T) {
+		// Verbatim GET http://127.0.0.1:8642/v1/models (the gateway
+		// api_server this server passes to gateway.NewClient).
+		const livePayload = `{
+    "object": "list",
+    "data": [
+        {
+            "id": "Hermes Agent",
+            "object": "model",
+            "created": 1789682544,
+            "owned_by": "hermes",
+            "permission": [],
+            "root": "Hermes Agent",
+            "parent": null
+        }
+    ]
+}`
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/models" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(livePayload))
+		}))
+		defer srv.Close()
+
+		client, err := gateway.NewClient(srv.URL, "k")
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog := NewModelWindowCatalog(client, time.Minute)
+		budget, source := catalog.Budget(context.Background(), "Hermes Agent", 60, 8000)
+		if budget != 8000 || source != BudgetSourceUnknownModel {
+			t.Fatalf("Budget(live payload, 60) = (%d, %q), want (8000, %q): the data envelope must decode, and a window it does not report must not be invented",
+				budget, source, BudgetSourceUnknownModel)
+		}
+
+		// The same catalog still derives when the gateway DOES report a
+		// window: the fallback above is about the missing field, not about
+		// the envelope.
+		srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"Hermes Agent","object":"model","context_length":200000}]}`))
+		}))
+		defer srv2.Close()
+		client2, err := gateway.NewClient(srv2.URL, "k")
+		if err != nil {
+			t.Fatal(err)
+		}
+		derived, src := NewModelWindowCatalog(client2, time.Minute).Budget(context.Background(), "Hermes Agent", 60, 8000)
+		if derived != 120000 || src != BudgetSourceWindow {
+			t.Fatalf("Budget(data envelope with a 200000 window, 60) = (%d, %q), want (120000, %q)", derived, src, BudgetSourceWindow)
+		}
+	})
 }

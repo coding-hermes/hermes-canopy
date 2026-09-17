@@ -137,9 +137,10 @@ func TestStartRunNon202ReturnsAPIError(t *testing.T) {
 
 // TestListModels pins the GET /v1/models client added for GAP-080 phase 2a:
 // auth is inherited from the client, the per-model context window is decoded,
-// and BOTH response shapes internal/hermes' decodeList tolerates are accepted
-// (bare array, or an object wrapping the list under "models"). Anything else
-// is an error — callers fall back from it.
+// and all THREE response shapes are accepted — a bare array, an object wrapping
+// the list under "models", and the OpenAI-style object wrapping it under
+// "data" that the LIVE gateway api_server actually answers (pinned verbatim
+// below). Anything else is an error — callers fall back from it.
 func TestListModels(t *testing.T) {
 	t.Run("bare array", func(t *testing.T) {
 		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
@@ -196,6 +197,105 @@ func TestListModels(t *testing.T) {
 		}
 	})
 
+	t.Run("wrapped in an OpenAI data field", func(t *testing.T) {
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"object":"list","data":[{"id":"big-model","context_length":200000}]}`))
+			return true
+		})
+		defer ts.Close()
+
+		c, _ := NewClient(ts.URL, "k")
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels: %v", err)
+		}
+		if len(models) != 1 || models[0].ID != "big-model" || models[0].ContextLen != 200000 {
+			t.Fatalf("data envelope decoded as %+v", models)
+		}
+	})
+
+	t.Run("data envelope carrying an empty list", func(t *testing.T) {
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"object":"list","data":[]}`))
+			return true
+		})
+		defer ts.Close()
+
+		c, _ := NewClient(ts.URL, "k")
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels: %v", err)
+		}
+		if len(models) != 0 {
+			t.Fatalf("empty data envelope decoded as %+v", models)
+		}
+	})
+
+	// The exact bytes the deployed gateway api_server answers with
+	// (GET http://127.0.0.1:8642/v1/models), verbatim: the list lives under
+	// "data", every entry carries the OpenAI model fields, and NO entry carries
+	// context_length — so the window is 0 and the budget must fall back rather
+	// than be invented.
+	t.Run("the live gateway payload", func(t *testing.T) {
+		const livePayload = `{
+    "object": "list",
+    "data": [
+        {
+            "id": "Hermes Agent",
+            "object": "model",
+            "created": 1789682544,
+            "owned_by": "hermes",
+            "permission": [],
+            "root": "Hermes Agent",
+            "parent": null
+        }
+    ]
+}`
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(livePayload))
+			return true
+		})
+		defer ts.Close()
+
+		c, _ := NewClient(ts.URL, "k")
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels on the live payload: %v", err)
+		}
+		if len(models) != 1 {
+			t.Fatalf("live payload decoded to %d models, want 1: %+v", len(models), models)
+		}
+		if models[0].ID != "Hermes Agent" {
+			t.Fatalf("live payload model ID = %q, want %q", models[0].ID, "Hermes Agent")
+		}
+		if models[0].ContextLen != 0 {
+			t.Fatalf("live payload reported a context window of %d; the gateway sends none", models[0].ContextLen)
+		}
+	})
+
+	// Both keys present: "models" wins, so the outcome does not depend on map
+	// iteration order.
+	t.Run("both keys prefers models", func(t *testing.T) {
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"object":"list","models":[{"id":"from-models","context_length":8192}],"data":[{"id":"from-data","context_length":4096}]}`))
+			return true
+		})
+		defer ts.Close()
+
+		c, _ := NewClient(ts.URL, "k")
+		models, err := c.ListModels(context.Background())
+		if err != nil {
+			t.Fatalf("ListModels: %v", err)
+		}
+		if len(models) != 1 || models[0].ID != "from-models" || models[0].ContextLen != 8192 {
+			t.Fatalf("both-key object decoded as %+v, want the models key to win", models)
+		}
+	})
+
 	t.Run("unusable shapes error", func(t *testing.T) {
 		for _, tc := range []struct {
 			name   string
@@ -203,8 +303,9 @@ func TestListModels(t *testing.T) {
 			body   string
 		}{
 			{"non-2xx", http.StatusUnauthorized, `{"error":{"message":"invalid api key"}}`},
-			{"object without a models field", http.StatusOK, `{"object":"list","data":[]}`},
+			{"object with neither models nor data", http.StatusOK, `{"object":"list","items":[]}`},
 			{"not JSON at all", http.StatusOK, `<html>nope</html>`},
+			{"models key present but not a list", http.StatusOK, `{"object":"list","models":"nope","data":[]}`},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				ts := newTestServer(func(w http.ResponseWriter, r *http.Request) bool {
