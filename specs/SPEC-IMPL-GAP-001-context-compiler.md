@@ -57,6 +57,7 @@ type Manifest struct {
     OmittedReason  string       `json:"omittedReason"`  // "budget" | "depth" | ""
     TruncationMarkers []string  `json:"truncationMarkers"` // e.g. "3 messages omitted"
     Warnings       []string     `json:"warnings"`        // e.g. "5+ references: context becoming unfocused"
+    PinnedCount    int          `json:"pinnedCount,omitempty"`  // 2026-09-17 amendment (GAP-080 phase 1)
 }
 
 type ManifestItem struct {
@@ -65,6 +66,7 @@ type ManifestItem struct {
     Title     string    `json:"title"`     // node: content preview (120 chars); topic: slug; card: card type
     TokenCount int      `json:"tokenCount"`
     Truncated bool      `json:"truncated"` // true if item content was elided
+    Pinned    bool      `json:"pinned,omitempty"`     // 2026-09-17 amendment (GAP-080 phase 1)
 }
 
 // TokenEstimator estimates tokens for a string. Injectable for tests.
@@ -104,6 +106,19 @@ type CardReader interface {
     GetByContextHash(ctx context.Context, contextHash string) ([]card.Card, error)
 }
 ```
+
+> **2026-09-17 amendment (GAP-080 phase 1):** `Manifest` gained `PinnedCount`
+> (json tag `pinnedCount`, omitted when zero) and `ManifestItem` gained `Pinned`
+> (json tag `pinned`, omitted when false) — see the amended `Manifest` /
+> `ManifestItem` declarations above, which keep every pre-existing field and add
+> these two. A node is **pinned** iff its `metadata` JSON is an object with
+> `"pinned": true` (exact boolean true); every other shape — absent, nil, empty,
+> `{}`, `"pinned": false`, a non-boolean value, an array/scalar, malformed JSON —
+> is NOT pinned and is never an error. `PinnedCount` is the number of pinned
+> ancestry items the budget walk kept; `ManifestItem.Pinned` marks each of them.
+> Both are `omitempty`, so an unpinned payload's manifest JSON is byte-identical
+> to the pre-amendment shape. Implementation: `internal/context/compiler.go`
+> (`isPinned`, the step-4 walk); tests: `internal/context/compiler_pinned_test.go`.
 
 ## 3. Data Model
 
@@ -163,6 +178,24 @@ Handler lives at `internal/handler/context_handler.go` (pattern: copy `internal/
 4. **Budget application** (iterative, in order):
    - Estimate full ancestry tokens. While `tokensUsed + nextItem > budget`, drop the OLDEST remaining item, increment `OmittedCount`, set `OmittedReason="budget"` (only if not already "depth"), append `"N messages omitted"` to `TruncationMarkers` (one marker total, N = total omitted).
    - If budget remains after ancestry: process references (step 5), then cards (step 6). Each is budget-gated identically (drop oldest-first).
+   > **2026-09-17 amendment (GAP-080 phase 1):** the budget walk above is
+   > unchanged for unpinned nodes and gains one exemption. Walk newest→oldest:
+   > an item that FITS is kept and its tokens deducted (as before); an item that
+   > does NOT fit is kept anyway when it is PINNED — its tokens are deducted and
+   > the running remaining budget may go negative, which is the documented
+   > overage — and the walk CONTINUES. The first item that does not fit and is
+   > NOT pinned ends the prefix phase: that item is omitted, and for every older
+   > item the walk keeps ONLY pinned ones and omits the rest. `OmittedCount`
+   > counts ONLY omitted (unpinned) items; a pinned item is never counted as
+   > omitted. Order is preserved (newest→oldest). The "keep the single newest
+   > node when the budget is too small" edge case (§7) and its warning are
+   > preserved verbatim. **No-pin parity guarantee:** with zero pinned nodes the
+   > tail contributes nothing, so `Content`, `OmittedCount`, `OmittedReason` and
+   > `TruncationMarkers` are byte-identical to the pre-amendment behaviour.
+   > When pinned content alone exceeds the budget, ONE warning naming the exact
+   > overage is appended (`"pinned nodes exceed the token budget by N tokens"`)
+   > and `TokensUsed` may exceed `TokenBudget`; no pinned node is ever dropped to
+   > make the numbers fit.
 5. **References**: if `ResolveRefs` (default true):
    - `TopicReader.GetTopicsForNode(req.NodeID)` → resolved topic IDs
    - For each topic, render `--- topic boundary: <slug> ---\n<title>\n<description preview 200 chars>`
@@ -219,6 +252,9 @@ Use stub readers (no PG): `stubNodeReader`, `stubTopicReader`, `stubCardReader` 
 | 13 | MaxAncestors=2, chain 10 | Only 2 newest; OmittedReason="depth"; OmittedCount=8 |
 | 14 | Duplicate refs | Deduped; manifest.references len 1 |
 | 15 | Budget too small for one node | Content non-empty; warning "budget too small for single node" |
+| 16 | Chain overflowing the budget with a node pinned at the OLDEST end (`metadata.pinned: true`) | Pinned node present in `Content` AND in `manifest.ancestry` with `Pinned: true`; unpinned neighbours still dropped; `OmittedCount` counts only unpinned items; `pinnedCount` = pinned items kept; `TokensUsed > TokenBudget` reports `"pinned nodes exceed the token budget by N tokens"` (GAP-080 phase 1) |
+| 17 | Zero pins, same inputs as scenarios 1/2/13/15 | Byte-identical pre-amendment `Content`, `OmittedCount`, `OmittedReason`, `TruncationMarkers` (no-pin parity guarantee, §5 step 4 amendment) |
+| 18 | `metadata` that is nil / `{}` / `null` / `[1,2]` / `{` / `{"pinned":"yes"}` / `{"pinned":false}` | Compiles without error; nothing marked pinned; payload identical to the metadata-less chain |
 
 Handler tests (`internal/handler/context_handler_test.go`, stub compiler): 200 with manifest JSON, 400 bad budget, 401 no JWT, 404 unknown node, 503 DB-down sentinel.
 

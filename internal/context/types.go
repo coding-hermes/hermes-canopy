@@ -74,6 +74,12 @@ type Manifest struct {
 	TruncationMarkers []string       `json:"truncationMarkers"` // e.g. "3 messages omitted"
 	Warnings          []string       `json:"warnings"`          // e.g. "5+ references: context becoming unfocused"
 
+	// PinnedCount is the number of PINNED ancestry items the budget walk kept
+	// (GAP-080 phase 1). Pinned items are exempt from the budget: they are
+	// never dropped and never counted as omitted, so TokensUsed may exceed
+	// TokenBudget when they are kept. Omitted for payloads with no pins.
+	PinnedCount int `json:"pinnedCount,omitempty"`
+
 	// MultiReference is the §6.3 audit record of the selected-source block,
 	// when the turn was compiled from a multi-reference selection. Omitted
 	// entirely for ordinary turns.
@@ -87,6 +93,11 @@ type ManifestItem struct {
 	Title      string    `json:"title"` // node: content preview (120 chars); topic: slug; card: card type
 	TokenCount int       `json:"tokenCount"`
 	Truncated  bool      `json:"truncated"` // true if item content was elided
+
+	// Pinned marks an ancestry item whose node carried `metadata.pinned: true`
+	// and was therefore exempted from the budget walk (GAP-080 phase 1).
+	// Omitted from the JSON for unpinned items.
+	Pinned bool `json:"pinned,omitempty"`
 }
 
 // TokenEstimator estimates tokens for a string. Injectable for tests.

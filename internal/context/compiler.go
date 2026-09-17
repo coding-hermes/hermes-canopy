@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -21,6 +22,33 @@ type compilerImpl struct {
 	cards   CardReader
 	est     TokenEstimator
 	maxRefs int // soft cap for references (hard cap = 2x)
+}
+
+// isPinned reports whether a node's metadata JSON marks the node pinned: an
+// OBJECT with `"pinned": true` (exact boolean true).
+//
+// Every other shape is NOT pinned and is never an error: absent metadata, nil,
+// empty bytes, `{}`, `{"pinned": false}`, a non-boolean value
+// (`{"pinned": "yes"}`), a JSON array or scalar, and malformed JSON all return
+// false. A pinned node's content is never dropped by the budget walk
+// (GAP-080 phase 1).
+func isPinned(metadata []byte) bool {
+	if len(metadata) == 0 {
+		return false
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(metadata, &obj); err != nil {
+		return false // malformed JSON, array, or scalar — not an object
+	}
+	raw, ok := obj["pinned"]
+	if !ok {
+		return false
+	}
+	var pinned bool
+	if err := json.Unmarshal(raw, &pinned); err != nil {
+		return false // present but not a JSON boolean
+	}
+	return pinned
 }
 
 // NewCompiler wires repositories + estimator into a Compiler.
@@ -112,6 +140,7 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	// The ancestry is oldest→newest now. Render newest-first.
 	var ancestryContent []string
 	var ancestryItems []ManifestItem
+	var ancestryPinned []bool
 	for i := len(ancestors) - 1; i >= 0; i-- {
 		node := ancestors[i]
 		text := fmt.Sprintf("--- node %s (%s) ---\n%s", node.ID, node.AuthorID, node.Content)
@@ -122,33 +151,65 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 			Title:      contentPreview(node.Content, 120),
 			TokenCount: c.est.Estimate(text),
 		})
+		ancestryPinned = append(ancestryPinned, isPinned(node.Metadata))
 	}
 
 	// ── Step 4: Budget application ──────────────────────────────────────
-	// Remove oldest-first until content fits budget
+	// Walk newest→oldest. An item that fits is kept and its tokens deducted.
+	// An item that does NOT fit is kept anyway when it is PINNED (the running
+	// budget may go negative — that is the documented overage) and the walk
+	// continues. The first item that does not fit and is NOT pinned ends the
+	// "prefix" phase: that item is omitted, and for every older item the walk
+	// keeps ONLY pinned ones and omits the rest. With zero pins the tail
+	// contributes nothing, so the result is byte-identical to the pre-GAP-080
+	// behaviour (GAP-080 phase 1).
 	remainingBudget := req.TokenBudget
 	var keptContent []string
 	var keptItems []ManifestItem
 	totalOmittedByBudget := 0
+	pinnedKept := 0
+	tailPhase := false
 
 	for i := 0; i < len(ancestryContent); i++ {
 		tokens := c.est.Estimate(ancestryContent[i])
-		if remainingBudget >= tokens {
+		pinned := ancestryPinned[i]
+
+		if tailPhase && !pinned {
+			// Older unpinned item after the prefix ended — omit, never count
+			// a pinned (kept) item as omitted.
+			totalOmittedByBudget++
+			continue
+		}
+
+		if remainingBudget >= tokens || pinned {
 			remainingBudget -= tokens
+			item := ancestryItems[i]
+			if pinned {
+				item.Pinned = true
+				pinnedKept++
+			}
+			keptContent = append(keptContent, ancestryContent[i])
+			keptItems = append(keptItems, item)
+			continue
+		}
+
+		// Unpinned and does not fit: the prefix phase ends here.
+		tailPhase = true
+		totalOmittedByBudget++
+		// still include at least the NEWEST node (the last one)
+		if len(keptContent) == 0 && i == len(ancestryContent)-1 {
+			// budget too small for even one node — keep the single newest anyway
 			keptContent = append(keptContent, ancestryContent[i])
 			keptItems = append(keptItems, ancestryItems[i])
-		} else {
-			// Drop this (oldest) and all remaining older ones
-			totalOmittedByBudget += len(ancestryContent) - i
-			// still include at least the NEWEST node (the last one)
-			if len(keptContent) == 0 && i == len(ancestryContent)-1 {
-				// budget too small for even one node — keep the single newest anyway
-				keptContent = append(keptContent, ancestryContent[i])
-				keptItems = append(keptItems, ancestryItems[i])
-				manifest.Warnings = append(manifest.Warnings, "budget too small for single node")
-			}
-			break
+			manifest.Warnings = append(manifest.Warnings, "budget too small for single node")
 		}
+	}
+
+	// Pinned content alone can push the accounted tokens past the budget: the
+	// overage is reported, and no pinned node is ever dropped to hide it.
+	if remainingBudget < 0 {
+		manifest.Warnings = append(manifest.Warnings,
+			fmt.Sprintf("pinned nodes exceed the token budget by %d tokens", -remainingBudget))
 	}
 
 	if totalOmittedByBudget > 0 {
@@ -163,6 +224,7 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	ancestryContent = keptContent
 	ancestryItems = keptItems
 	manifest.Ancestry = ancestryItems
+	manifest.PinnedCount = pinnedKept
 
 	// ── Step 5: References ──────────────────────────────────────────────
 	refContent, refItems, refWarnings := c.compileReferences(ctx, req, remainingBudget)

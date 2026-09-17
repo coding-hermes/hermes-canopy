@@ -271,6 +271,10 @@ func (h *NodeHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		Content       *string          `json:"content,omitempty"`
 		ContentFormat *string          `json:"content_format,omitempty"`
 		Metadata      *json.RawMessage `json:"metadata,omitempty"`
+		// Pinned is a strict boolean: a non-boolean value fails the decode and
+		// surfaces as 400 INVALID_BODY rather than silently becoming false
+		// (GAP-080 phase 1).
+		Pinned *bool `json:"pinned,omitempty"`
 	}
 	if err := decodeNodeJSON(r, &req); err != nil {
 		writeError(w, 400, "INVALID_BODY", invalidNodeBodyMessage(err))
@@ -281,6 +285,7 @@ func (h *NodeHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		Content:       req.Content,
 		ContentFormat: req.ContentFormat,
 		Metadata:      req.Metadata,
+		Pinned:        req.Pinned,
 	}
 
 	out, err := h.svc.Update(r.Context(), nodeID, input)

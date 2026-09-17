@@ -149,6 +149,13 @@ type UpdateNodeInput struct {
 	Content       *string
 	ContentFormat *string
 	Metadata      *json.RawMessage
+	// Pinned, when non-nil, sets or clears the node's `metadata.pinned` flag
+	// IN PLACE (GAP-080 phase 1): true merges `"pinned": true` into the
+	// existing metadata object, false removes exactly that key. Every other
+	// metadata key — including the reserved `multi_reference` object
+	// (SPEC-PL-06) — survives verbatim. A metadata field in the same body is
+	// applied first, then the pin merge on top of it.
+	Pinned *bool
 }
 
 // ReplyInput is the request body for POST /nodes/{node_id}/reply.
@@ -548,7 +555,7 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 	if nodeID == uuid.Nil {
 		return nil, ErrNodeNotFound
 	}
-	if input.Content == nil && input.ContentFormat == nil && input.Metadata == nil {
+	if input.Content == nil && input.ContentFormat == nil && input.Metadata == nil && input.Pinned == nil {
 		return nil, ErrNoUpdateFields
 	}
 
@@ -603,9 +610,38 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 	return detail, nil
 }
 
+// metadataPinMergeExpr is the `metadata` column expression of the PATCH
+// UPDATE (GAP-080 phase 1). Positional parameters:
+//
+//	$4 — optional explicit metadata replacement (COALESCE keeps the row's
+//	     value when absent); applied FIRST
+//	$5 — optional pin action: "pin" | "unpin" | NULL (absent). The pin merge
+//	     runs ON TOP of $4, so a body carrying both keeps its precedence.
+//
+// A pin merges/removes exactly the `pinned` key and leaves every other key
+// alone — in particular the reserved `metadata.multi_reference` object
+// (SPEC-PL-06) survives verbatim. Non-object / NULL metadata merges onto an
+// empty object instead of failing.
+const metadataPinMergeExpr = `CASE
+                WHEN $5::text IS NULL THEN COALESCE($4, metadata)
+                WHEN $5::text = 'pin' THEN
+                    (CASE WHEN metadata IS NULL OR jsonb_typeof(metadata) <> 'object'
+                          THEN '{}'::jsonb ELSE COALESCE($4, metadata) END)
+                    || '{"pinned": true}'::jsonb
+                ELSE
+                    (CASE WHEN metadata IS NULL OR jsonb_typeof(metadata) <> 'object'
+                          THEN '{}'::jsonb ELSE COALESCE($4, metadata) END)
+                    - 'pinned'
+            END`
+
 // applyUpdate runs the COALESCE SQL and returns the refreshed node.
+//
+// Pinned (GAP-080 phase 1) is merged in the SAME single UPDATE — no
+// read-modify-write race. Precedence when both fields are present: the
+// explicit `metadata` replace runs first, then the pin merge operates on the
+// result (see metadataPinMergeExpr).
 func (s *NodeServiceImpl) applyUpdate(ctx context.Context, nodeID uuid.UUID, input UpdateNodeInput) (*db.Node, error) {
-	var content, format, rawMetadata interface{}
+	var content, format, rawMetadata, pinAction interface{}
 	if input.Content != nil {
 		content = *input.Content
 	}
@@ -615,17 +651,24 @@ func (s *NodeServiceImpl) applyUpdate(ctx context.Context, nodeID uuid.UUID, inp
 	if input.Metadata != nil {
 		rawMetadata = []byte(*input.Metadata)
 	}
+	if input.Pinned != nil {
+		if *input.Pinned {
+			pinAction = "pin"
+		} else {
+			pinAction = "unpin"
+		}
+	}
 
 	var out db.Node
 	err := s.pool.QueryRow(ctx, `
         UPDATE nodes
         SET content = COALESCE($2, content),
             content_format = COALESCE($3, content_format),
-            metadata = COALESCE($4, metadata),
+            metadata = `+metadataPinMergeExpr+`,
             edited_at = clock_timestamp()
         WHERE id = $1 AND deleted_at IS NULL
         RETURNING `+nodeColumns,
-		nodeID, content, format, rawMetadata,
+		nodeID, content, format, rawMetadata, pinAction,
 	).Scan(
 		&out.ID, &out.TreeID, &out.ParentID, &out.ParentMode, &out.AuthorID,
 		&out.Content, &out.ContentFormat, &out.NodeType,

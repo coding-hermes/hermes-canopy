@@ -373,9 +373,28 @@ PATCH /api/v1/trees/{tree_id}/nodes/{node_id}
 {
   "content": "string (optional)",
   "content_format": "string (optional, enum: 'markdown'; default 'markdown' — any other value rejected with 400 VALIDATION_ERROR 'invalid content format')",
-  "metadata": "object (optional)"
+  "metadata": "object (optional)",
+  "pinned": "boolean (optional)"
 }
 ```
+
+`pinned` is merged into the node's `metadata` object rather than replacing it:
+`true` sets `metadata.pinned = true`, `false` removes that key, and **every other
+metadata key is preserved** — including the reserved
+`metadata.multi_reference` object written on multi-reference nodes
+(SPEC-PL-06), which survives byte-for-byte. Other keys are never touched, so a
+pin never clobbers reserved metadata. When `metadata` is present in the same
+body it is applied first and the pin merges on top of it. The value must be a
+JSON boolean (or `null`, meaning "not provided"); any other type is a 400
+`INVALID_BODY` naming the field.
+
+The context compiler never drops a pinned message from the compiled context: a
+pinned node is exempt from the token-budget walk, so it is always included and
+never counted in `omittedCount`. When pinned content alone exceeds the budget
+the compiled `tokensUsed` may exceed `tokenBudget` — the overage is reported in
+`manifest.warnings` (e.g. `"pinned nodes exceed the token budget by 137
+tokens"`), and `manifest.pinnedCount` reports how many pinned ancestry items
+were kept.
 
 **Response (200):** Updated node detail.
 
