@@ -685,3 +685,11 @@ warnings are the closure row's free-form `guard_result` vocabulary note (expecte
 clause vs `TestGAP080_PinnedOverageKeepsAllPinned`) — this tick did **not** touch pinned semantics; GAP-076/077/078 parked
 on rulings; DF-17 next cheapest; QC of the new depth+floor behaviour is locked by a test now, so the next accounting
 question (if any) starts from a defensible baseline. No doc or spec asserted the old count, so nothing was amended.
+
+### Tick 486 addendum — CI verified GREEN
+
+Both runs of this tick went **GREEN on the FIRST attempt** (polled to conclusion, never claimed early):
+**35271436791** on the content commit `6197d9a` (the accounting fix) and **35271830220** on the board closeout
+`6da5a96`. The DF-21 row's `ci_result` is `GREEN` with both run ids attached. This addendum commit's own run is left
+to the next tick's bookkeeping rather than written as green here. Inherited CI health at tick start was clean
+(last 5 completed runs all `success`), so no CI row had to be filed.
