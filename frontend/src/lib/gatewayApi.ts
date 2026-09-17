@@ -8,7 +8,7 @@
  * the frontend.
  */
 
-import { apiGet, apiPost } from './api';
+import { apiGet, apiPost, apiUrl } from './api';
 import {
   DEFAULT_CONTEXT_BUDGET,
   formatTokenUsage,
@@ -166,6 +166,11 @@ export function respondGatewayApproval(
 
 // ─── SSE stream URL ───────────────────────────────────────────────────
 
+/**
+ * SSE URL for a run's event feed. Built through `apiUrl()` so the base
+ * honours `VITE_API_BASE_URL` — a hardcoded base would pin the feed to the
+ * default and break a non-default deployment.
+ */
 export function gatewayRunEventsUrl(runId: string): string {
-  return `/api/v1/gateway/runs/${encodeURIComponent(runId)}/events`;
+  return apiUrl(`/gateway/runs/${encodeURIComponent(runId)}/events`);
 }

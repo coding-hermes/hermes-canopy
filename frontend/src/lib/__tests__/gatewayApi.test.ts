@@ -91,9 +91,41 @@ describe('gatewayApi', () => {
     await expect(getGatewayStatus()).rejects.toThrow('gateway down');
   });
 
-  it('gatewayRunEventsUrl builds the SSE URL', () => {
+  it('gatewayRunEventsUrl builds the SSE URL on the default base', () => {
+    // The base is supplied by apiUrl() (VITE_API_BASE_URL ?? '/api/v1'), so
+    // these two literals are the DEFAULT-base shape, not a copy of the base
+    // baked into the function. The base-tracking spec below is what proves the
+    // function follows a configured base.
     expect(gatewayRunEventsUrl('run_1')).toBe('/api/v1/gateway/runs/run_1/events');
     expect(gatewayRunEventsUrl('run/1')).toBe('/api/v1/gateway/runs/run%2F1/events');
+  });
+
+  // ─── base tracking (DF-HERMES-CANOPY-15) ─────────────────────────────
+
+  describe('gatewayRunEventsUrl base tracking', () => {
+    const CUSTOM_BASE = 'https://api.example.test/canopy/api/v1';
+
+    afterEach(() => {
+      // The base is fixed at module-import time, so the MODULE REGISTRY has to
+      // be reset too — unstubbing the env alone would leave the stubbed base
+      // live for any later dynamic import of gatewayApi/api.
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    });
+
+    it('follows VITE_API_BASE_URL instead of a hardcoded /api/v1', async () => {
+      vi.stubEnv('VITE_API_BASE_URL', CUSTOM_BASE);
+
+      vi.resetModules();
+      const mod = await import('../gatewayApi');
+
+      expect(mod.gatewayRunEventsUrl('run_1')).toBe(
+        `${CUSTOM_BASE}/gateway/runs/run_1/events`,
+      );
+      expect(mod.gatewayRunEventsUrl('run/1')).toBe(
+        `${CUSTOM_BASE}/gateway/runs/run%2F1/events`,
+      );
+    });
   });
 
   // ─── GAP-084: node-scoped runs ──────────────────────────────────────
