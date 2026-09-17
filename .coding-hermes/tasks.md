@@ -693,3 +693,109 @@ Both runs of this tick went **GREEN on the FIRST attempt** (polled to conclusion
 `6da5a96`. The DF-21 row's `ci_result` is `GREEN` with both run ids attached. This addendum commit's own run is left
 to the next tick's bookkeeping rather than written as green here. Inherited CI health at tick start was clean
 (last 5 completed runs all `success`), so no CI row had to be filed.
+
+## Tick 487 — 2026-09-17 ~21:22–21:42Z (WORK — DF-HERMES-CANOPY-17 CLOSED, foreman-direct)
+
+**Verdict: OK.** Board at tick start: 343 rows / 307 unique ids / **289 complete / 18 pending / 0 parse failures**
+(parsed line-wise, keep-LAST per id — a non-last-wins scan is a false high and a grep count is a false low on this file).
+Inherited CI health: the last 5 completed runs were all `success` — **nothing to file**.
+
+**Pick + rationale:** **DF-HERMES-CANOPY-17 (P3, complexity 1)** — the only pending row that is project-owned,
+single-repo, has 0 attempts, and carries clean PASS criteria. Every higher-priority row is unwinnable from this repo or
+needs an owner ruling: GAP-076 (P1) is the SQLite storage pivot ruling and blocks GAP-077 (P2); GAP-078 (P2) needs a
+ruling; QA-HERMES-CANOPY-1/2/9/10 are bunker/fleet-infra owned; DF-20 (P3) says "one owner decision, not a worker" in
+its own title; GAP-080 (P3) needs a phase split first (this tick delivered the missing design source — see below);
+FTR-06 + PL-03/04/05/06 + PL-02 are deferred post-MVP specs; GAP-081 is a scope decision and GAP-083 (P4) a policy/export
+row.
+
+**Mode: FOREMAN-DIRECT, no worker dispatch — deliberate.** A one-line ignore-pattern edit cannot exercise a worker
+(the tick-486 entry reached the same conclusion independently), and the row is complexity 1 / single file. The
+GitReins lifecycle was still run in full (create → start → complete).
+
+**Premise re-verified at HEAD `61f7d84` BEFORE editing (not taken from the row):**
+`git check-ignore -v cmd/canopyd/probe.go` → `.gitignore:16:canopyd` **rc=0**; a real throwaway file
+(`cmd/canopyd/zz_probe_df17.go`) made `git add` exit **rc=1** with *"The following paths are ignored by one of your
+.gitignore files: cmd/canopyd"*. Tracked files under `cmd/canopyd/` (7 of them) kept working — that is what makes the
+trap silent.
+
+**Change (`7a0dbad`, 1 file, +5/−1):** `.gitignore` line 16 `canopyd` → **`/canopyd`** plus a 4-line comment naming the
+trap. The class is now impossible **by construction** — `/canopyd` cannot match `cmd/canopyd/` under any circumstance.
+No coverage lost: the Makefile's `BIN_DIR ?= bin` puts the artifact at `bin/canopyd` (still covered by the existing
+`bin/` line, verified), and a bare `go build ./cmd/canopyd` at the root still produces `canopyd` there and stays
+ignored (verified).
+
+**Independent verification (foreman, adversarial, not the row's evidence):**
+- **Falsification by file swap:** with `git show HEAD:.gitignore` in place both signals reproduce (check-ignore
+  **rc=0**, add **rc=1**); restoring the patched file flips both (check-ignore **rc=1**, add **rc=0**);
+  `md5 5eac598a948b6641585a17479eec5c64` identical before/after the swap. The probe is sensitive to the change.
+- **Per-AC probes:** root artifact still ignored → `.gitignore:20:/canopyd`; `bin/canopyd` → `bin/`; a NEW file under
+  `cmd/canopyd/` shows as `?? cmd/canopyd/zz_probe_df17.go` and `git add` returns **rc=0**; probe file removed,
+  `git status --porcelain` clean apart from the intended diff.
+- **No test added, on purpose:** a `.gitignore` assertion would have to shell out to `git` from the Go suite
+  (non-portable), and the anchored pattern makes the failure mode unreachable — a test would assert the
+  implementation, not a behaviour. Said out loud here rather than implied.
+- ⚠️ **The off-by-one trap fired during the tick's own measurement:** `git add … | head -3; echo $?` printed **0** for
+  a refusal. Re-measured with a redirect and no pipe → **rc=1**. (Known class, `shell-pipeline-exit-code-masking`.)
+
+**Gates (fresh, foreman-run at `7a0dbad`):** `go build ./...` **0** · `go vet ./...` **0** · `golangci-lint run ./...`
+(v2.12.2 = CI) **0 issues** · `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 <24 non-handler pkgs>` →
+**SWEEP_EXIT=0** (db 83.4s, federation 37.7s, plugin 26.4s, fileviewer 22.3s, service 12.9s, testutil 8.8s,
+relay/transport/card/hermes/sse/session/mlst/etc all ok; no `FATAL: the database system is shutting down` this time —
+the container stayed up). `internal/handler` was **not** re-run: nothing in this diff can reach it, and the row's own
+acceptance surface is git-level. `CANOPY_TEST_DB_URL` never set.
+⚠️ **The pre-commit guard's PASS is a phantom-pass short-circuit**, not evidence: a `.gitignore`-only diff logs
+"No supported source files found" and returns instantly. The load-bearing evidence is the fresh battery above plus the
+falsification pair.
+
+**Live state:** `:8091` `/health` **200**; live `canopy` DB **2|26|46** with **0** nodes created in the last 2 hours;
+schema **47**; **11** `canopy_<hex>` per-test DBs present — pre-existing residue class, **flagged, not dropped**
+(not provably this tick's; the probe DB was not used this tick at all).
+
+**GitReins:** task created + started **before** the edit; `gitreins task complete DF-HERMES-CANOPY-17` after the commit
+→ **tier1 PASS** (secrets clean / go_build ok / go_lint ok / go_tests, full mode) + **tier2 PASS / COMPLETE**, verdict
+**`7e3a474e`**. The judge independently re-ran all four sub-conditions (its own `cmd/canopyd/__eval_probe_new.go`
+add-probe + `git diff 7a0dbad~1 7a0dbad -- .gitignore`) and reported them live. Ledger now holds **178** `status: complete`.
+
+**CI:** run **35276852016** on `7a0dbad` — **GREEN on the first attempt** (21:28:22Z → ~21:32Z, no rerun; polled to
+conclusion, never claimed early). The tick's board closeout commit gets its own run, left to the next tick's bookkeeping.
+
+**Off-by-one:** health `{"status":"ok","uptime":"20h2m55s"}`. Discover ran for real (not copied from the previous
+entry): `gitignore-pattern-matches-directory` → `not_found`, `git-ignore-directory-name-collision` → `not_found`
+(nothing cached, so nothing to apply). Debugged class submitted: **`sub_7b965c`** —
+`gitignore-bare-pattern-shadows-source-directory` (cadence `post-debug`, queued, position 2): *a bare-name artifact
+pattern also matches a same-named directory anywhere in the tree, so tracked files keep working while every NEW file
+under that directory silently refuses `git add`; anchor to `/name` and verify with BOTH probes (check-ignore + a real
+add, exit code measured without a pipe).*
+
+**Push:** `origin/master` = `gitlab/master` = `7a0dbad`; `git rev-list --count origin/master..HEAD` = **0**,
+`gitlab/master..HEAD` = **0** (both remotes, verified after the push).
+
+**Bookkeeping:** `tasks.jsonl` — **exactly two physical lines changed** (proved byte-wise against a pre-edit copy):
+physical **340** = the DF-17 row → `complete` with `commit_hash`/`judge_verdict`/`ci_result`/`ci_runs`/`worker_summary`/
+`guard_result`/`foreman_note`, and physical **322** = the GAP-080 row → `foreman_note` gains the **phase-2 unblock**
+(see below); all 343 other lines passed through byte-identically. Post-edit: 343 rows / 307 unique / **290 complete /
+17 pending** / 0 parse failures. `events.jsonl` — 2 appended rows (ids **541** `task_completed`, **542** `ci`).
+`board.jsonl` — `ticks_total 486 → 487`, `last_commit 6197d9a → 7a0dbad`, `last_tick`/`updated_at` bumped.
+`boardctl validate`: **39 errors + 180 warnings** — every error is the inherited recycled-ID duplicate class
+(`QA-HERMES-CANOPY-1` ×7, `QA-…-2` ×4, `PL02-P4` ×3, `DF-…-2/4/5` ×3, `GAP-071` ×2, …), i.e. the tick-481/486
+baseline of 39 unchanged in kind; the extra warning vs 486 (179 → 180) is the RICH closure row's free-form
+`guard_result` vocabulary note, expected.
+
+**GAP-080 phase-2 unblock (no dispatch, discovery only — recorded on the row):** the model window IS reachable on the
+existing path. `internal/hermes/client.go` `ListModels()` returns `ModelInfo` carrying `ContextLen` (`context_length`,
+~line 182), and the gateway run request already carries the selected model (`internal/gateway/service.go:35`). The
+single resolution point is `resolveContext` (`internal/handler/gateway_handler.go:179-223`), which today falls back to
+`h.defaultBudget` = `cfg.ContextDefaultBudget` 8000 (`internal/config/config.go:47/106`) whenever `req.TokenBudget <= 0`;
+the read route `GET /api/v1/context/{node_id}` takes `?budget=` and clamps to 10× default
+(`internal/handler/context_handler.go:72-83`). **Split before dispatching: 2a = percent-of-window computation behind a
+config knob (default 60) with an explicit fallback to `ContextDefaultBudget` when the model is unknown or the catalog
+call fails (never a hard dependency on the gateway being up) + the interaction with the existing 10× clamp;
+2b = the UI slider.** Do not attempt both in one dispatch.
+
+**Watch items:** DF-20 still needs ONE owner decision (§7 literal clause vs `TestGAP080_PinnedOverageKeepsAllPinned`);
+GAP-076/077/078 parked on rulings; GAP-080 needs the 2a/2b split above; GAP-081 is a scope decision; FTR/PL rows are
+post-MVP specs. Still no identifiable E2E battery tick in the recent window (E2E-001 cadence — unchanged watch item),
+and the `canopy_<hex>` per-test DB residue now reads 11.
+
+**Next tick.** Cheapest remaining: the split phase **GAP-080 phase 2a** (design source now on the row — the only row
+where the discovery work is already done), then **GAP-083** (P4 card/event JSONL export) or **DF-20** if Bane rules.
