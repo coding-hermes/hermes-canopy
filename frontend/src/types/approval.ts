@@ -75,10 +75,9 @@ export interface TreeDiff {
 }
 
 // ─── API helper ────────────────────────────────────────────────────────
-
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
-
-export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
-}
+//
+// The URL base and the bearer token both live in ONE module — `lib/api.ts`
+// (DF-HERMES-CANOPY-13). This file used to define its own base constant and
+// `apiUrl()` with no token logic, which silently bypassed auth for every
+// ApprovalPanel call. Re-exported so existing importers keep compiling.
+export { apiUrl } from '../lib/api.ts';

@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiUrl } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiUrl, authInit } from './api';
 import type { PluginPermission } from './pluginTypes';
 
 export class PluginApiError extends Error {
@@ -89,7 +89,7 @@ export class PluginApiHost {
   }
 
   private async networkFetch(p: Record<string, unknown>): Promise<unknown> {
-    const response = await fetch(apiUrl('/plugins/network-proxy'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    const response = await fetch(apiUrl('/plugins/network-proxy'), authInit({ method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }));
     const value = await response.json();
     if (!response.ok) throw new PluginApiError((value as { error?: { code?: string } }).error?.code ?? 'NETWORK_ERROR', (value as { error?: { message?: string } }).error?.message ?? `HTTP ${response.status}`);
     return value;

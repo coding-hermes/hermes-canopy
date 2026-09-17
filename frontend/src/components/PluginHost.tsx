@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildSandboxDoc, parseEmbeddedManifest, PluginSandboxHost, sha256Hex } from '../lib/pluginSandbox';
+import { apiUrl, authInit } from '../lib/api';
+import { subscribeSse } from '../lib/sse';
 import type { PluginDataApi, PluginNotification } from '../lib/pluginApi';
 import { PluginApiHost } from '../lib/pluginApi';
 import type { PluginEventPayload, PluginManifest, PluginPermission } from '../lib/pluginTypes';
@@ -42,15 +44,13 @@ export default function PluginHost({ plugin, instanceId, grantedPermissions, dat
 	}), [currentPlugin, instanceId, host]);
 
 	useEffect(() => {
-		const stream = eventSource ?? (typeof EventSource === 'undefined' ? null : new EventSource(`/api/v1/plugins/${currentPlugin.id}/events`));
-		if (!stream) return;
 		let cancelled = false;
-		const reload = async (raw: MessageEvent<string>) => {
-			const metadata = JSON.parse(raw.data) as { plugin_id: string; version: string; source_sha256: string };
+		const reload = async (data: string) => {
+			const metadata = JSON.parse(data) as { plugin_id: string; version: string; source_sha256: string };
 			if (metadata.plugin_id !== currentPlugin.id || metadata.version === currentPlugin.manifest.version) return;
 			let source = '';
 			for (let attempt = 0; attempt < 2; attempt++) {
-				const response = await fetch(`/api/v1/plugins/${metadata.plugin_id}/source`, { cache: 'no-store' });
+				const response = await fetch(apiUrl(`/plugins/${metadata.plugin_id}/source`), authInit({ cache: 'no-store' }));
 				if (!response.ok) throw new Error(`Plugin source fetch failed (${response.status})`);
 				source = await response.text();
 				if (await sha256Hex(source) === metadata.source_sha256) break;
@@ -61,10 +61,23 @@ export default function PluginHost({ plugin, instanceId, grantedPermissions, dat
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			if (!cancelled) setCurrentPlugin({ ...currentPlugin, manifest: parseEmbeddedManifest(source), sourceJS: source });
 		};
-		const listener: EventListener = (event) => { void reload(event as MessageEvent<string>); };
-		stream.addEventListener('plugin_updated', listener);
-		stream.addEventListener('plugin_rolled_back', listener);
-		return () => { cancelled = true; stream.removeEventListener('plugin_updated', listener); stream.removeEventListener('plugin_rolled_back', listener); if (!eventSource) stream.close(); };
+		// An injected stream is owned by the caller (tests / embedding): attach
+		// and detach listeners, never close it.
+		if (eventSource) {
+			const listener: EventListener = (event) => { void reload((event as MessageEvent<string>).data); };
+			eventSource.addEventListener('plugin_updated', listener);
+			eventSource.addEventListener('plugin_rolled_back', listener);
+			return () => { cancelled = true; eventSource.removeEventListener('plugin_updated', listener); eventSource.removeEventListener('plugin_rolled_back', listener); };
+		}
+		// Otherwise the plugin event feed goes through the shared SSE client so it
+		// carries the bearer token in a production build (DF-HERMES-CANOPY-13).
+		const sub = subscribeSse(apiUrl(`/plugins/${currentPlugin.id}/events`), {
+			eventTypes: ['plugin_updated', 'plugin_rolled_back'],
+			onEvent: (type, data) => {
+				if (type === 'plugin_updated' || type === 'plugin_rolled_back') void reload(data);
+			},
+		});
+		return () => { cancelled = true; sub.close(); };
 	}, [currentPlugin, eventSource, host]);
 
   useEffect(() => {

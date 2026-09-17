@@ -216,7 +216,11 @@ describe('viewerRegistry — selectViewer (A3)', () => {
     try {
       const file = makeFile();
       const sel = (await selectViewer(file)) as ViewerSelection;
-      expect(fetchMock).toHaveBeenCalledWith('/api/v1/viewers');
+      // DF-HERMES-CANOPY-13: the call now goes through authInit, which returns
+      // the caller's init verbatim (undefined here) when no token resolves —
+      // the dev-proxy shape. Production would pass a headers object instead.
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/viewers', undefined);
+      expect(fetchMock.mock.calls[0][1]).toBeUndefined();
       expect(sel.viewer.viewerSlug).toBe('pdf');
     } finally {
       vi.unstubAllGlobals();

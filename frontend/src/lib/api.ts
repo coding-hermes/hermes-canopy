@@ -77,8 +77,14 @@ export function authHeaders(extra?: HeadersInit): HeadersInit | undefined {
  * Request init for one API call. When no token is configured and the caller
  * passed no headers, the caller's init is returned unchanged (undefined for a
  * bare GET) so the dev-proxy request is exactly what it was before.
+ *
+ * Exported for the call sites that cannot use the typed apiGet/apiPost helpers
+ * (abortable reads, blob/stream responses, multipart uploads, plugin sandbox
+ * calls). Every network call in frontend/src goes through this or
+ * `authHeaders` — `lib/sse.ts` is the only other door, and it borrows
+ * `authHeaders` too.
  */
-function authInit(init?: RequestInit): RequestInit | undefined {
+export function authInit(init?: RequestInit): RequestInit | undefined {
   const headers = authHeaders(init?.headers);
   if (headers === undefined) return init;
   return { ...init, headers };

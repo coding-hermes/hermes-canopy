@@ -11,6 +11,12 @@
  *
  * The SSE endpoint is /api/v1/trees/{tree_id}/events (tree-scoped, auth-gated).
  * One provider instance per tree.
+ *
+ * Transport (DF-HERMES-CANOPY-13): the tree event feed and the three presence
+ * POSTs all carry the shared bearer token — the feed via `lib/sse.ts` (fetch
+ * with `Authorization` in production, native EventSource in dev), the POSTs
+ * via `authInit`. Native EventSource cannot set headers, so it could never
+ * authenticate against a static production build.
  */
 
 import * as Y from 'yjs';
@@ -28,6 +34,8 @@ import {
   handleTopicCreated,
 } from './topicProposalStore.ts';
 import { notifyTopicsChanged } from '../lib/activeTree.ts';
+import { authInit } from '../lib/api.ts';
+import { subscribeSse, type SseSubscription } from '../lib/sse.ts';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -65,7 +73,7 @@ export class SSESyncProvider {
   private doc: TreeYDoc;
   private treeId: string;
   private apiBase: string;
-  private eventSource: EventSource | null = null;
+  private sseSub: SseSubscription | null = null;
   private options: YjsProviderOptions;
   private _connected = false;
   private updateHandler: ((update: Uint8Array, origin: unknown) => void) | null =
@@ -158,7 +166,7 @@ export class SSESyncProvider {
 
   /** Connect to the SSE endpoint and begin syncing. */
   connect(): void {
-    if (this.eventSource) {
+    if (this.sseSub) {
       this.disconnect();
     }
 
@@ -166,44 +174,39 @@ export class SSESyncProvider {
       this.treeId,
     )}/events`;
 
-    this.eventSource = new EventSource(url, { withCredentials: true });
-
-    this.eventSource.onopen = (): void => {
-      this._connected = true;
-      console.debug(`[SSESyncProvider] connected to ${url}`);
-      this.options.onConnected?.();
-    };
-
-    this.eventSource.onerror = (): void => {
-      this._connected = false;
-      console.error(`[SSESyncProvider] SSE connection error for tree ${this.treeId}`);
-      this.options.onDisconnected?.('SSE connection error');
-    };
-
-    const forward = (eventName: string): void => {
-      this.eventSource?.addEventListener(
-        eventName,
-        ((e: MessageEvent) => {
-          this._handleSSEMessage(e.data as string);
-        }) as EventListener,
-      );
-    };
-
-    for (const eventName of [
-      'node_added',
-      'node_updated',
-      'node_deleted',
-      'edge_added',
-      'edge_deleted',
-      'tree_updated',
-      'yjs_update',
-      'presence_update',
-      'cursor_update',
-      'topic_proposed',
-      'topic_created',
-    ]) {
-      forward(eventName);
-    }
+    this.sseSub = subscribeSse(
+      url,
+      {
+        eventTypes: [
+          'node_added',
+          'node_updated',
+          'node_deleted',
+          'edge_added',
+          'edge_deleted',
+          'tree_updated',
+          'yjs_update',
+          'presence_update',
+          'cursor_update',
+          'topic_proposed',
+          'topic_created',
+        ],
+        onOpen: (): void => {
+          this._connected = true;
+          console.debug(`[SSESyncProvider] connected to ${url}`);
+          this.options.onConnected?.();
+        },
+        onError: (): void => {
+          this._connected = false;
+          console.error(`[SSESyncProvider] SSE connection error for tree ${this.treeId}`);
+          this.options.onDisconnected?.('SSE connection error');
+        },
+        onEvent: (_type: string, data: string): void => {
+          this._handleSSEMessage(data);
+        },
+      },
+      // Mirrored onto EventSourceInit.withCredentials in the dev arm.
+      { credentials: 'include' },
+    );
 
     // Listen for local Yjs changes and push to server
     this.updateHandler = (update: Uint8Array, origin: unknown): void => {
@@ -227,9 +230,9 @@ export class SSESyncProvider {
 
     this.clearLocalPresence();
 
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
+    if (this.sseSub) {
+      this.sseSub.close();
+      this.sseSub = null;
     }
 
     this._connected = false;
@@ -451,12 +454,12 @@ export class SSESyncProvider {
       this.treeId,
     )}/sync`;
     try {
-      const response = await fetch(url, {
+      const response = await fetch(url, authInit({
         method: 'POST',
         body: update as unknown as BodyInit,
         headers: { 'Content-Type': 'application/octet-stream' },
         credentials: 'include',
-      });
+      }));
       if (!response.ok) {
         const text = await response.text().catch(() => 'unknown');
         const err = new Error(`pushUpdate failed: ${response.status} ${text}`);
@@ -489,12 +492,12 @@ export class SSESyncProvider {
       this.treeId,
     )}/presence`;
     try {
-      const response = await fetch(url, {
+      const response = await fetch(url, authInit({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.localPresence),
         credentials: 'include',
-      });
+      }));
       if (!response.ok) {
         const text = await response.text().catch(() => 'unknown');
         console.error(
@@ -518,12 +521,12 @@ export class SSESyncProvider {
     )}/presence/leave`;
     const body = userId ? JSON.stringify({ userId }) : '{}';
     try {
-      await fetch(url, {
+      await fetch(url, authInit({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
         credentials: 'include',
-      });
+      }));
     } catch (err) {
       console.error('[SSESyncProvider] leavePresence network error:', err);
     }

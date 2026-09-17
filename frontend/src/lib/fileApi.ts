@@ -12,7 +12,7 @@
  * the message, so callers can branch on e.g. FILE_QUARANTINED.
  */
 
-import { apiUrl } from './api';
+import { apiUrl, authInit } from './api';
 import {
   FileAccessEntrySchema,
   FileListPageSchema,
@@ -179,19 +179,19 @@ export async function listFiles(params: ListFilesParams = {}): Promise<FileListP
   if (params.extensionFilter) qs.set('extensionFilter', params.extensionFilter);
   if (params.viewableOnly === false) qs.set('viewableOnly', 'false');
   const query = qs.toString();
-  const res = await expectOk(await fetch(apiUrl(`/files${query ? `?${query}` : ''}`)));
+  const res = await expectOk(await fetch(apiUrl(`/files${query ? `?${query}` : ''}`), authInit()));
   return FileListPageSchema.parse(await res.json());
 }
 
 /** GET /files/{id} — full metadata for one file. */
 export async function getFile(fileId: string): Promise<FileMetadata> {
-  const res = await expectOk(await fetch(apiUrl(`/files/${encodeURIComponent(fileId)}`)));
+  const res = await expectOk(await fetch(apiUrl(`/files/${encodeURIComponent(fileId)}`), authInit()));
   return FileMetadataSchema.parse(await res.json());
 }
 
 /** GET /files/recents — most recently accessed files (FileMetadataSlim rows). */
 export async function listRecentFiles(limit = 50): Promise<FileMetadataSlim[]> {
-  const res = await expectOk(await fetch(apiUrl(`/files/recents?limit=${limit}`)));
+  const res = await expectOk(await fetch(apiUrl(`/files/recents?limit=${limit}`), authInit()));
   const raw: unknown = await res.json();
   return (raw as unknown[]).map((entry) => FileMetadataSlimSchema.parse(entry));
 }
@@ -221,7 +221,7 @@ export async function fetchFileRange(
       ? `bytes=-${end ?? 0}`
       : `bytes=${start}-${end !== undefined ? end : ''}`;
   const res = await expectOk(
-    await fetch(streamUrl(fileId), { headers: { Range: range } }),
+    await fetch(streamUrl(fileId), authInit({ headers: { Range: range } })),
   );
   const contentRange = res.headers.get('Content-Range');
   return { blob: await res.blob(), status: res.status, contentRange };
@@ -230,7 +230,7 @@ export async function fetchFileRange(
 /** GET /files/{id}/access — recent access-log entries for a file. */
 export async function getFileAccessLog(fileId: string, limit = 50): Promise<FileAccessEntry[]> {
   const res = await expectOk(
-    await fetch(apiUrl(`/files/${encodeURIComponent(fileId)}/access?limit=${limit}`)),
+    await fetch(apiUrl(`/files/${encodeURIComponent(fileId)}/access?limit=${limit}`), authInit()),
   );
   const raw: unknown = await res.json();
   return (raw as unknown[]).map((entry) => FileAccessEntrySchema.parse(entry));
@@ -252,7 +252,7 @@ export async function postFileAccess(params: {
   errorCode?: string;
 }): Promise<FileAccessEntry> {
   const res = await expectOk(
-    await fetch(apiUrl(`/files/${encodeURIComponent(params.fileId)}/access`), {
+    await fetch(apiUrl(`/files/${encodeURIComponent(params.fileId)}/access`), authInit({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -264,7 +264,7 @@ export async function postFileAccess(params: {
         byte_offset: params.byteOffset,
         error_code: params.errorCode,
       }),
-    }),
+    })),
   );
   return FileAccessEntrySchema.parse(await res.json());
 }
@@ -275,11 +275,11 @@ export async function postFileAccess(params: {
  */
 export async function resolveByHash(profileId: string, sha256: string): Promise<ResolveFileOutput> {
   const res = await expectOk(
-    await fetch(apiUrl('/files/resolve'), {
+    await fetch(apiUrl('/files/resolve'), authInit({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hash_ref: { profile_id: profileId, sha256 } }),
-    }),
+    })),
   );
   return ResolveFileOutputSchema.parse(await res.json());
 }
@@ -288,13 +288,13 @@ export async function resolveByHash(profileId: string, sha256: string): Promise<
 
 /** GET /viewers — all active viewer registrations. */
 export async function listViewers(): Promise<ViewerRegistration[]> {
-  const res = await expectOk(await fetch(apiUrl('/viewers')));
+  const res = await expectOk(await fetch(apiUrl('/viewers'), authInit()));
   return parseViewersResponse(await res.json());
 }
 
 /** GET /viewers/{slug} — one viewer registration. */
 export async function getViewer(slug: string): Promise<ViewerRegistration> {
-  const res = await expectOk(await fetch(apiUrl(`/viewers/${encodeURIComponent(slug)}`)));
+  const res = await expectOk(await fetch(apiUrl(`/viewers/${encodeURIComponent(slug)}`), authInit()));
   return ViewerRegistrationSchema.parse(await res.json());
 }
 
@@ -304,11 +304,11 @@ export async function getViewer(slug: string): Promise<ViewerRegistration> {
  */
 export async function dispatchViewer(fileId: string, treeId?: string): Promise<ViewerDispatchResult> {
   const res = await expectOk(
-    await fetch(apiUrl('/viewers/dispatch'), {
+    await fetch(apiUrl('/viewers/dispatch'), authInit({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_id: fileId, tree_id: treeId }),
-    }),
+    })),
   );
   return ViewerDispatchResultSchema.parse(await res.json());
 }

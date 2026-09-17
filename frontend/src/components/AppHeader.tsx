@@ -220,6 +220,9 @@ export default function AppHeader({ onMenuClick }: { onMenuClick?: () => void } 
 
     async function check() {
       try {
+        // Deliberately public: /health is in the server's isPublicPath()
+        // whitelist (internal/handler/auth.go), so it needs no token and is
+        // intentionally NOT routed through authInit().
         const res = await fetch('/health');
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as HealthResponse;

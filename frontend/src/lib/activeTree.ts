@@ -12,6 +12,8 @@
  * `window.dispatchEvent` — cross-tab sync comes free from the same key.
  */
 
+import { apiUrl, authInit } from './api';
+
 export const ACTIVE_TREE_STORAGE_KEY = 'canopy.activeTreeId';
 
 /** Read the persisted tree id. Returns '' when unset or unavailable. */
@@ -82,7 +84,7 @@ export function resolveDemoAliasSync(raw: string): string {
 export async function resolveDemoAlias(raw: string): Promise<string> {
   if (raw !== 'demo') return raw;
   try {
-    const res = await fetch(`/api/v1/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`);
+    const res = await fetch(apiUrl(`/trees?search=${encodeURIComponent('UI-02 Rail Demo')}&limit=1`), authInit());
     if (!res.ok) return DEMO_TREE_UUID;
     const data = (await res.json()) as { trees?: { id: string }[] };
     const hit = data.trees?.find((t) => t.id);

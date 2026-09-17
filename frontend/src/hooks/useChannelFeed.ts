@@ -15,14 +15,20 @@
  * so EventSource auto-replays via the Last-Event-ID header on reconnect;
  * no manual re-subscribe is needed.
  *
- * Error handling: EventSource auto-reconnects natively (the server emits
- * `retry:` advisories). We surface readyState so the view can show a
+ * Transport (DF-HERMES-CANOPY-13): every feed goes through `lib/sse.ts`, which
+ * sends `Authorization: Bearer <token>` via `fetch` when a token resolves
+ * (production) and falls back to native EventSource when none does (the Vite
+ * dev proxy injects the dev JWT) — native EventSource cannot set headers, so
+ * it can never authenticate against a static build.
+ *
+ * Error handling: we surface transport status so the view can show a
  * "reconnecting" affordance, and we close cleanly on unmount / channel
  * switch so no orphan connections linger.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiUrl } from '../lib/api.ts';
+import { subscribeSse, type SseSubscription } from '../lib/sse.ts';
 import type { ChannelMessage } from '../types/workspace.ts';
 
 // ─── SSE envelope (mirrors yjsProvider.ts SSEEnvelope) ──────────────────
@@ -67,7 +73,7 @@ export function useChannelFeed(
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
 
-  const sourceRef = useRef<EventSource | null>(null);
+  const sourceRef = useRef<SseSubscription | null>(null);
 
   const cleanup = useCallback(() => {
     const src = sourceRef.current;
@@ -83,23 +89,20 @@ export function useChannelFeed(
       setStatus('connecting');
 
       const url = apiUrl(`/workspace/channels/${encodeURIComponent(id)}/feed`);
-      const src = new EventSource(url);
-      sourceRef.current = src;
+      sourceRef.current = subscribeSse(url, {
+        eventTypes: ['channel_message'],
+        onOpen: () => setStatus('open'),
+        onError: () => {
+          // The fetch arm retries once, native EventSource reconnects on its
+          // own — either way we only mirror the transport state.
+          setStatus('error');
+        },
+        onEvent: (type, data) => {
+          if (type !== 'channel_message') return;
 
-      src.onopen = () => setStatus('open');
-
-      src.onerror = () => {
-        // EventSource auto-reconnects; we only mirror readyState. The
-        // browser sets readyState to CONNECTING during the retry window.
-        setStatus('error');
-      };
-
-      src.addEventListener(
-        'channel_message',
-        ((e: MessageEvent) => {
           let envelope: SSEEnvelope | undefined;
           try {
-            envelope = JSON.parse(e.data as string) as SSEEnvelope;
+            envelope = JSON.parse(data) as SSEEnvelope;
           } catch {
             return;
           }
@@ -117,8 +120,8 @@ export function useChannelFeed(
             return [...prev, payload];
           });
           onMessageRef.current?.(payload);
-        }) as EventListener,
-      );
+        },
+      });
     },
     [cleanup],
   );

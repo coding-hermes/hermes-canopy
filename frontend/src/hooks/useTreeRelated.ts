@@ -26,7 +26,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { apiUrl } from '../lib/api.ts';
+import { apiUrl, authInit } from '../lib/api.ts';
 import type { TreeDetail, TreeRelated } from '../types/tree.ts';
 
 // ─── Result ────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ async function fetchTreeDetail(
   treeId: string,
   signal: AbortSignal,
 ): Promise<TreeDetail> {
-  const res = await fetch(apiUrl(`/trees/${treeId}`), { signal });
+  const res = await fetch(apiUrl(`/trees/${treeId}`), authInit({ signal }));
 
   if (!res.ok) {
     const body = await res.text();

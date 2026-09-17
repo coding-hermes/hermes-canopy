@@ -18,7 +18,7 @@ import {
   Inbox,
 } from 'lucide-react';
 import type { ApprovalItem, TreeDiff, DiffField, AuditEntry } from '../types/approval.ts';
-import { apiUrl } from '../types/approval.ts';
+import { apiUrl, authInit } from '../lib/api.ts';
 import ApprovalDiff from './ApprovalDiff.tsx';
 import AuditTrail from './AuditTrail.tsx';
 
@@ -302,7 +302,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl('/approvals'));
+      const res = await fetch(apiUrl('/approvals'), authInit());
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = (await res.json()) as ApprovalItem[] | { approvals: ApprovalItem[] };
       // Handle both wrapped ({ approvals: [...] }) and flat (ApprovalItem[]) responses
@@ -332,7 +332,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       setAuditLoading(true);
       setAuditError(null);
       try {
-        const res = await fetch(apiUrl(`/approvals/${selectedId}/audit`));
+        const res = await fetch(apiUrl(`/approvals/${selectedId}/audit`), authInit());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as AuditEntry[];
         if (!cancelled) setAuditEntries(Array.isArray(data) ? data : []);
@@ -363,7 +363,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       setDetailLoading(true);
       setDetailError(null);
       try {
-        const res = await fetch(apiUrl(`/approvals/${selectedId}`));
+        const res = await fetch(apiUrl(`/approvals/${selectedId}`), authInit());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as ApprovalItem;
         if (!cancelled) {
@@ -391,11 +391,11 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       setActing(id);
 
       try {
-        const res = await fetch(apiUrl(`/approvals/${id}/${action}`), {
+        const res = await fetch(apiUrl(`/approvals/${id}/${action}`), authInit({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ comment: comment || undefined }),
-        });
+        }));
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

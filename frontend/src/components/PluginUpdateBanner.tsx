@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PluginManifest } from '../lib/pluginTypes';
+import { apiUrl, authInit } from '../lib/api';
 
 export interface UpdateBannerPlugin { id: string; name: string; manifest: PluginManifest }
 export interface PluginUpdateBannerProps { installed: UpdateBannerPlugin; available: UpdateBannerPlugin; onUpdated?: () => void }
@@ -14,7 +15,7 @@ export default function PluginUpdateBanner({ installed, available, onUpdated }: 
   const added = available.manifest.permissions.filter((permission) => !oldPermissions.has(permission));
   const removed = installed.manifest.permissions.filter((permission) => !newPermissions.has(permission));
   const update = async () => {
-    const response = await fetch(`/api/v1/plugins/${available.id}/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const response = await fetch(apiUrl(`/plugins/${available.id}/install`), authInit({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
     if (!response.ok) throw new Error(`Plugin update failed (${response.status})`);
     onUpdated?.();
   };

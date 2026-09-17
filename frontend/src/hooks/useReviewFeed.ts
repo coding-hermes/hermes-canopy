@@ -14,10 +14,17 @@
  * The SSE layer wraps every event in an envelope
  * ({event_type, tree_id, data, …}); the review_event payload lives in
  * `envelope.data`.
+ *
+ * Transport (DF-HERMES-CANOPY-13): the feed goes through `lib/sse.ts`, which
+ * sends `Authorization: Bearer <token>` via `fetch` in production and falls
+ * back to native EventSource in dev (no token → the Vite dev proxy injects
+ * the JWT). Native EventSource cannot set headers, so the fetch arm is the
+ * only one that works against a static build.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiUrl } from '../lib/api.ts';
+import { subscribeSse, type SseSubscription } from '../lib/sse.ts';
 import type { ReviewEvent } from '../types/review.ts';
 
 // ─── SSE envelope (mirrors useChannelFeed.ts) ──────────────────────────
@@ -58,7 +65,7 @@ export function useReviewFeed(
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
-  const sourceRef = useRef<EventSource | null>(null);
+  const sourceRef = useRef<SseSubscription | null>(null);
 
   const cleanup = useCallback(() => {
     const src = sourceRef.current;
@@ -74,21 +81,18 @@ export function useReviewFeed(
       setStatus('connecting');
 
       const url = apiUrl(`/workspace/channels/${encodeURIComponent(id)}/feed`);
-      const src = new EventSource(url);
-      sourceRef.current = src;
+      sourceRef.current = subscribeSse(url, {
+        eventTypes: ['review_event'],
+        onOpen: () => setStatus('open'),
+        onError: () => {
+          setStatus('error');
+        },
+        onEvent: (type, data) => {
+          if (type !== 'review_event') return;
 
-      src.onopen = () => setStatus('open');
-
-      src.onerror = () => {
-        setStatus('error');
-      };
-
-      src.addEventListener(
-        'review_event',
-        ((e: MessageEvent) => {
           let envelope: SSEEnvelope | undefined;
           try {
-            envelope = JSON.parse(e.data as string) as SSEEnvelope;
+            envelope = JSON.parse(data) as SSEEnvelope;
           } catch {
             return;
           }
@@ -107,8 +111,8 @@ export function useReviewFeed(
             return [...prev, payload];
           });
           onEventRef.current?.(payload);
-        }) as EventListener,
-      );
+        },
+      });
     },
     [cleanup],
   );

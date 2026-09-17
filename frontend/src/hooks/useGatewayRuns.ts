@@ -6,9 +6,14 @@
  *   - starts/stops runs and responds to approvals
  *   - useRunEventStream() opens the run's SSE feed (history replay + live
  *     fan-out) and dedupes replayed events by (event, timestamp, content).
+ *
+ * The run feed goes through `lib/sse.ts` (DF-HERMES-CANOPY-13): `fetch` with
+ * `Authorization: Bearer <token>` when a token resolves (production), native
+ * EventSource when none does (dev — the Vite dev proxy injects the JWT).
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { subscribeSse } from '../lib/sse.ts';
 import {
   listGatewayRuns,
   getGatewayStatus,
@@ -121,38 +126,35 @@ export function useRunEventStream(runId: string | null): UseRunEventStreamReturn
     terminalSeen.current = false;
     if (!runId) return;
 
-    const src = new EventSource(gatewayRunEventsUrl(runId));
-    src.onopen = () => setStatus('open');
-    src.onerror = () => {
-      // A terminal run's stream closes by design (the gateway closes the
-      // SSE at run end; canopyd mirrors that) — that's not an error.
-      if (terminalSeen.current) {
-        setStatus('closed');
-      } else {
-        setStatus('error');
-      }
-    };
+    // A terminal run's stream closes by design (the gateway closes the SSE at
+    // run end; canopyd mirrors that) — that's not an error.
+    const settle = () => setStatus(terminalSeen.current ? 'closed' : 'error');
 
-    src.onmessage = (e: MessageEvent) => {
-      let ev: GatewayRunEvent;
-      try {
-        ev = JSON.parse(e.data as string) as GatewayRunEvent;
-      } catch {
-        return;
-      }
-      if (!ev?.event) return;
-      if (['run.completed', 'run.failed', 'run.cancelled'].includes(ev.event)) {
-        terminalSeen.current = true;
-      }
-      const key = eventKey(ev);
-      setEvents((prev) => {
-        if (prev.some((p) => eventKey(p) === key)) return prev;
-        return [...prev, ev];
-      });
-    };
+    const sub = subscribeSse(gatewayRunEventsUrl(runId), {
+      onOpen: () => setStatus('open'),
+      onError: settle,
+      onClose: settle,
+      onEvent: (_type, data) => {
+        let ev: GatewayRunEvent;
+        try {
+          ev = JSON.parse(data) as GatewayRunEvent;
+        } catch {
+          return;
+        }
+        if (!ev?.event) return;
+        if (['run.completed', 'run.failed', 'run.cancelled'].includes(ev.event)) {
+          terminalSeen.current = true;
+        }
+        const key = eventKey(ev);
+        setEvents((prev) => {
+          if (prev.some((p) => eventKey(p) === key)) return prev;
+          return [...prev, ev];
+        });
+      },
+    });
 
     return () => {
-      src.close();
+      sub.close();
     };
   }, [runId]);
 

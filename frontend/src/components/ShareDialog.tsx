@@ -11,6 +11,7 @@
 import { useState, useCallback } from 'react';
 import { X, Mail, Shield, Trash2, Loader2 } from 'lucide-react';
 import { token } from '../theme.ts';
+import { apiUrl, authInit } from '../lib/api.ts';
 import type { PermissionLevel, ShareInvitePayload } from '../types/multiUser.ts';
 import {
   getPermissionLabel,
@@ -102,15 +103,12 @@ export default function ShareDialog({
     };
 
     try {
-      const response = await fetch(
-        `/api/v1/trees/${encodeURIComponent(treeId)}/share`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          credentials: 'include',
-        },
-      );
+      const response = await fetch(apiUrl(`/trees/${encodeURIComponent(treeId)}/share`), authInit({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'include',
+      }));
 
       if (!response.ok) {
         // Extract the coded error message from the backend envelope.

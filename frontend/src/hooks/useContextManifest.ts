@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { apiUrl } from '../lib/api.ts';
+import { apiUrl, authInit } from '../lib/api.ts';
 import {
   DEFAULT_CONTEXT_BUDGET,
   contextRequestPath,
@@ -61,9 +61,9 @@ async function fetchManifest(
   budget: number,
   signal: AbortSignal,
 ): Promise<Manifest | null> {
-  const res = await fetch(apiUrl(contextRequestPath(nodeId, budget)), {
+  const res = await fetch(apiUrl(contextRequestPath(nodeId, budget)), authInit({
     signal,
-  });
+  }));
 
   if (!res.ok) {
     const body = await res.text();
