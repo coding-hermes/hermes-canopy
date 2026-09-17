@@ -93,9 +93,19 @@ type Service struct {
 	subs map[string]map[chan StreamEvent]struct{}
 }
 
-// DefaultStateFile returns the default path for the persisted gateway run
-// registry, following the card.DataDir() convention (~/.hermes/canopy/<sub>).
+// DefaultStateFile returns the path for the persisted gateway run registry,
+// following the card.DataDir() convention (~/.hermes/canopy/<sub>), unless
+// CANOPY_GATEWAY_STATE_FILE is set and non-empty, in which case that value is
+// returned verbatim.
+//
+// The override is returned verbatim — nothing is joined onto it, and it names
+// the JSONL file itself, not a directory — so a scratch instance can keep its
+// run registry off the shared store without a scratch $HOME
+// (DF-HERMES-CANOPY-9). It is resolved on every call, never cached.
 func DefaultStateFile() string {
+	if path := os.Getenv("CANOPY_GATEWAY_STATE_FILE"); path != "" {
+		return path
+	}
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		home = "/tmp"

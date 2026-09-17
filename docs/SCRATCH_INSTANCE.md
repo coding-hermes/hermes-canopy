@@ -48,7 +48,7 @@ files and gateway runs.
 |---|------|---------|-------------------|---------------|
 | 1 | Graph / authoritative store | `DB_NAME` (or `CANOPY_DB_URL`) | `canopy` on `:5437` | a unique `canopy_scratch_<tick>_<rand>` database on the existing server |
 | 2 | HTTP API | `HTTP_ADDR` | `:8091` (make/native) / `:8092` (compose) | an explicit free loopback port, e.g. `127.0.0.1:8093` |
-| 3 | Cards + gateway registry | `HOME` | `~/.hermes/canopy/…` | a scratch HOME, e.g. `/tmp/canopy-scratch-…/home` |
+| 3 | Cards + gateway registry | `HOME` (or the two per-store overrides in "Store paths") | `~/.hermes/canopy/…` | a scratch HOME, e.g. `/tmp/canopy-scratch-…/home` |
 | 4 | Uploaded file bytes | `CANOPY_FILE_ROOT` | `~/.canopy/files` | a scratch file root |
 
 Plus:
@@ -64,15 +64,21 @@ Plus:
 
 | Store | Resolution | Code |
 |-------|------------|------|
-| Cards (SQLite per card type) | `$HOME/.hermes/canopy/cards/<type>.db` | `internal/card/database.go` |
-| Gateway run registry | `$HOME/.hermes/canopy/gateway/runs.jsonl` | `internal/gateway/service.go` |
+| Cards (SQLite per card type) | `$CANOPY_CARD_DATA_DIR`, else `$HOME/.hermes/canopy/cards/<type>.db` | `internal/card/database.go` |
+| Gateway run registry | `$CANOPY_GATEWAY_STATE_FILE`, else `$HOME/.hermes/canopy/gateway/runs.jsonl` | `internal/gateway/service.go` |
 | File viewer bytes | `$CANOPY_FILE_ROOT`, else `$HOME/.canopy/files` | `internal/config/config.go`, `internal/fileviewer/storage.go` |
 | Graph (authoritative) | PostgreSQL via `DB_*` / `CANOPY_DB_URL` | `internal/db` |
 
-There is no environment variable for the card or gateway paths: **they follow
-`HOME`.** (`CANOPY_FILE_ROOT` is the one store with an explicit override.) Note
-`GO`-side `os.UserHomeDir()` reads `$HOME` on Linux, which is why exporting a
-scratch `HOME` isolates both.
+Every local store has an explicit override — `CANOPY_CARD_DATA_DIR`,
+`CANOPY_GATEWAY_STATE_FILE` and `CANOPY_FILE_ROOT` — and each is returned
+**verbatim**: nothing is joined onto the value, so a relative or scratch path
+lands exactly where you pointed it (note that `CANOPY_GATEWAY_STATE_FILE` names
+the JSONL **file**, not a directory). Without an override the card and gateway
+paths follow **`HOME`**: GO-side `os.UserHomeDir()` reads `$HOME` on Linux,
+which is why exporting a scratch `HOME` isolates both. Setting the two
+variables directly is the stricter form — it keeps a scratch instance off the
+shared stores even when the process must retain the real `HOME` (e.g. tooling
+that resolves other per-user state).
 
 ## 3. The recipe
 

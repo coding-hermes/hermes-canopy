@@ -11,8 +11,18 @@ import (
 	_ "modernc.org/sqlite" // CGo-free SQLite driver
 )
 
-// DataDir returns the path for Canopy card storage under the user's Hermes directory.
+// DataDir returns the path for Canopy card storage under the user's Hermes
+// directory (~/.hermes/canopy/cards), unless CANOPY_CARD_DATA_DIR is set and
+// non-empty, in which case that value is returned verbatim.
+//
+// The override is returned verbatim — nothing is joined onto it — so a scratch
+// instance can point the card store at a throwaway directory without a scratch
+// $HOME (DF-HERMES-CANOPY-9). It is resolved on every call, never cached, so
+// callers can redirect the store after the process has started.
 func DataDir() string {
+	if dir := os.Getenv("CANOPY_CARD_DATA_DIR"); dir != "" {
+		return dir
+	}
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		home = "/tmp"

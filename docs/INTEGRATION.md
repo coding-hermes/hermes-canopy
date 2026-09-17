@@ -171,7 +171,8 @@ PostgreSQL and do use `DB_*` / `CANOPY_DB_URL`.
 
 > **Isolating a scratch instance.** A distinct `CANOPY_SERVER_URL` only picks a
 > destination — it does not isolate anything. A second instance needs its own
-> database, API port, `HOME` (card store + gateway run registry) and
+> database, API port, `HOME` (card store + gateway run registry — or the
+> per-store overrides `CANOPY_CARD_DATA_DIR` / `CANOPY_GATEWAY_STATE_FILE`) and
 > `CANOPY_FILE_ROOT`; and do not reuse `:8091` (native/live), `:8092` (compose) or
 > `:8080` (raw default). Runnable recipe:
 > [SCRATCH_INSTANCE.md](SCRATCH_INSTANCE.md) / `scripts/scratch-instance.sh`.

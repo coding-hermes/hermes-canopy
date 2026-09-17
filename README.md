@@ -85,7 +85,10 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 # or a compose image built from older HEAD). Fix: `make build` (or rebuild the
 # docker image) and run again. `/health` reports both versions for comparison:
 #   curl http://localhost:8091/health
-#   -> {"status":"ok","service":"canopyd","schema_version":38,"embedded_migrations":38}
+#   -> {"status":"ok","service":"canopyd","schema_version":47,"embedded_migrations":47,"relay":{"mode":"air_gapped","status":"disabled","sessions":0}}
+#      (the two schema numbers are what the guard compares and they must match;
+#      `relay` reflects the relay configuration this host runs — 47 is the
+#      current embedded migration count.)
 
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
@@ -640,6 +643,9 @@ METRICS_ENABLED=true \
 | `CONTEXT_MAX_REFS` | `5` | Max topic references (soft; hard cap is 2×) |
 | `CONTEXT_DEFAULT_BUDGET` | `8000` | Default token budget for context compilation |
 | `PLUGIN_MAX_SIZE` | `1048576` | Max plugin source size in bytes (1 MB) |
+| `CANOPY_FILE_ROOT` | `~/.canopy/files` | Uploaded file bytes (file viewer storage root). Returned **verbatim** — nothing is joined onto it |
+| `CANOPY_CARD_DATA_DIR` | `~/.hermes/canopy/cards` | Card store directory (one SQLite DB per card type). Returned **verbatim**; set it to keep a scratch instance off the shared store without a scratch `HOME` |
+| `CANOPY_GATEWAY_STATE_FILE` | `~/.hermes/canopy/gateway/runs.jsonl` | Gateway run registry. Returned **verbatim**, and it names the **file**, not a directory |
 | `CANOPY_SERVER_URL` | `http://localhost:8091` | **CLI only** — API base URL the `tree`/`topic` subcommands call; an explicit value wins over `DB_*`/`HTTP_ADDR`, and a malformed one fails before any request (see "CLI") |
 | `CANOPY_TOKEN` | *(unset)* | **CLI only** — Bearer token sent with each CLI request |
 
