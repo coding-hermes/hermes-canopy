@@ -2662,3 +2662,17 @@ tasks:
   status: complete
   created_at: '2026-09-17T21:48:40.202028+00:00'
   completed_at: '2026-09-17T22:06:52.912823+00:00'
+- id: GAP-080-P2B
+  title: Context budget control in the UI (GAP-080 phase 2b)
+  criteria:
+  - The context panel must stop pinning ?budget=8000 (Auto sends NO budget parameter
+    so the server's window-derived default applies), expose the gateway model catalog
+    via GET /api/v1/gateway/models so a model can be chosen, allow an explicit budget
+    via an accessible slider, and never display a requested budget as if it were the
+    effective one. The explicit-budget clamp becomes window-aware when the model window
+    is known, and stays defaultBudget*10 otherwise. Backend route+clamp pinned by
+    Go tests (CANOPY_TEST_ALLOW_SHARED_DB=1 handler package green); frontend pinned
+    by vitest with the OLD ?budget=8000 assertions rewritten, plus tsc/oxlint clean.
+  status: complete
+  created_at: '2026-09-17T22:41:57.349665+00:00'
+  completed_at: '2026-09-17T23:03:39.979786+00:00'
