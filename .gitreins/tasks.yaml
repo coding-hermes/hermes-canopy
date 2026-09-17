@@ -2381,3 +2381,19 @@ tasks:
   status: complete
   created_at: '2026-09-16T22:53:45.497717+00:00'
   completed_at: '2026-09-16T23:06:49.540452+00:00'
+- id: DF-HERMES-CANOPY-10
+  title: MCP initialize handshake + CLI edge honesty
+  criteria:
+  - 'POST /api/v1/mcp answers a standards-compliant MCP handshake: initialize returns
+    a JSON-RPC result carrying protocolVersion + capabilities.tools + serverInfo;
+    notifications/initialized receives no JSON-RPC error (notification accepted, empty
+    body); ping answers {}; genuinely unknown methods still -32601; tools/list and
+    tools/call unchanged. CLI edges are honest: top-level --help names the real subcommands
+    and exits 0, ''session --help'' prints session usage and exits 0, an unknown subcommand
+    fails nonzero WITHOUT starting a server, and API-level failures (TOKEN_MISSING
+    / TREE_NOT_FOUND) exit nonzero. Regression tests cover every clause; go build,
+    go vet, golangci-lint and the handler test package pass; README + docs/API.md
+    document the MCP endpoint.'
+  status: complete
+  created_at: '2026-09-16T23:48:23.689886+00:00'
+  completed_at: '2026-09-17T00:09:16.016915+00:00'
