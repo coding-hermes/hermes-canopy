@@ -18,9 +18,19 @@ import {
 const SW_VERSION = '1.0.1';
 const CACHE_NAME = `canopy-static-v${SW_VERSION}`;
 const API_CACHE_NAME = `canopy-api-v${SW_VERSION}`;
+// The installable-app shell: the document, the web app manifest it points at
+// and the icons the manifest declares. The four additions below are build
+// outputs under public/, so precaching them makes the app launchable offline;
+// the icons are fetched by the OS/browser rather than by the page, which is
+// exactly why they must be in the cache instead of relying on the runtime
+// cache-first path.
 const STATIC_URLS = [
   '/',
   '/index.html',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
 ];
 
 // ─── Install: pre-cache static assets ────────────────────────────────

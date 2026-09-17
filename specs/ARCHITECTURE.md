@@ -46,7 +46,7 @@ Canopy replaces the linear chat log with a navigable conversation tree. Users dr
 | Offline persistence | y-indexeddb | ^9.0 | Yjs-native IndexedDB provider, 3KB | T1.4 |
 | Service Worker | Hand-rolled (frontend/sw.ts) | N/A | Cache-first static, network-first API + IndexedDB offline queue; SSE never cached (BUG-042); no Workbox dep | FE-09 |
 | Canvas fallback | Custom Canvas 2D | N/A | For >2000 node trees, manual renderer | T1.3 |
-| PWA | Manual SW registration (frontend/src/serviceWorkerRegistration.ts) | N/A | Manifest, SW registration, install prompt — no vite-plugin-pwa | FE-09 |
+| PWA | Manual SW registration (frontend/src/serviceWorkerRegistration.ts) | N/A | ~~Manifest, SW registration, install prompt — no vite-plugin-pwa~~ **SHIPPED — manifest (2026-09-17, GAP-082):** the web app manifest is live at `frontend/public/manifest.webmanifest` (name `Hermes Canopy` / short_name `Canopy`, `id` / `start_url` / `scope` `/`, `display: standalone`, `theme_color` + `background_color` `#0B0D17` matching the shell's `<meta name="theme-color">`, `lang` `en`, and `icon-192.png` / `icon-512.png` / `icon-maskable-512.png` rasterised from the existing `frontend/public/favicon.svg` by `frontend/scripts/generate-pwa-icons.mjs`). `frontend/index.html` links it (`rel="manifest"`), and `frontend/sw.ts` precaches the manifest and all three icons, so the shell installs and launches offline. Registration is still manual — no `vite-plugin-pwa`. **An in-app install PROMPT is still NOT implemented** (the browser's own install affordance is all there is). Pinned by `frontend/src/__tests__/pwaManifest.test.ts`. | FE-09 |
 
 ### 2.3 Infrastructure
 
