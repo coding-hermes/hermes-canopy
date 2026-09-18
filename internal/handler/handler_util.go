@@ -16,9 +16,15 @@ import (
 // --- Error response types ---------------------------------------------------
 
 // apiError is a single error item returned in the response body.
+//
+// RetryAfterSeconds is emitted only by rate-limited responses (429): it is the
+// `retry_after_seconds` field SPEC-API-07 lists as part of the RATE_LIMITED
+// identity (§14.3 of SPEC-API-04 requires that identity on the merge limit).
+// The omitempty tag keeps every other error envelope byte-identical to before.
 type apiError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code              string `json:"code"`
+	Message           string `json:"message"`
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
 }
 
 // apiErrorBody wraps an apiError in a consistent JSON envelope.

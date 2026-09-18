@@ -564,8 +564,18 @@ envelope): `INVALID_TREE_ID` (400), `INVALID_BODY` (400),
 `REQUEST_TOO_LARGE` (413), `NOT_TREE_MEMBER` (403), `TREE_DELETED` (410),
 `TREE_NOT_FOUND` (404), `VALIDATION_ERROR` (400, non-object `metadata`),
 `TOKEN_MISSING` (401), `SERVICE_UNAVAILABLE` (503), `RATE_LIMITED` (429 — the
-global per-IP limiter; SPEC-API-04 §13's per-user 10 req/min merge limit is
-**not** implemented, since the router has no per-endpoint rate limiter).
+global per-IP limiter, **or** the per-user merge budget below).
+
+**Rate limit (SPEC-API-04 §13, §14.3).** This endpoint is limited to **10
+requests per minute per user** (merges are heavyweight operations), counted in
+a rolling 60-second window keyed on the authenticated user id. The 11th request
+in that window answers `429` with the `RATE_LIMITED` code, a `Retry-After`
+header, and the identity's `retry_after_seconds` field (SPEC-API-07) —
+`{"error":{"code":"RATE_LIMITED","message":…,"retry_after_seconds":<n>}}` — and
+writes nothing. Other users and other routes are unaffected. (Until this
+change the §13 per-user limit was documented here as unimplemented; the global
+per-IP limiter — 100 req/s, burst 200 — still covers every route and is
+unchanged.)
 
 A rejected merge writes nothing: node, parent edge and synthesis edges are
 committed together or not at all.
@@ -2315,7 +2325,7 @@ All errors follow a consistent JSON envelope:
 | `GONE` | 410 | Resource was deleted |
 | `TREE_DELETED` | 410 | Tree was soft-deleted |
 | `REQUEST_TOO_LARGE` | 413 | Body exceeds 1MB limit |
-| `RATE_LIMITED` | 429 | Too many requests (100/s per IP, burst 200) |
+| `RATE_LIMITED` | 429 | Too many requests (100/s per IP, burst 200; `POST /trees/{tree_id}/merge` additionally 10 req/min per user — carries `Retry-After` and `retry_after_seconds`) |
 | `SERVICE_UNAVAILABLE` | 503 | Database unavailable |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 

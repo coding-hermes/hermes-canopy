@@ -51,7 +51,21 @@ type mergeHarness struct {
 	displayName string
 }
 
+// newMergeHarness builds the merge chain with NO per-user merge budget: the
+// functional merge tests issue many merge POSTs for one user, so they must
+// exercise the handler rather than SPEC-API-04 §13's rate limit. The budget's
+// own test uses newMergeHarnessWithLimiter.
 func newMergeHarness(t *testing.T, pool *pgxpool.Pool) *mergeHarness {
+	t.Helper()
+	return newMergeHarnessWithLimiter(t, pool, nil)
+}
+
+// newMergeHarnessWithLimiter builds the same production chain with the
+// SPEC-API-04 §13 per-user merge budget wired exactly where production wires
+// it (internal/server/server.go): inside the authenticated /api/v1 group,
+// after AuthMiddleware and TreeMembershipMiddleware, immediately before the
+// merge handler.
+func newMergeHarnessWithLimiter(t *testing.T, pool *pgxpool.Pool, limiter *UserRateLimiter) *mergeHarness {
 	t.Helper()
 
 	userID := uuid.New()
@@ -71,12 +85,17 @@ func newMergeHarness(t *testing.T, pool *pgxpool.Pool) *mergeHarness {
 	nodeHandler := NewNodeHandler(nodeSvc, nil)
 	membership := TreeMembershipMiddleware(db.NewPGTreeMemberRepo(pool))
 
+	mergeRoute := http.HandlerFunc(mergeHandler.CreateMerge)
+	if limiter != nil {
+		mergeRoute = MergeRateLimit(limiter)(mergeRoute).ServeHTTP
+	}
+
 	r := chi.NewRouter()
 	// Production global middleware (internal/server/server.go).
 	r.Use(BodySizeLimit(1024 * 1024))
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(AuthMiddleware(mergeTestSecret))
-		r.With(membership).Post("/trees/{tree_id}/merge", mergeHandler.CreateMerge)
+		r.With(membership).Post("/trees/{tree_id}/merge", mergeRoute)
 		// The tree-scoped node surface, mounted exactly as production mounts
 		// it — used to re-read the graph after a merge (§3.6).
 		treeNodes := chi.NewRouter()

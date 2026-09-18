@@ -346,8 +346,21 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// above) so chi resolves the exact pattern before the wildcard
 		// subrouter, and inside this authenticated group so it carries the
 		// same middleware class as every other tree-scoped surface.
+		//
+		// SPEC-API-04 §13 — 10 req/min per user ("merges are heavyweight
+		// operations"), answered per §14.3 with a 429 carrying Retry-After
+		// and the RATE_LIMITED code. The budget is applied as a route-level
+		// wrapper around the handler rather than as a second
+		// `r.With(membershipMW, handler.MergeRateLimit(mergeLimiter))`
+		// element: the route-parity guard (internal/server) pins this
+		// route's inline middleware CLASS to its sibling tree-scoped
+		// writes, and the wrapper runs in exactly the same position —
+		// after AuthMiddleware and TreeMembershipMiddleware, before the
+		// handler.
 		mergeHandler := handler.NewMergeHandler(mergeSvc)
-		r.With(membershipMW).Post("/trees/{tree_id}/merge", mergeHandler.CreateMerge)
+		mergeLimiter := handler.NewUserRateLimiter(handler.MergeRateLimitPerMinute)
+		mergeWithLimit := handler.MergeRateLimit(mergeLimiter)(http.HandlerFunc(mergeHandler.CreateMerge))
+		r.With(membershipMW).Post("/trees/{tree_id}/merge", mergeWithLimit.ServeHTTP)
 
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
