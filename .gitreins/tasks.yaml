@@ -2857,3 +2857,15 @@ tasks:
   status: complete
   created_at: '2026-09-18T20:39:12.951463+00:00'
   completed_at: '2026-09-18T20:49:52.522068+00:00'
+- id: PL-03
+  title: Implement card action HTTP path
+  criteria:
+  - 'Add the card action endpoint described by the PL-03 premise-corrected scope:
+    validate the requested action against the card''s declared actions, append action_requested
+    and action_completed or agent_error events through the existing SQLite card service,
+    expose a documented/tested HTTP route, and include regression tests. Do not alter
+    the SQLite card storage or revive internal/card/duckdb. Preserve existing CRUD
+    behavior and run the relevant Go tests.'
+  status: complete
+  created_at: '2026-09-18T21:48:53.497831+00:00'
+  completed_at: '2026-09-18T22:03:39.506560+00:00'
