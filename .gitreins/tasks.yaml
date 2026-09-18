@@ -2773,3 +2773,20 @@ tasks:
   status: complete
   created_at: '2026-09-18T06:29:37.902090+00:00'
   completed_at: '2026-09-18T07:28:20.625715+00:00'
+- id: DF-HERMES-CANOPY-27
+  title: Wire the bulk Merge action to the live POST /trees/{tree_id}/merge endpoint
+  criteria:
+  - 'AC1 bulkActions(n) enables merge exactly for 2<=n<=100 and disables it with a
+    truthful non-null reason otherwise; nodeSelection tests pin 0/1/2/100/101 and
+    no longer assert merge is never enabled. AC2 a pure module owns the merge request
+    body: snake_case source_node_ids in selection order, content + content_format
+    sent explicitly, optional target_parent_id, refuses <2 or >100 sources in the
+    client. AC3 the UI calls POST /api/v1/trees/{tree_id}/merge through apiPost and
+    on 201 the new synthesis node appears in the node list with the selection cleared;
+    server error codes surface in the UI. AC4 grep -rn ''Coming soon - no bulk merge
+    endpoint yet'' frontend/src == 0 hits and the module/component headers describe
+    the live tree-scoped route. AC5 gates green: npx vitest run, npx oxlint on touched
+    dirs, tsc -b build.'
+  status: complete
+  created_at: '2026-09-18T08:01:08.065562+00:00'
+  completed_at: '2026-09-18T08:13:16.793916+00:00'
