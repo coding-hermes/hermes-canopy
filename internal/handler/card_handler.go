@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -21,11 +22,36 @@ import (
 // CardHandler wires the card CRUD HTTP routes to the CardService interface.
 type CardHandler struct {
 	svc service.CardService
+
+	// heartbeat is the idle SSE heartbeat cadence used by
+	// GET /{card_id}/events. It is a field (not a constant) so tests can
+	// inject a short interval instead of waiting the spec's 30s.
+	heartbeat time.Duration
 }
 
 // NewCardHandler returns a handler wired to the given CardService.
 func NewCardHandler(svc service.CardService) *CardHandler {
-	return &CardHandler{svc: svc}
+	return &CardHandler{svc: svc, heartbeat: cardSSEHeartbeatInterval}
+}
+
+// WithSSEHeartbeat overrides the SSE heartbeat cadence used by
+// GET /{card_id}/events. A non-positive duration restores the 30s default (a
+// zero ticker would panic, and the spec fixes the production cadence anyway).
+func (h *CardHandler) WithSSEHeartbeat(d time.Duration) *CardHandler {
+	if d <= 0 {
+		d = cardSSEHeartbeatInterval
+	}
+	h.heartbeat = d
+	return h
+}
+
+// sseHeartbeat returns the heartbeat cadence, falling back to the spec value
+// for a handler built as a bare struct literal.
+func (h *CardHandler) sseHeartbeat() time.Duration {
+	if h.heartbeat <= 0 {
+		return cardSSEHeartbeatInterval
+	}
+	return h.heartbeat
 }
 
 // Routes mounts the card endpoints under /cards.
@@ -36,6 +62,7 @@ func NewCardHandler(svc service.CardService) *CardHandler {
 //	PATCH  /{card_id}             — update card data
 //	DELETE /{card_id}             — dismiss/archive card
 //	POST   /{card_id}/actions     — submit a declared card action
+//	GET    /{card_id}/events      — stream card events (SSE, SPEC-PL-03 §9)
 func (h *CardHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.ListCards)
@@ -44,6 +71,7 @@ func (h *CardHandler) Routes() chi.Router {
 	r.Patch("/{card_id}", h.UpdateCard)
 	r.Delete("/{card_id}", h.ArchiveCard)
 	r.Post("/{card_id}/actions", h.SubmitCardAction)
+	r.Get("/{card_id}/events", h.StreamCardEvents)
 	return r
 }
 

@@ -118,6 +118,7 @@ func (s *CardServiceImpl) SubmitCardAction(
 	if err != nil {
 		return nil, fmt.Errorf("card: append action_requested: %w", err)
 	}
+	s.publishEvent(requested)
 
 	outcome := &service.CardActionOutcome{
 		CardID:       cardID,
@@ -149,6 +150,7 @@ func (s *CardServiceImpl) SubmitCardAction(
 		if err != nil {
 			return nil, fmt.Errorf("card: append agent_error: %w", err)
 		}
+		s.publishEvent(failure)
 
 		outcome.Status = service.CardActionStatusError
 		outcome.ResultSeq = failure.Sequence
@@ -173,6 +175,7 @@ func (s *CardServiceImpl) SubmitCardAction(
 	if err != nil {
 		return nil, fmt.Errorf("card: append action_completed: %w", err)
 	}
+	s.publishEvent(completed)
 
 	outcome.Status = service.CardActionStatusCompleted
 	outcome.ResultSeq = completed.Sequence

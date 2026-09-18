@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
@@ -405,6 +406,17 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.With(membershipMW).Mount("/trees/{tree_id}/topic-detection", topicDetectionHandler.TreeRoutes())
 
 		// Card endpoints (BE-15 — real CRUD). Spec: SPEC-PL-03.
+		//
+		// Card event streaming (§9) needs a live hub in front of the card
+		// service's append path, so the hub is created here and installed on
+		// the concrete service. Nil-safe and non-breaking by construction: a
+		// nil or alternate CardService (cards disabled, or a stand-in
+		// implementation) simply keeps the SSE route in snapshot + replay +
+		// heartbeat mode, because SubscribeCardEvents on a service without a
+		// hub returns a nil channel that never fires.
+		if impl, ok := cardSvc.(*card.CardServiceImpl); ok && impl != nil {
+			impl.WithEventHub(card.NewCardEventHub())
+		}
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
 
 		// Collaboration endpoints (SPEC-FTR-01 §5.1/§5.2) — workspace CRUD,

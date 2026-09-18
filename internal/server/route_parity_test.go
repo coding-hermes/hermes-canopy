@@ -576,6 +576,44 @@ func TestRouteParityDocumentedAgentRoutes(t *testing.T) {
 // Deterministic and DB-free; if it fails, fix the docs or the mount, never the
 // check.
 func TestRouteParityDocumentedCardRoutes(t *testing.T) {
+	// Explicit pin on the card event stream (PL-03 §9), in both directions and
+	// by name — checked FIRST so a drift names the route before the set diff,
+	// and so both diagnostics appear in one run. The parity check below already
+	// fails either way; this is the readable half. What it catches if the docs
+	// entry is removed: the named assertion below fires AND the
+	// mounted->documented direction reports
+	// "GET /api/v1/cards/{}/events (mounted, NOT documented in § Cards)".
+	// If the mount is removed instead, the documented->mounted direction fires
+	// and the named assertion fails on the mounted side.
+	const cardEventsRoute = "GET /api/v1/cards/{}/events"
+
+	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1/cards")
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+	if !mounted[cardEventsRoute] {
+		t.Errorf("%s is not mounted — the card event stream route disappeared from CardHandler.Routes", cardEventsRoute)
+	}
+
+	section, err := markdownSection(readAPIDocs(t), "Cards")
+	if err != nil {
+		t.Fatal(err)
+	}
+	documented, err := documentedSectionRoutes(section, "/api/v1/cards")
+	if err != nil {
+		t.Fatalf("docs/API.md § Cards: %v", err)
+	}
+	documentedRoute := false
+	for _, r := range documented {
+		if r == cardEventsRoute {
+			documentedRoute = true
+			break
+		}
+	}
+	if !documentedRoute {
+		t.Errorf("§ Cards does not document %s — the stream is mounted but undiscoverable from docs/API.md", cardEventsRoute)
+	}
+
 	assertDocumentedSectionParity(t, "Cards", "/api/v1/cards")
 
 	// Extractor control: a mid-prose mention is NOT a documented route, and the

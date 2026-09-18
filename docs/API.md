@@ -941,6 +941,56 @@ object), `400 INVALID_CARD_ID`, `404 CARD_NOT_FOUND`, `422
 CARD_ACTION_NOT_DECLARED`, `500 CARD_ACTION_FAILED` (execution failed and the
 `agent_error` event was recorded), `500 CARD_ACTION_ERROR`.
 
+### Stream Card Events
+
+```
+GET /api/v1/cards/{card_id}/events
+```
+
+Server-Sent Events stream of a card's activity log (SPEC-PL-03 §9). This repo's
+card surface is the single-id form, so the card type is taken from the stored
+card rather than from a path segment.
+
+**Query params:** `after_sequence` (non-negative int, default 0) — replay
+stored events with a higher sequence
+
+**Headers:** `Last-Event-ID` (non-negative int) — the sequence last seen by the
+client, as sent automatically by `EventSource` on reconnect
+
+The replay cursor is the **larger** of `after_sequence` and `Last-Event-ID`.
+Either one being non-integer or negative is a `400 CARD_SSE_CURSOR_INVALID`
+JSON response written *before* any SSE header.
+
+Every successful connection writes, in order:
+
+1. one `card_snapshot` frame carrying the current materialised card (the same
+   card JSON the REST card routes return), so a fresh client renders without
+   replaying history. The snapshot frame carries no `id:` line on purpose: it
+   is not a position in the event log, so a client that reconnects mid-replay
+   keeps its previous `Last-Event-ID` instead of skipping events it never
+   received — the card's sequence is in `data.last_event_seq`.
+2. one `card_event` frame per stored event after the cursor, in sequence order.
+   `id:` is the event's sequence and `data:` is compact single-line JSON.
+3. later events appended while the connection is open, streamed live.
+
+An idle connection receives a `heartbeat` event every 30 seconds.
+
+**Frame shape:**
+```text
+id: 42
+event: card_event
+data: {"event_type":"card_event","card_id":"uuid","card_type":"compact","sequence":42,"timestamp":"RFC3339","data":{"sequence":42,"event_id":"uuid","card_id":"uuid","event_type":"agent_progress","actor_kind":"agent","actor_id":"coding","payload":{},"created_at":"RFC3339"}}
+```
+
+`event:` is `card_event` for a stored event, `card_snapshot` for the
+materialised card, or `heartbeat` for liveness. The `data:` body is always one
+line.
+
+**Errors:** `400 CARD_SSE_CURSOR_INVALID` (cursor is not a non-negative
+integer), `413 CARD_SSE_BACKLOG_LIMIT` (the replay would exceed 10,000 events —
+GET the card snapshot and reconnect with a fresh cursor), `404
+CARD_NOT_FOUND`, `400 INVALID_CARD_ID`.
+
 ---
 
 ## Approvals

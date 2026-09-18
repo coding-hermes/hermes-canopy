@@ -83,6 +83,22 @@ type CardActionOutcome struct {
 	Error           string          `json:"error,omitempty"`
 }
 
+// CardEvent is the streamable view of one stored card event: the row the SSE
+// stream frames as `event: card_event` (SPEC-PL-03 §9.1) and the same row a
+// replay reads back from the card's SQLite event log. It is declared here
+// rather than in internal/card because the HTTP layer consumes it through this
+// package — internal/card depends on internal/service, never the reverse.
+type CardEvent struct {
+	Sequence  int64           `json:"sequence"`
+	EventID   uuid.UUID       `json:"event_id"`
+	CardID    uuid.UUID       `json:"card_id"`
+	EventType string          `json:"event_type"`
+	ActorKind string          `json:"actor_kind"`
+	ActorID   string          `json:"actor_id"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
 // CardService defines the contract for card CRUD, events, and lifecycle.
 // Spec: SPEC-PL-03.
 type CardService interface {
@@ -112,4 +128,23 @@ type CardService interface {
 	// appended), or ErrCardActionFailed (execution failed; the returned outcome
 	// is non-nil so callers can read the durable agent_error event).
 	SubmitCardAction(ctx context.Context, cardID uuid.UUID, handler string, payload json.RawMessage) (*CardActionOutcome, error)
+
+	// ListCardEvents returns the card's stored events after a sequence cursor,
+	// in sequence order. This is the SSE replay path (SPEC-PL-03 §9.2): the
+	// cursor is the larger of the request's after_sequence parameter and its
+	// Last-Event-ID header, and the rows come from the card's event log.
+	ListCardEvents(ctx context.Context, cardID uuid.UUID, afterSequence int64, limit int) ([]CardEvent, error)
+
+	// MaxCardEventSequence returns the highest stored event sequence for a
+	// card, or 0 when the card has no events. It bounds a replay request.
+	MaxCardEventSequence(ctx context.Context, cardID uuid.UUID) (int64, error)
+
+	// SubscribeCardEvents registers a live listener for a card's events and
+	// returns the receive-only channel plus an idempotent unsubscribe func.
+	//
+	// The channel is closed when the subscription ends, so a stream loop can
+	// terminate on close. A service without a live hub returns a nil channel
+	// and a no-op unsubscribe: a nil channel blocks forever in a select, which
+	// leaves the caller's snapshot + replay + heartbeat path intact.
+	SubscribeCardEvents(cardID uuid.UUID) (<-chan CardEvent, func())
 }

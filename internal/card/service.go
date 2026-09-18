@@ -14,6 +14,11 @@ import (
 type CardServiceImpl struct {
 	dbMgr    *CardDBManager
 	executor CardActionExecutor
+	// hub carries freshly appended events to live SSE subscribers
+	// (SPEC-PL-03 §9). It is nil until WithEventHub installs one, and a nil
+	// hub makes publishing a no-op — so a service built by
+	// NewCardServiceImpl alone keeps its previous behaviour exactly.
+	hub *CardEventHub
 }
 
 // NewCardServiceImpl creates a CardServiceImpl that uses the given CardDBManager
@@ -65,7 +70,7 @@ func (s *CardServiceImpl) CreateCard(
 	}
 
 	// Append card_created event.
-	_, err = repo.AppendEvent(ctx, card.ID, AppendEventInput{
+	created, err := repo.AppendEvent(ctx, card.ID, AppendEventInput{
 		EventID:   uuid.New(),
 		EventType: EventCardCreated,
 		ActorKind: ActorUser,
@@ -75,6 +80,7 @@ func (s *CardServiceImpl) CreateCard(
 	if err != nil {
 		return nil, fmt.Errorf("card: append create event: %w", err)
 	}
+	s.publishEvent(created)
 
 	return CardToSummary(card), nil
 }
@@ -176,7 +182,7 @@ func (s *CardServiceImpl) UpdateCardData(ctx context.Context, cardID uuid.UUID, 
 	}
 
 	// Append card_updated event.
-	_, err = repo.AppendEvent(ctx, cardID, AppendEventInput{
+	updatedEvent, err := repo.AppendEvent(ctx, cardID, AppendEventInput{
 		EventID:   uuid.New(),
 		EventType: EventCardUpdated,
 		ActorKind: ActorUser,
@@ -186,6 +192,7 @@ func (s *CardServiceImpl) UpdateCardData(ctx context.Context, cardID uuid.UUID, 
 	if err != nil {
 		return nil, fmt.Errorf("card: append update event: %w", err)
 	}
+	s.publishEvent(updatedEvent)
 
 	summary := CardToSummary(updated)
 	seq, _ := repo.MaxSequence(ctx, cardID)
@@ -209,7 +216,7 @@ func (s *CardServiceImpl) ArchiveCard(ctx context.Context, cardID uuid.UUID) err
 	}
 
 	// Append card_archived event.
-	_, err = repo.AppendEvent(ctx, cardID, AppendEventInput{
+	archivedEvent, err := repo.AppendEvent(ctx, cardID, AppendEventInput{
 		EventID:   uuid.New(),
 		EventType: EventCardArchived,
 		ActorKind: ActorUser,
@@ -219,8 +226,47 @@ func (s *CardServiceImpl) ArchiveCard(ctx context.Context, cardID uuid.UUID) err
 	if err != nil {
 		return fmt.Errorf("card: append archive event: %w", err)
 	}
+	s.publishEvent(archivedEvent)
 
 	return nil
+}
+
+// ListCardEvents implements service.CardService: the card's stored events after
+// a sequence cursor, in sequence order. Replay for the SSE stream reads the
+// event log directly — there is no second event store (SPEC-PL-03 §9.2).
+func (s *CardServiceImpl) ListCardEvents(
+	ctx context.Context,
+	cardID uuid.UUID,
+	afterSequence int64,
+	limit int,
+) ([]service.CardEvent, error) {
+	_, repo, err := s.findCardAndRepo(ctx, cardID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", service.ErrCardNotFound, cardID)
+	}
+
+	events, err := repo.ListEvents(ctx, cardID, afterSequence, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]service.CardEvent, 0, len(events))
+	for _, ev := range events {
+		out = append(out, toServiceCardEvent(ev))
+	}
+	return out, nil
+}
+
+// MaxCardEventSequence implements service.CardService: the highest stored event
+// sequence for a card (0 when the card has no events). The SSE handler uses it
+// to refuse a replay larger than the backlog limit BEFORE any SSE header is
+// written.
+func (s *CardServiceImpl) MaxCardEventSequence(ctx context.Context, cardID uuid.UUID) (int64, error) {
+	_, repo, err := s.findCardAndRepo(ctx, cardID)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", service.ErrCardNotFound, cardID)
+	}
+	return repo.MaxSequence(ctx, cardID)
 }
 
 // findCardAndRepo looks up a card across all card type databases.
