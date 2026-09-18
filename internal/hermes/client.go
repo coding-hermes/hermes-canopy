@@ -810,6 +810,14 @@ func (c *httpHermesClient) CreateConversation(ctx context.Context, profileToken 
 }
 
 // ListModels returns available models from GET /v1/models.
+//
+// The response shape is tolerant, in this precedence order: a bare JSON array
+// of models, an object wrapping the list under "models", or an object wrapping
+// it under "data" — the OpenAI-style envelope the LIVE gateway api_server
+// answers with ({"object":"list","data":[{"id":"Hermes Agent","object":"model",
+// "owned_by":"hermes"}]}). A "models" key wins when an object carries both (see
+// decodeList). Anything else is an error, which callers treat as "catalog
+// unreachable".
 func (c *httpHermesClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	raw, err := c.getWithRetry(ctx, "/v1/models")
 	if err != nil {
@@ -877,7 +885,20 @@ func (c *httpHermesClient) getWithRetry(ctx context.Context, path string) ([]byt
 }
 
 // decodeList decodes a list response that is either a bare JSON array or an
-// object wrapping the array under the given key (e.g. {"models": [...]}).
+// object wrapping the array under one of two accepted keys, in this precedence
+// order:
+//
+//  1. a bare JSON array (tried first, so an empty array keeps working);
+//  2. an object wrapping the list under the caller's key (e.g. {"models": [...]});
+//  3. an object wrapping the list under "data" — the OpenAI-style envelope the
+//     live Hermes gateway api_server answers with on GET /v1/models
+//     ({"object":"list","data":[{"id":"Hermes Agent","object":"model",...}]}).
+//
+// Step 3 is skipped when key == "data" so the same key is never decoded twice.
+// The order is load-bearing when an object carries BOTH keys: the named key wins
+// deterministically rather than by map-iteration luck. A present key whose value
+// is not a list is an error naming that key and never falls through to "data";
+// an object with neither accepted key, and a non-JSON body, are errors.
 func decodeList[T any](raw []byte, key string) ([]T, error) {
 	var out []T
 	if err := json.Unmarshal(raw, &out); err == nil {
@@ -887,12 +908,22 @@ func decodeList[T any](raw []byte, key string) ([]T, error) {
 	if err := json.Unmarshal(raw, &wrapped); err != nil {
 		return nil, errors.New("decode list response: not a JSON array or object")
 	}
-	items, ok := wrapped[key]
-	if !ok {
+	keys := []string{key}
+	if key != "data" {
+		keys = append(keys, "data")
+	}
+	for _, k := range keys {
+		items, ok := wrapped[k]
+		if !ok {
+			continue
+		}
+		if err := json.Unmarshal(items, &out); err != nil {
+			return nil, fmt.Errorf("decode list response: %q field: %w", k, err)
+		}
+		return out, nil
+	}
+	if key == "data" {
 		return nil, fmt.Errorf("decode list response: missing %q field", key)
 	}
-	if err := json.Unmarshal(items, &out); err != nil {
-		return nil, fmt.Errorf("decode list response: %q field: %w", key, err)
-	}
-	return out, nil
+	return nil, fmt.Errorf("decode list response: missing %q or %q field", key, "data")
 }

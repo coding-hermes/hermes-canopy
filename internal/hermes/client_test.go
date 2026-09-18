@@ -742,6 +742,106 @@ func TestListModelsBareArray(t *testing.T) {
 	assert.Equal(t, "m1", models[0].ID)
 }
 
+func TestListModelsDataEnvelope(t *testing.T) {
+	// The OpenAI-style envelope: an object whose list rides under "data"
+	// instead of the named "models" key.
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		_, _ = w.Write([]byte(`{"object":"list","data":[
+			{"id":"deepseek-v4-flash","object":"model","provider":"deepseek","context_length":128000,"supports_streaming":true},
+			{"id":"kimi-k3","object":"model","provider":"kimi","context_length":131072,"supports_streaming":false}
+		]}`))
+	}, nil)
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 2)
+	assert.Equal(t, "deepseek-v4-flash", models[0].ID)
+	assert.Equal(t, "deepseek", models[0].Provider)
+	assert.Equal(t, 128000, models[0].ContextLen)
+	assert.True(t, models[0].SupportsStreaming)
+	assert.Equal(t, "kimi-k3", models[1].ID)
+	assert.Equal(t, 131072, models[1].ContextLen)
+	assert.False(t, models[1].SupportsStreaming)
+}
+
+func TestListModelsDataEnvelopeIsTheLiveShape(t *testing.T) {
+	// The payload captured verbatim from the live Hermes gateway api_server:
+	// exactly one model, no context_length (a missing window is data, not an
+	// error — the caller derives a budget only when one is reported).
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"Hermes Agent","object":"model","owned_by":"hermes"}]}`))
+	}, nil)
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	assert.Equal(t, "Hermes Agent", models[0].ID)
+	assert.Zero(t, models[0].ContextLen)
+	assert.Empty(t, models[0].Provider)
+	assert.False(t, models[0].SupportsStreaming)
+}
+
+func TestListModelsModelsKeyWinsOverData(t *testing.T) {
+	// An object carrying BOTH keys must resolve deterministically to the named
+	// "models" key, never by map-iteration luck.
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[{"id":"from-models","context_length":4096}],
+			"data":[{"id":"from-data","context_length":8192}]}`))
+	}, nil)
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	assert.Equal(t, "from-models", models[0].ID)
+	assert.Equal(t, 4096, models[0].ContextLen)
+}
+
+func TestListModelsNonListFieldIsAnError(t *testing.T) {
+	// A present named key whose value is not a list is an error naming that key
+	// — it must NOT silently fall through to a sibling "data" array.
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":"nope","data":[{"id":"from-data"}]}`))
+	}, nil)
+
+	models, err := client.ListModels(context.Background())
+	require.Error(t, err)
+	assert.Nil(t, models)
+	assert.Contains(t, err.Error(), `"models"`)
+	assert.NotContains(t, err.Error(), "from-data")
+}
+
+func TestListModelsMissingBothKeysIsAnError(t *testing.T) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list"}`))
+	}, nil)
+
+	models, err := client.ListModels(context.Background())
+	require.Error(t, err)
+	assert.Nil(t, models)
+	// The error must name BOTH accepted keys so a future reader knows which
+	// shapes were tolerated.
+	assert.Contains(t, err.Error(), `"models"`)
+	assert.Contains(t, err.Error(), `"data"`)
+	assert.Contains(t, err.Error(), "hermes: list models:")
+}
+
+func TestListSkillsStillNamedKeyOnly(t *testing.T) {
+	// Regression guard for the shared helper: skills are only ever accepted
+	// under their own key, and the named key still wins over "data".
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/skills", r.URL.Path)
+		_, _ = w.Write([]byte(`{"skills":[{"name":"web_search","description":"Search the web"}],
+			"data":[{"name":"from-data"}]}`))
+	}, nil)
+
+	skills, err := client.ListSkills(context.Background())
+	require.NoError(t, err)
+	require.Len(t, skills, 1)
+	assert.Equal(t, "web_search", skills[0].Name)
+}
+
 func TestHealthWithRetryContextCanceled(t *testing.T) {
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
