@@ -2706,3 +2706,16 @@ tasks:
   status: complete
   created_at: '2026-09-18T00:12:22.134100+00:00'
   completed_at: '2026-09-18T00:40:03.674869+00:00'
+- id: DF-HERMES-CANOPY-23
+  title: internal/hermes decodeList tolerates the OpenAI data envelope (mirror of
+    the gateway rework)
+  criteria:
+  - internal/hermes ListModels accepts the live gateway shape {"object":"list","data":[...]}
+    and still accepts a bare array and a {"models":[...]} object, with the named key
+    winning when both are present, pinned by tests; ListSkills/404 behaviour unchanged;
+    go build+vet clean, focused tests PASS with 0 SKIP, golangci-lint 0 issues on
+    internal/hermes; no change to internal/gateway, internal/handler, internal/server
+    or internal/card
+  status: complete
+  created_at: '2026-09-18T00:57:34.353732+00:00'
+  completed_at: '2026-09-18T01:01:34.863008+00:00'

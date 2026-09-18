@@ -926,3 +926,111 @@ where the discovery work is already done), then **GAP-083** (P4 card/event JSONL
 **DuckBrain:** pre-write state read first (`GET /api/keys?tree=true&namespace=hermes-canopy`, walking the nested tree — tick keys were contiguous through `/ticks/490`). Written: **`/ticks/491`** (domain `event`, UUID `47f01419-b0c0-464b-b7bc-50f65286f9d9`) and **`/project/hermes-canopy/status/2026-09-18-tick491-audit`** (domain `config`, UUID `22e07253-4e81-41d7-92db-fccea6f4022c`), namespace `hermes-canopy`, both verified by re-listing the key tree. **Residue I created and am naming rather than hiding:** a CLI `--attr` smoke test wrote **five** probe keys (`/ticks/probe-491-{at,base,emptyarr,semicolon,slash}`); they were `forget`-ed by UUID but the key tree still lists them (soft-delete), so treat them as known junk — the attribute problem that caused them was my shell quoting, not the CLI.
 
 **Next tick:** tractable = **GAP-080 phase 3** (summarization — needs a retention-policy decision **and** a marked spec amendment to §8 scenario 17's no-pin byte-parity clause before any dispatch) or the smaller sharp diffs **DF-HERMES-CANOPY-23** (the sibling `internal/hermes` envelope gap: one file + tests, mirroring a recipe proven twice), **DF-HERMES-CANOPY-24** (the CI teardown flake — a reproduction recipe is on the row) and **DF-HERMES-CANOPY-25** (handler timeouts under concurrent PG load). Still parked on owner rulings: **GAP-076** (blocks GAP-077), **GAP-078**, **GAP-081**, **DF-20**, **DF-22**; **QA-HERMES-CANOPY-*** remain bunker/fleet-infra owned. Watch: the `canopy_<hex>` per-test DB residue (flag, never drop another run's state — this tick's probes created none), and the E2E-001 cadence with still no identifiable battery tick in the window.
+
+## Tick 492 — 2026-09-18 ~00:56Z → ~01:1xZ (WORK — DF-HERMES-CANOPY-23 LANDED: the SPEC-FTR-07 list client now tolerates the live OpenAI `data` envelope, worker, judge 2dc3ade4)
+
+### Verdict
+WORK. Board read directly from `.coding-hermes/board/tasks.jsonl` (tick start):
+347 rows / 311 unique ids / **291 complete / 20 pending** / **0 parse failures**.
+The 20 pending rows are: 4 `QA-HERMES-CANOPY-*` (bunker/fleet-infra owned — not fixable from
+this repo), `GAP-076` (P1, owner ruling, blocks `GAP-077`), `GAP-078`/`GAP-081`/`DF-20`/`DF-22`
+(decision-bound), `GAP-080` (P3, remaining phases are decision-bound), `FTR-06` + `PL-02..PL-06`
+(P3 post-MVP specs), and `DF-23`/`DF-24`/`DF-25` (foreman-filed, actionable).
+Pick: **DF-HERMES-CANOPY-23** — the only pending row that is a real code defect with a named
+fix shape, a finite diff and testable criteria. `DF-24` (CI-only teardown flake) is an
+investigation whose honest best case is "cannot reproduce", and `DF-25` is explicitly a watch
+row; both stay pending by design.
+
+### Pick premise re-verified at HEAD (before dispatch)
+- `grep -n decodeList internal/hermes/client.go` → two call sites, `ListModels` passes `"models"`,
+  `ListSkills` passes `"skills"`; the helper only ever read `wrapped[key]`.
+- **First-hand reproduction at HEAD, independent of the worker**: `git show HEAD:internal/hermes/client.go`
+  → extracted the pre-fix `decodeList` verbatim into `/tmp/df23-prefix-proof/` with the live gateway
+  payload → `err=decode list response: missing "models" field`, `models=[]`. The defect is real and
+  the live shape is the trigger.
+- Blast radius: `decodeList` is unexported with exactly 2 call sites in one package; `internal/hermes` is
+  the SPEC-FTR-07 §3.1 client and its profile-router surfaces do not touch this helper. An earlier tick
+  excluded the file precisely because it is shared — this row is the deliberate, scoped follow-up.
+
+### Dispatch / Worker
+`gpt-5.6-luna` @ `openai-codex` (the reliable lane on this project), `-s coding-hermes-worker`, brief
+`/tmp/brief-df23.md`, launched as a tool-tracked background process (`bash /tmp/dispatch-df23.sh`,
+`proc_5b5f7e60fb9c`) — no shell-level `nohup`/`&` wrapper, per the tick-491 lesson.
+Liveness: 0-byte log at +50s but `internal/hermes/client_test.go` already modified → live-but-quiet
+(luna lane signature), **not** a dead dispatch. Commit `231ea45` landed at ~01:0xZ; 1 attempt, 0 rework.
+
+### Gates (foreman-run, fresh, in the working tree)
+| Gate | Command | Result |
+|---|---|---|
+| build | `go build ./...` | RC=0 |
+| vet (pkg) | `go vet ./internal/hermes/` | RC=0 |
+| vet (repo) | `go vet ./...` | RC=0 |
+| focused | `go test -count=1 -v -run 'TestListModels\|TestListSkills' ./internal/hermes/` | RC=0 — **11 RUN / 11 PASS / 0 SKIP / 0 FAIL** |
+| package | `go test -count=1 ./internal/hermes/` | RC=0 (`ok … 1.294s`) |
+| lint | `golangci-lint run ./internal/hermes/` | **0 issues** |
+
+### Falsification (foreman-executed, not the worker's word)
+`cp internal/hermes/client.go /tmp/client.go.fixed` → `git show HEAD~1:internal/hermes/client.go > internal/hermes/client.go`
+(tests kept) → `go test … -run 'TestListModels|TestListSkills'` **RC=1**:
+`--- FAIL: TestListModelsDataEnvelope`, `--- FAIL: TestListModelsDataEnvelopeIsTheLiveShape`,
+`--- FAIL: TestListModelsMissingBothKeysIsAnError` with the production error verbatim
+(`decode list response: missing "models" field`). Restore → `md5sum` identical to
+`git show HEAD:internal/hermes/client.go | md5sum` (**51bd7d9f420c090f786ae59149e60e5f**) → green again.
+The RED is the defect, not a compile error or a nil assertion.
+
+### What landed (commit `231ea45`, 2 files, +138/−7)
+`internal/hermes/client.go` — `decodeList[T]` (signature, genericity and `decode list response: …`
+prefix unchanged) now accepts, in this precedence: bare JSON array → the caller's named key →
+`"data"` (skipped when `key == "data"`, so no key is decoded twice). The named key wins
+deterministically when an object carries both; a present-but-non-list key stays an error naming that
+key and never falls through to `data`; the missing-field error now names both keys. `ListModels`' doc
+comment names all three shapes and the live envelope.
+`internal/hermes/client_test.go` — 6 new tests: `TestListModelsDataEnvelope`,
+`TestListModelsDataEnvelopeIsTheLiveShape` (live payload verbatim, no `context_length` → `ContextLen == 0`),
+`TestListModelsModelsKeyWinsOverData`, `TestListModelsNonListFieldIsAnError`,
+`TestListModelsMissingBothKeysIsAnError`, `TestListSkillsStillNamedKeyOnly`. Existing list tests untouched.
+This closes the class in the sibling of the gateway rework (`c65a12b`), which is what `DF-23` existed for.
+Scope proof: `git show --name-only --format= 231ea45` → exactly those two files; nothing under
+`internal/gateway`, `internal/handler`, `internal/server`, `internal/card` or `AGENTS.md`.
+
+### GitReins
+`gitreins task create DF-HERMES-CANOPY-23 …` + `task start` **before** implementation; `task complete`
+after the commit → **tier1 PASS** (secrets clean / go_build ok / go_lint ok / go_tests, test mode full),
+**tier2 PASS / COMPLETE**, verdict id **`2dc3ade4`**, judge RC=0.
+
+### CI
+`gh run list --repo coding-hermes/hermes-canopy`: run **35293615140** on `231ea45` → **success**
+(created 01:01:29Z, completed 01:04:30Z, first attempt, no rerun). The four completed runs before it
+(35292684986, 35292149124, 35289108567, 35288755665) were all success — **no pre-existing CI failure
+to file this tick**.
+
+### Push health
+`git push origin master` + `git push gitlab master` both landed `5d57435..231ea45`;
+`git rev-list --count origin/master..HEAD` = 0 and `gitlab/master..HEAD` = 0 (both remotes at HEAD).
+
+### Board bookkeeping
+- `tasks.jsonl` — `DF-HERMES-CANOPY-23` closed with commit/judge/gate/CI metadata (one line rewritten,
+  file's own compact style preserved; every other line passed through byte-identically).
+- `events.jsonl` — `task_completed` + `ci` appended.
+- `board.jsonl` — `ticks_total` 491 → **492**, `last_commit` = `231ea45`.
+- `.gitreins/tasks.yaml` — the DF-HERMES-CANOPY-23 ledger entry (complete) rides the closeout commit.
+
+### Worker brief / skill feedback
+The worker disclosed one brief deviation (the "tree must be clean" precondition was dirty with the
+foreman's own in-progress `tasks.yaml` ledger row; it classified the file, left it alone, used a pathspec
+commit and proved scope from `git show --name-only`). It recorded the reusable half in the
+`coding-hermes-worker` skill's `references/commit-scope-and-tree-precondition-reporting.md` (+ a pointer
+line; SKILL.md is at its 100 K cap). Verified present and accurate — kept.
+
+### Off-by-one
+Health `{"status":"ok","uptime":"23h36m"}`. Discover BEFORE designing the fix:
+`POST /api/v1/problems/discover {"problem_class":"openai-data-envelope-list-decode"}` → `not_found`
+(also probed `json-list-decode-envelope-precedence` → `not_found`), so the fix was derived from the
+sibling's landed rework (`c65a12b`), not from a cached answer. Submitted the reusable answer as
+`json-list-envelope-named-key-precedence` (`cadence: post-debug`).
+
+### Next tick
+Pending set = 20 rows, unchanged in shape: `DF-24` (CI teardown flake — reproduce the CI timing before
+believing a local green), `DF-25` (watch: handler package stalling in `testutil.TruncateAll` under
+concurrent PG load), `DF-22`/`DF-20`/`GAP-078`/`GAP-081`/`GAP-076`. `GAP-077` is blocked by `GAP-076`.
+`QA-HERMES-CANOPY-*` stay bunker/fleet-infra owned — skip with this rationale, never dispatch.
