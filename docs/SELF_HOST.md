@@ -294,13 +294,13 @@ Migrations are **embedded in the binary** and run automatically when `canopyd` s
 ```
 2026-07-27T10:00:00Z INF canopyd starting version=v0.1.0 http_addr=:8091 db_host=localhost
 2026-07-27T10:00:00Z INF running database migrations...
-2026-07-27T10:00:01Z INF migrations complete (20 applied)
+2026-07-27T10:00:01Z INF migrations complete
 2026-07-27T10:00:01Z INF HTTP server listening addr=:8091
 ```
 
 There is nothing you need to do — no migration CLI, no manual step. If the schema is already current, the migration step is a no-op with no downtime.
 
-The migration files live in `migrations/` in the repo (40 SQL files — 20 up + 20 down). The binary embeds them at compile time via `iofs`, so the version you're running always contains the correct schema for that version.
+The migration files live in `migrations/` in the repo — numbered `.up.sql`/`.down.sql` pairs, compiled in via `migrations/embed.go`. That directory is the source of truth for which migrations exist and how many; don't trust a count quoted in prose. The binary embeds them at compile time via `iofs`, so the version you're running always contains the correct schema for that version.
 
 ### Connection String Format
 
@@ -647,8 +647,9 @@ checkout:
 
 ```bash
 curl -s http://localhost:8091/health   # or :8092 for the compose stack
-# → {"status":"ok",…,"schema_version":47,"embedded_migrations":47}
-#   schema_version > embedded_migrations means this binary is stale.
+# → {"status":"ok",…,"schema_version":N,"embedded_migrations":N}
+#   N is the migration version the binary reports — see migrations/ for the
+#   embedded set. schema_version > embedded_migrations means this binary is stale.
 
 make build            # native: rebuild from HEAD, then restart your instance
 make deploy           # …or the atomic path for the systemd instance

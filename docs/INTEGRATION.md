@@ -65,7 +65,10 @@ This starts two services:
 
 Migrations are **embedded in the canopyd binary** at compile time. The SQL files
 live in `migrations/` and are compiled into the binary via Go's `embed` package
-(see `migrations/embed.go`). There are 32 numbered migration pairs (up/down).
+(see `migrations/embed.go`). The numbered `.up.sql`/`.down.sql` pairs in
+`migrations/` are the source of truth for the migration set — read the count from
+that directory rather than from a number written down here, which would go stale
+as soon as a migration is added.
 
 **How they run:** On every startup, `main.go` calls `database.Migrate(ctx)` which
 uses `golang-migrate` to apply any pending up-migrations automatically. The
