@@ -1292,3 +1292,30 @@ Health: `{"status":"ok","uptime":"27h58m11s"}`. Discover actually fired (not cop
 - **GAP-080 phase 3** (summarisation tier) only after the retention-policy decision **and** a dated amendment to SPEC-IMPL-GAP-001 §8 scenario 17's no-pin byte-parity clause.
 - Parked, needing an owner: **GAP-076** (storage pivot; blocks GAP-077), **GAP-078** (build-or-declare), **GAP-081** (scope honesty), **DF-HERMES-CANOPY-20** (closed), plus the bunker/fleet-infra `QA-HERMES-CANOPY-*` rows.
 - Watch: the live catalog still reports no `context_length`, so the **declaration is now the operative path on this deployment** — if the gateway ever starts reporting windows, the live value wins automatically and the declaration becomes a no-op fallback. Documented, not assumed.
+
+### Tick 494 follow-up — CI RED on this tick's OWN board commit, diagnosed and fixed in the same tick (DF-HERMES-CANOPY-26)
+
+The closeout push (`02cb8a0`, board-only) turned CI **RED**: run **35311008908**, job `build (ubuntu-latest, 1.25)` → `Test (short)` → `internal/service` **FAIL**:
+
+```
+--- FAIL: TestReferenceSelectionSigner_RejectsTamperingAndForeignCallers (0.00s)
+    --- FAIL: .../tampered_signature (0.00s)
+        multi_reference_test.go:129: Verify() error = <nil>, want ErrReferenceSelectionTokenInvalid
+```
+
+Two things ruled out a regression before anything was changed: the **same tree** was green in runs 35310000395 (implementation `0e7f2af`) and 35310757883 (closeout `5fdc763`), and a board-only commit changes no code. Diagnosis was by **reproduction, not inspection**: a temporary in-package probe (deleted before commit) signed tokens in a loop until the test's tamper produced a token **identical** to the input — reproduced within **25 signings**, i.e. the "tampered" case handed `Verify` an **unchanged, valid** token and then demanded `REFERENCE_SELECTION_TOKEN_INVALID` for it. **The product was correct.**
+
+Two independent defects in the tamper, both measured:
+
+| Defect | Measurement |
+|---|---|
+| `token[:len(token)-2] + "AA"` is a NO-OP when the signature already ends in `"AA"` | **19 no-ops / 20000 signings (~0.095%)** ≈ one false failure per ~1000 runs |
+| Mutating the **trailing** base64url character does not reliably change the signature **bytes** (43 chars carry 4 significant bits + 2 spare bits; Go tolerates non-zero spare bits, so several last characters decode identically) | the "no-op count" stayed **0** while a `-count=3000` loop still FAILED — the spare-bit path, not the suffix collision |
+
+Fix (**`1574a3d`**, `internal/service/multi_reference_test.go`, +41/−1, test-only): new `tamperedToken()` flips the **FIRST** character of the signature segment (fully significant 6 bits), so the decoded signature really differs.
+
+- Evidence: targeted test **FAILS** the same `-count=3000` loop with the old form, **3000/3000 PASS** with the new one; tamper no-op rate **0/20000** for the new helper; `internal/service` package ok; build/vet/gofmt/golangci-lint clean.
+- **CI: run 35311475715 on `1574a3d` GREEN, and the rerun of the original red run 35311008908 ALSO GREEN with no tree change** — the flake signature, recorded rather than smoothed over.
+- **Not changed on purpose:** `Verify()` itself. Go's base64 spare-bit leniency is not a forgery path (the MAC still authenticates the payload), so the defect was in the test's tamper, not in the product's verification; touching a security surface for scope creep is how a green suite starts lying.
+- Board: new row **DF-HERMES-CANOPY-26** (P2, complexity 2) filed and closed in the same write pass — events **557** (`task_created`), **558** (`task_completed`), **559** (`audit` with the full sequence). `boardctl validate` signature unchanged (**40 errors / 185 warnings**, zero error lines naming row DF-26 or event 559).
+- Reusable law for the fleet: **a tamper test must mutate material that is (a) guaranteed to differ at the STRING level AND (b) significant at the BYTES level** — a fixed-suffix overwrite fails (a), a trailing base64url character fails (b).
