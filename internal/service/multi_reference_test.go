@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +97,45 @@ func TestReferenceSelectionSigner_Expired(t *testing.T) {
 	}
 }
 
+// tamperedToken returns token with the FIRST character of its signature segment
+// replaced by a DIFFERENT base64url character, so the mutation is guaranteed to
+// change the DECODED signature bytes.
+//
+// Why not the previous form — overwriting the last characters with the fixed
+// suffix "AA" (`token[:len(token)-2] + "AA"`)? Two independent reasons, both
+// measured by the foreman:
+//
+//  1. it is a NO-OP whenever the signature already ends in "AA" (measured: 18
+//     no-ops in 20000 signings, ~0.09%), so the "tampered" case occasionally
+//     handed Verify an UNCHANGED, perfectly valid token and then demanded
+//     REFERENCE_SELECTION_TOKEN_INVALID for it — a non-deterministic failure of a
+//     security test that reddened CI on a board-only commit; and
+//  2. the TRAILING character of a base64url-encoded 32-byte MAC is only PARTIALLY
+//     significant: 43 characters carry 4 significant bits plus 2 spare ones, and
+//     Go's base64 decoder tolerates non-zero spare bits, so several different last
+//     characters decode to the SAME signature bytes and still verify. Mutating the
+//     last character therefore does not reliably tamper with anything.
+//
+// The first character is fully significant (6 bits), so the signature bytes really
+// differ and rejection is the only correct outcome. The MAC still authenticates
+// the payload either way — spare-bit leniency is not a forgery path — which is why
+// this is a TEST fix and not a verifier change.
+func tamperedToken(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 || parts[3] == "" {
+		// Not the token shape this case is about; return something that cannot
+		// accidentally equal the input.
+		return token + "!"
+	}
+	sig := parts[3]
+	replacement := byte('A')
+	if sig[0] == 'A' {
+		replacement = 'B'
+	}
+	parts[3] = string(replacement) + sig[1:]
+	return strings.Join(parts, ".")
+}
+
 func TestReferenceSelectionSigner_RejectsTamperingAndForeignCallers(t *testing.T) {
 	clock, _ := fixedClock(time.Now())
 	signer := NewReferenceSelectionSigner("test-secret", clock)
@@ -116,7 +156,7 @@ func TestReferenceSelectionSigner_RejectsTamperingAndForeignCallers(t *testing.T
 		token string
 		call  uuid.UUID
 	}{
-		{"tampered signature", token[:len(token)-2] + "AA", requester},
+		{"tampered signature", tamperedToken(token), requester},
 		{"empty token", "", requester},
 		{"wrong prefix", "xyz.v1.a.b", requester},
 		{"missing signature", "mrs.v1.abc", requester},
