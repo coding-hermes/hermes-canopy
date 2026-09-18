@@ -2845,5 +2845,6 @@ tasks:
     migration-file count; preserve accurate migration guidance, verify the docs contain
     no drift-prone count claim, run relevant validation, and commit the change with
     Addresses GAP-089.
-  status: in_progress
+  status: complete
   created_at: '2026-09-18T19:28:04.972187+00:00'
+  completed_at: '2026-09-18T19:40:23.300956+00:00'
