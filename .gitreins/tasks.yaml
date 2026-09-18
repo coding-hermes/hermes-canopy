@@ -2719,3 +2719,16 @@ tasks:
   status: complete
   created_at: '2026-09-18T00:57:34.353732+00:00'
   completed_at: '2026-09-18T01:01:34.863008+00:00'
+- id: DF-HERMES-CANOPY-20
+  title: Amend SPEC-IMPL-GAP-001 section 7 (budget smaller than one node) for the
+    landed post-walk floor + pinned exception; cross-reference it in the pinned test
+  criteria:
+  - SPEC-IMPL-GAP-001 revision statement preserves the original clause text and adds
+    a dated amendment naming commit 919c98d (floor), d82dae1 (pinned exception) and
+    TestGAP080_PinnedOverageKeepsAllPinned, plus the named open option (ii); internal/context/compiler_pinned_test.go
+    carries a comment-only cross-reference; git diff touches exactly those two files
+    with no production behavior change; go build/vet/gofmt clean and go test -count=1
+    ./internal/context/ passes
+  status: complete
+  created_at: '2026-09-18T02:59:07.574892+00:00'
+  completed_at: '2026-09-18T03:01:56.478228+00:00'

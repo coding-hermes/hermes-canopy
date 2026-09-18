@@ -1034,3 +1034,165 @@ Pending set = 20 rows, unchanged in shape: `DF-24` (CI teardown flake — reprod
 believing a local green), `DF-25` (watch: handler package stalling in `testutil.TruncateAll` under
 concurrent PG load), `DF-22`/`DF-20`/`GAP-078`/`GAP-081`/`GAP-076`. `GAP-077` is blocked by `GAP-076`.
 `QA-HERMES-CANOPY-*` stay bunker/fleet-infra owned — skip with this rationale, never dispatch.
+
+## Tick 493 — 2026-09-18 ~02:56Z → ~03:1xZ (WORK — DF-HERMES-CANOPY-20 CLOSED: SPEC-IMPL-GAP-001 §7 amended for the pinned budget floor, worker, judge 78f9c664)
+
+### Verdict
+WORK. Board read directly from `.coding-hermes/board/tasks.jsonl` (last-wins per id, line-wise parse):
+347 rows / 311 unique ids / **292 complete / 19 pending** / **0 parse failures**. CI health at tick start:
+the six most recent runs were all `success` (35293917709, 35293615140, 35292684986, 35292149124,
+35289108567, 35288755665) — nothing pre-existing to file.
+
+The 19 pending rows are: `GAP-076` (P1, owner ruling, blocks `GAP-077`), `QA-HERMES-CANOPY-1` (P1,
+bunker/fleet-infra owned), `GAP-078` (P2, ruling), `DF-20`/`DF-22` (P3, decision-bound),
+`GAP-080` (P3 umbrella: phases 3/4/5b each need a retention/UX decision), `GAP-081` (P3 scope
+decision), `FTR-06` + `PL-02..PL-06` (P3 post-MVP specs), `DF-24` (P3 CI flake), `DF-25` (P4 watch),
+`QA-HERMES-CANOPY-2/9/10` (P3 bunker/fleet-infra owned).
+
+**Pick: `DF-HERMES-CANOPY-20`** — the only pending row whose premise is verifiable at HEAD, whose
+resolution is deterministic, and whose failure mode is a future tick silently changing landed,
+judge-approved behaviour to satisfy a literal reading of the spec.
+
+`DF-24` (the CI teardown flake) was the other candidate and was **declined with evidence**: the run
+the row names (35280411606) is now `success` — it was the *rerun* — and
+`gh api .../actions/runs?status=completed` shows **no failing run among the last 100**, so the CI
+timing cannot be reproduced from CI evidence and a dispatch would risk phantom work. The row stays
+pending with that measurement recorded.
+
+### Pick premise re-verified at HEAD (before the decision, before dispatch)
+- `grep -n "Budget smaller than one node" specs/SPEC-IMPL-GAP-001-context-compiler.md` → **:225**, the
+  literal clause, **unmarked** (no amendment marker).
+- `internal/context/compiler_pinned_test.go:341` `TestGAP080_PinnedOverageKeepsAllPinned` asserts the
+  opposite for a pinned chain: ancestry == the two pinned nodes and `!strings.Contains(res.Content, ids[2])`
+  (assertion at **:373-379**).
+- `internal/context/compiler.go:201-231` is the implemented floor (`len(keptContent) == 0 && len(ancestryContent) > 0`,
+  warning appended at `:230`); the surrounding comment already names "SPEC-IMPL-GAP-001 §7" and the
+  pinned exception, i.e. **the code documents the conflict and the spec does not**.
+
+### Decision (foreman, this tick) — option (i), behaviour-preserving
+**The §7 escape is a post-walk FLOOR; the pinned exception STANDS.** Three reasons, each measured:
+1. the clause's non-negotiable half — "never return empty Content when the node exists" — HOLDS at
+   HEAD (probe A below), so option (i) does not weaken the clause's promise;
+2. the forced-inclusion mechanism was written for a plain oldest-first drop, where the newest node is
+   the last item dropped; under pinning it would spend budget the user did not pin;
+3. forcing the newest in would contradict the landed, judge-approved pinned contract (pinned items
+   are the only items exempt from the budget walk) and would require changing that test's assertion.
+**Option (ii)** — adopt the literal clause and change `TestGAP080_PinnedOverageKeepsAllPinned`'s
+assertion — is **NOT implemented**; the spec amendment names it explicitly as an owner-facing
+product decision so the option is not lost. Marking (strike-through of the superseded phrase, original
+text preserved) is the doctrine; nothing was silently rewritten.
+
+### Probe evidence (foreman-run, independent of the worker)
+Temporary in-package probe `internal/context/zz_t493_foreman_probe_test.go` (deleted after the run;
+`git status --short` clean, tree md5 unchanged), budget 30, 3-node chain, 40-char bodies:
+
+| Probe | content_len | Content empty | newest present | Omitted | Pinned | TokensUsed | warnings |
+|---|---|---|---|---|---|---|---|
+| A no pins | 129 | no | **yes** | 2 | 0 | 33 | `budget too small for single node`, `tokens used (33) exceeds budget (30)` |
+| B1 middle node pinned | 129 | no | **no** | 2 | 1 | 33 | `pinned nodes exceed the token budget by 3 tokens`, … |
+| B2 two oldest pinned | 260 | no | **no** | 1 | 2 | 65 | `pinned nodes exceed the token budget by 36 tokens`, … |
+
+The worker's own probe (recorded in its commit body) agrees on all three shapes. The row's tick-485
+measurement (overage 6 tokens, content_len 142, 1 pinned) used a different fixture — the qualitative
+claim is identical and the magnitude difference is fixture size, not drift (recorded on the row).
+
+### Dispatch / Worker
+`gpt-5.6-luna` @ `openai-codex` (the reliable lane on this project), `-s coding-hermes-worker`, brief
+`/tmp/brief-df20.md`, launched as a tool-tracked background process (`bash /tmp/dispatch-df20.sh`,
+`proc_3391bdd1d791`) — no shell-level `nohup`/`&` wrapper (tick-491 lesson). The brief carried the
+decision, the two probe shapes, the strike-through style with the file's own amendment examples, and
+an explicit "stop and report if a probe contradicts the premise" clause.
+Liveness: **65-byte log for the whole dispatch** (the luna signature) and no tree change at +3.5 min —
+the completion signal was the commit appearing in `git log` (`44f8ae9`) at ~+4 min. 1 attempt, 0 rework.
+
+### Gates (foreman-run, fresh, in the working tree at `44f8ae9`)
+| Gate | Command | Result |
+|---|---|---|
+| fmt | `gofmt -l internal/context` | empty |
+| build | `go build ./...` | RC=0 |
+| vet | `go vet ./...` | RC=0 |
+| package | `go test -count=1 ./internal/context/` | RC=0 (`ok … 0.011s`) |
+| lint | `golangci-lint run ./internal/context/...` | **0 issues** |
+| secrets | `gitleaks detect --no-git -c .gitleaks.toml` | **no leaks** (472.05 MB, 24.4s) |
+| guard | `gitreins guard` | Tier 1 PASS (secrets/go_build/go_lint/go_tests, test mode full) |
+
+**This is a docs+comment diff, so the guard's PASS is not the load-bearing evidence** (the repo's
+guard short-circuits on non-source diffs). The load-bearing evidence is: the foreman-run probe table
+above, the acceptance greps below, and the judge's own tier-1 battery.
+
+### Verification of the brief's acceptance criteria (adversarial, foreman-run)
+- Spec still carries the original clause at `:225` with only the superseded **phrase** struck through
+  (`~~include the single newest node regardless~~`) and the non-negotiable half intact
+  (`grep -ic "never return empty Content when the node exists"` = 1).
+- Amendment marker present **exactly once** (`2026-09-18 amendment (DF-HERMES-CANOPY-20`) and the block
+  names `919c98d`, `d82dae1`, `TestGAP080_PinnedOverageKeepsAllPinned` **and** option (ii) (5 naming hits).
+- Cross-reference present in the test (`grep -c "DF-HERMES-CANOPY-20" internal/context/compiler_pinned_test.go` = 1).
+- **Comment-only test edit, proven**: added lines in the test file that are not `//` comments →
+  **none** (grep of the diff returns empty). No production file touched: `git show --stat HEAD` names
+  exactly 2 files (`specs/SPEC-IMPL-GAP-001-context-compiler.md` 31+/1-, `internal/context/compiler_pinned_test.go` 4+/0-).
+
+### CI
+Run **35301669296** on `44f8ae9` → **success, first attempt** (3m2s; no rerun). The closeout commit
+triggers a second run on the tip, recorded in the `ci` event for this tick.
+
+### GitReins
+Lifecycle per protocol: `gitreins task create DF-HERMES-CANOPY-20 …` → `task start` **before** any
+implementation (tasks.yaml showed 183 complete / 0 in_progress at tick start) → after the commit
+landed, `gitreins task complete DF-HERMES-CANOPY-20` (run in the background; the judge took ~4 min).
+Result: **tier1 PASS** (secrets / go_build / go_lint / go_tests, test mode full), **tier2 PASS /
+COMPLETE**, verdict **`78f9c664`**. The judge independently re-ran build/vet/gofmt/tests and re-read
+both files.
+
+### Off-by-one
+Health: `curl -s http://localhost:8766/health` → `{"status":"ok","uptime":"25h37m47s"}`.
+Discover: `POST /api/v1/problems/discover` with class `spec-contradicts-landed-test-behaviour` →
+`{"error":"not_found"}` (no cached answer; the API-root form was not used — a 404 there would not
+mean the lab is down). **No submission this tick: nothing was debugged.** The work was a decision plus
+a documentation amendment, not a diagnosis, so there is no reusable post-debug answer to submit —
+stating that rather than padding the corpus.
+
+### Push health
+`44f8ae9` pushed to **origin** and **gitlab**; after the pushes `git rev-list --count origin/master..HEAD`
+= **0** and `git rev-list --count gitlab/master..HEAD` = **0**. The closeout commit is pushed and
+re-verified the same way.
+
+### Bookkeeping
+- `tasks.jsonl`: the `DF-HERMES-CANOPY-20` row rewritten in place (compact style preserved:
+  `json.dumps(..., separators=(",", ":"))`, the script **asserts exactly one physical line changed**),
+  carrying `decision`, `commit_hash`, `judge_verdict`, `guard_result`, `ci_result`/`ci_runs`,
+  `files_changed`/`lines_added`/`lines_removed`, `attempts`, worker lane, `worker_summary`,
+  `foreman_note` and `completed_at`.
+- `events.jsonl`: one `task_completed` event appended (id **554**, max before = 553).
+- `board.jsonl`: `ticks_total` 492 → **493**, `last_tick`/`updated_at` → 2026-09-18T03:08Z,
+  `last_commit` → `44f8ae9` (the CONTENT commit); `namespace`/`git_branch` untouched.
+- `.gitreins/tasks.yaml`: the task row for this tick (complete, verdict `78f9c664`).
+- Post-close parsed state (last-wins per id): **18 pending** / 292 complete / 311 unique ids / 347 rows.
+  The raw `grep -c '"status":"pending"'` count reads **29** (it matches compact rows only and counts
+  superseded duplicates) — it is not the honest number and is not used here.
+- `.coding-hermes/tasks.md`: this entry appended at the bottom (newest last), the only board file whose
+  delta in the closeout commit is pure addition.
+
+### DuckBrain
+Namespace `hermes-canopy`. Pre-write state: `/ticks/` contiguous through **492** (so 493 is the next key);
+the canonical `/project/hermes-canopy/status/2026-09-18` key already exists with per-tick `-tickNNN-audit`
+siblings, so this tick wrote the **tick-scoped audit key** rather than clobbering the canonical one.
+Written over HTTP (`POST /api/memories`, key read at runtime from `~/.duckbrain/foreman-status.token`,
+never printed) because the server holds the authoritative embedding config (OpenRouter
+`qwen3-embedding-8b`, 4096d) while a bare CLI run can fall back to LM Studio 384d:
+`/ticks/493` → uuid **cb8b71b0-7100-4a0e-93ae-bdbd25c74332**; 
+`/project/hermes-canopy/status/2026-09-18-tick493-audit` → uuid **b39fa4e0-70ee-4f2a-bd6b-6abe056e652f**.
+Both verified twice: present in `GET /api/keys?tree=true` (nested tree walk — a flat `.keys[]` selector
+silently returns nothing on this API) and found verbatim on disk in
+`namespaces/hermes-canopy/event/2026-09/current.jsonl` and `.../config/2026-09/current.jsonl`.
+
+### Next tick
+Tractable: **`DF-24`** only if a fresh red CI run makes the flake live again (the row now carries the
+"cannot reproduce from CI evidence" measurement), else **`GAP-080` phase 3** (summarisation — needs a
+retention-policy decision **and** a marked amendment to §8 scenario 17's no-pin byte-parity clause
+before any dispatch) or **phase 5b** (the audit-before-send gate needs an owner decision about when a
+send is blocked). Still parked on owner rulings: **GAP-076** (blocks GAP-077), **GAP-078**,
+**GAP-081**, **DF-22**. `QA-HERMES-CANOPY-1/2/9/10` remain bunker/fleet-infra owned.
+Watch: the `canopy_<hex>` per-test DB residue (flag, never drop another run's state — this tick's
+probes were in-memory and created none), **DF-25** (handler timeouts under concurrent PG load), and
+the **E2E-001 cadence** — still no identifiable battery tick in the window (fifth tick running);
+if the next ticks cannot identify one either, the cadence itself needs an owner check.
