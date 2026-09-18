@@ -1,0 +1,29 @@
+-- 000001_extensions.up.sql — SQLite translation of ../../000001_extensions.up.sql
+--
+-- NO-OP BY DESIGN: this migration deliberately contains no SQLite DDL.
+--
+-- PostgreSQL installs two extensions here — "pgcrypto" (../../000001_extensions.up.sql:7)
+-- and "pg_uuidv7" (:10) — and defines a fallback PL/pgSQL uuidv7() generator (:21-43).
+-- SQLite has none of those mechanisms:
+--
+--   * CREATE EXTENSION does not exist; there is no extension catalogue.
+--   * There is no PL/pgSQL and no stored (CREATE FUNCTION) routines of any kind.
+--   * There is no bundled UUID generator. Verified on modernc.org/sqlite v1.58.0:
+--     `SELECT sha3('a',256)` -> "no such function: sha3", and no uuidv7()/gen_random_uuid()
+--     symbol exists.
+--
+-- CONSEQUENCE, and the reason this file is a no-op rather than a guess:
+--   PG's `DEFAULT uuidv7()` (and `DEFAULT gen_random_uuid()` in 000010/000018/...)
+--   cannot be expressed in SQLite DDL. Every SQLite table in this directory therefore
+--   declares its id column with NO default. The id becomes a GO WRITE-PATH OBLIGATION
+--   in wave 2: the repo layer generates RFC 9562 UUIDv7 values before insert, so a
+--   missing id fails loudly as a NOT NULL constraint violation instead of silently
+--   receiving a random or malformed value.
+--
+-- Wave-2 owner: internal/db repo layer (id generation on every insert path).
+-- Machinery for the switch: docs/SQLITE-PIVOT.md (open decision "id generation").
+--
+-- The file is kept (not deleted) so the numeric sequence stays 1:1 with the
+-- PostgreSQL migration set that golang-migrate tracks.
+
+-- (intentionally empty)

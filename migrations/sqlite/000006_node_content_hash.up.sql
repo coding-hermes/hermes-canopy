@@ -1,0 +1,31 @@
+-- 000006_node_content_hash.up.sql — SQLite translation of ../../000006_node_content_hash.up.sql
+--
+-- PG does three things here and only one of them is DDL-expressible in SQLite:
+--
+--   (a) `ALTER TABLE nodes ADD COLUMN content_hash text;`            (../../000006_node_content_hash.up.sql:2)
+--   (b) `UPDATE nodes SET content_hash = encode(sha256(content::bytea),'hex') ..` (:3)
+--   (c) `ALTER TABLE nodes ALTER COLUMN content_hash SET NOT NULL;`  (:4)
+--   (d) `set_content_hash()` + `trg_node_content_hash`               (:5-13)
+--       (replaced later by ../../000025_node_content_hash_utf8.up.sql:7-12)
+--
+-- (a)+(c) collapse into the single statement below. SQLite cannot ALTER COLUMN, but it
+-- accepts `ADD COLUMN .. NOT NULL` with no default on an EMPTY table (verified on
+-- modernc.org/sqlite v1.58.0), which is exactly the state the migration chain runs in:
+-- the SQLite store is created by applying 000001..000047 in order before any data is
+-- imported. On a table that already has rows SQLite refuses it loudly
+-- ("Cannot add a NOT NULL column with default value NULL", verified) — we keep that
+-- strictness deliberately: a silent `DEFAULT ''` would let a missing hash pass as a
+-- real one.
+--
+-- (b) and (d) are NOT TRANSLATABLE and are wave-2 GO OBLIGATIONS, not dropped features:
+--   * SQLite has no sha256/sha3 SQL function (verified: `SELECT sha3('a',256)` ->
+--     "no such function: sha3" on modernc.org/sqlite v1.58.0), so neither the backfill
+--     UPDATE nor the trigger can compute a hash. Wave-2 owner: the repo layer computes
+--     sha256 over the UTF-8 encoded content on every node insert/update (the same fix
+--     that PG needed in 000025 for the bytea literal-syntax bug) and backfills existing
+--     rows when a pre-existing store is first opened.
+--   * PG object names to retire with that work: set_content_hash() and
+--     trg_node_content_hash (../../000006_node_content_hash.up.sql:5,11; last definition
+--     ../../000025_node_content_hash_utf8.up.sql:7).
+
+ALTER TABLE nodes ADD COLUMN content_hash TEXT NOT NULL;
