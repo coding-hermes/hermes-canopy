@@ -2691,3 +2691,18 @@ tasks:
   status: complete
   created_at: '2026-09-17T23:28:33.260845+00:00'
   completed_at: '2026-09-17T23:50:05.128426+00:00'
+- id: GAP-083
+  title: Deterministic card/event JSONL export + git-diffable snapshot (GAP-083 phase
+    1)
+  criteria:
+  - canopyd exports every card and its events from the per-type SQLite card store
+    as one JSON object per line in a stable total order (card_type, id; events by
+    sequence) and two exports of unchanged data are byte-identical; the store is opened
+    read-only and never mutated; --out writes the same bytes as stdout and --snapshot-dir
+    writes <dir>/cards-<UTC-date>.jsonl atomically; unknown flag or --out with --snapshot-dir
+    exits 2, missing data dir exits 1; go build/vet clean, golangci-lint 0 issues
+    on the touched packages, docs/CARD_EXPORT.md example is real output of the built
+    binary; no change to internal/card, internal/handler or internal/server
+  status: complete
+  created_at: '2026-09-18T00:12:22.134100+00:00'
+  completed_at: '2026-09-18T00:40:03.674869+00:00'
