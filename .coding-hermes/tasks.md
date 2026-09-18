@@ -1594,3 +1594,57 @@ Untracked `namespaces/` (a DuckBrain namespace clone incl. `namespaces/qa/`) sit
 - **Row:** GAP-090 carries `ci_result GREEN`, `commit_hash 76d51fb`, `guard_result PASS`, `worker_summary`, and a `foreman_note` holding the full verification chain (diff shape, gates, the re-read worker artifacts, the DB-level soft-delete check, the host-restore check, the CI run id, and the push parity).
 - **Off-by-one:** post-debug submission `sub_01285d` under class `docs-quickstart-port-default-mismatch` (submit response: `status queued`, position 8, `existing_solutions: 0`). Read back at closeout through the exact-item endpoint: `status pending`, `stage queued`, position **5** — so it is reported as queued/processing, never as a solved or cached answer.
 - **DuckBrain:** `/project/hermes-canopy/status/2026-09-18-tick500-gap090` and `/ticks/tick500-gap090-docs-port-mismatch` written to the hermes-canopy namespace and read back.
+
+## Tick 501 — 2026-09-18 ~17:52Z → ~18:14Z (WORK — GAP-087 LANDED: § Agents + § Reviews documented, route-parity guards added, worker gpt-5.6-luna @ openai-codex, judge 6b4c9228 tier1+tier2 PASS)
+
+### Verdict
+Board at tick start: **358 JSONL rows** (319 complete / 26 pending / 11 duplicate). Pick: **GAP-087 (P3, complexity 2)** — the last open member of the stand-in-PM doc-drift family that GAP-085/086/088/090 worked through, and the only pending row that closes a *published contract* hole rather than an observation. Premise re-verified before dispatch, not taken from the row text: `grep -rF` over `README.md docs/ specs/` returned **0 files** for `/api/v1/reviews`, `/api/v1/agents` and `plugins/{plugin_id}/versions`, and **1 file** for `plugins/network-proxy` (already documented in § Network Proxy, already pinned by the § Plugins parity test) — so the row's fourth path was a `{plugin_id}`-vs-`{name}` **spelling gap, not an undocumented route**, and the brief said so instead of letting the worker "fix" it by renaming the documented route. Mounts confirmed in `internal/server/server.go:427` (`/agents`), `:433` (`/reviews`), `:488` (`POST /plugins/network-proxy`).
+
+### Dispatch
+Worker **gpt-5.6-luna @ openai-codex** (sub before PAYG), brief `/tmp/brief-gap087.md`, background `hermes chat -q "$(cat …)" -s coding-hermes-worker --ignore-rules -Q`, log `/tmp/worker-gap087.log` (0 bytes until exit — `-Q` buffers; liveness was proven by the tree, not the log: `docs/API.md +191` and `route_parity_test.go +178` appeared within ~4 min, then `go test ./internal/handler/...` was visible in the process table). First attempt, no rework. Commit **a454f75**.
+
+### Diff
+`git show --numstat a454f75` = `188/1 docs/API.md`, `178/17 internal/server/route_parity_test.go` — no other file; co-author trailer present once.
+
+### Gates (foreman-run, fresh)
+| gate | result |
+|---|---|
+| `go build ./...` | rc=0 |
+| `go vet ./...` | rc=0 |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -v -run TestRouteParity ./internal/server/...` | 4/4 PASS (Node, Plugin, Agent, Review) |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 ./internal/handler/...` | `ok 455.205s` rc=0 |
+| `golangci-lint run ./internal/... ./cmd/...` | `0 issues.` (v2.12.2) |
+| acceptance (a) four greps | all four → `docs/API.md` |
+
+### Guard red-proof (the load-bearing check)
+Three in-place mutations of `docs/API.md`, each restored to a **byte-identical sha256** afterwards:
+1. path edit on a documented route → `TestRouteParityDocumentedReviewRoutes` **FAIL**;
+2. foreign route line injected under § Agents → **FAIL** (`that is not a /api/v1/agents route`);
+3. agent detail route line renamed → **FAIL reporting both directions** (`mounted, NOT documented` + `documented, NOT mounted`).
+A fourth mutation (renaming a sub-heading) correctly **did not** fire — it changes nothing the section-body extractor reads. That false-negative trap is the off-by-one submission below, not a defect.
+
+### Live evidence claimed by the worker and re-checked by the foreman
+Docs prose spot-checked against the code: `agentRegistry.list()` sorts by `Name` (`agent_handler.go:127`), `reviewRegistry.list()` sorts `CreatedAt` descending (`:167-169`), three agent seeds / four review seeds exist, the `plugin_id` alias sits **mid-prose** (not a standalone route line, so the GAP-086 extractor cannot read it as a second documented route). Worker's httptest+JWT probe (200 bare array / 400 non-UUID / 404 unknown UUID / 405 empty body / FNV-1a bands) is consistent with the source at every point I sampled.
+
+### Judge
+`gitreins task complete GAP-087` → Tier 1 **PASS** (segments: secrets clean, go_build ok, go_lint ok, go tests `test mode: full`), Tier 2 **PASS / COMPLETE**, verdict **6b4c9228**, run in the background and polled. The judge re-ran `grep -rlF`, re-read the handlers against the new sections, re-ran the parity suite and lint, and re-ran the mutation red-proof itself; no findings.
+
+### CI
+Run list inherited at tick start: **6/6 `success`** — nothing to file, no `INT-CI` row needed. Content commit `a454f75` pushed and its run id folded in by the closeout commit.
+
+### Push health
+`143171b..a454f75` → **origin** (GitHub) and **gitlab**; `git rev-list --count <remote>/master..HEAD` = **0** on both.
+
+### Bookkeeping
+`tasks.jsonl`: the GAP-087 row closed surgically — one line changed (`git show HEAD:` line-diff = index 354 only), `status complete`, `commit_hash a454f75`, `guard_result PASS`, `ci_result PENDING`, `worker_summary`, `foreman_note`. `events.jsonl`: **591** (audit) + **592** (judge_verdict) through `~/.hermes/scripts/board_append.py` (`APPENDED=2 PRIOR=604 TOTAL=606`); ids continue from the max of the legacy `seq` rows. `board.jsonl` header bumped (`ticks_total 500 → 501`, `last_commit a454f75`) by hand — the header is multi-line pretty-printed and boardctl's reader is line-wise. `.gitreins/tasks.yaml` and untracked `namespaces/` left alone (not mine to commit).
+
+### Off-by-one
+`discover docs-router-parity-guard-red-proof` → `not_found` (the two first-choice classes — `documentation-drift`, `api-surface-undocumented` — were also `not_found` at tick start). Post-debug submission **`sub_a587ba`**, class `docs-router-parity-guard-red-proof`, status `queued`, position 1, `existing_solutions: 0`: the working mutation set for a docs↔router parity guard **plus the false-negative trap** — a mutation that does not change the extracted input reads as "the guard cannot fire".
+
+### Next tick
+- **GAP-089** (P3, complexity 1) — migration counts drift ("32 pairs" / "40 files" vs 47 up + 47 down); fix direction is *derive or drop* so it cannot drift a third time.
+- **DF-HERMES-CANOPY-28** (P3) — SPEC-API-04 §13 per-user merge rate limit: implement (JWT-subject keyed) or amend the spec with a dated note.
+- **GAP-080 phases** (P3) — summarization/pinning, retrieved tier, budget slider, audit-before-send; needs sub-rows before dispatch.
+- **GAP-076 (P1)** parked: needs a multi-wave plan (SQLite DDL translation → repo layer → boot path → parity suite → DuckDB retirement) written as sub-rows first.
+- **GAP-081** (P3) — scope honesty for ~13.4k LOC of shipped-but-deferred subsystems.
+- QA-HERMES-CANOPY-1/2/9/10 remain bunker/fleet-infra owned; DF-24/25 need a reproducible red before dispatch.
