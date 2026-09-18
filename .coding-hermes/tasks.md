@@ -1197,3 +1197,98 @@ Watch: the `canopy_<hex>` per-test DB residue (flag, never drop another run's st
 probes were in-memory and created none), **DF-25** (handler timeouts under concurrent PG load), and
 the **E2E-001 cadence** — still no identifiable battery tick in the window (fifth tick running);
 if the next ticks cannot identify one either, the cadence itself needs an owner check.
+
+## Tick 494 — 2026-09-18 ~04:47Z → ~05:3xZ (WORK — DF-HERMES-CANOPY-22 LANDED: operator-declared model windows activate GAP-080 phase 2a on a gateway that reports no context_length, worker, judge 338e7169)
+
+### Verdict
+
+Board at tick start (parsed line-wise, LAST-WINS per id): **347 rows / 311 unique ids / 293 complete / 18 pending / 0 parse failures** — the same numbers tick 493's correction landed, so the board is settled and parse-clean.
+
+Pick: **DF-HERMES-CANOPY-22** (P3, complexity 2) — *"the live Hermes gateway reports NO context_length for any model, so the GAP-080 percent-of-window default is inert on this deployment"*. Rationale: every remaining P1/P2 is undispatchable from this repo (QA-HERMES-CANOPY-1/2/9/10 are bunker/fleet-infra owned; GAP-076 is an owner ruling and blocks GAP-077; GAP-078 needs a build-or-declare ruling). This row is the one that converts a LANDED feature (GAP-080 phase 2a, tick 488) from *shipped-but-inert* into *actually operating on this deployment*, and the row itself named the two acceptable halves. Premise re-verified at HEAD before dispatch, not trusted from the row: `grep -rn 'CONTEXT_MODEL_WINDOWS|ContextModelWindows|configured_window' --include=*.go .` = **0 hits**; `ModelWindowCatalog`'s vocabulary had exactly four labels and no declaration tier; the live gateway at 127.0.0.1:8642 answers `/v1/models` only with a credential (unauthenticated call → **401** `gateway_auth_failed`) and there is no richer endpoint (`/api/v1/models`, `/models`, `/v1/model/info` all 404).
+
+Decision the foreman made (recorded on the row): take the ADDITIVE half of option (a) — an operator-declared window map is the deployment's own knowledge, provider-agnostic, and byte-identical when unset — **and** do option (b) as well, because the deployment fact belongs in the docs either way. Nothing was disabled, re-pointed or defaulted differently for anyone who does not set the knob.
+
+⚠️ **A stale GitReins row is not a work item.** Two `gitreins task list` entries still name `GAP-080-P2B` (context budget control in the UI) and `GAP-080-P1/P2A/P5A` as outstanding; the UI half **already shipped in commit `d85bbb7` (tick 489, judge e61d98c6)** — `frontend/src/components/ContextManifestPanel.tsx` renders the model choice + `context-budget-slider` (Auto sends NO `budget`), `frontend/src/lib/contextManifest.ts` consumes `GET /api/v1/gateway/models` and sizes the slider from `desired_budget`. The phase-2b frontend work was therefore NOT re-dispatched.
+
+### Dispatch / Worker
+
+- Worker: **gpt-5.6-luna @ openai-codex** (this project's reliable lane), 1 attempt, 0 rework, 0 dead dispatch. Brief: `/tmp/brief-df22.md` (self-contained: the verified-at-HEAD facts, the numbered steps, the pinned precedence + source vocabulary, the HARD constraints — no `AGENTS.md`, no `specs/`, no `frontend/`, no background/detached steps). Dispatched as a tool-tracked background process (`bash /tmp/dispatch-df22.sh > /tmp/worker-df22.log`), NOT a shell background wrapper.
+- Liveness: the log stayed **0 bytes for the whole run** (this lane's signature) — the tree was the liveness signal (`git status --short` showed config.go → model_window.go → server.go → README/API.md accumulate). The **commit landing was the completion signal**; the pid sat alive ~10 min after the commit, which is normal here.
+- Commit: **`0e7f2af`** — `feat(context): declare model context windows locally (CONTEXT_MODEL_WINDOWS). Addresses DF-HERMES-CANOPY-22.`, 8 files, **+948/−76**: `internal/config/config.go` (+141 test lines), `internal/handler/model_window.go` (+154/−76 → the declaration tier), `internal/handler/model_window_test.go` (+486), `internal/handler/context_handler_test.go` (call sites), `internal/server/server.go` (wiring the single 5-minute-TTL catalog), `README.md`, `docs/API.md` (+87).
+
+### What landed
+
+`CONTEXT_MODEL_WINDOWS` (comma-separated `model=window`, e.g. `"Hermes Agent=200000,probe-big=128000"`) is now a **second source of truth** behind `ModelWindowCatalog`:
+
+- **Precedence:** LIVE catalog window (>0) → declared window (>0) → flat fallback. A window the gateway reports always wins; a declaration can only fill a gap.
+- **New observable source label `configured_window`**; `catalog_error` survives only when the catalog call failed **and** nothing was declared for that model; `unknown_model` means neither source knows one; `disabled` + flat default when `CONTEXT_BUDGET_PERCENT <= 0` (unchanged).
+- **`GET /api/v1/gateway/models` ENRICHES, never invents:** a gateway-listed model with no window is reported with its declared window + `desired_budget` (`floor(window*percent/100)`), so the phase-2b slider can finally size itself on this deployment; a declaration-only model is never listed (the UI would offer a model the gateway rejects); `[]` never null, never 5xx.
+- **A typo fails LOUDLY:** `Validate()` rejects a pair with no `=`, a blank name, a non-integer window, a window ≤ 0 and a stray comma — the exact silent inertness the knob exists to remove.
+- **Unset = zero behaviour change:** nil/empty map leaves every answer byte-identical to HEAD.
+
+### Gates (foreman-run, fresh, at `0e7f2af`)
+
+| Gate | Result |
+|---|---|
+| `go build ./...` | rc=0 |
+| `go vet ./...` | rc=0 |
+| `gofmt -l` on the six changed .go files | empty (clean) |
+| `golangci-lint run ./internal/config/... ./internal/handler/...` | **0 issues** |
+| `go test -count=1 ./internal/config/...` | ok |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -run 'TestContextModelWindows\|TestModelWindow\|TestGAP080\|TestGatewayModels\|TestListModels\|TestBudget' ./internal/handler/...` | ok (0 SKIP — shared-DB flag honoured) |
+| GitReins **tier1** (its own run, test mode: **full**) | PASS — secrets clean, go_build ok, go_lint ok, go_tests ok |
+| GitReins **tier2** | **PASS / COMPLETE** |
+
+### Live proof (the load-bearing evidence — isolated stack + the REAL gateway)
+
+Throwaway DB `canopy_probe22` on :5437, HEAD binary, loopback **:8107**, scratch `HOME`/`CANOPY_FILE_ROOT` under `env -i`, `CONTEXT_BUDGET_PERCENT=60`, gateway `http://127.0.0.1:8642` with the key read from the hermes env at runtime (never printed), seeded with `scripts/seed-demo-data.sql`, dev JWT. **A/B on the SAME stack, only the knob differing:**
+
+| Leg | `GET /api/v1/gateway/models` | `GET /api/v1/context/{node}?model=Hermes Agent` |
+|---|---|---|
+| **A** `CONTEXT_MODEL_WINDOWS="Hermes Agent=200000"` | `source=configured_window`, `models=[{id: Hermes Agent, context_window: 200000, desired_budget: 120000}]` | **tokenBudget 120000** |
+| **B** knob unset (control) | `source=unknown_model`, `context_window 0`, `desired_budget 8000` | **tokenBudget 8000** |
+
+This is the row's own BEFORE state (`8000` + `unknown_model`, re-measured live against the real gateway, which really has no `context_length`) sitting next to the fixed AFTER state. The GitReins tier-2 judge reproduced the same A/B independently on its own stack and additionally verified `percent=0` → `disabled` and a dead gateway → `{"models":[],"source":"catalog_error"}` HTTP 200, plus that a declaration-only `ghost-model` is NOT listed.
+
+⚠️ The `LOG_LEVEL=debug` **source-label grep came back empty** (zerolog's console encoder does not emit the `"source":"…"` JSON form), so the log-side probe is inconclusive — the source label evidence is the HTTP `source` field in the two responses above, which is the observable contract either way. Said out loud rather than quoting a grep that found nothing.
+
+Cleanup: probe DB dropped, probe root removed, **live `canopy` DB unchanged 2|26|46 before and after**, deployed `:8091/health` → 200.
+
+### Worker-reported, NOT fixed on purpose
+
+`Window()` stays live-catalog-only, so the explicit-budget ceiling of `GET /api/v1/context/{node_id}` (10× `CONTEXT_DEFAULT_BUDGET`) does not consult a declaration — named in the commit body as out of scope for this row. No new board row was needed: the remaining GAP-080 phases (3 summarisation tier, 4 manifest send-gate) already live on the open umbrella `GAP-080`, which carries the tick-491 sequencing note.
+
+### CI
+
+- **`0e7f2af` → run 35310000395: success on the FIRST attempt** (no rerun). `gh run list` re-read after the run; the two preceding runs (35302179619 / 35302156524, tick 493) were already green.
+- No pre-existing red CI found this tick (the last 100 `failure` conclusions query is empty as of tick 493's DF-24 measurement) — nothing to file.
+
+### GitReins lifecycle
+
+`gitreins task create DF-HERMES-CANOPY-22 "<title>" "<criterion>"` → `task start` **before** implementation → `task complete` after the commit landed. Verdict **`338e7169`** (history dir) / CLI printed **`c2d2f65e`** — tier1 PASS (test mode: full) + tier2 PASS/COMPLETE. Task kept (fleet default keeps completed tasks for audit).
+⚠️ **`gitreins task complete` stamps `tasks.yaml` `status: complete` + `completed_at` BEFORE the evaluation returns** — the yaml read `complete` within ~20s of invocation while the verdict artifact appeared minutes later in `.gitreins/history/<date>/<id>/verdict.json`. The yaml is not the verdict; the verdict is the history artifact.
+
+### Off-by-one
+
+Health: `{"status":"ok","uptime":"27h58m11s"}`. Discover actually fired (not copied from a previous entry) for `gitreins-task-complete-status-before-verdict` and `llm-gateway-models-endpoint-missing-context-length` → both **`not_found`** (no cached answer). The knob's design question (how to activate a derivation whose data source is absent) was answered from the deployment's own evidence — the live 401 + the `context_length`-less payload — so nothing new was submitted; the reusable fact is the ordering pitfall recorded above.
+
+### Push health
+
+`0e7f2af` pushed to **both** remotes (`origin` GitHub + `gitlab` readydedis); `git rev-list --count origin/master..HEAD` = **0** and `gitlab/master..HEAD` = **0**. The board closeout commit follows and is verified separately.
+
+### Bookkeeping
+
+- `.coding-hermes/board/tasks.jsonl` — the `DF-HERMES-CANOPY-22` row (line 347) closed **surgically: exactly one line changed** (`git diff --numstat` = `1 1`), COMPACT style preserved, keys extended to the closure set (`commit_hash 0e7f2af`, `guard_result PASS`, `ci_result GREEN`, `worker_status complete`, `completed_at`, `worker_summary`, `foreman_note`, `judge_verdict 338e7169`, `ci_runs [35310000395]`, `attempts 1`, `files_changed 8`, `lines_added 948`, `lines_removed 76`, `primary_model gpt-5.6-luna`, `primary_provider openai-codex`, `exit_code 0`).
+- `.coding-hermes/board/events.jsonl` — **id 555** `task_completed` (written by `boardctl update`) + **id 556** `audit` (tick 494, full detail payload). Spaced style preserved; only the tail changed.
+- `.coding-hermes/board/board.jsonl` — `ticks_total` 493 → **494**, `last_commit` → `0e7f2af`, `last_tick`/`updated_at` → this tick. ⚠️ This file is **pretty-printed**, so `boardctl` refuses its "header bump" (`board.jsonl line 1: EOF`) — the header is patched by hand, which is what every tick here does.
+- `boardctl -C . validate`: **40 errors / 185 warnings before → 40 errors / 185 warnings after** — the inherited red baseline (recycled-ID duplicates + the pretty-printed header) unchanged, with **zero error lines naming my row or my event ids 555/556**.
+- `.gitreins/tasks.yaml` — the completed task row folded into the same closeout commit.
+- DuckBrain (namespace `hermes-canopy`, HTTP :3000, x-api-key): `/ticks/494` → id `ea4806d2-d9d6-44e7-98b2-c60f889d201a` and `/project/hermes-canopy/status/2026-09-18-tick494-audit` → id `2d78e6cf-3f87-4423-925d-75cb429006e7`; both returned 201 and both keys were re-found by walking the live keys tree (`?tree=true`), so the ids are the later-checkable evidence.
+
+### Next tick
+
+- **DF-HERMES-CANOPY-24** (P3, complexity 2) — the CI-only teardown flake: before dispatching, measure reproducibility with the **runs API** (a named "red" run can be the green rerun) rather than re-deriving the mechanism.
+- **DF-HERMES-CANOPY-25** (P4 watch) — handler package exceeding a 10m timeout under concurrent PG load, blocked in `testutil.TruncateAll`; only escalate if it REPEATS under a quiet PG.
+- **GAP-080 phase 3** (summarisation tier) only after the retention-policy decision **and** a dated amendment to SPEC-IMPL-GAP-001 §8 scenario 17's no-pin byte-parity clause.
+- Parked, needing an owner: **GAP-076** (storage pivot; blocks GAP-077), **GAP-078** (build-or-declare), **GAP-081** (scope honesty), **DF-HERMES-CANOPY-20** (closed), plus the bunker/fleet-infra `QA-HERMES-CANOPY-*` rows.
+- Watch: the live catalog still reports no `context_length`, so the **declaration is now the operative path on this deployment** — if the gateway ever starts reporting windows, the live value wins automatically and the declaration becomes a no-op fallback. Documented, not assumed.

@@ -2732,3 +2732,18 @@ tasks:
   status: complete
   created_at: '2026-09-18T02:59:07.574892+00:00'
   completed_at: '2026-09-18T03:01:56.478228+00:00'
+- id: DF-HERMES-CANOPY-22
+  title: Source the model context window from an operator-declared override so GAP-080
+    phase 2a activates on a gateway that reports no context_length
+  criteria:
+  - CONTEXT_MODEL_WINDOWS env/config map (Model Name=window,...) is parsed and validated;
+    ModelWindowCatalog resolution order is live-catalog window > configured override
+    > flat fallback with a new observable source label configured_window; GET /api/v1/gateway/models
+    reports the override window+desired_budget for listed models without inventing
+    models; live isolated-stack proof with the real gateway shows tokenBudget 120000
+    + source configured_window with the knob and 8000 + unknown_model without it;
+    existing catalog behaviour (percent=0 disabled, catalog_error, unknown_model)
+    unchanged
+  status: complete
+  created_at: '2026-09-18T04:52:54.151042+00:00'
+  completed_at: '2026-09-18T05:14:23.165878+00:00'
