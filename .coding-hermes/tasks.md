@@ -1411,3 +1411,61 @@ per-user merge rate limit is not implemented — implement or un-spec).
 - **DF-HERMES-CANOPY-25** watch is now CONFIRMED live (the handler package timed out once more under load at this tick);
   if it repeats under a QUIET PG, escalate it as a real defect.
 - CI green at closeout; the board closeout commit triggers its own run (verify it in the next tick's inherited health).
+
+
+---
+
+## Tick 496 — 2026-09-18 ~08:0xZ → ~08:3xZ (WORK — DF-HERMES-CANOPY-27 LANDED: the bulk Merge action is wired to the live merge route, worker gpt-5.6-luna @ openai-codex, judge a8e804a4 tier1+tier2 PASS)
+
+### Verdict
+Board at tick start (read directly from `tasks.jsonl`, not the harness's 10-row subset): **358 lines / 320 unique ids / 314 complete / 31 pending rows (23 last-wins pending)**. Pick = **DF-HERMES-CANOPY-27** (P2, complexity 2) — the follow-up row tick 495 filed when GAP-078 landed the merge route. Every other pending row is parked for a stated reason: GAP-076 (P1 owner-ruling multi-wave storage pivot; blocks GAP-077), QA-HERMES-CANOPY-1/2/9/10 (bunker/fleet-infra owned), FTR-06/PL-03..PL-06 (P3 post-MVP specs), GAP-080/081/087/089 + DF-24/25 (decisions, or flakes with no reproducible red), GAP-085/086/088/090 (docs drift rows the stand-in PM injected hours ago — GAP-085 is the very next pick).
+Premise re-verified at HEAD `eea006c` before dispatch, not trusted from the row: `internal/server/server.go:350` mounts `POST /trees/{tree_id}/merge`; `nodeSelection.ts` carried `merge.enabled=false` with `'Coming soon — no bulk merge endpoint yet'`; `BulkActionBar.tsx` documented "`/nodes/merge` is a 404"; a repo-wide grep found those two frontend spots only, so no doc asserted the same thing (GAP-085 stays a separate README row).
+
+### Dispatch / Worker
+- Worker: **gpt-5.6-luna @ openai-codex** (this project's proven lane), **1 attempt / 0 rework / 0 dead dispatch**. Brief `/tmp/brief-df27.md` (self-contained: verified-at-HEAD facts with line numbers, the full `docs/API.md` § Merge Tree contract, the required design, the five ACs verbatim, HARD constraints — frontend only, no npm install, no push, no gitreins lifecycle, no `pkill -f`, oxlint not eslint).
+- Launched as a tool-tracked background process (`bash /tmp/dispatch-df27.sh > /tmp/worker-df27.log`), never a `nohup`/`&` wrapper. One tree held the brief (checked via `/proc/*/cmdline` for the row id).
+- Liveness: the log stayed **0 bytes for the whole run** (this lane's signature) and the tree was the signal — the seven files appeared in `git status`, then the commit landed. The worker exited cleanly with a full report.
+- Commit: **`dfdc584`** — `feat(nodes): wire the bulk Merge action to POST /trees/{tree_id}/merge`, **7 files, +1487/−38**: NEW `frontend/src/lib/merge.ts` (+443), `frontend/src/lib/__tests__/merge.test.ts` (+352), `frontend/src/pages/__tests__/NodesPage.test.tsx` (+356), `frontend/src/pages/NodesPage.tsx` (+261/−4), `frontend/src/lib/__tests__/nodeSelection.test.ts` (+39/−14), `frontend/src/lib/nodeSelection.ts` (+25/−15), `frontend/src/components/BulkActionBar.tsx` (+11/−5).
+
+### What landed
+`lib/merge.ts` owns the client half of SPEC-API-04 §3: `MERGE_MIN_SOURCES=2` / `MERGE_MAX_SOURCES=100` (the server's own numbers), `canMerge` / `mergeDisabledReason`, `buildMergeRequest` (snake_case `source_node_ids` in caller order, `content` **always** a string — empty allowed, `content_format` explicit, `target_parent_id` only when given; returns a typed `{ok:false, reason}` for <2, >100, blank or duplicate ids instead of throwing) and `normalizeMergeResponse` (201 → the page's camelCase shape). `nodeSelection.bulkActions` imports those two helpers, so the disabled button and the refused request cannot drift apart; the merge entry is enabled **exactly at 2..100**, no longer `destructive`, and the old "there is no bulk merge route" docstring is replaced with the live tree-scoped route. `NodesPage` gains `MergeDialog` (overlay + `role="dialog"`, Escape-closes unless submitting, optional markdown summary, source short-ids, submit disabled in flight), `mergeSourceIds` (list order, with hidden-but-selected ids appended rather than dropped) and `handleMerged` (insert the returned node, clear the selection); failures keep the dialog open, show the mapped §3.3 code + hint, and leave the selection intact.
+
+### Gates (foreman-run, on `dfdc584`)
+`npx vitest run` → **71 files / 1285 tests PASS** (baseline measured on the same box 20 min earlier at HEAD `eea006c`: 69 files / 1254 tests → +2 files, +31 tests, no test deleted) · `npx oxlint` on the seven touched files → **exit 0, no findings** · `npx tsc -b` → **exit 0** · `npx vite build` → **exit 0** (pre-existing chunk-size warning only) · `go build -o /dev/null ./cmd/canopyd` → **PASS** · `go vet ./...` → **clean** · `gitreins guard --full` → **Tier 1 PASS** (secrets clean / go_build ok / go_lint ok / go_tests full).
+
+### Independent verification (the load-bearing part)
+- **RED proof, foreman-run:** `git checkout HEAD~1 -- frontend/src/lib/nodeSelection.ts frontend/src/pages/NodesPage.tsx` (new tests kept) → **6 failed / 52 passed across 2 files**; then `git checkout HEAD -- …` and the tree re-verified clean. The work is the diff, not a green suite.
+- **Live proof on an isolated stack:** throwaway DB `canopy_probe_df27_496`, HEAD binary `/tmp/canopyd-496`, `127.0.0.1:8098`, scratch `HOME` + `CANOPY_FILE_ROOT`, seeded fixture, dev JWT. The request body was captured by **running the client's own `buildMergeRequest`** through a temporary probe test (deleted before the tick ended) — `{"source_node_ids":[A,B],"content":"","content_format":"markdown"}` — and posted verbatim: **HTTP 201**, `node_type=synthesis`, `parent_id` = tree root, `depth 1`, `child_count 0`, `content ""`, **3 edges** (`reply`, `synthesis`, `synthesis`), `merged_source_ids` in request order; the created node then read back from `GET /trees/{id}/nodes` as `nodeType=synthesis`, i.e. exactly the row the page inserts. **Control:** the same body with ONE source → **400 `MIN_SOURCE_NODES`** ("merge requires at least 2 source nodes (received 1)"), which is the request the new client guard refuses to send.
+- **Cleanup:** listener killed by pid, `canopy_probe_df27_496` **DROPPED**, probe roots removed, live `canopy` DB **2|26|46 unchanged**, live `:8091 /health` **200**.
+
+### Worker-reported finding the brief did not know
+The tree-scoped node **LIST** is camelCase (`treeId`/`nodeType`/`parentId`) while the merge **201** is snake_case (`tree_id`/`node_type`) — the same page, two shapes. Inserting the 201 straight into the list would have produced rows with `undefined` fields; that translation is now a named, tested boundary (`normalizeMergeResponse`). The worker also declined a client-side 65536-char `content` check (Go counts runes, JS counts UTF-16 units — a client check would be wrong in one direction) and mapped `CONTENT_TOO_LONG` to a hint instead. Nothing contradicted the brief.
+
+### GitReins
+`task create DF-HERMES-CANOPY-27` (five ACs) → `task start` before implementation → `task complete` after the commit landed. Tier 1 PASS; Tier 2 **PASS / COMPLETE**, verdict artifact `.gitreins/history/2026-09-18/24be7432/verdict.json` (cli id `a8e804a4`). The judge re-walked all five ACs against the tree (citing `nodeSelection.ts:167-176`, `merge.test.ts:116-225`, `NodesPage.tsx:419`/`:825`, `NodesPage.test.tsx:267-343`), re-ran the frontend suite itself, and re-derived the 2–100 bounds from the **server** side (`merge_service.go:40-42`, route at `server.go:350`) rather than trusting the frontend test; 0 LSP diagnostics. Housekeeping: the `tasks.yaml` count is now 188 complete — the completed rows are kept for audit.
+
+### CI
+Inherited health at tick start: the five most recent completed runs were **all success** — nothing pre-existing to file. This tick's three runs, verified with `gh run list` (never inferred from the push): **35323259533** (`dfdc584`) success first attempt · **35323325026** (`c2f78e2` board closeout) success · **35323552334** (`63bfb91` verdict fold-in) success.
+
+### Off-by-one
+Health `{"status":"ok","uptime":"30h44m…"}`. Discover actually fired for `frontend wiring bulk merge synthesis endpoint` and `react-bulk-action-wiring` → both **`not_found`** (no cached answer; nothing was debugged from scratch this tick). One reusable pitfall WAS worth banking, so it was submitted as a **post-debug** pre-solve answer: `same-page-json-shape-split-camelcase-list-vs-snakecase-write-response` → **`sub_23455e`**, status `queued` (position 3, ~9 min) — the camelCase-list vs snake_case-write-response shape split above.
+
+### Push health
+`dfdc584` → `c2f78e2` → `63bfb91` pushed to **origin + gitlab**; parity re-verified after every push (`git rev-list --count <remote>/master..HEAD` = **0** on both).
+
+### Bookkeeping
+`tasks.jsonl`: the `DF-HERMES-CANOPY-27` row (line 351) closed **surgically — `git diff --numstat` = `1 1`**, spaced style preserved, keys extended to the closure set (`status complete`, `commit_hash dfdc584`, `guard_result`, `ci_result`/`ci_runs [35323259533, 35323325026]`, `judge_verdict a8e804a4`, `attempts 1`, `worker_status complete`, `files_changed 7`, `lines_added 1487`, `lines_removed 38`, `primary_model/provider`, `exit_code 0`, `worker_summary`, `foreman_note`, `completed_at`, `updated_at`).
+`events.jsonl`: **566** `task_completed` (full closure detail), **567** `audit` (premise + per-AC results + evidence + live proof), **568** `ci`, **569** `judge_verdict` (both ids + the judge's own citations), **570** `ci` (run id + conclusion). `board.jsonl` header bumped by hand (pretty-printed, `boardctl` cannot bump it): `ticks_total 495 → 496`, `last_commit → dfdc584`.
+No new board row was needed: the surviving `'Coming soon'` is the **tag** action (still genuinely endpoint-less) and the pre-existing oxlint warnings in the viewer modules are outside this diff.
+
+### DuckBrain (namespace `hermes-canopy`)
+- `/project/hermes-canopy/status/2026-09-18-tick496-df27` (domain `config`) → id `9721078b-d0de-4ca8-96b0-3ccd7901e945`
+- `/ticks/tick496-df27-merge-wiring` (domain `event`) → id `2f014076-a994-4ea4-a30c-a67e06f32451`
+Both UUIDs verified on disk in `~/duckbrain/namespaces/hermes-canopy/{config,event}/2026-09/current.jsonl` (+ `_audit`). Pre-write state: `/ticks/probe-491-*` are the newest tick keys and `status/2026-09-18-tick495-gap078` the newest status key.
+
+### Next tick
+- **GAP-085** (P2, one file) — README still tells API consumers the merge route is *not implemented*; now the last stale merge surface.
+- **GAP-086 / 088 / 089 / 090** (P2/P3) — the rest of the stand-in PM's docs-drift set (plugins 405s, SELF_HOST quickstart name collision, migration counts, INTEGRATION §8.2 port).
+- **DF-HERMES-CANOPY-28** (P3) — §13's per-user merge rate limit: implement or amend the spec.
+- **DF-24 / DF-25** — flakes with no reproducible red; measure before dispatching.
+- **GAP-076 (P1)** still owns the storage pivot (blocks GAP-077) and needs a multi-wave plan, not a dispatch; **GAP-080 phase 3** needs the retention decision + the §8 amendment.
