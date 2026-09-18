@@ -336,6 +336,7 @@ graph store until it does.
 | `POST` | `/api/v1/trees/{tree_id}/share` | Share a tree with a user |
 | `POST` | `/api/v1/trees/{tree_id}/presence` | Push presence heartbeat |
 | `POST` | `/api/v1/trees/{tree_id}/presence/leave` | Leave presence session |
+| `POST` | `/api/v1/trees/{tree_id}/merge` | Create a synthesis node from 2–100 source nodes (SPEC-API-04 §3) |
 
 ### Nodes
 
@@ -355,9 +356,15 @@ resolved per node:
 |--------|------|-------------|
 | `GET` | `/api/v1/nodes/{node_id}/reference-context` | Stored provenance of a multi-reference reply — `include_content`, `max_source_tokens` (max 2048), `verify_hash`; `404 REFERENCE_CONTEXT_NOT_FOUND` for a node that is not a multi-reference reply |
 
-> **Merge endpoint (spec drift):** the spec'd `POST /trees/{tree_id}/merge` is
-> **NOT implemented** — no merge route exists in `internal/server/server.go`.
-> Merging multiple sources into one node ships as **multi-reference replies**:
+> **Merge endpoint:** `POST /api/v1/trees/{tree_id}/merge` is **implemented**
+> (SPEC-API-04 §3; mounted in `internal/server/server.go` behind the
+> authenticated tree-membership middleware). It creates one `synthesis` node
+> with a `reply` edge from the placement target plus one `synthesis` edge per
+> source, and is the **only** way to create a synthesis node. See
+> [docs/API.md § Merge Tree (Create Synthesis Node)](docs/API.md#merge-tree-create-synthesis-node)
+> for the canonical request/response contract, error codes and SSE events.
+> Merging multiple sources into a **`message`** node is a distinct capability
+> that ships as **multi-reference replies**:
 > `POST /api/v1/trees/{tree_id}/reference-selections` (preflight) then
 > `POST /api/v1/trees/{tree_id}/multi-reference-replies` (create), SPEC-PL-06.
 
