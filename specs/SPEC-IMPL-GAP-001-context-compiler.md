@@ -222,7 +222,37 @@ Handler lives at `internal/handler/context_handler.go` (pattern: copy `internal/
 
 - **Empty ancestry** (node is root): Content = just the node itself. Manifest ancestry = [node]. Not an error.
 - **Node content empty**: render empty node section; no error (input validation already prevents empty-content nodes per BUG-019).
-- **Budget smaller than one node**: include the single newest node regardless, `TokensUsed` may exceed budget — append warning `"budget too small for single node"`. Never return empty Content when the node exists.
+- **Budget smaller than one node**: ~~include the single newest node regardless~~ **[see the 2026-09-18 amendment below]**, `TokensUsed` may exceed budget — append warning `"budget too small for single node"`. Never return empty Content when the node exists.
+
+> **2026-09-18 amendment (DF-HERMES-CANOPY-20 — §7 vs GAP-080 phase 1):** the
+> struck phrase above is implemented as a **post-walk FLOOR, not a forced
+> inclusion**: the newest node is kept regardless only when the budget walk
+> kept NOTHING at all (`internal/context/compiler.go:215-231`, landed by
+> DF-HERMES-CANOPY-19, commit `919c98d`). The clause's non-negotiable half —
+> never returning empty `Content` when the node exists — HOLDS at that commit:
+> the floor fires whenever nothing at all was kept, so `Content` is non-empty
+> whenever a node exists. **Pinned exception (GAP-080 phase 1, commit
+> `d82dae1`):** when the walk kept older PINNED nodes, the unpinned newest node
+> stays subject to the ordinary budget rule and is **NOT** forced in — `Content`
+> is already non-empty from the pinned nodes, and the pinned-overage warning
+> names the overage instead of forcing a node in. This is pinned by
+> `internal/context/compiler_pinned_test.go`
+> `TestGAP080_PinnedOverageKeepsAllPinned`. **Why:** the forced-inclusion
+> mechanism was written for a plain oldest-first drop, where the newest node is
+> the last item to be dropped; under pinning, forcing an ADDITIONAL unpinned
+> node would spend budget the user did not pin while contradicting the landed,
+> judge-approved pinned contract (pinned items are the only items exempt from
+> the budget walk). **Named open alternative — option (ii), NOT implemented:**
+> adopt the literal clause and force the newest node in even when pins were
+> kept; it would require changing `TestGAP080_PinnedOverageKeepsAllPinned`'s
+> assertion (currently `internal/context/compiler_pinned_test.go:377-379`) and
+> is an owner-facing product decision, not a foreman call. **Evidence:**
+> measured at `6307495` with a temporary in-package probe, budget 30, 3-node
+> chain, no pins: `Content` non-empty (newest kept, 2 omitted); only the middle
+> node pinned: the pinned node kept and the unpinned newest ABSENT, overage
+> `"pinned nodes exceed the token budget by 3 tokens"`; two oldest pinned: both
+> kept, newest ABSENT, overage `by 36 tokens`.
+
 - **Duplicate references**: dedupe by topic ID before rendering.
 - **Node has 0 references**: empty References array, no warnings.
 - **Concurrent compiles**: Compiler is stateless (all state in request + repos). Safe for concurrent use. Document on the struct.

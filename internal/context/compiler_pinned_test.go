@@ -374,6 +374,10 @@ func TestGAP080_PinnedOverageKeepsAllPinned(t *testing.T) {
 	if res.Manifest.OmittedCount != 1 {
 		t.Errorf("OmittedCount = %d, want 1 (pinned nodes are never counted as omitted)", res.Manifest.OmittedCount)
 	}
+	// SPEC-IMPL-GAP-001 §7 "budget smaller than one node" — pinned exception
+	// (amended 2026-09-18, DF-HERMES-CANOPY-20): with older PINNED nodes kept,
+	// the unpinned newest node is NOT forced in; Content is already non-empty.
+	// Do not relax this assertion to satisfy a literal reading of the clause.
 	if strings.Contains(res.Content, ids[2].String()) {
 		t.Error("Content contains the unpinned node that could not fit")
 	}
