@@ -2747,3 +2747,15 @@ tasks:
   status: complete
   created_at: '2026-09-18T04:52:54.151042+00:00'
   completed_at: '2026-09-18T05:14:23.165878+00:00'
+- id: DF-HERMES-CANOPY-26
+  title: Token-tamper security test is non-deterministic (fixed-AA suffix no-op +
+    non-significant trailing base64url character)
+  criteria:
+  - 'tamperedToken() mutates a character that is guaranteed to differ at the string
+    level AND significant at the decoded-bytes level; the targeted test passes a -count=3000
+    loop (it failed that loop with the old form); the tamper no-op rate is 0 in 20000
+    signings (old form: 19); internal/service builds, vets, lints and tests clean;
+    the token verifier''s own behaviour is unchanged'
+  status: complete
+  created_at: '2026-09-18T05:41:44.100847+00:00'
+  completed_at: '2026-09-18T05:41:51.485217+00:00'
