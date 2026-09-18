@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -167,5 +168,278 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 			t.Errorf("merge route middleware class differs from %s %s: %d vs %d inline middleware",
 				sibling.method, sibling.pattern, mwCount[mergeRoute], mwCount[sibling])
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GAP-086: § Plugins documentation parity
+// ---------------------------------------------------------------------------
+
+// pluginSectionRouteLine matches a standalone route line inside a § Plugins
+// fenced block ("POST /api/v1/plugins/{name}/activate"). The method+path must
+// be the WHOLE line, so a mid-prose mention — backticked or not — is never
+// mistaken for a documented route.
+var pluginSectionRouteLine = regexp.MustCompile(`^(GET|POST|PATCH|PUT|DELETE)[ 	]+(/\S+)$`)
+
+// stalePluginPaths are the five routes earlier revisions of docs/API.md
+// documented in § Plugins which nothing mounts today (GAP-086). They belonged
+// to the first plugin handler (GAP-002) and were replaced by the PL-01
+// registry/lifecycle surface, so a plugin author following the old text could
+// not register a plugin: the documented POSTs matched no route, and
+// /api/v1/plugins/instances was captured by the mounted GET /api/v1/plugins/{id}
+// as a plugin lookup.
+var stalePluginPaths = []string{
+	"/api/v1/plugins/register",
+	"/api/v1/plugins/{plugin_id}/install",
+	"/api/v1/plugins/instances",
+	"/api/v1/plugins/instances/{instance_id}/pause",
+	"/api/v1/plugins/instances/{instance_id}/resume",
+}
+
+// stalePluginMarkers are non-path promises the same earlier revision made and
+// the mounted source route does not satisfy.
+var stalePluginMarkers = []string{"X-Source-SHA256"}
+
+// markdownSection returns the body of the level-2 section titled title,
+// excluding the heading and stopping at the next level-2 heading. docs/API.md
+// is the canonical API reference, so the parity checks read it as the record
+// of what an operator was told is mounted.
+func markdownSection(doc, title string) (string, error) {
+	heading := "## " + title
+	lines := strings.Split(doc, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.TrimRight(line, " 	") == heading {
+			start = i + 1
+			break
+		}
+	}
+	if start < 0 {
+		return "", fmt.Errorf("docs/API.md has no %q section", heading)
+	}
+	for i := start; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "## ") {
+			return strings.Join(lines[start:i], "\n"), nil
+		}
+	}
+	return strings.Join(lines[start:], "\n"), nil
+}
+
+// numberedDriftItem returns the text of drift entry n (its "n. **…**" line
+// through the line before entry n+1) — the place docs/API.md records the
+// direction of a known discrepancy.
+func numberedDriftItem(section string, n int) (string, error) {
+	lines := strings.Split(section, "\n")
+	prefix := fmt.Sprintf("%d. ", n)
+	next := fmt.Sprintf("%d. ", n+1)
+	start := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return "", fmt.Errorf("docs/API.md has no drift entry %d", n)
+	}
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], next) {
+			return strings.Join(lines[start:i], "\n"), nil
+		}
+	}
+	return strings.Join(lines[start:], "\n"), nil
+}
+
+// documentedPluginRoutes extracts the routes a section documents, normalized
+// with the same canonicalization the mounted route table uses, so parameter
+// renames ({id} vs {plugin_id}) cannot hide a route that is documented but
+// absent. Every route line in the section must be a /api/v1/plugins path: a
+// foreign route documented under § Plugins is itself drift.
+func documentedPluginRoutes(section string) ([]string, error) {
+	var out []string
+	for i, line := range strings.Split(section, "\n") {
+		m := pluginSectionRouteLine.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			continue
+		}
+		if !strings.HasPrefix(m[2], "/api/v1/plugins") {
+			return nil, fmt.Errorf("line %d documents %s %s — that is not a /api/v1/plugins route",
+				i+1, m[1], m[2])
+		}
+		out = append(out, m[1]+" "+normalizeChiPattern(m[2]))
+	}
+	return out, nil
+}
+
+// mountedPluginRoutes walks the REAL production router (newRouter, the same
+// seam New uses) and returns its /api/v1/plugins routes in the same normalized
+// form, plus the size of the whole walked table so a run that enumerated
+// nothing cannot be mistaken for parity. Hermetic and DB-free, exactly like
+// TestRouteParityDocumentedNodeRoutes: $HOME is redirected so the gateway
+// run-registry restore is a no-op, and nil services are safe because handlers
+// only dereference them inside request handlers.
+func mountedPluginRoutes(t *testing.T) (map[string]bool, int) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".hermes", "canopy", "gateway"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deps := &routeDeps{
+		jwtSecret: "route-parity-test-secret",
+		connMgr:   transport.NewConnectionManager(nil),
+		cfg:       &config.Config{},
+	}
+	router := newRouter(deps)
+
+	got := map[string]bool{}
+	total := 0
+	err := chi.Walk(router, func(method, pattern string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		if method == "" {
+			method = http.MethodGet
+		}
+		total++
+		norm := normalizeChiPattern(pattern)
+		if !strings.HasPrefix(norm, "/api/v1/plugins") {
+			return nil
+		}
+		got[method+" "+norm] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("chi.Walk failed: %v", err)
+	}
+	return got, total
+}
+
+// stalePluginClaims reports every stale path or marker a section still
+// asserts. It is the absence half of the guard, so it must be able to fire:
+// TestRouteParityDocumentedPluginRoutes feeds it a control section that does
+// contain a stale path.
+func stalePluginClaims(section string) []string {
+	stale := append(append([]string{}, stalePluginPaths...), stalePluginMarkers...)
+	var hits []string
+	for _, s := range stale {
+		if strings.Contains(section, s) {
+			hits = append(hits, s)
+		}
+	}
+	return hits
+}
+
+func equalStringSlices(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestRouteParityDocumentedPluginRoutes pins § Plugins to the mounted plugin
+// surface in BOTH directions (GAP-086): every route the section documents is
+// mounted on the real router, every mounted plugin route is documented, and
+// the five stale paths the old revision documented (plus the digest response
+// header it promised) stay absent. Drift entry 7 is pinned too, because it is
+// where the document states which direction the drift ran — the old revision
+// claimed those routes "are registered but not fully documented", which was
+// the opposite of the truth.
+//
+// Deterministic and dependency-free: no DB, no network, and no HTTP probe —
+// status-code probes are a false oracle here, because the auth middleware runs
+// before chi's routing table and answers 401 for unknown paths too. If this
+// test fails, the docs and the mount disagree: fix whichever is wrong, do not
+// delete the check.
+func TestRouteParityDocumentedPluginRoutes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "API.md"))
+	if err != nil {
+		t.Fatalf("read docs/API.md: %v", err)
+	}
+	docs := string(raw)
+
+	section, err := markdownSection(docs, "Plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	documented, err := documentedPluginRoutes(section)
+	if err != nil {
+		t.Fatalf("docs/API.md § Plugins: %v", err)
+	}
+	if len(documented) == 0 {
+		t.Fatal("§ Plugins documents no route at all — the heading or the extractor moved, not the API")
+	}
+
+	mounted, walkedTotal := mountedPluginRoutes(t)
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+	if len(mounted) == 0 {
+		t.Fatal("no /api/v1/plugins route is mounted — the plugin mount disappeared from newRouter")
+	}
+
+	// Extractor control: a mid-prose mention is NOT a documented route, and
+	// the {param} canonicalization must collapse.
+	control := "### Register Plugin\n\n```\nPOST /api/v1/plugins/\n```\n\n" +
+		"Prose that mentions POST /api/v1/plugins/register mid-sentence.\n\n" +
+		"### Get Plugin\n\n```\nGET /api/v1/plugins/{id}\n```\n"
+	controlGot, err := documentedPluginRoutes(control)
+	if err != nil {
+		t.Fatalf("extractor control: %v", err)
+	}
+	if want := []string{"POST /api/v1/plugins", "GET /api/v1/plugins/{}"}; !equalStringSlices(controlGot, want) {
+		t.Fatalf("extractor control = %v, want %v", controlGot, want)
+	}
+	if _, err := documentedPluginRoutes("```\nGET /api/v1/trees/{tree_id}\n```\n"); err == nil {
+		t.Fatal("extractor accepted a foreign route line — § Plugins could document a non-plugin route silently")
+	}
+
+	// Absence control: the stale check below must be able to fail.
+	if len(stalePluginClaims("GET /api/v1/plugins/instances/")) == 0 {
+		t.Fatal("stale-plugin detector found nothing in a section that asserts a stale path — the absence check is vacuous")
+	}
+
+	var problems []string
+	documentedSet := map[string]bool{}
+	for _, r := range documented {
+		documentedSet[r] = true
+		if !mounted[r] {
+			problems = append(problems, r+" (documented in § Plugins, NOT mounted)")
+		}
+	}
+	for r := range mounted {
+		if !documentedSet[r] {
+			problems = append(problems, r+" (mounted, NOT documented in § Plugins)")
+		}
+	}
+	if hits := stalePluginClaims(section); len(hits) > 0 {
+		problems = append(problems, "§ Plugins re-asserts stale claim(s): "+strings.Join(hits, ", "))
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		t.Logf("§ Plugins documents %d routes; the router mounts %d plugin routes", len(documented), len(mounted))
+		t.Fatalf("plugin documentation parity broken:\n  %s", strings.Join(problems, "\n  "))
+	}
+
+	// Drift entry 7 states the direction of the drift, so pin it: the
+	// disproved claim must stay gone and the correction stay in place.
+	driftSection, err := markdownSection(docs, "Spec-vs-Code Drift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item7, err := numberedDriftItem(driftSection, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(item7, "Plugin endpoints") {
+		t.Errorf("drift entry 7 is no longer the plugin entry — re-point this assertion:\n%s", item7)
+	}
+	if !strings.Contains(strings.ToUpper(item7), "STALE") {
+		t.Errorf("drift entry 7 no longer states that the old register/install + instances surface is stale:\n%s", item7)
+	}
+	if strings.Contains(item7, "are registered but not fully documented in the README") {
+		t.Errorf("drift entry 7 re-asserts the disproved claim that the old plugin routes are registered:\n%s", item7)
 	}
 }

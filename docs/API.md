@@ -2211,15 +2211,22 @@ actual code:
    README and any usable handshake.
 
 7. **Plugin endpoints:** earlier revisions of this document described a
-   `register`/`install` route pair and an instance pause/resume lifecycle.
-   Those claims are STALE: that route set belonged to the first plugin
-   handler and was replaced when the PL-01 registry/lifecycle surface landed.
-   No such route is mounted today, and nothing was implemented here to match
-   the old text. The mounted surface is the registry and lifecycle set in
+   `register`/`install` route pair and an `instances` list plus pause/resume
+   lifecycle. Those claims are STALE: that route set belonged to the first
+   plugin handler (GAP-002) and was replaced when the PL-01 registry/lifecycle
+   surface landed. None of those routes is mounted today: a documented `POST`
+   to them matches no route, and `GET /api/v1/plugins/instances` is captured by
+   the mounted `GET /api/v1/plugins/{id}` as a plugin lookup for the id
+   `instances`. The mounted surface is the registry and lifecycle set in
    § Plugins (registration is `POST` on the plugins collection route; the
    lifecycle routes are keyed by plugin name or slug; source and detail are
    keyed by the plugin UUID), plus the separately registered
-   `POST /api/v1/plugins/network-proxy` and the plugin events stream.
+   `POST /api/v1/plugins/network-proxy` and the plugin events stream. § Plugins
+   and this entry are pinned to the mounted routes by
+   `TestRouteParityDocumentedPluginRoutes` (`internal/server/route_parity_test.go`),
+   which fails when a documented plugin route is not mounted, when a mounted
+   plugin route is undocumented, or when a stale plugin path reappears in the
+   section.
 
 8. **Profile endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/profiles`
    — not documented in the README.
