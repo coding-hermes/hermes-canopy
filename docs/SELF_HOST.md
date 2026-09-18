@@ -26,22 +26,33 @@ Canopy is a graph-native collaboration surface for human-agent work. It ships as
 Download the latest binary for your platform (or build from source — see [Installation](#installation)), set four environment variables, and run:
 
 ```bash
-# 1. Start PostgreSQL (Docker, one-liner)
-docker run -d --name canopy-pg \
-  -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
-  -e POSTGRES_DB=canopy -p 5432:5432 \
-  postgres:16-alpine
+# 1. Start PostgreSQL (Docker) — standalone option.
+#    Already running the compose stack? Skip this whole step: `docker compose up -d`
+#    (or `docker compose up -d postgres` for the database alone — see
+#    docs/INTEGRATION.md §2) already starts a postgres service publishing host
+#    port 5437, so the command below would fail on the container name AND on the
+#    port. The standalone container uses a DISTINCT name
+#    (`canopy-pg-standalone`) so it never collides with compose's `canopy-pg`.
+#    Host port 5437 matches docker-compose.yml (which maps 5437:5432) so the same
+#    DB_PORT works on either path.
+if docker ps --format '{{.Ports}}' | grep -q ':5437->'; then
+  echo "PostgreSQL already running on :5437 (compose stack) — skipping standalone Postgres (docs/INTEGRATION.md §2)."
+else
+  docker run -d --name canopy-pg-standalone \
+    -e POSTGRES_USER=canopy -e POSTGRES_PASSWORD=canopy \
+    -e POSTGRES_DB=canopy -p 5437:5432 postgres:16-alpine
 
-# 2. Wait for PG to be ready
-until docker exec canopy-pg pg_isready -U canopy; do sleep 1; done
+  # Wait for PG to be ready
+  until docker exec canopy-pg-standalone pg_isready -U canopy; do sleep 1; done
+fi
 
-# 3. Run canopyd (API on :8091 — matches the rest of the docs ecosystem)
-DB_HOST=localhost DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
+# 2. Run canopyd (API on :8091 — matches the rest of the docs ecosystem)
+DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
   JWT_SECRET=$(openssl rand -base64 32) \
   HTTP_ADDR=:8091 \
   ./canopyd
 
-# 4. Verify
+# 3. Verify
 curl http://localhost:8091/health
 # → {"status":"ok"}
 ```
