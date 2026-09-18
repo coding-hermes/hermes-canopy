@@ -9,11 +9,17 @@
  *   │ 3 nodes selected   [Clear]        Merge   Tag   Delete   │
  *   └──────────────────────────────────────────────────────────┘
  *
- * Merge and Tag render DISABLED with a stated reason rather than being
- * hidden or wired to a guessed endpoint — see `lib/nodeSelection`
- * (`bulkActions`) for which routes were checked and what is missing. A
- * disabled control that says why is a roadmap; an invented `POST
- * /nodes/merge` is a 404 in front of the user.
+ * A disabled action renders with a stated reason rather than being hidden or
+ * wired to a guessed endpoint — see `lib/nodeSelection` (`bulkActions`) for
+ * which routes were checked.
+ *
+ * Merge is enabled exactly when the selection is 2–100 nodes, because that
+ * is what the live tree-scoped route accepts
+ * (`POST /api/v1/trees/{tree_id}/merge`, SPEC-API-04 §3); outside that range
+ * the reason explains the bound. Tag is still a roadmap item: nothing
+ * associates an existing node with a topic in bulk. The rule is the same
+ * for both — a disabled control that says why is a roadmap; an invented
+ * `POST /nodes/merge` would be a 404 in front of the user.
  *
  * Accessibility: the bar is a labelled `<section>`, and the count lives
  * in an `aria-live="polite"` region so checking rows is announced without

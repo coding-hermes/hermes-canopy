@@ -35,6 +35,13 @@ import {
 import { buildHierarchy, filterHierarchy } from '../lib/nodeHierarchy';
 import { disambiguateNodeIds } from '../lib/nodeShortId';
 import {
+  buildMergeRequest,
+  canMerge,
+  describeMergeError,
+  normalizeMergeResponse,
+  type MergeNode,
+} from '../lib/merge';
+import {
   clearSelection,
   isBulkBarVisible,
   pruneSelection,
@@ -341,6 +348,199 @@ function BranchNodeDialog({
   );
 }
 
+// ─── Merge Dialog (DF-HERMES-CANOPY-27) ────────────────────────────────
+
+/**
+ * Bulk-merge affordance for the selection. Creates ONE synthesis node from
+ * 2–100 selected nodes through the tree-scoped route that owns it:
+ *
+ *     POST /trees/{tree_id}/merge   →  201 { node, edges, merged_source_ids }
+ *
+ * `target_parent_id` is deliberately NOT sent: omitting it is the contract's
+ * own way of saying "place it at the tree root" (§3.2), and the client must
+ * not pick a placement the user did not ask for.
+ *
+ * The summary is optional — an empty `content` is valid, so an empty
+ * textarea sends `content: ""` rather than dropping the field. The dialog
+ * re-checks the count itself (`buildMergeRequest` refuses 1/101 sources)
+ * because the disabled button is a UI affordance, not a guarantee: this
+ * component must not depend on the button for correctness.
+ *
+ * Failures keep the dialog open, show the message inside it, and leave the
+ * selection untouched so the user can fix and retry instead of re-selecting
+ * rows.
+ */
+function MergeDialog({
+  treeId,
+  sourceIds,
+  onClose,
+  onMerged,
+}: {
+  treeId: string;
+  sourceIds: readonly string[];
+  onClose: () => void;
+  onMerged: (node: MergeNode) => void;
+}) {
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Escape closes — except mid-request, where the merge is already in
+  // flight and leaving the dialog would strand the result.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [onClose, loading]);
+
+  // The labels the page uses in the rows, recomputed for this dialog's own
+  // id set so a modal listing six sources stays readable.
+  const shortIds = useMemo(() => disambiguateNodeIds(sourceIds), [sourceIds]);
+
+  const handleMerge = async () => {
+    if (!treeId) {
+      setError('No tree selected.');
+      return;
+    }
+    const built = buildMergeRequest(sourceIds, { content });
+    if (!built.ok) {
+      setError(built.reason);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const raw = await apiPost<unknown>(`/trees/${treeId}/merge`, built.body);
+      const result = normalizeMergeResponse(raw);
+      if (!result) {
+        setError(
+          'The server accepted the merge but returned an unexpected response, so the new node was not added to this list. Reload to see it.',
+        );
+        return;
+      }
+      onMerged(result.node);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to merge nodes';
+      // `apiPost` surfaces only the envelope's message; map the documented
+      // §3.3 codes to actionable text, show the code beside it for a bug
+      // report, and fall back to the server's own wording when the message
+      // is not recognised.
+      const { code, hint } = describeMergeError(message);
+      setError(hint && code ? `${hint} (${code})` : message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="merge-dialog-title"
+      data-testid="merge-dialog"
+    >
+      <div
+        className="absolute inset-0 bg-black/60"
+        onClick={() => !loading && onClose()}
+      />
+      <div className="relative glass-raised rounded-xl w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle">
+          <h2
+            id="merge-dialog-title"
+            className="flex items-center gap-2 text-sm font-medium text-content-primary"
+          >
+            <GitMerge className="w-4 h-4" aria-hidden="true" />
+            Merge into a synthesis node
+          </h2>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-hover disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {error && (
+            <div
+              role="alert"
+              data-testid="merge-error"
+              className="flex items-start gap-2 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-status-danger text-xs"
+            >
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <p className="text-xs text-content-muted">
+            {countLabel(sourceIds.length, 'node')} will be synthesised into one
+            new node. The sources are kept — a merge adds, it does not delete.
+          </p>
+
+          <ul
+            data-testid="merge-sources"
+            className="flex flex-wrap gap-1.5 rounded-lg bg-surface-input/60 border border-line-subtle px-3 py-2"
+          >
+            {sourceIds.map((id) => (
+              <li
+                key={id}
+                title={id}
+                className="rounded bg-surface-panel px-1.5 py-0.5 font-mono text-[11px] text-content-muted"
+              >
+                {shortIds.get(id) ?? id}
+              </li>
+            ))}
+          </ul>
+
+          <label
+            htmlFor="merge-content"
+            className="block text-xs text-content-muted"
+          >
+            Synthesis summary (optional, markdown)
+          </label>
+          <textarea
+            id="merge-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={6}
+            disabled={loading}
+            autoFocus
+            data-testid="merge-content"
+            className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint resize-none focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent disabled:opacity-50"
+            placeholder="What do these nodes conclude together? Leave empty to create the synthesis node with no summary."
+          />
+        </div>
+        <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleMerge}
+            disabled={loading}
+            data-testid="merge-submit"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Merging...' : 'Merge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────
 
 export default function NodesPage() {
@@ -374,6 +574,9 @@ export default function NodesPage() {
   );
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  // Bulk merge (DF-HERMES-CANOPY-27) — the dialog owns its own request
+  // state; the page only decides whether a mergeable selection exists.
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   // Fetch trees for dropdown
   const fetchTrees = useCallback(async () => {
@@ -577,10 +780,54 @@ export default function NodesPage() {
     setConfirmBulkDelete(false);
   }, [selection]);
 
-  const handleBulkAction = useCallback((action: BulkActionId) => {
-    // Merge and tag are rendered disabled (no endpoint) — see
-    // lib/nodeSelection.bulkActions. Only delete can reach here.
-    if (action === 'delete') setConfirmBulkDelete(true);
+  /**
+   * The merge sources, in the order the LIST shows them rather than the
+   * order the checkboxes were ticked: `source_node_ids` is echoed back in
+   * `merged_source_ids` and decides the order the synthesis edges are
+   * created in, so a stable, visible order is easier to reason about than
+   * click order. Ids that are selected but not in the list (a search can
+   * hide a checked row) keep their selection order at the end instead of
+   * being dropped from the request.
+   */
+  const mergeSourceIds = useMemo(() => {
+    const ordered = nodes.filter((n) => selection.has(n.id)).map((n) => n.id);
+    if (ordered.length === selection.size) return ordered;
+    const seen = new Set(ordered);
+    for (const id of selection) if (!seen.has(id)) ordered.push(id);
+    return ordered;
+  }, [nodes, selection]);
+
+  const handleBulkAction = useCallback(
+    (action: BulkActionId) => {
+      // Merge is enabled only for 2–100 selected nodes (lib/merge.canMerge
+      // — the server's own bound). The handler re-checks rather than
+      // trusting the disabled button, and `MergeDialog` re-checks again
+      // through `buildMergeRequest`, so a 1-source request cannot be sent
+      // even if a click reaches this handler. Tag has no endpoint yet.
+      if (action === 'delete') setConfirmBulkDelete(true);
+      else if (action === 'merge' && canMerge(selection.size)) {
+        setMergeOpen(true);
+      }
+    },
+    [selection],
+  );
+
+  /**
+   * Post-merge (DF-HERMES-CANOPY-27). The 201 envelope carries the whole
+   * synthesis node (§3.6), so it is inserted into the list directly instead
+   * of refetching: the new node is visible immediately, and the response
+   * contract is consumed rather than thrown away. The existing
+   * `pruneSelection` effect runs on every list change, so the freshly
+   * created row cannot be pruned. Selection is cleared because the rows it
+   * held are now synthesised, and leaving them checked would invite a
+   * second merge of the same sources.
+   */
+  const handleMerged = useCallback((node: MergeNode) => {
+    setNodes((prev) =>
+      prev.some((n) => n.id === node.id) ? prev : [...prev, node],
+    );
+    setSelection(clearSelection());
+    setMergeOpen(false);
   }, []);
 
   // Author identities and topic titles are derived once per fetch, not
@@ -858,6 +1105,16 @@ export default function NodesPage() {
           treeId={selectedTreeId}
           onClose={() => setBranchNode(null)}
           onBranched={handleBranched}
+        />
+      )}
+
+      {/* Merge dialog (DF-HERMES-CANOPY-27) */}
+      {mergeOpen && selectedTreeId && (
+        <MergeDialog
+          treeId={selectedTreeId}
+          sourceIds={mergeSourceIds}
+          onClose={() => setMergeOpen(false)}
+          onMerged={handleMerged}
         />
       )}
 

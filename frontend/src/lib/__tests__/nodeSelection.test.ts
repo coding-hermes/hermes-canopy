@@ -175,24 +175,49 @@ describe('bulkActions', () => {
     expect(del.reason).toBeTruthy();
   });
 
-  it('disables merge and tag — no endpoint backs them', () => {
-    for (const id of ['merge', 'tag'] as const) {
-      const action = bulkActions(3).find((a) => a.id === id)!;
-      expect(action.enabled).toBe(false);
-      // A disabled control must say why, not just grey out.
-      expect(action.reason).toBeTruthy();
-      expect(action.destructive).toBe(false);
+  it('enables merge only inside the server bound (2–100 sources)', () => {
+    const merge = (n: number) => bulkActions(n).find((a) => a.id === 'merge')!;
+    // `POST /trees/{tree_id}/merge` accepts 2–100 sources (SPEC-API-04
+    // §3.2); outside that range the server answers 400, so the button must
+    // not offer it.
+    for (const n of [0, 1, 101]) {
+      expect(merge(n).enabled).toBe(false);
+      expect(merge(n).reason).toBeTruthy();
+    }
+    for (const n of [2, 3, 100]) {
+      expect(merge(n).enabled).toBe(true);
+      expect(merge(n).reason).toBeNull();
     }
   });
 
-  it('never marks merge or tag enabled at any selection size', () => {
-    for (const n of [0, 1, 2, 50]) {
-      const enabled = bulkActions(n)
-        .filter((a) => a.enabled)
-        .map((a) => a.id);
-      expect(enabled).not.toContain('merge');
-      expect(enabled).not.toContain('tag');
+  it('names the bound that was broken when merge is disabled', () => {
+    expect(bulkActions(1).find((a) => a.id === 'merge')!.reason).toContain(
+      'at least 2',
+    );
+    expect(bulkActions(101).find((a) => a.id === 'merge')!.reason).toContain(
+      'at most 100',
+    );
+  });
+
+  it('keeps merge non-destructive — it adds a synthesis node, deletes nothing', () => {
+    const merge = bulkActions(3).find((a) => a.id === 'merge')!;
+    expect(merge.destructive).toBe(false);
+  });
+
+  it('disables tag at every size, with a reason (no bulk tag route exists)', () => {
+    for (const n of [0, 1, 2, 50, 100, 101]) {
+      const tag = bulkActions(n).find((a) => a.id === 'tag')!;
+      expect(tag.enabled).toBe(false);
+      // A disabled control must say why, not just grey out.
+      expect(tag.reason).toBeTruthy();
+      expect(tag.destructive).toBe(false);
     }
+  });
+
+  it('treats a non-finite count as zero rather than enabling merge', () => {
+    const merge = bulkActions(NaN).find((a) => a.id === 'merge')!;
+    expect(merge.enabled).toBe(false);
+    expect(merge.reason).toBeTruthy();
   });
 
   it('treats a non-finite count as zero rather than enabling delete', () => {

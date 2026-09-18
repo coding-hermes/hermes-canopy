@@ -20,6 +20,8 @@
  *               that hides half the list cannot make "select all" lie.
  */
 
+import { canMerge, mergeDisabledReason } from './merge.ts';
+
 // ─── Toggling ──────────────────────────────────────────────────────────
 
 /**
@@ -123,7 +125,7 @@ export type BulkActionId = 'delete' | 'merge' | 'tag';
 export interface BulkAction {
   id: BulkActionId;
   label: string;
-  /** False when no endpoint backs the action yet. */
+  /** False when the action cannot run for this selection. */
   enabled: boolean;
   /**
    * Why the action is disabled — rendered as the button's `title` and
@@ -137,29 +139,37 @@ export interface BulkAction {
 /**
  * The bulk-action bar's buttons for a given selection size.
  *
- * Only DELETE has a real endpoint: `DELETE /nodes/{id}`, already wired
- * per-row on this page (soft delete). Merge and tag are rendered but
- * disabled with a stated reason, because no endpoint backs them:
+ * DELETE is per-row (`DELETE /nodes/{id}`, soft delete, already wired on
+ * this page). MERGE is tree-scoped and live:
+ * `POST /trees/{tree_id}/merge` (SPEC-API-04 §3, since GAP-078) creates one
+ * synthesis node from 2–100 source nodes — so it is enabled exactly in that
+ * range and disabled, with the server's own reason, outside it. The bounds
+ * come from `lib/merge.canMerge`, not from numbers repeated here, so the
+ * disabled button and the refused request cannot disagree. A merge is
+ * additive (a new synthesis node; nothing is deleted), hence not
+ * `destructive`.
  *
- *   merge  a synthesis node is created via `POST /trees/{id}/nodes` with
- *          multiple parents — there is no bulk merge route, and the
- *          multi-parent create contract is not settled. Inventing one
- *          here would be a client guessing at a server API.
- *   tag    topics exist (`/topics` CRUD) but nothing associates an
- *          EXISTING node with a topic in bulk; topic linkage is carried
- *          in node metadata at create time.
+ * TAG stays disabled with a stated reason, because there is still nothing
+ * behind it: topics exist (`/topics` CRUD) but nothing associates an
+ * EXISTING node with a topic in bulk — topic linkage is carried in node
+ * metadata at create time. A disabled control that says why is a roadmap;
+ * a button wired to a guessed `POST /nodes/merge` is a 404 in front of the
+ * user.
  *
- * Verified against `internal/handler/node_handler.go` (Routes/TreeRoutes),
- * `graph_handler.go`, `topic_handler.go` and `internal/server/server.go`.
+ * Verified against `internal/server/server.go` (the merge mount, line 350),
+ * `merge_handler.go`, `node_handler.go`, `graph_handler.go`,
+ * `topic_handler.go` and `docs/API.md` §"Merge Tree (Create Synthesis
+ * Node)".
  */
 export function bulkActions(count: number): BulkAction[] {
   const n = Number.isFinite(count) ? count : 0;
+  const mergeable = canMerge(n);
   return [
     {
       id: 'merge',
       label: 'Merge',
-      enabled: false,
-      reason: 'Coming soon — no bulk merge endpoint yet',
+      enabled: mergeable,
+      reason: mergeable ? null : mergeDisabledReason(n),
       destructive: false,
     },
     {
