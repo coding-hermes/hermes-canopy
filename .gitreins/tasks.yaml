@@ -2813,3 +2813,28 @@ tasks:
   status: complete
   created_at: '2026-09-18T17:22:46.140720+00:00'
   completed_at: '2026-09-18T17:27:15.895578+00:00'
+- id: GAP-087
+  title: Document the mounted-but-undocumented API surfaces (/agents, /reviews, plugins/{plugin_id}/versions
+    alias) in docs/API.md and guard them with route-parity tests
+  criteria:
+  - "grep -rF over README.md docs/ specs/ finds >=1 file for each of /api/v1/reviews,\
+    \ /api/v1/agents, plugins/network-proxy, plugins/{plugin_id}/versions; docs/API.md\
+    \ gains \xA7 Agents and \xA7 Reviews describing the real mounted routes with envelopes+auth+error\
+    \ codes; internal/server/route_parity_test.go gains a bidirectional parity guard\
+    \ for both sections; go build/vet PASS, CANOPY_TEST_ALLOW_SHARED_DB=1 go test\
+    \ ./internal/server/... PASS, golangci-lint 0 issues"
+  status: complete
+  created_at: '2026-09-18T17:53:12.599409+00:00'
+  completed_at: '2026-09-18T18:06:51.256893+00:00'
+- id: DF-HERMES-CANOPY-28
+  title: 'Per-user merge rate limit (SPEC-API-04 13: 10 req/min/user) is not implemented'
+  criteria:
+  - 'POST /api/v1/trees/{tree_id}/merge enforces 10 req/min per authenticated user:
+    the 11th request inside the window answers 429 with error.code RATE_LIMITED and
+    a Retry-After header; a second user and other routes are unaffected; unit + integration
+    tests added and passing; go build + go vet PASS, golangci-lint run ./... 0 issues,
+    CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 ./internal/handler/... PASS;
+    docs/API.md no longer claims the per-user merge limit is unimplemented'
+  status: complete
+  created_at: '2026-09-18T18:26:26.055108+00:00'
+  completed_at: '2026-09-18T18:51:17.211387+00:00'
