@@ -160,6 +160,14 @@ const apiErrorSchema = z.object({
 
 #### 3.3.3 Request Body Errors
 
+> **Status update — 2026-09-18 (GAP-078):** `INVALID_SOURCE_NODE_ID` was added
+> below. The merge endpoint (`POST /trees/{tree_id}/merge`, API-04 §3) returns
+> it when one member of `source_node_ids` is a JSON string that is not a
+> parseable UUIDv7 — the sibling row `INVALID_SOURCE_NODE_IDS` covers the field
+> not being an array at all. Every other code the endpoint returns was already
+> catalogued; this was the only gap found by checking each code against this
+> file first.
+
 | Code | Status | Message | Trigger Condition | Source Spec(s) |
 |------|--------|---------|-------------------|----------------|
 | `INVALID_JSON` | 400 | `"Request body is not valid JSON"` | `json.Unmarshal` fails. | API-02 §3.2 |
@@ -181,6 +189,7 @@ const apiErrorSchema = z.object({
 | `MIN_SOURCE_NODES` | 400 | `"Merge requires at least 2 source nodes"` | `len(source_node_ids)` < 2. | API-04 §3.1 |
 | `MAX_SOURCE_NODES` | 400 | `"Merge supports at most 100 source nodes"` | `len(source_node_ids)` > 100. | API-04 §3.1 |
 | `DUPLICATE_SOURCE_NODES` | 400 | `"source_node_ids contains duplicate entries"` | Duplicate IDs in source array. | API-04 §3.1 |
+| `INVALID_SOURCE_NODE_ID` | 400 | `"source_node_id is not valid UUIDv7"` | One member of `source_node_ids` is a string that is not a parseable UUIDv7. The response message names the offending `index` and `value`; this repo's error envelope has no `details` object to carry them. | API-04 §3.1 |
 | `TREE_MISMATCH` | 400 | `"A source node belongs to a different tree"` | Source node's `tree_id != target tree_id`. | API-04 §3.1 |
 | `SOURCE_TARGET_OVERLAP` | 400 | `"Target parent is one of the source nodes"` | `target_parent_id` is in `source_node_ids`. | API-04 §3.1 |
 | `NO_COMMON_ANCESTOR` | 400 | `"Branches do not share a common ancestor"` | GET /compare nodes have no LCA (different tree roots). | API-04 §4.4 |

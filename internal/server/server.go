@@ -78,6 +78,7 @@ func New(
 	topicSvc service.TopicService,
 	cardSvc service.CardService,
 	graphSvc service.GraphService,
+	mergeSvc service.MergeService,
 	collabSvc collaboration.CollaborationService,
 	metrics *telemetry.Metrics,
 	ctxCompiler ctxpkg.Compiler,
@@ -109,6 +110,7 @@ func New(
 		topicSvc:        topicSvc,
 		cardSvc:         cardSvc,
 		graphSvc:        graphSvc,
+		mergeSvc:        mergeSvc,
 		collabSvc:       collabSvc,
 		metrics:         metrics,
 		ctxCompiler:     ctxCompiler,
@@ -171,6 +173,7 @@ type routeDeps struct {
 	topicSvc        service.TopicService
 	cardSvc         service.CardService
 	graphSvc        service.GraphService
+	mergeSvc        service.MergeService
 	collabSvc       collaboration.CollaborationService
 	metrics         *telemetry.Metrics
 	ctxCompiler     ctxpkg.Compiler
@@ -206,6 +209,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	topicSvc := deps.topicSvc
 	cardSvc := deps.cardSvc
 	graphSvc := deps.graphSvc
+	mergeSvc := deps.mergeSvc
 	collabSvc := deps.collabSvc
 	metrics := deps.metrics
 	ctxCompiler := deps.ctxCompiler
@@ -334,6 +338,16 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// no tree_id segment for TreeMembershipMiddleware to act on, so the
 		// handler resolves membership from the target node's tree.
 		r.Get("/nodes/{node_id}/reference-context", multiRefHandler.GetReferenceContext)
+
+		// SPEC-API-04 §3 — POST /trees/{tree_id}/merge creates the
+		// synthesis node the ordinary node-create path refuses
+		// (ErrSynthesisViaMergeOnly). Registered BEFORE the /trees mount
+		// (like the topic-search / reference / multi-reference routes
+		// above) so chi resolves the exact pattern before the wildcard
+		// subrouter, and inside this authenticated group so it carries the
+		// same middleware class as every other tree-scoped surface.
+		mergeHandler := handler.NewMergeHandler(mergeSvc)
+		r.With(membershipMW).Post("/trees/{tree_id}/merge", mergeHandler.CreateMerge)
 
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).

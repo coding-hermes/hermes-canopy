@@ -37,6 +37,16 @@ Merge nodes are the mechanism for combining divergent branches in the conversati
 
 ## 3. POST /trees/{tree_id}/merge — Create Merge Node
 
+> **Status update — 2026-09-18 (GAP-078):** this route is **IMPLEMENTED**.
+> Landed by commit `feat(api): POST /trees/{tree_id}/merge creates synthesis
+> nodes (SPEC-API-04 §3) — GAP-078` (`internal/service/merge_service.go`,
+> `internal/handler/merge_handler.go`, mounted in `internal/server/server.go`),
+> with router-level integration tests for the §3.3 table, the §3.5
+> transaction, the §3.6 envelope and the §3.8 event order. The multi-reference
+> reply path of SPEC-PL-06 is unchanged (it keeps producing multi-parent
+> `message` nodes); §3 is now the working contract for `synthesis` nodes it
+> always described. Spec text below is unchanged.
+
 ### 3.1 Route
 
 ```

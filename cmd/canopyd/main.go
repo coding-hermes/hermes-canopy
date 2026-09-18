@@ -515,10 +515,14 @@ func main() {
 		log.Fatal().Err(err).Msg("initialize federation identity")
 	}
 
+	// Merge service (SPEC-API-04 §3) — creates synthesis nodes, the one
+	// write path the node-create validator refuses by design.
+	mergeService := service.NewMergeService(database.Pool, sseHub)
+
 	srv := server.New(
 		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, collabSvc, metrics,
+		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, graphSvc, mergeService, collabSvc, metrics,
 		ctxCompiler, pluginSvc, fileViewerSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg)
 	if natsBus != nil {
 		srv.SetTransportDrain(natsBus.Drain)

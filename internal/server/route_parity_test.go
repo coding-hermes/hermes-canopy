@@ -61,11 +61,14 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 	type route struct{ method, pattern string }
 
 	got := map[route]bool{}
+	mwCount := map[route]int{}
 	err := chi.Walk(router, func(method, pattern string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		if method == "" {
 			method = http.MethodGet
 		}
-		got[route{method, normalizeChiPattern(pattern)}] = true
+		key := route{method, normalizeChiPattern(pattern)}
+		got[key] = true
+		mwCount[key] = len(middlewares)
 		return nil
 	})
 	if err != nil {
@@ -95,6 +98,9 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 		// docs/API.md § Live Hermes gateway and consumed by the context
 		// manifest panel's model choice.
 		{http.MethodGet, "/api/v1/gateway/models"},
+		// GAP-078 / SPEC-API-04 §3: the merge endpoint that creates the
+		// synthesis node the node-create path refuses.
+		{http.MethodPost, "/api/v1/trees/{}/merge"},
 	}
 
 	// Control: tree-scoped fork was mounted before GAP-065 and must stay
@@ -102,6 +108,18 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 	// failing vacuously.
 	controls := []route{
 		{http.MethodPost, "/api/v1/trees/{}/nodes/{}/fork"},
+	}
+
+	// The route whose middleware class the sibling comparison below pins
+	// (SPEC-API-04 §3).
+	mergeRoute := route{http.MethodPost, "/api/v1/trees/{}/merge"}
+
+	// Floor check: chi reports the FULL inherited chain, so a bare count is
+	// not proof of the inline gate by itself (a gate-less route still shows
+	// the /api/v1 group's middleware) — but zero would mean the route lives
+	// outside the authenticated group entirely.
+	if mwCount[mergeRoute] == 0 {
+		t.Errorf("merge route carries NO middleware on the real router — it is outside the authenticated /api/v1 group")
 	}
 
 	var missing []string
@@ -129,5 +147,25 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 		}
 		t.Fatalf("documented node route(s) NOT mounted on the real router:\n  %s",
 			strings.Join(missing, "\n  "))
+	}
+
+	// GAP-078 / SPEC-API-04 §3: the merge route must sit in the SAME
+	// middleware class as its sibling tree-scoped write routes — membership
+	// gated inside the authenticated /api/v1 group, which is what produces
+	// NOT_TREE_MEMBER (403) and TREE_DELETED (410) for free. chi.Walk reports
+	// each route's inline middleware chain, so comparing the chain LENGTH
+	// with the sibling mounts catches a merge route that lost its gate.
+	for _, sibling := range []route{
+		{http.MethodPost, "/api/v1/trees/{}/reference-selections"},
+		{http.MethodPost, "/api/v1/trees/{}/multi-reference-replies"},
+	} {
+		if !got[sibling] {
+			t.Fatalf("sibling control route %s %s is no longer mounted — cannot compare middleware classes",
+				sibling.method, sibling.pattern)
+		}
+		if mwCount[mergeRoute] != mwCount[sibling] {
+			t.Errorf("merge route middleware class differs from %s %s: %d vs %d inline middleware",
+				sibling.method, sibling.pattern, mwCount[mergeRoute], mwCount[sibling])
+		}
 	}
 }

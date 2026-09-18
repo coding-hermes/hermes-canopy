@@ -23,6 +23,7 @@ changed (GAP-072).
 | `POST /api/v1/trees/{tree_id}/nodes` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork` | 201 | **`{"node":{…},"edge":{…}}`** |
+| `POST /api/v1/trees/{tree_id}/merge` | 201 | **`{"node":{…},"edges":[…],"merged_source_ids":[…]}`** — the single-parent routes above return one `edge`; a merge returns the whole edge set (GAP-078) |
 | `POST /api/v1/files/upload` | 201 | **`{"file":{…},"was_new_upload":…,…}`** |
 | `POST /api/v1/files/resolve` | 200 | **`{"file":{…},…}`** (same resolve shape) |
 | `GET /api/v1/trees` | 200 | **`{"trees":[…],"pagination":{…}}`** |
@@ -458,6 +459,112 @@ message `content is required` — the field is named instead of the previous
 misleading `400 INVALID_BODY "request body must be valid JSON"`. Malformed JSON
 (no JSON at all, truncated, unknown field) still returns `400 INVALID_BODY`.
 
+### Merge Tree (Create Synthesis Node)
+
+```
+POST /api/v1/trees/{tree_id}/merge
+```
+
+Tree-scoped and membership-gated like the other tree-scoped write routes
+(SPEC-API-04 §3). Creates ONE `node_type: "synthesis"` node with multiple
+parents: one `reply` edge from the placement target plus one `synthesis` edge
+per source node, all in a single transaction.
+
+This is the **only** way to create a synthesis node: the ordinary node-create
+and reply/fork routes reject `node_type: "synthesis"` with `400 VALIDATION_ERROR`
+(message `node service: synthesis nodes via merge endpoint only` — the service
+sentinel `ErrSynthesisViaMergeOnly`; the SPEC-API-07 catalog name for the
+condition is `SYNTHESIS_VIA_MERGE_ONLY`, which is not the code the node handler
+currently emits). The multi-reference reply route
+(`POST /api/v1/trees/{tree_id}/multi-reference-replies`, SPEC-PL-06 §9.2) is a
+different surface: it creates a `message` node whose parents are `reference`
+edges.
+
+**Request body:**
+
+```json
+{
+  "source_node_ids": [
+    "0191a8b2-7fff-7000-9000-000000000101",
+    "0191a8b2-7fff-7000-9000-000000000102"
+  ],
+  "content": "Synthesizing the two approaches:\n\nConclusion: use CTEs with index optimization for MVP.",
+  "content_format": "markdown",
+  "target_parent_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "metadata": {
+    "merge_summary": "Resolved branch divergence on tree storage strategy",
+    "decision": "CTE with index optimization"
+  }
+}
+```
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `source_node_ids` | array of UUID strings | Yes | — | 2–100 sources. Each must exist in this tree, not be soft-deleted, and be unique. A source may itself be a synthesis node (chained merges). |
+| `content` | string | Yes | — | Synthesis summary; ≤ 65536 characters. May be empty. |
+| `content_format` | string | No | `"markdown"` | `markdown`, `plain`, or `rich`. |
+| `target_parent_id` | UUID string | No | the tree's root node | Where the synthesis node is placed. Must exist in this tree and not be soft-deleted. Must not be one of the sources. |
+| `metadata` | object | No | `{}` | ≤ 16 KB serialized (measured compactly). |
+
+**Response (201):** `{"node": {…}, "edges": [ … ], "merged_source_ids": [ … ]}`.
+
+```json
+{
+  "node": {
+    "id": "0191a8b2-7fff-7000-9000-000000000301",
+    "tree_id": "0191a8b2-7fff-7000-9000-000000000001",
+    "parent_id": "0191a8b2-7fff-7000-9000-000000000001",
+    "author_id": "0191a8b2-7fff-7000-9000-000000000042",
+    "author_display_name": "Bane",
+    "content": "Synthesizing the two approaches:...",
+    "content_format": "markdown",
+    "node_type": "synthesis",
+    "sequence_num": 312,
+    "metadata": {"merge_summary": "Resolved branch divergence on tree storage strategy"},
+    "depth": 1,
+    "child_count": 0,
+    "created_at": "2026-09-18T23:15:00Z",
+    "edited_at": null,
+    "deleted_at": null
+  },
+  "edges": [
+    {"id": "…401", "tree_id": "…", "source_node_id": "<target_parent_id>", "target_node_id": "<node.id>", "edge_type": "reply", "created_at": "…"},
+    {"id": "…402", "tree_id": "…", "source_node_id": "<source 1>", "target_node_id": "<node.id>", "edge_type": "synthesis", "created_at": "…"},
+    {"id": "…403", "tree_id": "…", "source_node_id": "<source 2>", "target_node_id": "<node.id>", "edge_type": "synthesis", "created_at": "…"}
+  ],
+  "merged_source_ids": ["<source 1>", "<source 2>"]
+}
+```
+
+`edges` always holds **N+1** entries in creation order: the `reply` edge from
+`target_parent_id` first, then one `synthesis` edge per source in the order
+`source_node_ids` was sent. `node.depth` is `target_parent.depth + 1` and
+`node.child_count` is always `0` on creation.
+
+**SSE (SPEC-API-04 §3.8):** one `node_added`, then N+1 `edge_added` events (in
+the same order as `edges`), then a composite `tree_merged`
+(`{tree_id, merge_node_id, source_node_ids, timestamp}`) as the last event, all
+on the tree's event stream. The event set is purely additive — clients that
+only understand `node_added`/`edge_added` keep working.
+
+**Error codes** (all use the standard `{"error":{"code":…,"message":…}}`
+envelope): `INVALID_TREE_ID` (400), `INVALID_BODY` (400),
+`INVALID_SOURCE_NODE_IDS` (400), `MIN_SOURCE_NODES` (400),
+`MAX_SOURCE_NODES` (400), `DUPLICATE_SOURCE_NODES` (400),
+`INVALID_SOURCE_NODE_ID` (400), `SOURCE_NODE_NOT_FOUND` (404),
+`SOURCE_NODE_DELETED` (410), `TREE_MISMATCH` (400), `CONTENT_TOO_LONG` (400),
+`INVALID_CONTENT_FORMAT` (400), `METADATA_TOO_LARGE` (400),
+`INVALID_TARGET_PARENT_ID` (400), `TARGET_PARENT_NOT_FOUND` (404),
+`TARGET_PARENT_DELETED` (409), `SOURCE_TARGET_OVERLAP` (400),
+`REQUEST_TOO_LARGE` (413), `NOT_TREE_MEMBER` (403), `TREE_DELETED` (410),
+`TREE_NOT_FOUND` (404), `VALIDATION_ERROR` (400, non-object `metadata`),
+`TOKEN_MISSING` (401), `SERVICE_UNAVAILABLE` (503), `RATE_LIMITED` (429 — the
+global per-IP limiter; SPEC-API-04 §13's per-user 10 req/min merge limit is
+**not** implemented, since the router has no per-endpoint rate limiter).
+
+A rejected merge writes nothing: node, parent edge and synthesis edges are
+committed together or not at all.
+
 ### Get Reference Context (SPEC-PL-06 §9.3)
 
 ```
@@ -474,12 +581,17 @@ A multi-reference reply is created through the two write endpoints of the same
 spec (§9.1 `POST /api/v1/trees/{tree_id}/reference-selections` preflight, §9.2
 `POST /api/v1/trees/{tree_id}/multi-reference-replies` create).
 
-**Spec drift — the merge endpoint.** The spec'd `POST /trees/{tree_id}/merge` is
-**not implemented**: `internal/server/server.go` registers no `merge` route at all.
-Multi-reference replies — `POST /api/v1/trees/{tree_id}/multi-reference-replies`
-(SPEC-PL-06 §9.2), preceded by `POST /api/v1/trees/{tree_id}/reference-selections`
-(§9.1) — are the **shipped path for merging multiple sources into one node**, and
-the resulting node is the multi-parent synthesis node (`is_synthetic_merge_point`).
+**Merge endpoint — resolved (2026-09-18, GAP-078).** This paragraph previously
+reported the spec'd `POST /trees/{tree_id}/merge` as unimplemented. It is now
+implemented (see § Merge Tree (Create Synthesis Node) above, SPEC-API-04 §3),
+and the two paths are complementary rather than substitutes:
+`POST /api/v1/trees/{tree_id}/merge` creates a `synthesis` node whose parents
+are one `reply` edge plus N `synthesis` edges, while
+`POST /api/v1/trees/{tree_id}/multi-reference-replies` (SPEC-PL-06 §9.2,
+preceded by `POST /api/v1/trees/{tree_id}/reference-selections` §9.1) creates a
+`message` node whose parents are `reference` edges. A multi-reference reply may
+report `is_synthetic_merge_point: true` when its selection spans diverged
+branches, but it is a `message`, not a `synthesis` node.
 
 **Query params:**
 - `include_content` — bool, default `true`. When `false` each source's
