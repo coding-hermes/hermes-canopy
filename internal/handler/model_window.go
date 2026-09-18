@@ -12,6 +12,15 @@
 // The ModelLister interface is owned here, like ContextCompiler and
 // ReferenceSelectionLoader, so the handlers depend on the capability they need
 // rather than on internal/gateway's transport details.
+//
+// A gateway is allowed to report no window at all — the live Hermes gateway's
+// /v1/models answers an OpenAI-style envelope with no context_length, which
+// left the derivation above inert (flat default on every call). The operator
+// can therefore DECLARE the missing windows locally
+// (config.Config.ContextModelWindows / CONTEXT_MODEL_WINDOWS) and the catalog
+// treats them as a second source of truth: a window the gateway reports wins,
+// a declared window fills the gap, and with the knob unset nothing changes.
+// See BudgetSourceConfiguredWindow.
 package handler
 
 import (
@@ -26,19 +35,29 @@ import (
 
 // Budget source values reported by ModelWindowCatalog.Budget. They are part of
 // the observable contract (debug logs today; the phase 2b budget slider next),
-// so they are exactly these four strings.
+// so they are exactly these five strings.
 const (
 	// BudgetSourceDisabled: the percentage knob is <= 0, so the
 	// window-derived path is off and the flat default always applies.
 	BudgetSourceDisabled = "disabled"
 	// BudgetSourceWindow: the budget was derived from the selected model's
-	// context window.
+	// context window AS THE GATEWAY REPORTED IT.
 	BudgetSourceWindow = "window"
+	// BudgetSourceConfiguredWindow: the gateway reported no window for the
+	// model — it was absent from the catalog, listed without one, or the
+	// catalog call failed — so the budget was derived from the window the
+	// OPERATOR declared for it (CONTEXT_MODEL_WINDOWS). A live window
+	// always wins over a declared one, so this source can only ever
+	// appear on a model the gateway left unanswered
+	// (GAP-080 phase 2a follow-up).
+	BudgetSourceConfiguredWindow = "configured_window"
 	// BudgetSourceUnknownModel: the model catalog was consulted (or the
-	// request named no model at all) and no usable window is known for it.
+	// request named no model at all) and no usable window is known for it
+	// — from the gateway OR from the operator's declarations.
 	BudgetSourceUnknownModel = "unknown_model"
-	// BudgetSourceCatalogError: the model catalog could not be reached. The
-	// caller falls back; the request is NOT failed.
+	// BudgetSourceCatalogError: the model catalog could not be reached and
+	// no window was declared for that model either. The caller falls back;
+	// the request is NOT failed.
 	BudgetSourceCatalogError = "catalog_error"
 )
 
@@ -84,6 +103,15 @@ type ModelWindowCatalog struct {
 	lister ModelLister
 	ttl    time.Duration
 
+	// configured holds the operator-declared context windows
+	// (config.Config.ContextModelWindows, GAP-080 phase 2a follow-up),
+	// keyed by model id. It is consulted only when the gateway reports no
+	// window for the model, so a nil or empty map leaves every derivation
+	// exactly as it was before the knob existed. Keys are matched
+	// verbatim — the config loader trims them — and the map is read-only
+	// after construction, hence it needs no lock.
+	configured map[string]int
+
 	// mu guards the snapshot. It is held across the refresh so concurrent
 	// callers wait for one in-flight fetch instead of stampeding the
 	// gateway — a single background-free refresh per ttl is all that is
@@ -98,28 +126,50 @@ type ModelWindowCatalog struct {
 // client) with a cache ttl. It performs no I/O: construction never depends on
 // the gateway being up, which is what keeps it safe on the server boot path.
 // A nil lister is legal and makes every lookup fall back.
-func NewModelWindowCatalog(lister ModelLister, ttl time.Duration) *ModelWindowCatalog {
-	return &ModelWindowCatalog{lister: lister, ttl: ttl}
+//
+// configuredWindows are the windows the operator declared locally for models
+// the gateway reports none for (CONTEXT_MODEL_WINDOWS). They are the catalog's
+// SECOND source of truth: a window the gateway reports always wins, so the
+// declarations can only ever fill a gap, and a nil or empty map is exactly the
+// pre-knob behaviour. The map is not copied or mutated — callers keep it
+// immutable, like every other config value.
+func NewModelWindowCatalog(lister ModelLister, ttl time.Duration, configuredWindows map[string]int) *ModelWindowCatalog {
+	return &ModelWindowCatalog{lister: lister, ttl: ttl, configured: configuredWindows}
 }
 
 // Budget resolves the default compilation budget for model at percent of its
 // context window, returning the budget and the source that produced it.
 //
+// The window comes from the LIVE catalog first and from the operator's
+// declaration (CONTEXT_MODEL_WINDOWS) second, so a window the gateway actually
+// reports always wins and the declaration can only ever fill a gap
+// (GAP-080 phase 2a follow-up). A derived budget is
+// floor(window * percent / 100) and at least 1 for any positive window.
+//
 // Fallback (the flat default) is used when percent <= 0 ("disabled"), when the
-// catalog cannot be reached or no lister is wired ("catalog_error"), and when
-// no usable window is known for the model ("unknown_model" — the model is
-// absent from the catalog, has a non-positive window, or the request named no
-// model). A derived budget is floor(window * percent / 100) and at least 1 for
-// any positive window. Any receiver, any lister, and any model string are
-// safe: this method never panics.
+// catalog cannot be reached and no window was declared for the model
+// ("catalog_error"), and when neither source knows a window for the model
+// ("unknown_model" — the model is absent from the catalog, is listed without a
+// usable window, the request named no model, or the declarations have no entry
+// for it). Any receiver, any lister, and any model string are safe: this
+// method never panics.
 func (c *ModelWindowCatalog) Budget(ctx context.Context, model string, percent int, fallback int) (int, string) {
 	if percent <= 0 {
 		return fallback, BudgetSourceDisabled
 	}
+	name := strings.TrimSpace(model)
 	if c == nil || c.lister == nil {
+		// No catalog to consult. A declared window is the only source that
+		// can still answer — but only for a model that was NAMED, since
+		// there is nothing to look up without one (and deliberately no
+		// gateway call either).
+		if name != "" {
+			if window := c.configuredWindow(name); window > 0 {
+				return windowBudget(window, percent, fallback), BudgetSourceConfiguredWindow
+			}
+		}
 		return fallback, BudgetSourceCatalogError
 	}
-	name := strings.TrimSpace(model)
 	if name == "" {
 		// No model was named, so there is no window to look up and no
 		// catalog outcome to claim — and, deliberately, no gateway call:
@@ -127,14 +177,40 @@ func (c *ModelWindowCatalog) Budget(ctx context.Context, model string, percent i
 		return fallback, BudgetSourceUnknownModel
 	}
 	window, ok := c.window(ctx, name)
+	if ok && window > 0 {
+		// The gateway's own answer always wins over a declaration.
+		return windowBudget(window, percent, fallback), BudgetSourceWindow
+	}
+	if declared := c.configuredWindow(name); declared > 0 {
+		// Either the catalog does not know this model (absent, or listed
+		// without a window) or it could not be reached at all. The
+		// operator declared a window, so the derivation activates.
+		return windowBudget(declared, percent, fallback), BudgetSourceConfiguredWindow
+	}
 	if !ok {
+		// The catalog answered nothing AND there is no declaration for
+		// this model.
 		return fallback, BudgetSourceCatalogError
 	}
-	if window <= 0 {
-		// The catalog answered but has no usable window for this model.
-		return fallback, BudgetSourceUnknownModel
+	// The catalog answered but has no usable window for this model.
+	return fallback, BudgetSourceUnknownModel
+}
+
+// configuredWindow returns the operator-declared context window for model, or
+// 0 when there is none (GAP-080 phase 2a follow-up). It is nil-safe on both
+// the receiver and the map, so a catalog built without declarations answers 0
+// for every model — which is what keeps the derivation unchanged for anyone
+// who does not set CONTEXT_MODEL_WINDOWS. A non-positive declared value is
+// 0 here too: config.Validate rejects those at startup, and a catalog that
+// ignored that would rather not derive a nonsensical budget from one.
+func (c *ModelWindowCatalog) configuredWindow(model string) int {
+	if c == nil || len(c.configured) == 0 {
+		return 0
 	}
-	return windowBudget(window, percent, fallback), BudgetSourceWindow
+	if window := c.configured[model]; window > 0 {
+		return window
+	}
+	return 0
 }
 
 // windowBudget is the ONE derivation of a window-derived budget: percent of
@@ -185,10 +261,22 @@ func (c *ModelWindowCatalog) Window(ctx context.Context, model string) (int, boo
 //     the window-derived BUDGET, not the model list a user picks from (every
 //     desired_budget is then the flat fallback, and the source is "disabled");
 //   - the source describes the LIST: "window" when at least one listed model
-//     yields a window-derived budget, "unknown_model" when the catalog
-//     answered but no entry carries a usable window (the live gateway's
-//     OpenAI-style envelope), "disabled" when the knob is off, and
-//     "catalog_error" / "no_catalog" when the list could not be read.
+//     yields a window-derived budget from a window the GATEWAY reported,
+//     "configured_window" when no live window was seen anywhere but a listed
+//     model was enriched from the operator's declaration, "unknown_model" when
+//     the catalog answered but no entry carries a usable window from either
+//     source (the live gateway's OpenAI-style envelope), "disabled" when the
+//     knob is off, and "catalog_error" / "no_catalog" when the list could not
+//     be read.
+//
+// The listing is ENRICHED, never invented (GAP-080 phase 2a follow-up): a
+// model the gateway listed whose window is 0/absent is reported with the
+// window the operator declared for it — same id, same order, and a real
+// context_window + desired_budget the UI can size its control from. A model
+// that exists ONLY in the declarations is NOT listed, because the UI would
+// then offer a model the gateway rejects. A catalog failure lists nothing
+// (declarations cannot stand in for the gateway's own list) and is still a
+// 200 with an empty array.
 //
 // The slice is never nil — an unreachable catalog answers `[]`, so the caller
 // has no nil to leak onto the wire — and it is sorted by model id so the same
@@ -213,16 +301,34 @@ func (c *ModelWindowCatalog) Models(ctx context.Context, percent, fallback int) 
 	if percent <= 0 {
 		source = BudgetSourceDisabled
 	}
+	liveWindowSeen := false
+	declaredWindowUsed := false
 	for _, id := range ids {
 		window := windows[id]
-		if window > 0 && percent > 0 {
-			source = BudgetSourceWindow
+		if window > 0 {
+			if percent > 0 {
+				liveWindowSeen = true
+			}
+		} else if declared := c.configuredWindow(id); declared > 0 {
+			// The gateway listed the model but reported no window for
+			// it, and the operator declared one: report the real
+			// window and the budget derived from it.
+			window = declared
+			declaredWindowUsed = true
 		}
 		models = append(models, ModelWindow{
 			ID:            id,
 			ContextWindow: window,
 			DesiredBudget: windowBudget(window, percent, fallback),
 		})
+	}
+	if percent > 0 {
+		switch {
+		case liveWindowSeen:
+			source = BudgetSourceWindow
+		case declaredWindowUsed:
+			source = BudgetSourceConfiguredWindow
+		}
 	}
 	return models, source
 }

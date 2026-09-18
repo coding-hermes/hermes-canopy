@@ -978,9 +978,13 @@ GET /api/v1/context/{node_id}
 
 **Default budget (`?model=` + `CONTEXT_BUDGET_PERCENT`).** With no `budget`
 parameter the default is `CONTEXT_DEFAULT_BUDGET` (8000) unless a model is
-named and the gateway's model catalog knows its context window, in which case
+named and its context window is known, in which case
 it becomes `floor(window × CONTEXT_BUDGET_PERCENT / 100)` (60% by default;
-4096 → 2457, 200 000 → 120 000). `CONTEXT_BUDGET_PERCENT=0` disables the
+4096 → 2457, 200 000 → 120 000). The window is the gateway's catalog answer
+when it reports one and the locally declared `CONTEXT_MODEL_WINDOWS` window
+otherwise (see "Declared context windows" under the gateway section), so a
+model the gateway reports no window for still derives a real budget.
+`CONTEXT_BUDGET_PERCENT=0` disables the
 derivation, and an unknown model, an unreachable catalog, or no `model` at all
 falls back to `CONTEXT_DEFAULT_BUDGET` — the request never fails because the
 catalog is down.
@@ -988,8 +992,10 @@ catalog is down.
 The catalog is the gateway's `GET /v1/models`, and its list is read from a bare
 JSON array, from a `models` key, or from the OpenAI-style `data` key the gateway
 actually answers with (`models` wins if an object carries both). The derivation
-is conditional on the gateway reporting a window: an entry with no context
-window counts as unknown, so the budget falls back to `CONTEXT_DEFAULT_BUDGET`.
+is conditional on a window being known: an entry with no context
+window and no declaration counts as unknown, so the budget falls back to
+`CONTEXT_DEFAULT_BUDGET` — that is the live gateway's shape, whose one
+`Hermes Agent` entry carries no `context_length` at all.
 
 An explicit `budget` wins as long as it fits the ceiling, and the ceiling is
 **window-aware** (GAP-080 phase 2b): when the request names a `model` whose
@@ -1940,10 +1946,15 @@ actual code:
 
     **Window-derived default budget (GAP-080).** With no `token_budget` the
     default is `CONTEXT_DEFAULT_BUDGET` (8000) unless `model` names a model
-    whose context window the gateway's model catalog reports, in which case it
+    whose context window is known, in which case it
     becomes `floor(window × CONTEXT_BUDGET_PERCENT / 100)` (60% by default).
+    The window comes from the gateway's model catalog first and from
+    `CONTEXT_MODEL_WINDOWS` second (a window the operator declared locally —
+    see "Declared context windows" below), so a model the gateway reports no
+    window for still gets a real derived budget instead of the flat fallback.
     `CONTEXT_BUDGET_PERCENT=0` disables the derivation; an unknown model, no
-    `model` at all, or an unreachable model catalog falls back to
+    `model` at all, or an unreachable model catalog with nothing declared for
+    that model falls back to
     `CONTEXT_DEFAULT_BUDGET` — the model list is cached for five minutes, and a
     failed lookup never fails the run. The list is read from a bare array, a
     `models` key, or the OpenAI-style `data` key the gateway sends (`models`
@@ -1974,8 +1985,11 @@ actual code:
       for a positive window; the flat `default_budget` when `percent` is 0 or
       the entry reports no usable window.
     - `source` — `window` when at least one entry yields a window-derived
-      budget, `unknown_model` when the catalog answered but reports no window
-      for anything, `disabled` when `CONTEXT_BUDGET_PERCENT=0`, and
+      budget from a window the GATEWAY reported, `configured_window` when no
+      live window was seen anywhere but a listed entry was enriched from
+      `CONTEXT_MODEL_WINDOWS` (below), `unknown_model` when the catalog answered
+      but reports no window for anything, `disabled` when
+      `CONTEXT_BUDGET_PERCENT=0`, and
       `catalog_error` / `no_catalog` when the list could not be read at all.
       With `disabled` the models are still listed (the knob turns off the
       derivation, not the catalog) and every `desired_budget` is the flat
@@ -1983,10 +1997,65 @@ actual code:
     - The route **never answers 5xx because the catalog is down**: a failure is
       `200` with `"models":[]` — an empty ARRAY, never `null` — and the matching
       `source`, so a client degrades to "no model choice" instead of an error
-      state.
+      state. Declared windows cannot stand in for the gateway's own list, so a
+      catalog failure lists nothing even when `CONTEXT_MODEL_WINDOWS` is set.
     - Entries are sorted by `id`, and the list comes from the same five-minute
       cache the two compile surfaces use (one gateway call per TTL for the whole
       server).
+
+    **Declared context windows (`CONTEXT_MODEL_WINDOWS`, GAP-080 phase 2a).**
+    A gateway is allowed to report no window at all, and the live Hermes gateway
+    does: `GET /v1/models` answers an OpenAI-style envelope whose entry carries
+    no `context_length`
+
+    ```json
+    {"object": "list", "data": [{"id": "Hermes Agent", "object": "model",
+      "created": 1789707496, "owned_by": "hermes", "permission": [],
+      "root": "Hermes Agent", "parent": null}]}
+    ```
+
+    so with the knob unset every budget falls back to `CONTEXT_DEFAULT_BUDGET`
+    and the derivation is INERT. `CONTEXT_MODEL_WINDOWS` lets the operator
+    declare the missing windows locally — comma-separated `model=window` pairs,
+    e.g. `CONTEXT_MODEL_WINDOWS="Hermes Agent=200000,probe-big=128000"`
+    (whitespace around a pair, the name and the number is ignored; the LAST `=`
+    of a pair separates the two, so a model id may contain `=`).
+
+    Measured A/B (2026-09-17) on a scratch canopyd against this live gateway,
+    same route and same model: with the knob set
+
+    ```json
+    {"models":[{"id":"Hermes Agent","context_window":200000,"desired_budget":120000}],
+     "percent":60,"default_budget":8000,"source":"configured_window"}
+    ```
+
+    and with the knob unset
+
+    ```json
+    {"models":[{"id":"Hermes Agent","context_window":0,"desired_budget":8000}],
+     "percent":60,"default_budget":8000,"source":"unknown_model"}
+    ```
+
+    Precedence per model — a window the gateway reports ALWAYS wins, so a
+    declaration only ever fills a gap: **live catalog window (>0) → declared
+    window (>0) → neither**. The declared source answers a model the catalog
+    lists without a window, a model the catalog does not list at all, and a
+    model whose catalog call failed; `catalog_error` survives only when the
+    catalog call failed AND nothing was declared for that model, and
+    `unknown_model` only when neither source knows the model. The two surfaces
+    then differ exactly as they do for the flat fallback: a compile surface
+    derives `floor(declared window × percent / 100)`, while the read route
+    ENRICHES rather than invents — every gateway-listed model with no live
+    window is reported with its declared window and the budget derived from it,
+    a model that exists only in the declarations is never listed (the UI would
+    offer a model the gateway rejects), and `source` becomes
+    `configured_window`.
+
+    Unset/empty means no overrides and leaves every answer byte-identical to
+    the pre-knob behaviour. A malformed pair (no `=`, a blank model name, a
+    non-integer window, a window ≤ 0, an empty entry from a stray comma) is a
+    **startup error** from `Validate()`: the knob exists to switch the
+    derivation on, so a typo must fail loudly instead of silently doing nothing.
 
     The run record — the `run` object in the 202 response and the body of
     `GET /api/v1/gateway/runs/{run_id}` — then carries:

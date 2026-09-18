@@ -187,8 +187,8 @@ func TestContextHandlerExplicitBudgetCeiling(t *testing.T) {
 		{ID: "big-model", ContextLen: bigWindow},
 		{ID: "small-model", ContextLen: smallWindow},
 		{ID: "no-window", ContextLen: 0},
-	}}, time.Minute)
-	unreachable := NewModelWindowCatalog(&stubModelLister{err: errors.New("gateway down")}, time.Minute)
+	}}, time.Minute, nil)
+	unreachable := NewModelWindowCatalog(&stubModelLister{err: errors.New("gateway down")}, time.Minute, nil)
 
 	cases := []struct {
 		name       string
@@ -255,7 +255,7 @@ func TestContextHandlerExplicitBudgetCeilingIsNotAlsoTheDerivedDefault(t *testin
 	const defaultBudget = 8000
 	catalog := NewModelWindowCatalog(&stubModelLister{models: []gateway.ModelInfo{
 		{ID: "small-model", ContextLen: 4096},
-	}}, time.Minute)
+	}}, time.Minute, nil)
 
 	cases := []struct {
 		query      string

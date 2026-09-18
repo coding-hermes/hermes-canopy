@@ -446,11 +446,16 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		}
 		// One catalog for the whole server: it resolves a model's context
 		// window so the DEFAULT compilation budget can be percent of that
-		// window instead of one flat number. Every failure mode (unreachable
-		// gateway, unknown model, no model, percent 0) falls back to
-		// cfg.ContextDefaultBudget, so it can only ever change the budget —
-		// never fail a request or block boot.
-		windowCatalog := handler.NewModelWindowCatalog(gwClient, modelWindowCatalogTTL)
+		// window instead of one flat number. The windows the gateway
+		// reports win; a window the operator declared locally
+		// (CONTEXT_MODEL_WINDOWS) fills the gap for a model the gateway
+		// reports none for — which is the case on this deployment, whose
+		// gateway answers /v1/models with no context_length. Every failure
+		// mode (unreachable gateway, unknown model, no model, percent 0,
+		// no declaration) falls back to cfg.ContextDefaultBudget, so it
+		// can only ever change the budget — never fail a request or block
+		// boot.
+		windowCatalog := handler.NewModelWindowCatalog(gwClient, modelWindowCatalogTTL, cfg.ContextModelWindows)
 
 		// Context compiler (GAP-001) — budgeted context assembly with visible
 		// manifest. SPEC-PL-06 §6: the loader is wired here, on the only

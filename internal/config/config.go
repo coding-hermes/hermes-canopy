@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -55,6 +56,37 @@ type Config struct {
 	// range or non-numeric values keep the default at parse time; a
 	// programmatically-built Config outside 0..100 is rejected by Validate().
 	ContextBudgetPercent int
+
+	// ContextModelWindows declares the context window of a model for which
+	// the gateway reports none (GAP-080 phase 2a follow-up —
+	// CONTEXT_MODEL_WINDOWS). The live Hermes gateway answers /v1/models
+	// with an OpenAI-style envelope that carries no context_length, so the
+	// window-derived budget above is INERT on this deployment and every
+	// call falls back to ContextDefaultBudget; this knob is how an operator
+	// declares the window locally.
+	//
+	// Format: comma-separated `model=window` pairs, e.g.
+	//
+	//	CONTEXT_MODEL_WINDOWS="Hermes Agent=200000,probe-big=128000"
+	//
+	// Whitespace around a pair, around the model name and around the number
+	// is ignored, the LAST `=` of a pair separates the two (a model id may
+	// itself contain `=`), and a later pair for the same model replaces an
+	// earlier one. A window the gateway actually reports always wins over
+	// the declaration here, so this can only ever fill a gap. Unset or
+	// empty means "no overrides", which leaves the derivation exactly as it
+	// behaves without the knob. A malformed pair (no `=`, a blank model
+	// name, a non-integer window, a window <= 0) is a STARTUP ERROR from
+	// Validate() — a typo must fail loudly, never silently do nothing.
+	ContextModelWindows map[string]int
+
+	// contextModelWindowsErr is the failure FromEnv() hit while parsing
+	// CONTEXT_MODEL_WINDOWS (the message names the offending entry and the
+	// raw value). FromEnv() parses the knob once so the map above is usable
+	// immediately; carrying the error here is what lets Validate() refuse
+	// the startup instead of leaving the operator to wonder why the
+	// derivation stayed inert.
+	contextModelWindowsErr error
 
 	// Plugin sandbox (GAP-002 §4.1)
 	PluginMaxSize int // PLUGIN_MAX_SIZE, default 1048576 (1MB)
@@ -118,6 +150,56 @@ func Default() *Config {
 		PluginMaxSize:        1048576,
 		GatewayBaseURL:       "http://127.0.0.1:8642",
 	}
+}
+
+// parseContextModelWindows parses the CONTEXT_MODEL_WINDOWS value: a
+// comma-separated list of `model=window` pairs (GAP-080 phase 2a follow-up).
+//
+// It is strict on purpose — a typo in this knob has to fail loudly at startup
+// rather than leave the window-derived budget silently inert, which is the
+// exact failure the knob exists to fix:
+//
+//   - an empty (or whitespace-only) value means "no overrides" and is NOT an
+//     error: the caller left the knob alone;
+//   - an empty entry (a stray or doubled comma) is an error;
+//   - a pair with no `=` at all is an error;
+//   - the LAST `=` separates model from window, so a model id may contain
+//     `=` (`weird=model=1000` declares the model "weird=model");
+//   - a blank model name after trimming is an error;
+//   - a window that is not an integer, or is <= 0, is an error.
+//
+// It returns a nil map together with the error, so a rejected value can never
+// half-populate the overrides.
+func parseContextModelWindows(raw string) (map[string]int, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	windows := make(map[string]int)
+	for _, pair := range strings.Split(trimmed, ",") {
+		entry := strings.TrimSpace(pair)
+		if entry == "" {
+			return nil, fmt.Errorf("config: CONTEXT_MODEL_WINDOWS %q has an empty entry (a stray comma?)", raw)
+		}
+		sep := strings.LastIndex(entry, "=")
+		if sep < 0 {
+			return nil, fmt.Errorf("config: CONTEXT_MODEL_WINDOWS entry %q is not a model=window pair", entry)
+		}
+		model := strings.TrimSpace(entry[:sep])
+		if model == "" {
+			return nil, fmt.Errorf("config: CONTEXT_MODEL_WINDOWS entry %q has an empty model name", entry)
+		}
+		value := strings.TrimSpace(entry[sep+1:])
+		window, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, fmt.Errorf("config: CONTEXT_MODEL_WINDOWS entry %q has a non-integer window %q", entry, value)
+		}
+		if window <= 0 {
+			return nil, fmt.Errorf("config: CONTEXT_MODEL_WINDOWS entry %q has a non-positive window %d", entry, window)
+		}
+		windows[model] = window
+	}
+	return windows, nil
 }
 
 // FromEnv loads configuration from environment variables,
@@ -192,6 +274,16 @@ func FromEnv() *Config {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
 			c.ContextBudgetPercent = n
 		}
+	}
+	// CONTEXT_MODEL_WINDOWS (GAP-080 phase 2a follow-up): locally declared
+	// context windows for models the gateway reports no window for. Unset
+	// or empty means "no overrides". A parse failure is kept on the Config
+	// so Validate() can refuse the startup: a typo in this knob must be
+	// loud, not an inert derivation.
+	if v := os.Getenv("CONTEXT_MODEL_WINDOWS"); v != "" {
+		windows, err := parseContextModelWindows(v)
+		c.contextModelWindowsErr = err
+		c.ContextModelWindows = windows
 	}
 	if v := os.Getenv("PLUGIN_MAX_SIZE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -303,9 +395,13 @@ func FromEnv() *Config {
 // to the 1MB default in FromEnv. A CONTEXT_BUDGET_PERCENT outside 0..100 is
 // likewise a hard error (GAP-080 phase 2a) — FromEnv already ignores an
 // out-of-range env value, so reaching Validate() with one means the Config was
-// built in code. TrustedProxies entries must each parse as a
-// valid CIDR — a malformed entry is a startup error rather than a panic
-// inside chi's ClientIPFromXFF (which panics on invalid prefixes).
+// built in code. A malformed CONTEXT_MODEL_WINDOWS is a hard error too
+// (GAP-080 phase 2a follow-up): the knob exists to make the window-derived
+// budget activate, so a typo that silently resolved to no overrides would
+// reproduce the very inertness it was added to remove. TrustedProxies entries
+// must each parse as a valid CIDR — a malformed entry is a startup error
+// rather than a panic inside chi's ClientIPFromXFF (which panics on invalid
+// prefixes).
 func (c *Config) Validate() error {
 	if c.PluginMaxSize < 0 {
 		return fmt.Errorf("config: PLUGIN_MAX_SIZE must not be negative (got %d)", c.PluginMaxSize)
@@ -316,10 +412,42 @@ func (c *Config) Validate() error {
 	if c.ContextBudgetPercent < 0 || c.ContextBudgetPercent > 100 {
 		return fmt.Errorf("config: CONTEXT_BUDGET_PERCENT must be between 0 and 100 (got %d)", c.ContextBudgetPercent)
 	}
+	// GAP-080 phase 2a follow-up: the parse failure FromEnv() recorded for
+	// CONTEXT_MODEL_WINDOWS, reported here so the server refuses to start.
+	if c.contextModelWindowsErr != nil {
+		return c.contextModelWindowsErr
+	}
+	// The same knob built in code has no env value to re-parse, so the map
+	// itself is checked. Keys are sorted so a Config with several bad
+	// entries always reports the same one.
+	for _, model := range sortedKeys(c.ContextModelWindows) {
+		window := c.ContextModelWindows[model]
+		if strings.TrimSpace(model) == "" {
+			return fmt.Errorf("config: CONTEXT_MODEL_WINDOWS has an empty model name")
+		}
+		if window <= 0 {
+			return fmt.Errorf("config: CONTEXT_MODEL_WINDOWS entry %q has a non-positive window %d", model, window)
+		}
+	}
 	for _, p := range c.TrustedProxies {
 		if _, _, err := net.ParseCIDR(p); err != nil {
 			return fmt.Errorf("config: CANOPY_TRUSTED_PROXIES entry %q is not a valid CIDR: %w", p, err)
 		}
 	}
 	return nil
+}
+
+// sortedKeys returns a map's keys in ascending order. It exists for
+// deterministic validation errors: a map range would otherwise pick an
+// arbitrary offending entry to report.
+func sortedKeys(m map[string]int) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

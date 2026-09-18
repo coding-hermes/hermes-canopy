@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -262,5 +264,144 @@ func TestValidateTrustedProxies(t *testing.T) {
 		if !strings.Contains(err.Error(), bad) {
 			t.Fatalf("Validate() error %q does not name offending entry %q", err, bad)
 		}
+	}
+}
+
+// --- CONTEXT_MODEL_WINDOWS (GAP-080 phase 2a follow-up) ----------------------
+
+// TestFromEnvContextModelWindowsParsesPairs pins the knob's documented format:
+// comma-separated `model=window` pairs, a model name that may contain spaces,
+// whitespace trimmed around the pair, the name and the number, and the LAST
+// `=` of a pair as the separator (a model id may itself contain `=`).
+func TestFromEnvContextModelWindowsParsesPairs(t *testing.T) {
+	t.Setenv("CONTEXT_MODEL_WINDOWS", "Hermes Agent=200000,probe-big=128000")
+	c := FromEnv()
+	want := map[string]int{"Hermes Agent": 200000, "probe-big": 128000}
+	if !reflect.DeepEqual(c.ContextModelWindows, want) {
+		t.Fatalf("ContextModelWindows = %#v, want %#v", c.ContextModelWindows, want)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() with a well-formed knob = %v, want nil", err)
+	}
+
+	// Trimming, a model id containing '=', and a duplicate (last wins).
+	t.Setenv("CONTEXT_MODEL_WINDOWS", "  Hermes Agent = 200000 , weird=model=4096 ,   probe-big=1000  ,probe-big=128000")
+	c = FromEnv()
+	want = map[string]int{
+		"Hermes Agent": 200000,
+		"weird=model":  4096,
+		"probe-big":    128000,
+	}
+	if !reflect.DeepEqual(c.ContextModelWindows, want) {
+		t.Fatalf("ContextModelWindows = %#v, want %#v", c.ContextModelWindows, want)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() with a padded/duplicate list = %v, want nil", err)
+	}
+}
+
+// TestFromEnvContextModelWindowsUnsetMeansNoOverrides pins the empty case: an
+// unset, empty or blank value is "no overrides", NOT an error — the knob is
+// optional and leaving it alone must leave the derivation exactly as it was.
+func TestFromEnvContextModelWindowsUnsetMeansNoOverrides(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		unset bool
+	}{
+		{"unset", "", true},
+		{"empty", "", false},
+		{"blank", "   ", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CONTEXT_MODEL_WINDOWS", tc.value)
+			if tc.unset {
+				if err := os.Unsetenv("CONTEXT_MODEL_WINDOWS"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c := FromEnv()
+			if len(c.ContextModelWindows) != 0 {
+				t.Fatalf("ContextModelWindows = %#v, want no overrides", c.ContextModelWindows)
+			}
+			if err := c.Validate(); err != nil {
+				t.Fatalf("Validate() with no overrides = %v, want nil", err)
+			}
+		})
+	}
+}
+
+// TestValidateContextModelWindowsFailsLoudly is the point of the knob's
+// strictness: a typo must refuse the startup instead of silently resolving to
+// no overrides, which would reproduce the inert derivation the knob exists to
+// fix. Each malformed form is asserted through the real startup path
+// (FromEnv -> Validate).
+func TestValidateContextModelWindowsFailsLoudly(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"a pair with no =", "Hermes Agent"},
+		{"a blank model name", "=200000"},
+		{"a whitespace-only model name", "   =200000"},
+		{"a non-integer window", "probe-big=128k"},
+		{"a zero window", "probe-big=0"},
+		{"a negative window", "probe-big=-5"},
+		{"an empty entry after a comma", "probe-big=128000,,probe-small=1000"},
+		{"a trailing comma", "probe-big=128000,"},
+		{"a non-numeric window after a valid pair", "ok=1000,bad=abc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CONTEXT_MODEL_WINDOWS", tc.raw)
+			c := FromEnv()
+			if len(c.ContextModelWindows) != 0 {
+				t.Fatalf("a rejected knob must not half-populate the overrides: %#v", c.ContextModelWindows)
+			}
+			err := c.Validate()
+			if err == nil {
+				t.Fatalf("Validate() with %q = nil, want an error", tc.raw)
+			}
+			if !strings.Contains(err.Error(), "CONTEXT_MODEL_WINDOWS") {
+				t.Fatalf("Validate() error %q does not name CONTEXT_MODEL_WINDOWS", err)
+			}
+		})
+	}
+}
+
+// TestValidateContextModelWindowsProgrammatic covers the same knob built in
+// code, which has no env value to re-parse: the map itself is checked, so a
+// non-positive window or a blank model name can never reach the catalog.
+func TestValidateContextModelWindowsProgrammatic(t *testing.T) {
+	valid := Default()
+	valid.ContextModelWindows = map[string]int{"Hermes Agent": 200000, "probe-big": 128000}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() with well-formed overrides = %v, want nil", err)
+	}
+
+	none := Default()
+	if none.ContextModelWindows != nil {
+		t.Fatalf("Default().ContextModelWindows = %#v, want nil", none.ContextModelWindows)
+	}
+	if err := none.Validate(); err != nil {
+		t.Fatalf("Validate() with no overrides = %v, want nil", err)
+	}
+
+	zero := Default()
+	zero.ContextModelWindows = map[string]int{"probe-big": 0}
+	if err := zero.Validate(); err == nil || !strings.Contains(err.Error(), "CONTEXT_MODEL_WINDOWS") {
+		t.Fatalf("Validate() with a zero window = %v, want an error naming CONTEXT_MODEL_WINDOWS", err)
+	}
+
+	negative := Default()
+	negative.ContextModelWindows = map[string]int{"probe-big": -1}
+	if err := negative.Validate(); err == nil || !strings.Contains(err.Error(), "CONTEXT_MODEL_WINDOWS") {
+		t.Fatalf("Validate() with a negative window = %v, want an error naming CONTEXT_MODEL_WINDOWS", err)
+	}
+
+	blank := Default()
+	blank.ContextModelWindows = map[string]int{"   ": 200000}
+	if err := blank.Validate(); err == nil || !strings.Contains(err.Error(), "CONTEXT_MODEL_WINDOWS") {
+		t.Fatalf("Validate() with a blank model name = %v, want an error naming CONTEXT_MODEL_WINDOWS", err)
 	}
 }
