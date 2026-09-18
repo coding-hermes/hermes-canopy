@@ -1648,3 +1648,10 @@ Run list inherited at tick start: **6/6 `success`** — nothing to file, no `INT
 - **GAP-076 (P1)** parked: needs a multi-wave plan (SQLite DDL translation → repo layer → boot path → parity suite → DuckDB retirement) written as sub-rows first.
 - **GAP-081** (P3) — scope honesty for ~13.4k LOC of shipped-but-deferred subsystems.
 - QA-HERMES-CANOPY-1/2/9/10 remain bunker/fleet-infra owned; DF-24/25 need a reproducible red before dispatch.
+
+### Tick 501 — closeout (CI folded in)
+- **CI:** content commit **a454f75** run **success** (first attempt) and board closeout commit **a50394c** run **success** — both verified live through `gh run list --repo coding-hermes/hermes-canopy`; the six runs inherited at tick start were all `success`, so no `INT-CI` row was needed.
+- **Row:** GAP-087 carries `ci_result GREEN` (was `PENDING` at closeout of the work half), `guard_result PASS`, `commit_hash a454f75`, `worker_summary`, and a `foreman_note` with the full chain — diff shape, the foreman's own gate re-runs, the three-mutation red-proof with sha256 restore, the docs-vs-code spot checks, the judge verdict id, and the push parity.
+- **Push:** `a50394c` on **origin/master** and **gitlab/master**; rev-list counts 0 on both after the closeout commit.
+- **Off-by-one:** submission `sub_a587ba` read back through the exact-item endpoint at closeout.
+- **DuckBrain:** `/project/hermes-canopy/status/2026-09-18-tick501-gap087` and `/ticks/tick501-gap087-agents-reviews-docs-parity` written to the `hermes-canopy` namespace and verified by UUID on disk.
