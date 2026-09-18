@@ -1159,90 +1159,295 @@ invent a digest for a record that carries none.
 
 ## Plugins
 
-Mounted at `/api/v1/plugins`. All require auth.
+Mounted at `/api/v1/plugins`. All require auth. The mount is
+`handler.NewPluginHandler(pluginSvc, sseHub).Routes()`, plus the
+separately registered network-proxy route and the events stream
+(`internal/server/server.go`, `internal/handler/plugin_handler.go`,
+`internal/handler/network_proxy_handler.go`).
 
-### Register Plugin
+The registry keeps one row per `(name, version)` in `plugin_registry`, with
+exactly one `active` row per name (enforced by the unique partial index
+`idx_plugin_registry_name_active`). The lifecycle routes keep the version chain
+linked (`previousVersionId`, `supersededById`) and append a `plugin_audit_log`
+row (`registered`, `updated`, `rolled_back`, `paused`, `uninstalled`). Plugin
+rows come back as the **bare object** — no `{"plugin": …}` wrapper — and the
+listing routes return `{"plugins": […]}`; an empty result is
+`{"plugins": []}`, never `null`.
+
+A plugin is a JS source whose header carries a manifest:
+
+```javascript
+/*@@canopy.manifest@@ {"name":"CSV Viewer","version":"1.0.0","description":"View CSV attachments","permissions":["data_read"],"render_type":"card","entry_point":"main"} @@end@@*/
+```
+
+The manifest is the JSON between `/*@@canopy.manifest@@` and `@@end@@*/`. It
+must decode with **no unknown fields** and satisfy: `name` non-empty
+(≤ 100 chars), `description` non-empty (≤ 1000), `entry_point` non-empty,
+`version` matching `X.Y.Z` (an optional `-suffix` is allowed), `render_type`
+one of `card` / `embed` / `background`, and `permissions` drawn from
+`data_read`, `data_write`, `notification`, `calendar_read`, `calendar_write`,
+`network_request`. `icon_url` is optional. A source that is missing the
+markers, is 1 MiB (1048576 bytes) or larger, or fails any of those checks is
+`400 INVALID_MANIFEST`.
+
+The plugin **slug** is derived from the manifest name: lowercased, with every
+run of non-alphanumerics collapsed to one `-` (`CSV Viewer` → `csv-viewer`).
+
+`{name}` and `{id}` are not interchangeable:
+
+| Path parameter | Value |
+|---|---|
+| `{name}` in `/versions`, `/activate`, `/disable`, `/archive` | the manifest `name`, verbatim (those routes resolve the plugin by name) |
+| `{name}` in `/update`, `/rollback` | the plugin **slug** (both are resolved through the slug; `update` refuses a source whose manifest name does not slugify to the path parameter) |
+| `{id}` | the plugin row's UUID |
+
+### Register Plugin (or publish a new version)
 
 ```
-POST /api/v1/plugins/register
+POST /api/v1/plugins/
 ```
+
+The collection route of the mount is `/`, so `POST /api/v1/plugins/` is the
+canonical path (the mount itself answers without the trailing slash too).
 
 **Request body:**
 ```json
 {
-  "source": "string (JS source with manifest comment block)"
+  "source_js": "string (full plugin source, manifest header included)"
 }
 ```
 
-**Response (201):** Registered plugin metadata.
+Registration publishes a version: the previously `active` row for the same
+name is archived and chain-linked (`previousVersionId`, `supersededById`), and
+the new row becomes `active` (`isRootVersion` is true for the first version of
+a name). Re-posting a `(name, version)` pair that already exists is a conflict.
+
+**Response (201):** the created plugin row (bare object). `source_js` is never
+echoed — the payload carries `sourceSha256` and `sourceByteSize` instead.
+
+**Error codes:** `INVALID_MANIFEST` (400 — missing/empty `source_js`, an
+invalid manifest, an unknown permission, or a source of 1 MiB or more),
+`VERSION_CONFLICT` (409), `INTERNAL_ERROR` (500)
 
 ### List Plugins
 
 ```
-GET /api/v1/plugins
+GET /api/v1/plugins/
 ```
 
-**Query params:** `limit` (int), `offset` (int)
+**Response (200):** `{"plugins": […]}` — the `active` row of every plugin,
+ordered by name. There are no pagination parameters; the route answers with
+the whole active registry.
 
-**Response (200):** Paginated plugin list.
+**Error codes:** `INTERNAL_ERROR` (500)
 
 ### Get Plugin
 
 ```
-GET /api/v1/plugins/{plugin_id}
+GET /api/v1/plugins/{id}
 ```
 
-**Response (200):** Plugin metadata (no source).
+`{id}` must be a UUID. Any status is returned (`active`, `disabled`,
+`archived`).
+
+**Response (200):** the plugin row (bare object). The source is not part of
+this payload — use § Get Plugin Source.
+
+**Error codes:** `INVALID_PLUGIN_ID` (400 — `{id}` is not a UUID),
+`PLUGIN_NOT_FOUND` (404), `INTERNAL_ERROR` (500)
 
 ### Get Plugin Source
 
 ```
-GET /api/v1/plugins/{plugin_id}/source
+GET /api/v1/plugins/{id}/source
 ```
 
-**Response (200):** Raw source with `X-Source-SHA256` header.
+**Response (200):** the raw source text as `application/javascript` (the body
+is the source, not JSON), with `Cache-Control: no-store`. Only an `active` row
+is served: a disabled or archived version answers 404 here even though § Get
+Plugin still returns its metadata. There is no digest response header — the
+integrity value is the row's `sourceSha256`.
 
-### Install Plugin
+**Error codes:** `INVALID_PLUGIN_ID` (400), `PLUGIN_NOT_FOUND` (404 — unknown
+id, or a row that is not `active`), `INTERNAL_ERROR` (500)
+
+### List Plugin Versions
 
 ```
-POST /api/v1/plugins/{plugin_id}/install
+GET /api/v1/plugins/{name}/versions
+```
+
+`{name}` is the manifest name.
+
+**Response (200):** `{"plugins": […]}` — every version of that plugin, newest
+first. An unknown name is an empty list, not a 404.
+
+**Error codes:** `INTERNAL_ERROR` (500)
+
+### Activate Version
+
+```
+POST /api/v1/plugins/{name}/activate
 ```
 
 **Request body:**
 ```json
+{ "version": "string (semver, required)" }
+```
+
+Activates the named version and archives whichever version was `active`,
+linking the chain. Asking for the version that is already active returns it
+unchanged.
+
+**Response (200):** the now-active plugin row (bare object).
+
+**Error codes:** `INVALID_MANIFEST` (400 — missing `version`),
+`PLUGIN_NOT_FOUND` (404 — no such plugin or version), `INTERNAL_ERROR` (500)
+
+### Update Plugin (publish a new version)
+
+```
+POST /api/v1/plugins/{name}/update
+```
+
+`{name}` is the plugin **slug**.
+
+**Request body:**
+```json
 {
-  "treeId": "uuid (optional)",
-  "grantedPermissions": ["string"]
+  "source_js": "string (required)",
+  "actor_profile_id": "uuid (required; recorded on the audit row)"
 }
 ```
 
-**Response (200):** Installation result.
+**Response (200):** the new `active` plugin row (bare object).
 
-### List Instances
+**Error codes:** `INVALID_MANIFEST` (400 — missing `source_js` or
+`actor_profile_id`, an invalid manifest, or a manifest whose name does not
+slugify to `{name}`), `PLUGIN_VERSION_EXISTS` (409 — that version already
+exists), `PLUGIN_NOT_FOUND` (404), `INTERNAL_ERROR` (500)
 
-```
-GET /api/v1/plugins/instances
-```
-
-**Query params:** `treeId` (UUID, optional)
-
-**Response (200):** List of plugin instances for the caller.
-
-### Pause Instance
+### Rollback Version
 
 ```
-POST /api/v1/plugins/instances/{instance_id}/pause
+POST /api/v1/plugins/{name}/rollback
 ```
 
-**Response (200):** Paused instance.
+`{name}` is the plugin **slug**.
 
-### Resume Instance
+**Request body:**
+```json
+{
+  "target_version": "string (semver, required)",
+  "actor_profile_id": "uuid (required)"
+}
+```
+
+Archives the active row and re-activates `target_version`, linking the chain in
+both directions.
+
+**Response (200):** the re-activated plugin row (bare object).
+
+**Error codes:** `INVALID_REQUEST` (400 — missing `target_version` or
+`actor_profile_id`), `PLUGIN_VERSION_NOT_FOUND` (404 — the plugin has no such
+version, or no active row), `INTERNAL_ERROR` (500)
+
+### Disable Plugin
 
 ```
-POST /api/v1/plugins/instances/{instance_id}/resume
+POST /api/v1/plugins/{name}/disable
 ```
 
-**Response (200):** Resumed instance.
+No request body. Moves the `active` row of that name to `disabled` (audit
+event `paused`).
+
+**Response (200):** the updated plugin row (bare object).
+
+**Error codes:** `PLUGIN_NOT_FOUND` (404 — unknown name, or the plugin has no
+`active` row), `INTERNAL_ERROR` (500)
+
+### Archive Plugin
+
+```
+POST /api/v1/plugins/{name}/archive
+```
+
+No request body. Moves the `active` row of that name to `archived` and stamps
+`archivedAt` (audit event `uninstalled`). Archived rows drop out of § List
+Plugins and stop being served by § Get Plugin Source.
+
+**Response (200):** the updated plugin row (bare object).
+
+**Error codes:** `PLUGIN_NOT_FOUND` (404), `INTERNAL_ERROR` (500)
+
+### Network Proxy
+
+```
+POST /api/v1/plugins/network-proxy
+```
+
+The outbound-HTTP route the sandbox's `network_request` permission gates. It is
+registered directly on the `/api/v1` router alongside the plugin mount (not
+inside it) and carries the same auth as every other plugin route. `Cookie` and
+`Authorization` headers are **stripped** (case-insensitively) and never
+forwarded upstream; every other header is passed through. The upstream call is
+made with the handler's own HTTP client.
+
+**Request body:**
+```json
+{
+  "url": "https://example.com/thing",
+  "method": "GET",
+  "headers": { "X-Custom": "kept" },
+  "body": "string"
+}
+```
+
+`url` must be an absolute **HTTPS** URL. `method` defaults to `GET`. `body` is
+optional: a JSON string is sent as that text, any other JSON value is sent as
+its JSON text.
+
+**Response (200):** the upstream result, with the upstream payload always as a
+string (it is never parsed or re-serialized):
+
+```json
+{
+  "status": 201,
+  "statusText": "Created",
+  "headers": { "X-Upstream": "yes" },
+  "body": "ok",
+  "durationMs": 12
+}
+```
+
+The upstream call has a 30 s budget, and an upstream response larger than
+10 MiB is refused rather than truncated.
+
+**Error codes:** `INVALID_REQUEST` (400 — the request body is not valid JSON),
+`INVALID_URL` (400 — `url` is not an absolute HTTPS URL),
+`PAYLOAD_TOO_LARGE` (413 — upstream response over 10 MiB), `NETWORK_ERROR`
+(502 — transport failure or read error)
+
+### Plugin Lifecycle Events
+
+```
+GET /api/v1/plugins/{tree_id}/events
+```
+
+The SSE stream registered next to the plugin mount. It reuses the tree-events
+handler, which is why the path parameter is spelled `tree_id`; at this mount it
+is the plugin's UUID. `update` and `rollback` broadcast on that plugin's
+channel:
+
+| Event | Payload |
+|---|---|
+| `plugin_updated` | `{"plugin_id": …, "slug": …, "version": …, "source_sha256": …}` |
+| `plugin_rolled_back` | `{"plugin_id": …, "slug": …, "version": …, "source_sha256": …}` |
+
+**Error codes:** `INVALID_TREE_ID` (400 — the parameter is not a UUID),
+`TOO_MANY_CONNECTIONS_TREE` (429), `TOO_MANY_CONNECTIONS` (503). Wire format,
+query parameters (`since`, `profiles`, `include_heartbeat`) and connection
+limits are the ones documented in § SSE Events.
 
 ---
 
@@ -2005,8 +2210,16 @@ actual code:
    `initialize`, so it was advertised in `entry_point` and absent from both the
    README and any usable handshake.
 
-7. **Plugin endpoints:** `POST /api/v1/plugins/register`, instance lifecycle,
-   and source retrieval are registered but not fully documented in the README.
+7. **Plugin endpoints:** earlier revisions of this document described a
+   `register`/`install` route pair and an instance pause/resume lifecycle.
+   Those claims are STALE: that route set belonged to the first plugin
+   handler and was replaced when the PL-01 registry/lifecycle surface landed.
+   No such route is mounted today, and nothing was implemented here to match
+   the old text. The mounted surface is the registry and lifecycle set in
+   § Plugins (registration is `POST` on the plugins collection route; the
+   lifecycle routes are keyed by plugin name or slug; source and detail are
+   keyed by the plugin UUID), plus the separately registered
+   `POST /api/v1/plugins/network-proxy` and the plugin events stream.
 
 8. **Profile endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/profiles`
    — not documented in the README.
