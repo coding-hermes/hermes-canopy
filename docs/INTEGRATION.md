@@ -954,9 +954,9 @@ PGPASSWORD=canopy psql -h localhost -p 5437 -U canopy -d canopy -c \
    VALUES ('00000000-0000-0000-0000-000000000001','dev','dev@canopy.dev','Dev User',true)
    ON CONFLICT (id) DO NOTHING;"
 
-# Start canopyd against the canonical DB:
+# Start canopyd against the canonical DB — :8091, the port the probe below targets:
 DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy \
-DB_NAME=canopy ./bin/canopyd   # or: DB_PORT=5437 make run
+HTTP_ADDR=:8091 DB_NAME=canopy ./bin/canopyd   # or: DB_PORT=5437 make run
 ```
 
 **Green probe:** `curl -s -X POST http://localhost:8091/api/v1/trees \
