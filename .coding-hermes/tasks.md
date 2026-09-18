@@ -1655,3 +1655,62 @@ Run list inherited at tick start: **6/6 `success`** — nothing to file, no `INT
 - **Push:** `a50394c` on **origin/master** and **gitlab/master**; rev-list counts 0 on both after the closeout commit.
 - **Off-by-one:** submission `sub_a587ba` read back through the exact-item endpoint at closeout.
 - **DuckBrain:** `/project/hermes-canopy/status/2026-09-18-tick501-gap087` and `/ticks/tick501-gap087-agents-reviews-docs-parity` written to the `hermes-canopy` namespace and verified by UUID on disk.
+
+## Tick 502 — 2026-09-18 ~18:25Z → ~19:00Z (WORK — DF-HERMES-CANOPY-28 LANDED: per-user merge rate limit, worker gpt-5.6-luna @ openai-codex, commit 68afb35)
+
+### Verdict
+Board at tick start: **356 JSONL lines / 320 unique ids** (last-wins: **320 complete / 17 pending / 11 duplicate**). Pending set re-read directly from `tasks.jsonl` (not the 10-row harness subset): P1 = GAP-076 (SQLite storage pivot — parked, needs its own multi-wave plan) + QA-HERMES-CANOPY-1 (bunker/fleet-infra owned). Pick: **DF-HERMES-CANOPY-28 (P3, complexity 2)** — the last open *code* row of the GAP-078 merge family and the only pending row whose fix closes a **published spec control** (SPEC-API-04 §13 "Rate limit — merge | 10 req/min/user"), where the alternative was amending the spec to admit the control does not exist. Premise re-verified at HEAD before dispatch: `internal/server/server.go:262-264` carried the global per-IP limiter only, the merge route was registered as `r.With(membershipMW).Post(...)` with no budget of its own, and `docs/API.md` stated the §13 limit was *not* implemented (GAP-089, the docs-count drift, stays for the next tick — docs-only, complexity 1).
+
+### Dispatch
+Worker **gpt-5.6-luna @ openai-codex** (sub before PAYG — same lane that stayed reliable on this repo for GAP-087), brief `/tmp/brief-df28.md`, background `hermes chat -q "$(cat …)" -s coding-hermes-worker --ignore-rules -Q`, log `/tmp/worker-df28.log` (0 bytes until exit — `-Q` buffers; liveness proven by the tree within ~2 min: `merge_ratelimit.go` + `handler_util.go` + `server.go` dirty at 02:35 elapsed). First attempt, no rework. Commit **68afb35**.
+
+### Diff
+`git show --numstat 68afb35` = 7 files, **+677/−7**: `merge_ratelimit.go` (new, +180), `merge_ratelimit_test.go` (new, +274), `merge_ratelimit_integration_test.go` (new, +168), `merge_integration_test.go` +20/−1, `handler_util.go` +10/−2, `server.go` +15/−1, `docs/API.md` +16/−3. Co-author trailer present once.
+
+### What landed
+- `UserRateLimiter` / `NewUserRateLimiter(perMinute)`: **rolling** 60s window of accepted-request timestamps per user id, `Allow(userID) (ok, retryAfterSeconds)` with `retryAfterSeconds = ceil(wait for the earliest acceptance to age out)`, floor 1; mutex-guarded; clock seam via unexported `now`; prune on access + one amortized whole-map sweep per window (an idle user's entry can outlive its window by at most one sweep).
+- `MergeRateLimit(l)`: `uuid.Nil` passes through (auth/membership keep owning 401/403); denied ⇒ `Retry-After: <n>` + 429 `{"error":{"code":"RATE_LIMITED","message":…,"retry_after_seconds":n}}` (SPEC-API-07 identity; `apiError` gained `retry_after_seconds,omitempty` so every other envelope is byte-identical).
+- Wired in `internal/server/server.go` at `handler.MergeRateLimitPerMinute` (10).
+
+### Foreman gates (fresh, this tick)
+| gate | result |
+|---|---|
+| `go build ./...` | rc=0 |
+| `go vet ./...` | rc=0 |
+| `golangci-lint run ./...` | `0 issues.` (v2.12.2 — the CI binary) |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 -run 'TestUserRateLimiter\|TestMergeRateLimitMiddleware\|TestMergeIntegration_PerUserRateLimit' ./internal/handler/...` | `ok 5.6s`; `-v` rerun: `TestMergeIntegration_PerUserRateLimit PASS` (logged `observed 429: Retry-After="60"`) + `…LeavesAuthAndMembershipOwn PASS` |
+| `go test -count=1 -run TestRouteParity -v ./internal/server/...` | **4/4 PASS** (Node, Plugin, Agent, Review) |
+
+### Live proof (isolated stack — HTTP surface changed, so codes alone are not enough)
+Throwaway stack per `references/live-proof-isolated-stack.md`: probe DB **`canopy_probe_502`** (created + **dropped**), HEAD binary `/tmp/canopyd-probe-502`, loopback **:8099**, scratch `HOME`/`CANOPY_FILE_ROOT` under `/tmp/canopy-probe-502`, dev JWT (`dev-secret-change-me`). Observed:
+
+| step | result |
+|---|---|
+| 10 merge POSTs as user 1 (`target_parent_id` = third node, sources N1+N2) | **201 ×10**; synthesis rows 1 → **11** |
+| 11th merge, same user, same window | **429**, `Retry-After: 60`, body `{"error":{"code":"RATE_LIMITED","message":"too many requests — try again later","retry_after_seconds":60}}`; synthesis count **unchanged at 11** (the denied request wrote nothing) |
+| second user, same window | **201** (synthesis 11 → 12) — the budget is keyed per user, not per process |
+| `GET /trees/{id}/nodes` as the limited user | **200** |
+| `POST /trees/{id}/nodes/{node}/reply` as the limited user | **201** — route-scoped, other surfaces unaffected |
+| merge POST with no token | **401** (limiter does not shadow auth) |
+| live `:8091` after cleanup | `health=200`; probe DB dropped |
+
+### Judge
+`gitreins task complete DF-HERMES-CANOPY-28` → Tier 1 **PASS** (secrets clean, go_build ok, go_lint ok, go_tests full), Tier 2 **still evaluating at closeout** (~13 min in, the judge re-runs the handler package + lint), so the row records **PENDING** — never an assumed pass; the landed verdict is folded into the row and into a closeout section below as soon as it lands (verdict path `.gitreins/history/2026-09-18/<handle>/verdict.json`, located by task id and evaluated commit `68afb35`).
+
+### CI
+Run list at tick start: **4/4 `success`** (inherited from tick 501's window) — nothing to file, no `INT-CI` row needed. Content commit `68afb35` pushed → run **35382589241 GREEN on the first attempt**.
+
+### Push health
+`2996f1c..68afb35` → **origin** (GitHub); `git rev-list --count origin/master..HEAD` = **0** after the push and again after the closeout commit.
+
+### Bookkeeping
+`tasks.jsonl`: the DF-HERMES-CANOPY-28 row closed surgically — **one line changed** (index 352), `status complete`, `commit_hash 68afb35`, `guard_result`, `ci_result GREEN (35382589241)`, `worker_summary`, `foreman_note` (worker + two accepted deviations + what was left open), `review_notes` (judge). `events.jsonl`: appended `task_completed` + `judge_verdict` + `ci` with ids continuing from the file max. `board.jsonl` header bumped (`ticks_total 501 → 502`, `last_commit 68afb35`). `.gitreins/tasks.yaml` (tracked but carrying the GAP-087 + DF-28 judge records) and untracked `namespaces/` were left alone.
+
+### Off-by-one
+`POST /api/v1/problems/discover {"problem_class":"go per-user rate limiter middleware"}` → **`not_found`** (run this tick, not copied). Post-debug submission **`sub_3f8426`**, class **`go-chi-route-parity-inline-middleware-count`**, status `queued`, position 1, `existing_solutions: 0` — adding one inline middleware element to a single route breaks a route-parity guard that compares per-route inline middleware **counts**; the behaviourally identical route-level wrapper (`mw(handler).ServeHTTP`) keeps the guard green because the inline count is unchanged.
+
+### Next tick
+- **GAP-089** (P3, complexity 1) — docs migration counts drift again ("32 pairs" / "40 files" vs 47 up + 47 down); direction is *derive or drop*, not correct-by-hand, so it cannot drift a third time.
+- **GAP-076 (P1)** parked — SQLite storage pivot: needs the multi-wave plan (DDL translation → repo layer → boot path → parity suite → DuckDB retirement) written as sub-rows before any dispatch.
+- **SPEC-API-04 §13's sibling row** (path/subtree/compare, 100 req/min/user) is still unimplemented and is now the *only* remaining §13 control; `docs/API.md` deliberately claims only the merge limit — a candidate row for the PM/gap-push lane.
+- **GAP-080 phases** (summarization/pinning, retrieved tier, budget slider, audit-before-send) and **GAP-081** (scope honesty) remain; QA-HERMES-CANOPY-1/2/9/10 stay bunker/fleet-infra owned; DF-24/25 need a reproducible red first.
