@@ -85,10 +85,13 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 # or a compose image built from older HEAD). Fix: `make build` (or rebuild the
 # docker image) and run again. `/health` reports both versions for comparison:
 #   curl http://localhost:8091/health
-#   -> {"status":"ok","service":"canopyd","schema_version":47,"embedded_migrations":47,"relay":{"mode":"air_gapped","status":"disabled","sessions":0}}
-#      (the two schema numbers are what the guard compares and they must match;
-#      `relay` reflects the relay configuration this host runs — 47 is the
-#      current embedded migration count.)
+#   -> {"status":"ok","service":"canopyd","schema_version":N,"embedded_migrations":N,"relay":{"mode":"air_gapped","status":"disabled","sessions":0}}
+#      (the two schema numbers are what the guard compares and they must match:
+#      they are what THIS binary reports at runtime, so read them from the
+#      binary you are running, never from a count quoted here. The embedded
+#      set itself is `migrations/` — numbered .up.sql/.down.sql pairs compiled
+#      in by `migrations/embed.go` — which is authoritative and grows as new
+#      migrations land. `relay` reflects the relay configuration this host runs.)
 
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
