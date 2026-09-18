@@ -2848,3 +2848,12 @@ tasks:
   status: complete
   created_at: '2026-09-18T19:28:04.972187+00:00'
   completed_at: '2026-09-18T19:40:23.300956+00:00'
+- id: GAP-091
+  title: Remove hard-coded migration count from README
+  criteria:
+  - README.md no longer presents schema_version:47 or embedded_migrations:47 as fixed;
+    documentation points readers to the live binary/filesystem source of truth; diff
+    is scoped to README.md; git diff --check passes
+  status: complete
+  created_at: '2026-09-18T20:39:12.951463+00:00'
+  completed_at: '2026-09-18T20:49:52.522068+00:00'
