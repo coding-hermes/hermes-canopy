@@ -12,13 +12,16 @@ import (
 
 // CardServiceImpl implements service.CardService backed by the card package.
 type CardServiceImpl struct {
-	dbMgr *CardDBManager
+	dbMgr    *CardDBManager
+	executor CardActionExecutor
 }
 
 // NewCardServiceImpl creates a CardServiceImpl that uses the given CardDBManager
-// to obtain per-type repositories.
+// to obtain per-type repositories. The action execution boundary defaults to
+// the side-effect-free echo executor (see CardActionExecutor); install a real
+// adapter with WithActionExecutor.
 func NewCardServiceImpl(dbMgr *CardDBManager) *CardServiceImpl {
-	return &CardServiceImpl{dbMgr: dbMgr}
+	return &CardServiceImpl{dbMgr: dbMgr, executor: echoActionExecutor{}}
 }
 
 // CreateCard creates a new card with an initial card_created event.

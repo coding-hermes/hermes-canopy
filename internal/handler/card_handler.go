@@ -5,7 +5,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -26,11 +30,12 @@ func NewCardHandler(svc service.CardService) *CardHandler {
 
 // Routes mounts the card endpoints under /cards.
 //
-//	GET    /             — list cards
-//	POST   /             — create card
-//	GET    /{card_id}    — get card by ID
-//	PATCH  /{card_id}    — update card data
-//	DELETE /{card_id}    — dismiss/archive card
+//	GET    /                      — list cards
+//	POST   /                      — create card
+//	GET    /{card_id}             — get card by ID
+//	PATCH  /{card_id}             — update card data
+//	DELETE /{card_id}             — dismiss/archive card
+//	POST   /{card_id}/actions     — submit a declared card action
 func (h *CardHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.ListCards)
@@ -38,6 +43,7 @@ func (h *CardHandler) Routes() chi.Router {
 	r.Get("/{card_id}", h.GetCard)
 	r.Patch("/{card_id}", h.UpdateCard)
 	r.Delete("/{card_id}", h.ArchiveCard)
+	r.Post("/{card_id}/actions", h.SubmitCardAction)
 	return r
 }
 
@@ -55,6 +61,15 @@ type cardCreateRequest struct {
 // cardUpdateRequest is the JSON body for updating a card.
 type cardUpdateRequest struct {
 	Data any `json:"data"`
+}
+
+// cardActionRequest is the JSON body for POST /{card_id}/actions.
+//
+// Handler must name one of the card's declared actions; payload is the action's
+// JSON input and is recorded verbatim in the card's action events.
+type cardActionRequest struct {
+	Handler string          `json:"handler"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 // cardsListResponse wraps a list of card summaries.
@@ -195,6 +210,72 @@ func (h *CardHandler) ArchiveCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// SubmitCardAction records a declared action on a card and returns the
+// resulting action outcome.
+//
+// Execution is the event-backed boundary described in SPEC-PL-03 §4.3: the
+// service appends action_requested and then exactly one terminal event,
+// action_completed or agent_error. Canopy never runs arbitrary server-side code
+// for a card action — a handler that has no registered adapter completes with
+// the payload it was sent.
+//
+//	200 — action_completed recorded            (service.CardActionOutcome)
+//	400 — INVALID_JSON / MISSING_HANDLER / INVALID_PAYLOAD
+//	404 — CARD_NOT_FOUND (the card does not exist)
+//	422 — CARD_ACTION_NOT_DECLARED (the card exists; the handler is not one of
+//	      its declared actions). Distinct from 404 on purpose: a client must be
+//	      able to tell "card missing" from "action not offered" by status alone.
+//	500 — CARD_ACTION_FAILED (agent_error recorded) / CARD_ACTION_ERROR
+func (h *CardHandler) SubmitCardAction(w http.ResponseWriter, r *http.Request) {
+	cardID, ok := parseCardID(w, r)
+	if !ok {
+		return
+	}
+
+	var req cardActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
+		return
+	}
+
+	handlerName := strings.TrimSpace(req.Handler)
+	if handlerName == "" {
+		writeError(w, http.StatusBadRequest, "MISSING_HANDLER", "handler is required")
+		return
+	}
+
+	outcome, err := h.svc.SubmitCardAction(r.Context(), cardID, handlerName, req.Payload)
+	if err == nil {
+		writeJSON(w, http.StatusOK, outcome)
+		return
+	}
+
+	switch {
+	case errors.Is(err, service.ErrCardActionHandlerRequired):
+		writeError(w, http.StatusBadRequest, "MISSING_HANDLER", "handler is required")
+	case errors.Is(err, service.ErrCardActionPayloadInvalid):
+		writeError(w, http.StatusBadRequest, "INVALID_PAYLOAD", "payload must be a JSON object")
+	case errors.Is(err, service.ErrCardNotFound):
+		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", "card not found")
+	case errors.Is(err, service.ErrCardActionNotDeclared):
+		writeError(w, http.StatusUnprocessableEntity, "CARD_ACTION_NOT_DECLARED",
+			fmt.Sprintf("handler %q is not a declared action on card %s", handlerName, cardID))
+	case errors.Is(err, service.ErrCardActionFailed):
+		// The request was accepted and its failure is durable: the
+		// action_requested and agent_error events are recorded on the card.
+		log.Ctx(r.Context()).Error().Err(err).
+			Str("card_id", cardID.String()).Str("handler", handlerName).
+			Msg("card action execution failed")
+		writeError(w, http.StatusInternalServerError, "CARD_ACTION_FAILED",
+			fmt.Sprintf("action %q failed; an agent_error event was recorded for card %s", handlerName, cardID))
+	default:
+		log.Ctx(r.Context()).Error().Err(err).
+			Str("card_id", cardID.String()).Str("handler", handlerName).
+			Msg("card action failed")
+		writeError(w, http.StatusInternalServerError, "CARD_ACTION_ERROR", "internal server error")
+	}
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────

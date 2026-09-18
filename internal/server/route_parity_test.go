@@ -560,6 +560,44 @@ func TestRouteParityDocumentedAgentRoutes(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// § Cards documentation parity
+// ---------------------------------------------------------------------------
+
+// TestRouteParityDocumentedCardRoutes pins § Cards to the mounted card surface
+// in BOTH directions, with the same helpers and controls as the § Plugins /
+// § Agents / § Reviews guards (GAP-086/GAP-087): every card route the section
+// documents must be mounted on the real router, every mounted /api/v1/cards
+// route must be documented, and the walked table must be non-trivial.
+//
+// The action route (POST /api/v1/cards/{card_id}/actions) is what this guard
+// was added for: a card action path that is mounted but undocumented — or
+// documented but unmounted — is exactly the drift class the siblings catch.
+// Deterministic and DB-free; if it fails, fix the docs or the mount, never the
+// check.
+func TestRouteParityDocumentedCardRoutes(t *testing.T) {
+	assertDocumentedSectionParity(t, "Cards", "/api/v1/cards")
+
+	// Extractor control: a mid-prose mention is NOT a documented route, and the
+	// {param} canonicalization must collapse to the form the walker produces.
+	control := "### Submit Card Action\n\n```\nPOST /api/v1/cards/{card_id}/actions\n```\n\n" +
+		"Prose that mentions GET /api/v1/cards/{card_id} mid-sentence.\n"
+	controlGot, err := documentedSectionRoutes(control, "/api/v1/cards")
+	if err != nil {
+		t.Fatalf("extractor control: %v", err)
+	}
+	if want := []string{"POST /api/v1/cards/{}/actions"}; !equalStringSlices(controlGot, want) {
+		t.Fatalf("extractor control = %v, want %v", controlGot, want)
+	}
+
+	// Foreign-route control: a route line under § Cards that is not a card path
+	// is itself drift, so the section cannot smuggle another surface's route
+	// past this guard unnoticed.
+	if _, err := documentedSectionRoutes("```\nGET /api/v1/agents/\n```\n", "/api/v1/cards"); err == nil {
+		t.Fatal("extractor accepted a foreign route line — § Cards could document a non-card route silently")
+	}
+}
+
 // TestRouteParityDocumentedReviewRoutes pins § Reviews to the mounted review
 // surface in both directions (GAP-087), with the same non-empty, non-trivial
 // and extractor controls as § Agents. The section documents three routes (list,

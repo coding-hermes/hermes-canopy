@@ -892,6 +892,55 @@ DELETE /api/v1/cards/{card_id}
 
 **Response (200):** Archived card detail.
 
+### Submit Card Action
+
+```
+POST /api/v1/cards/{card_id}/actions
+```
+
+Submits one of the card's declared actions. `handler` must match a
+`actions[].handler` value on the card, otherwise the request is rejected with
+`422 CARD_ACTION_NOT_DECLARED` and **nothing** is written. A declared action is
+recorded as an `action_requested` event, then executed and recorded as exactly
+one terminal event: `action_completed` on success, `agent_error` on execution
+failure.
+
+Execution is an event-backed boundary (SPEC-PL-03 §4.3): the durable event pair
+*is* the record, and Canopy never runs arbitrary server-side code for a card
+action. A handler with no registered app adapter completes deterministically
+with the payload it was sent.
+
+**Request body:**
+```json
+{
+  "handler": "string (required) — one of the card's declared actions[].handler",
+  "payload": "object (optional) — action input, defaults to {}"
+}
+```
+
+**Response (200):**
+```json
+{
+  "card_id": "uuid",
+  "handler": "string",
+  "status": "completed",
+  "requested_seq": 2,
+  "result_seq": 3,
+  "result_event_id": "uuid",
+  "result_event_type": "action_completed",
+  "payload": {}
+}
+```
+
+`status` is `completed` or `error`; on `error` the response also carries
+`error` (the failure reason) and `result_event_type` is `agent_error`.
+
+**Errors:** `400 INVALID_JSON` (body is not valid JSON, or has unknown fields),
+`400 MISSING_HANDLER` (no handler), `400 INVALID_PAYLOAD` (payload is not a JSON
+object), `400 INVALID_CARD_ID`, `404 CARD_NOT_FOUND`, `422
+CARD_ACTION_NOT_DECLARED`, `500 CARD_ACTION_FAILED` (execution failed and the
+`agent_error` event was recorded), `500 CARD_ACTION_ERROR`.
+
 ---
 
 ## Approvals
