@@ -1166,7 +1166,8 @@ re-verified the same way.
 - `board.jsonl`: `ticks_total` 492 → **493**, `last_tick`/`updated_at` → 2026-09-18T03:08Z,
   `last_commit` → `44f8ae9` (the CONTENT commit); `namespace`/`git_branch` untouched.
 - `.gitreins/tasks.yaml`: the task row for this tick (complete, verdict `78f9c664`).
-- Post-close parsed state (last-wins per id): **18 pending** / 292 complete / 311 unique ids / 347 rows.
+- Post-close parsed state (last-wins per id): **18 pending** / **293 complete** / 311 unique ids / 347 rows
+  (tick start: 292 complete / 19 pending; this tick closed exactly one row).
   The raw `grep -c '"status":"pending"'` count reads **29** (it matches compact rows only and counts
   superseded duplicates) — it is not the honest number and is not used here.
 - `.coding-hermes/tasks.md`: this entry appended at the bottom (newest last), the only board file whose
