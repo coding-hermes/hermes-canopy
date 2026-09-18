@@ -2869,3 +2869,16 @@ tasks:
   status: complete
   created_at: '2026-09-18T21:48:53.497831+00:00'
   completed_at: '2026-09-18T22:03:39.506560+00:00'
+- id: PL-03-SSE
+  title: "Card SSE event stream (SPEC-PL-03 \xA79)"
+  criteria:
+  - GET /api/v1/cards/{card_id}/events streams card_event frames replayed in sequence
+    order from the SQLite events table with a cursor from max(after_sequence, Last-Event-ID),
+    emits card_snapshot on connect and heartbeat on idle, returns 400 CARD_SSE_CURSOR_INVALID
+    before headers on a bad cursor and 413 CARD_SSE_BACKLOG_LIMIT above 10000, delivers
+    live events appended after connect, documents the route in docs/API.md Cards section
+    so route-parity passes, and go build/vet plus card+handler+server suites (card
+    also under -race) are green
+  status: complete
+  created_at: '2026-09-18T22:18:03.187421+00:00'
+  completed_at: '2026-09-18T22:44:43.285469+00:00'

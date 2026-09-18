@@ -1722,3 +1722,83 @@ Run list at tick start: **4/4 `success`** (inherited from tick 501's window) —
 - **Push:** `68afb35` and `2fed8d3` on **origin/master**; `git rev-list --count origin/master..HEAD` = **0**.
 - **Off-by-one:** submission `sub_3f8426` (class `go-chi-route-parity-inline-middleware-count`), read back from the submit response this tick.
 - **DuckBrain:** `/ticks/tick502-df28-per-user-merge-rate-limit` (ID `15fc4bfe-fda7-4c6d-9cfc-c412eb9e6e23`) and `/project/hermes-canopy/status/2026-09-18-tick502` (ID `a9584d51-9142-45d0-b414-bac995e87206`) written to the `hermes-canopy` namespace and each verified by exact UUID in `namespaces/hermes-canopy/{event,config}/2026-09/current.jsonl`.
+
+## Tick 506 — 2026-09-18 ~22:16-22:50Z (WORK: PL-03 card SSE)
+
+**Verdict:** OK (work tick). Pick = **PL-03** (P3), the only pending row whose open clause was narrowed to a
+bounded, spec-backed deliverable by the previous tick. Pending set at pick time: 23 pending / 11 duplicate of
+359 rows (321 unique ids); GAP-076/GAP-077 parked on the owner ruling, FTR-06 + PL-04..PL-06 post-MVP
+decisions, GAP-080/GAP-081 umbrellas without rulings, QA-HERMES-CANOPY-* fleet-infra this project does not own.
+
+**Dispatch/Worker:** gpt-5.6-luna @ openai-codex (subscription lane), brief `/tmp/pl03-sse-brief.md`, one worker,
+1 attempt, 0 rework. Delivered commit **628dce6** (+2086/-4, 11 files). Worker self-report was treated as a
+claim: every acceptance criterion was re-verified foreman-fresh at HEAD (below).
+
+**Scope delivered:** SPEC-PL-03 §9 SSE Event Flow on this repo's single-id card surface —
+`GET /api/v1/cards/{card_id}/events`. Cursor = the LARGER of `after_sequence` and `Last-Event-ID`, replayed in
+sequence order from the existing SQLite `events` table (`ListEvents`/`MaxSequence`; no second event store).
+`card_snapshot` first on connect (deliberately no `id:` line, so a client that drops mid-replay cannot skip
+events it never received), one `card_event` frame per stored row, `heartbeat` on an idle stream (30s,
+injectable), `400 CARD_SSE_CURSOR_INVALID` and `413 CARD_SSE_BACKLOG_LIMIT` written as JSON **before** any SSE
+header, live fan-out through a new card-scoped `CardEventHub` that drops rather than blocks (a nil hub is inert,
+so every pre-existing constructor behaves exactly as before). Route documented in `docs/API.md § Cards` and
+pinned both ways by `TestRouteParityDocumentedCardRoutes`.
+
+**Gates (foreman-fresh, HEAD 628dce6):** `go build ./cmd/canopyd` rc=0 · `go vet ./...` rc=0 ·
+`golangci-lint run ./...` **0 issues** (local binary = CI version) · `gitleaks` no leaks · `gitreins guard`
+**Tier 1 PASS (full mode)** · card SSE tests PASS · handler SSE tests PASS (8 tests) · `RouteParity` PASS
+(5 tests) · `go test -race ./internal/card/...` PASS. Worker's own shared-DB sweep: PASS=725 SKIP=5 FAIL=0
+(`CANOPY_TEST_DB_URL` never set; the bare run's 196 PG skips were reported, not hidden).
+
+**Live proof (isolated stack, `references/live-proof-isolated-stack.md`):** probe DB `canopy_probe` + HEAD binary
+on :8099. Replay from cursor 0 → `card_snapshot` first, then `card_event` `id: 1,2,3` in order; cursor 2 → only
+`id: 3`; `after_sequence=2` + `Last-Event-ID: 1` → `id: 3` and `after_sequence=0` + `Last-Event-ID: 2` → `id: 3`
+(larger-of proven in both directions); **a PATCH issued while the stream was open was delivered live as `id: 4`**
+with the new payload; `after_sequence` abc/-1/1.5/overflow and `Last-Event-ID: nope` → 400
+`CARD_SSE_CURSOR_INVALID` (`application/json`); unknown card → 404 `CARD_NOT_FOUND`; bad uuid → 400
+`INVALID_CARD_ID`; no token → 401 (route is inside the auth group); response headers `text/event-stream` +
+`no-cache` + `keep-alive` + `X-Accel-Buffering: no`.
+
+**Containment:** the card subsystem stores its per-type SQLite DBs under `~/.hermes/canopy/cards/`, which the
+recipe does NOT override — so the probe ran with `CANOPY_CARD_DATA_DIR=/tmp/canopy-probe-cards`. Verified after:
+the live store still holds its 5 cards (`integrity_check ok`), the probe card id is absent, and the `.db` mtimes
+are unchanged. A read-only sqlite open created 0-byte `compact.db-wal/-shm` artifacts there — flagged, no rows
+written. Probe listener killed by pid (never `pkill -f`, which self-matched this shell once), `canopy_probe`
+dropped, probe card dir removed; deployed :8091 binary untouched (200) throughout.
+
+**CI:** content commit **628dce6** run **35402886636** `success` on the first attempt; the four runs inherited at
+tick start were all `success`, so no `INT-CI` row was needed. The board-closeout commit's run is recorded in the
+row's `ci_result` once complete.
+
+**GitReins:** task `PL-03-SSE` created + started before dispatch; `task complete` → **Tier 1 PASS + Tier 2
+PASS/COMPLETE**, verdict `aa991cbf` (`.gitreins/history/2026-09-18/aa991cbf/verdict.json`). The judge re-read the
+hub, handler, wiring and docs and re-ran build/vet plus card(-race)/handler/server suites itself. Statuses:
+`grep -c '^  status:' .gitreins/tasks.yaml` = 196, all `complete`.
+
+**Off-by-one:** health `ok`. discover `canopy-card-sse` and `canopy-card-sse-backlog-limit` → `not_found`
+(no cached answer to reuse). Submissions (post-debug): `sub_be10aa`
+(`canopy-isolated-stack-must-isolate-card-data-dir`) and `sub_1c1674`
+(`canopy-seed-demo-data-before-migration-silently-noops`).
+
+**Push health:** `origin/master` and `gitlab/master` both at **628dce6**; `git rev-list --count origin/master..HEAD`
+= **0**, `gitlab/master..HEAD` = **0**.
+
+**Bookkeeping:** `tasks.jsonl` line 89 (last-wins PL-03 row) rewritten in place — `commit_hash 628dce6`,
+`guard_result PASS`, `ci_result GREEN (35402886636)`, `lines_added/removed 2086/4`, `worker_status` (actions
+landed 505 + SSE landed 506, row open for the client-side clauses), `worker_summary`, and `foreman_note` with the
+tick 505 note preserved beneath the tick 506 note. `events.jsonl` appended ids **609** (`judge_verdict`) and
+**610** (`audit`). `board.jsonl` header: `ticks_total` 503 → **506** (504/505 never bumped it, so this tick
+corrects the count rather than adding one), `last_tick`/`updated_at` = 2026-09-18 22:50, `last_commit` = 628dce6.
+Row kept **pending** on purpose: the spec's client half (§5 Zod types/card store, §6 renderer dispatch,
+§9 EventSource subscription) and §9.3's per-connection limit are named as the residual so the next tick inherits
+a bounded pick instead of a vague umbrella.
+
+**DuckBrain:** namespace `hermes-canopy` — tick key `/ticks/tick506-pl03-card-sse` (`event`) + status key
+`/project/hermes-canopy/status/2026-09-18-tick506` (`config`), written via the local CLI and verified by exact
+UUID in `namespaces/hermes-canopy/{event,config}/2026-09/current.jsonl`. Pre-write read: tick keys contiguous
+through `/ticks/tick502-df28-per-user-merge-rate-limit` (503-505 wrote none).
+
+**Next tick:** PL-03 remains the bounded pick — frontend card SSE consumption (SPEC-PL-03 §5/§6/§9 client:
+Zod types + card store + `subscribeSse` on the card events route + renderer dispatch). Watch: DF-HERMES-CANOPY-24
+(CI-only gateway teardown flake), DF-HERMES-CANOPY-25 (handler package exceeding 10m under concurrent PG load —
+seen again this tick at 465s), QA-HERMES-CANOPY-9/10 (fleet QA-harness path assumptions, not project-owned).
