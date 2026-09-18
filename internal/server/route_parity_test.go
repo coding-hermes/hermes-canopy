@@ -175,11 +175,12 @@ func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
 // GAP-086: § Plugins documentation parity
 // ---------------------------------------------------------------------------
 
-// pluginSectionRouteLine matches a standalone route line inside a § Plugins
-// fenced block ("POST /api/v1/plugins/{name}/activate"). The method+path must
-// be the WHOLE line, so a mid-prose mention — backticked or not — is never
-// mistaken for a documented route.
-var pluginSectionRouteLine = regexp.MustCompile(`^(GET|POST|PATCH|PUT|DELETE)[ 	]+(/\S+)$`)
+// sectionRouteLine matches a standalone route line inside a documented section's
+// fenced block ("POST /api/v1/plugins/{name}/activate"). The method+path must be
+// the WHOLE line, so a mid-prose mention — backticked or not — is never
+// mistaken for a documented route. § Plugins introduced the matcher (GAP-086);
+// § Agents and § Reviews reuse it (GAP-087).
+var sectionRouteLine = regexp.MustCompile(`^(GET|POST|PATCH|PUT|DELETE)[ 	]+(/\S+)$`)
 
 // stalePluginPaths are the five routes earlier revisions of docs/API.md
 // documented in § Plugins which nothing mounts today (GAP-086). They belonged
@@ -250,35 +251,42 @@ func numberedDriftItem(section string, n int) (string, error) {
 	return strings.Join(lines[start:], "\n"), nil
 }
 
-// documentedPluginRoutes extracts the routes a section documents, normalized
+// documentedSectionRoutes extracts the routes a section documents, normalized
 // with the same canonicalization the mounted route table uses, so parameter
 // renames ({id} vs {plugin_id}) cannot hide a route that is documented but
-// absent. Every route line in the section must be a /api/v1/plugins path: a
-// foreign route documented under § Plugins is itself drift.
-func documentedPluginRoutes(section string) ([]string, error) {
+// absent. Every route line in the section must sit under prefix: a foreign route
+// documented under the section is itself drift.
+func documentedSectionRoutes(section, prefix string) ([]string, error) {
 	var out []string
 	for i, line := range strings.Split(section, "\n") {
-		m := pluginSectionRouteLine.FindStringSubmatch(strings.TrimSpace(line))
+		m := sectionRouteLine.FindStringSubmatch(strings.TrimSpace(line))
 		if m == nil {
 			continue
 		}
-		if !strings.HasPrefix(m[2], "/api/v1/plugins") {
-			return nil, fmt.Errorf("line %d documents %s %s — that is not a /api/v1/plugins route",
-				i+1, m[1], m[2])
+		if !strings.HasPrefix(m[2], prefix) {
+			return nil, fmt.Errorf("line %d documents %s %s — that is not a %s route",
+				i+1, m[1], m[2], prefix)
 		}
 		out = append(out, m[1]+" "+normalizeChiPattern(m[2]))
 	}
 	return out, nil
 }
 
-// mountedPluginRoutes walks the REAL production router (newRouter, the same
-// seam New uses) and returns its /api/v1/plugins routes in the same normalized
+// documentedPluginRoutes is the § Plugins call site of documentedSectionRoutes
+// (GAP-086). Its behaviour is unchanged: every route line in the section must be
+// an /api/v1/plugins path.
+func documentedPluginRoutes(section string) ([]string, error) {
+	return documentedSectionRoutes(section, "/api/v1/plugins")
+}
+
+// mountedRoutesUnder walks the REAL production router (newRouter, the same
+// seam New uses) and returns the routes under prefix in the same normalized
 // form, plus the size of the whole walked table so a run that enumerated
 // nothing cannot be mistaken for parity. Hermetic and DB-free, exactly like
 // TestRouteParityDocumentedNodeRoutes: $HOME is redirected so the gateway
 // run-registry restore is a no-op, and nil services are safe because handlers
 // only dereference them inside request handlers.
-func mountedPluginRoutes(t *testing.T) (map[string]bool, int) {
+func mountedRoutesUnder(t *testing.T, prefix string) (map[string]bool, int) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -300,7 +308,7 @@ func mountedPluginRoutes(t *testing.T) (map[string]bool, int) {
 		}
 		total++
 		norm := normalizeChiPattern(pattern)
-		if !strings.HasPrefix(norm, "/api/v1/plugins") {
+		if !strings.HasPrefix(norm, prefix) {
 			return nil
 		}
 		got[method+" "+norm] = true
@@ -310,6 +318,13 @@ func mountedPluginRoutes(t *testing.T) (map[string]bool, int) {
 		t.Fatalf("chi.Walk failed: %v", err)
 	}
 	return got, total
+}
+
+// mountedPluginRoutes is the § Plugins call site of mountedRoutesUnder
+// (GAP-086). Its behaviour is unchanged: it returns the /api/v1/plugins routes.
+func mountedPluginRoutes(t *testing.T) (map[string]bool, int) {
+	t.Helper()
+	return mountedRoutesUnder(t, "/api/v1/plugins")
 }
 
 // stalePluginClaims reports every stale path or marker a section still
@@ -441,5 +456,134 @@ func TestRouteParityDocumentedPluginRoutes(t *testing.T) {
 	}
 	if strings.Contains(item7, "are registered but not fully documented in the README") {
 		t.Errorf("drift entry 7 re-asserts the disproved claim that the old plugin routes are registered:\n%s", item7)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GAP-087: § Agents and § Reviews documentation parity
+// ---------------------------------------------------------------------------
+
+// readAPIDocs returns docs/API.md — the canonical API reference, and therefore
+// the record of what an operator was told is mounted.
+func readAPIDocs(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "API.md"))
+	if err != nil {
+		t.Fatalf("read docs/API.md: %v", err)
+	}
+	return string(raw)
+}
+
+// assertDocumentedSectionParity is the bidirectional half of the GAP-087 guard:
+// for the level-2 section title, every route line the section documents must be
+// mounted on the REAL router under prefix, every route mounted under prefix must
+// be documented in that section, the documented set must be non-empty, and the
+// walked table must be non-trivial so a run that enumerated nothing cannot read
+// as parity. Deterministic and DB-free, like its node and plugin siblings.
+func assertDocumentedSectionParity(t *testing.T, title, prefix string) {
+	t.Helper()
+
+	section, err := markdownSection(readAPIDocs(t), title)
+	if err != nil {
+		t.Fatal(err)
+	}
+	documented, err := documentedSectionRoutes(section, prefix)
+	if err != nil {
+		t.Fatalf("docs/API.md § %s: %v", title, err)
+	}
+	if len(documented) == 0 {
+		t.Fatalf("§ %s documents no route at all — the heading or the extractor moved, not the API", title)
+	}
+
+	mounted, walkedTotal := mountedRoutesUnder(t, prefix)
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+	if len(mounted) == 0 {
+		t.Fatalf("no %s route is mounted — the mount disappeared from newRouter", prefix)
+	}
+
+	var problems []string
+	documentedSet := map[string]bool{}
+	for _, r := range documented {
+		documentedSet[r] = true
+		if !mounted[r] {
+			problems = append(problems, r+" (documented in § "+title+", NOT mounted)")
+		}
+	}
+	for r := range mounted {
+		if !documentedSet[r] {
+			problems = append(problems, r+" (mounted, NOT documented in § "+title+")")
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		t.Logf("§ %s documents %d routes; the router mounts %d %s route(s)", title, len(documented), len(mounted), prefix)
+		t.Fatalf("documentation parity broken for § %s:\n  %s", title, strings.Join(problems, "\n  "))
+	}
+}
+
+// TestRouteParityDocumentedAgentRoutes pins § Agents to the mounted agent roster
+// surface in BOTH directions (GAP-087): every route the section documents is
+// mounted on the real router, every mounted /api/v1/agents route is documented,
+// the documented set is non-empty, and the walked table is non-trivial. The
+// section documents two GET routes and the mount has no write route, so the
+// mounted→documented direction is what catches a roster mutation route
+// (POST/PATCH/DELETE) being mounted without documentation.
+//
+// Deterministic and dependency-free, exactly like the node and plugin guards: no
+// DB, no network, and no HTTP probe — status-code probes are a false oracle
+// here, because the auth middleware runs before chi's routing table and answers
+// 401 for unknown paths too. If this test fails, the docs and the mount
+// disagree: fix whichever is wrong, do not delete the check.
+func TestRouteParityDocumentedAgentRoutes(t *testing.T) {
+	assertDocumentedSectionParity(t, "Agents", "/api/v1/agents")
+
+	// Extractor control: a mid-prose mention is NOT a documented route, and the
+	// {param} canonicalization must collapse to the form the walker produces.
+	control := "### List Agents\n\n```\nGET /api/v1/agents/\n```\n\n" +
+		"Prose that mentions POST /api/v1/agents/register mid-sentence.\n\n" +
+		"### Get Agent\n\n```\nGET /api/v1/agents/{agent_id}\n```\n"
+	controlGot, err := documentedSectionRoutes(control, "/api/v1/agents")
+	if err != nil {
+		t.Fatalf("extractor control: %v", err)
+	}
+	if want := []string{"GET /api/v1/agents", "GET /api/v1/agents/{}"}; !equalStringSlices(controlGot, want) {
+		t.Fatalf("extractor control = %v, want %v", controlGot, want)
+	}
+
+	// Foreign-route control: a route line under § Agents that is not an
+	// /api/v1/agents path is itself drift, so the section cannot smuggle another
+	// surface's route past this guard unnoticed.
+	if _, err := documentedSectionRoutes("```\nGET /api/v1/reviews/\n```\n", "/api/v1/agents"); err == nil {
+		t.Fatal("extractor accepted a foreign route line — § Agents could document a non-agent route silently")
+	}
+}
+
+// TestRouteParityDocumentedReviewRoutes pins § Reviews to the mounted review
+// surface in both directions (GAP-087), with the same non-empty, non-trivial
+// and extractor controls as § Agents. The section documents three routes (list,
+// detail, trigger); the mounted→documented direction catches a review route
+// mounted without documentation, which is how this surface stayed invisible.
+func TestRouteParityDocumentedReviewRoutes(t *testing.T) {
+	assertDocumentedSectionParity(t, "Reviews", "/api/v1/reviews")
+
+	// Extractor control: the trigger route is documented mid-prose elsewhere in
+	// the section's links, and only the fenced standalone line counts.
+	control := "### List Reviews\n\n```\nGET /api/v1/reviews/\n```\n\n" +
+		"Prose that mentions POST /api/v1/reviews/{pr}/trigger mid-sentence.\n\n" +
+		"### Trigger Review\n\n```\nPOST /api/v1/reviews/{pr}/trigger\n```\n"
+	controlGot, err := documentedSectionRoutes(control, "/api/v1/reviews")
+	if err != nil {
+		t.Fatalf("extractor control: %v", err)
+	}
+	if want := []string{"GET /api/v1/reviews", "POST /api/v1/reviews/{}/trigger"}; !equalStringSlices(controlGot, want) {
+		t.Fatalf("extractor control = %v, want %v", controlGot, want)
+	}
+
+	// Foreign-route control: a route line under § Reviews that is not an
+	// /api/v1/reviews path is itself drift.
+	if _, err := documentedSectionRoutes("```\nGET /api/v1/agents/\n```\n", "/api/v1/reviews"); err == nil {
+		t.Fatal("extractor accepted a foreign route line — § Reviews could document a non-review route silently")
 	}
 }

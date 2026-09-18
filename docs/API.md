@@ -32,6 +32,11 @@ changed (GAP-072).
 | `GET /api/v1/files` | 200 | **`{"files":[…],"pagination":{…}}`** |
 | `GET /api/v1/files/recents` | 200 | **bare array** — `[ {file}, … ]` |
 | `GET /api/v1/viewers` | 200 | **bare array** |
+| `GET /api/v1/agents` | 200 | **bare array** — the agent roster, `[ {agent}, … ]` |
+| `GET /api/v1/agents/{agent_id}` | 200 | **bare object** — the agent, with its `trust_history` |
+| `GET /api/v1/reviews` | 200 | **bare array** — the review list, newest first |
+| `GET /api/v1/reviews/{review_id}` | 200 | **bare object** — the review, with `blast_radius` and `verdict` |
+| `POST /api/v1/reviews/{pr}/trigger` | 200 | **bare object** — the same review detail the read route returns |
 | Any failure | 4xx/5xx | **`{"error":{"code":"…","message":"…"}}`** |
 
 ### Create tree → bare object
@@ -1277,7 +1282,7 @@ id, or a row that is not `active`), `INTERNAL_ERROR` (500)
 GET /api/v1/plugins/{name}/versions
 ```
 
-`{name}` is the manifest name.
+`{name}` is the manifest name. The UUID that § Register Plugin returns for the row is the `id` field (the plugin lifecycle SSE payloads carry the same value as `plugin_id`), so a reference written `GET /api/v1/plugins/{plugin_id}/versions` denotes this endpoint: the path parameter is the manifest name, not that id.
 
 **Response (200):** `{"plugins": […]}` — every version of that plugin, newest
 first. An unknown name is an empty list, not a 404.
@@ -1448,6 +1453,171 @@ channel:
 `TOO_MANY_CONNECTIONS_TREE` (429), `TOO_MANY_CONNECTIONS` (503). Wire format,
 query parameters (`since`, `profiles`, `include_heartbeat`) and connection
 limits are the ones documented in § SSE Events.
+
+---
+
+## Agents
+
+Mounted at `/api/v1/agents` (`handler.NewAgentHandler().Routes()`,
+`internal/server/server.go`; `internal/handler/agent_handler.go`, SPEC-023 §5
+and §7). Every route requires auth: the JWT `Authorization: Bearer <token>`
+header every other `/api/v1` route requires — this surface is not in the public
+`/health` class.
+
+The roster is **entirely in memory**. There is no DB table, nothing reached
+through this surface survives a restart, and the registry is seeded on
+construction with three demo agents (`helix-foreman`, `codex-worker`,
+`kimi-scout`). Agent IDs are **deterministic UUIDs** — `uuid.NewSHA1` over a
+fixed namespace and the agent name — so the same agent always has the same id,
+across restarts and test runs. There is no create, update or delete route.
+
+The two routes do not share one envelope: the roster is a **bare array** and the
+detail is a **bare object**. Neither is wrapped in `{"agents": …}`.
+
+### List Agents
+
+```
+GET /api/v1/agents/
+```
+
+The collection route of the mount is `/`, so `GET /api/v1/agents/` is the
+canonical path (the mount answers without the trailing slash as well).
+
+**Response (200):** **bare array** — `[ {agent}, … ]`, ordered by `name`. Each
+entry carries `id`, `name`, `tier`, `trust_score` (`0.0`–`1.0`),
+`capabilities`, `incidents` and `last_active`; `tier` is one of `provisional`,
+`established`, `veteran`, and `last_active` is an RFC3339 timestamp string. The
+trust timeline is detail-only (§ Get Agent). `capabilities` is an object keyed by
+capability name, each value `{"success": n, "total": n}`.
+
+**Error codes:** none of its own — the auth codes (`TOKEN_MISSING`,
+`TOKEN_INVALID`) apply here as everywhere else.
+
+### Get Agent
+
+```
+GET /api/v1/agents/{agent_id}
+```
+
+`{agent_id}` must be a UUID.
+
+**Response (200):** **bare object** — the § List Agents fields plus
+`trust_history`, an array of `{"score": f, "at": "RFC3339"}` points. An agent
+with no history points still emits `trust_history: []`: the field is an array,
+never `null`.
+
+**Error codes:** `INVALID_AGENT_ID` (400 — `{agent_id}` is not a UUID),
+`AGENT_NOT_FOUND` (404 — no agent with that id)
+
+A method this surface does not mount — for example `POST /api/v1/agents` or `DELETE /api/v1/agents/{agent_id}` — answers `405` with an **empty body** (chi's default, not the `{"error": …}` envelope of § Error Catalog).
+
+---
+
+## Reviews
+
+Mounted at `/api/v1/reviews` (`handler.NewReviewHandler(sseHub).Routes()`,
+`internal/server/server.go`; `internal/handler/review_handler.go`, SPEC-023 §2,
+§4 and §5). Every route requires auth (JWT `Authorization: Bearer <token>`, the
+same class as every other `/api/v1` route).
+
+**The review itself is a deterministic SIMULATION, not a model call.** Nothing
+on this surface contacts a model, the network or the database: the risk score is
+the FNV-1a hash of the PR identifier (`hash mod 100 ÷ 100`), and the verdict,
+formation, confidence and summary are derived from that score by a fixed table.
+The same PR string therefore always produces the same verdict — the only fields
+that change between two runs of the same PR are `at` and `updated_at`. Do not
+read a verdict here as the output of a real Chimera / multi-model review.
+
+The registry is **in memory**: no DB table, nothing persists across a restart,
+and it is seeded on construction with four demo reviews (PRs `1042`, `1038`,
+`1051`, `1055`). Review IDs are **deterministic UUIDs** (`uuid.NewSHA1` over a
+fixed namespace) and are stable across restarts. The list is a **bare array**;
+the detail and the trigger response are a **bare object** — there is no
+`{"review": …}` wrapper.
+
+### List Reviews
+
+```
+GET /api/v1/reviews/
+```
+
+The collection route of the mount is `/`, so `GET /api/v1/reviews/` is the
+canonical path (the mount answers without the trailing slash as well).
+
+**Response (200):** **bare array** — `[ {review}, … ]`, newest `created_at`
+first. Each entry carries `id`, `pr`, `title`, `author`, `status`, `risk_score`
+and `updated_at`; `blast_radius` and `verdict` are detail-only.
+
+**Error codes:** none of its own — the auth codes apply as everywhere else.
+
+### Get Review
+
+```
+GET /api/v1/reviews/{review_id}
+```
+
+`{review_id}` is the review's **UUID**, not the PR identifier, so the PR number is not accepted here: `GET /api/v1/reviews/1042` answers `400 INVALID_REVIEW_ID`. Use the `id` returned by § List Reviews or by § Trigger Review.
+
+**Response (200):** **bare object** with `id`, `pr`, `title`, `author`,
+`status`, `risk_score`, `blast_radius`, `verdict`, `created_at` and
+`updated_at`.
+
+- `blast_radius` — `{"files_touched": ["…"], "dependents_count": n}`;
+  `files_touched` is `[]`, never `null`.
+- `verdict` — `null` until the review has run. Once it has run it is
+  `{"verdict": "approve" | "request_changes" | "error", "model_formation": "…",
+  "summary": "…", "confidence": f, "at": "RFC3339"}`.
+- `status` — one of `pending`, `reviewing`, `approved`, `requested_changes`.
+
+**Error codes:** `INVALID_REVIEW_ID` (400 — `{review_id}` is not a UUID),
+`REVIEW_NOT_FOUND` (404 — no review with that id)
+
+### Trigger Review
+
+```
+POST /api/v1/reviews/{pr}/trigger
+```
+
+No request body is read. `{pr}` is the PR identifier as an opaque string — it is
+never parsed as a number. The route is an **upsert**: when a review already
+exists for that PR the record is updated, otherwise a `pending` review is
+created first (`title` `PR #<pr>`, `author` `external`, `risk_score` `0`, empty
+blast radius, and an id derived from the PR string). Triggering the seeded PR
+`1042` therefore updates that seed rather than adding a second row.
+
+The simulated review derives, from the PR string:
+
+| Risk score | `verdict` | `model_formation` | `status` afterwards |
+|---|---|---|---|
+| `< 0.40` | `approve` | `single-judge` | `approved` |
+| `< 0.70` | `request_changes` | `dual-review` | `requested_changes` |
+| `>= 0.70` | `error` | `triple-jury` | `reviewing` |
+
+`confidence` is `1.0 − risk_score × 0.5` (a raw float, so a risk of `0.82`
+answers `0.5900000000000001`). The `>= 0.70` band sets the status back to
+`reviewing`: a failed simulation is not an approval.
+
+**Response (200):** the review detail object (§ Get Review, bare) after the
+update.
+
+The route also broadcasts a `review_event` on the **`general`** workspace channel of the SSE hub — the same deterministic channel the workspace registry derives for `general`, whose feed is mounted at `/api/v1/workspace/channels/{channel_id}/feed` — carrying:
+
+```json
+{
+  "review_id": "941257ba-04e2-52ca-9726-ceb80339d3bf",
+  "pr": "1042",
+  "title": "feat: add agent roster surface",
+  "status": "reviewing",
+  "verdict": "error",
+  "risk_score": 0.7,
+  "triggered_at": "2026-09-18T17:55:29Z"
+}
+```
+
+**Error codes:** `INVALID_PR` (400 — the `{pr}` segment is empty), plus the auth
+codes.
+
+A method this surface does not mount — for example `PATCH /api/v1/reviews/{review_id}` — answers `405` with an **empty body** (chi's default, not the `{"error": …}` envelope).
 
 ---
 
@@ -2441,3 +2611,20 @@ actual code:
 
     `DELETE /api/v1/files/{id}` (soft delete) also exists in code and is now
     documented.
+
+15. **Agents and reviews (GAP-087 docs pass):** the agent roster
+    (`/api/v1/agents`) and the PR review panel (`/api/v1/reviews` plus
+    `POST /api/v1/reviews/{pr}/trigger`) were mounted and auth-reachable but
+    appeared in no shipped document — not in README.md, not in this file, not in
+    `specs/` — so an operator could neither discover nor audit them. They are now
+    documented in § Agents and § Reviews and pinned to the mounted router in both
+    directions by `TestRouteParityDocumentedAgentRoutes` and
+    `TestRouteParityDocumentedReviewRoutes`
+    (`internal/server/route_parity_test.go`), which fail when a route documented
+    in either section is not mounted, when a mounted agent or review route is
+    undocumented, or when the route-line extractor would accept a foreign path
+    inside either section. Two code facts the silence hid: both registries are
+    in-memory (no DB table, demo rows seeded on construction, ids derived
+    deterministically from the name/PR so they survive a restart), and the review
+    verdict is a deterministic simulation derived from the PR string — no model
+    is called.
