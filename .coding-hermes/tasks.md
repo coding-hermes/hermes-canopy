@@ -1526,3 +1526,10 @@ Untracked `namespaces/` (a duckbrain namespace clone, incl. `namespaces/qa/.git`
 - **GAP-087 (P3)** — four mounted, auth-reachable surfaces with zero doc occurrences; the `plugins/network-proxy` allow-list is the sharpest (undocumented security-relevant surface).
 - **DF-HERMES-CANOPY-28 (P3)** — SPEC-API-04 §13's per-user merge rate limit: implement or un-spec.
 - Parked: GAP-076 (P1, owner ruling, blocks GAP-077), GAP-080 phase 3 (needs the retention decision + the §8 amendment), GAP-081, GAP-078, DF-20, DF-24/25 (flakes with no reproducible red), QA-HERMES-CANOPY-* (bunker/fleet-infra).
+
+### Tick 499 — closeout (judge + CI folded in)
+- **Judge:** `gitreins task complete GAP-088` → Tier 1 **PASS**, Tier 2 **PASS / COMPLETE**, verdict `dd89b0d9` (artifact `.gitreins/history/2026-09-18/cef89ce8/verdict.json`), ~5 min. The judge independently re-read the committed blob, re-checked `--name canopy-pg-standalone` != `container_name: canopy-pg`, the `-p 5437:5432` == `DB_PORT=5437` equality and the docs-only file set; no findings.
+- **CI:** run **35369657808** (`c61ef6a`, content) **GREEN first attempt** and run **35369751842** (`a0aabb2`, board closeout) **GREEN**. The five runs inherited at tick start were all `success` — nothing to file.
+- **Row:** GAP-088 carries `judge_verdict dd89b0d9`, `ci_result GREEN`, `ci_runs [35369657808, 35369751842]`.
+- **Off-by-one:** post-debug submission `sub_2679a0` under class `docs-quickstart-collides-with-own-compose-container` (status `pending`, queue position 7 at +2 min, `existing_solutions: 0` — nothing cached under that slug; the nearest pre-verified neighbour `docker-compose-port-conflict-docs-reality` modelled the fix shape).
+- **DuckBrain:** `/project/hermes-canopy/status/2026-09-18-tick499-gap088` = `fb99f750-5bcd-4a02-9a18-e2c647f5a524`, `/ticks/tick499-gap088-selfhost-quickstart` = `fb39a161-1103-4943-b621-ed4d96315bbb`; both found in `~/duckbrain/namespaces/hermes-canopy/{config,event}/2026-09/current.jsonl` and listed by `GET /api/keys?tree=true`.
