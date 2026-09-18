@@ -95,6 +95,7 @@ var knownSubcommands = map[string]struct{}{
 	"tree":    {},
 	"session": {},
 	"topic":   {},
+	"card":    {},
 }
 
 // exitUnknownSubcommand is the exit code for CLI misuse: an argument that is
@@ -118,6 +119,8 @@ func runCLI() {
 		runSessionCmd(os.Args[2:])
 	case "topic":
 		runTopicCmd(os.Args[2:])
+	case "card":
+		runCardCmd(os.Args[2:])
 	default:
 		os.Exit(refuseUnknownSubcommand(sub))
 	}
@@ -136,6 +139,7 @@ func printCLIUsage() {
 	fmt.Fprintf(os.Stderr, "  session import [flags]    Import Hermes sessions from state.db into trees\n")
 	fmt.Fprintf(os.Stderr, "  session associations-backfill [flags]  Recompute association metadata for imported sessions\n")
 	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
+	fmt.Fprintf(os.Stderr, "  card export [flags]       Export the local card stores as deterministic JSONL (docs/CARD_EXPORT.md)\n")
 	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
 }
 

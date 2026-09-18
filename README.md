@@ -962,6 +962,10 @@ CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
 > in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly, plus
 > `--db` for the Hermes `state.db`), so they are configured like a server rather
 > than like an HTTP client.
+>
+> `card export` is the other exception: it reads the local per-type card stores
+> directly (`CANOPY_CARD_DATA_DIR`, default `~/.hermes/canopy/cards`) and never
+> touches the API or PostgreSQL — see [docs/CARD_EXPORT.md](docs/CARD_EXPORT.md).
 
 ## Monitoring
 
