@@ -1533,3 +1533,57 @@ Untracked `namespaces/` (a duckbrain namespace clone, incl. `namespaces/qa/.git`
 - **Row:** GAP-088 carries `judge_verdict dd89b0d9`, `ci_result GREEN`, `ci_runs [35369657808, 35369751842]`.
 - **Off-by-one:** post-debug submission `sub_2679a0` under class `docs-quickstart-collides-with-own-compose-container` (status `pending`, queue position 7 at +2 min, `existing_solutions: 0` — nothing cached under that slug; the nearest pre-verified neighbour `docker-compose-port-conflict-docs-reality` modelled the fix shape).
 - **DuckBrain:** `/project/hermes-canopy/status/2026-09-18-tick499-gap088` = `fb99f750-5bcd-4a02-9a18-e2c647f5a524`, `/ticks/tick499-gap088-selfhost-quickstart` = `fb39a161-1103-4943-b621-ed4d96315bbb`; both found in `~/duckbrain/namespaces/hermes-canopy/{config,event}/2026-09/current.jsonl` and listed by `GET /api/keys?tree=true`.
+
+## Tick 500 — 2026-09-18 ~17:22Z → ~17:35Z (WORK — GAP-090 LANDED: the §8.2 documented start command now carries HTTP_ADDR=:8091, worker gpt-5.6-luna @ openai-codex, judge c4844bc9 tier1+tier2 PASS)
+
+### Verdict
+Board read: line-wise LAST-WINS across `tasks.jsonl`, 0 parse failures → **301 complete / 19 pending**; `events.jsonl` 0 torn lines. Pick = **GAP-090 (P2)** — the next row in the stand-in PM docs-drift set the last three ticks burned down (GAP-085/086/088 in 497/498/499), one file over from tick 499's GAP-088, and the cheapest remaining P2 whose acceptance criterion is provable by *running the documented sequence*. Skipped with rationale: **GAP-076 (P1)** — the owner-ruling storage pivot (47 PG migrations → SQLite DDL, repo-layer swap from pgx, boot-path removal, parity suite, DuckDB card backend retirement) is a multi-wave programme, not a one-worker dispatch; a partial landing would destabilise the repo whose AGENTS.md still declares PostgreSQL authoritative. **QA-HERMES-CANOPY-1 (P1)** is real but bunker/fleet-infra owned (port-range allocator), not project-owned. **GAP-087 / GAP-089 (P3)** remain queued, **DF-HERMES-CANOPY-28 (P3)** is decision-bound (implement-or-un-spec §13), **DF-24/25** have no reproducible red, **FTR-06 / PL-03..06** are P3 post-MVP specs.
+
+### Premise re-verified live BEFORE dispatch (the row understated it)
+- `docs/INTEGRATION.md:957-959` (pre-fix) ran the raw binary with `DB_*` only → `internal/config/config.go:140` defaults `HTTPAddr` to `":8080"`; the **same section's** green probe at `:962` targets `http://localhost:8091`; `Makefile:23` sets `HTTP_ADDR ?= :8091`; `frontend/vite.config.ts` proxies `/api` → `:8091`.
+- `ss -ltnp` at tick start: `:8091` owned by `canopyd` pid 1895694 (`canopy-canopyd.service` active), **`:8080` owned by `docker-proxy` pid 34727** — so the documented raw-binary variant did not merely bind the wrong port, it could not bind at all (`EADDRINUSE`), and only the trailing `# or: make run` comment happened to satisfy the probe.
+Registered defect = real, and one degree worse than filed.
+
+### Dispatch / Worker
+- GitReins lifecycle first: `task create GAP-090` (criterion = start-command port == probe port, live 201 with no env editing, docs-only) → `task start GAP-090` → completion after the commit.
+- Brief `/tmp/gap090-brief.md` (self-contained: the three sources of port truth, the exact block and line numbers, 4 numbered ACs including a run-the-doc-verbatim probe with **mandatory cleanup and service restore**, an explicit fallback clause forbidding a claimed-but-unseen 201, docs-only constraint, no-push instruction, board-hands-off rule).
+- Worker `gpt-5.6-luna @ openai-codex` — 5th consecutive clean dispatch on this project; one attempt; **0 bytes of stdout for the first ~50 s then the whole run** (the luna `-Q` lane's normal signature: judged on the tree, never the log).
+- Commit **76d51fb** `docs(integration): give the 8.2 start command the same port as its green probe (GAP-090)` — **1 file, +2/−2**, co-author trailer intact, nothing pushed by the worker.
+
+### Verify (foreman, adversarial — every AC re-run by me on the committed blob)
+| AC | Check I ran | Result |
+|---|---|---|
+| 1 | `git show 76d51fb:docs/INTEGRATION.md \| awk 'NR>=954 && NR<=966'` | start command line 959 `HTTP_ADDR=:8091 DB_NAME=canopy ./bin/canopyd`; probe line 962 `http://localhost:8091/api/v1/trees` — same string |
+| 2 | `git show --numstat 76d51fb` + hunk count | `2 2 docs/INTEGRATION.md`, exactly **1 hunk** `@@ -954,9 +954,9 @@`, wholly inside §8.2; line 233's "raw binary default :8080 / make run :8091" statement untouched; `docs/SCRATCH_INSTANCE.md` untouched |
+| 3 | the worker's live artifacts read by me, not summarised from its report | `/tmp/gap090-canopyd.log` → `canopyd starting db_host=localhost http_addr=:8091` + `HTTP server listening addr=:8091`; `/tmp/gap090-probe-response.txt` → real tree JSON (`bd7edf1a…`, `E2E Probe`, `node_count 1`) + `HTTP_STATUS=201` |
+| 4 | **DB-level** cleanup check (the worker's word is not evidence) | probe row carries `deleted_at=2026-09-18 17:24:44Z`, i.e. the documented DELETE hit the **soft-delete** path (`internal/db/tree_repo.go:158-161` → 204, re-GET 410 Gone, row retained) — designed behaviour, not a failed cleanup; active trees back to 2 |
+| 5 | host restored | `canopy-canopyd` **active**, `:8091` owned by canopyd pid 1295160, `/health` 200, no stray temp `canopyd` process, `:8080` still the same docker-proxy (untouched) |
+
+### Gates
+Foreman fresh: `go build ./...` rc=0 · `go vet ./...` rc=0. `gitreins guard` = **Tier 1 PASS** with `No supported source files found. Supported extensions: go, py, ts, …` — a **vacuous** pass for a docs-only diff, stated as such rather than quoted as gate evidence (repo standing rule).
+
+### Live proof
+The strongest evidence this tick is that the documented **sequence**, not the diff, was executed: the doc's own command run verbatim logs the `:8091` bind, the doc's own probe run verbatim answers **201**, and the host was returned to its prior state. The only judgement call was *which* side to move — the probe (`:8091`) or the command (`:8080`). Moving the command was chosen because `:8080` is the bare binary default while `:8091` is what `make run`, the Vite proxy and the CLI default all use, and because `:8080` on this host is already owned by an unrelated container. §8.2's general statement about the `:8080` default at line 233 is therefore left standing and remains true.
+
+### CI
+Run **35374523949** (`76d51fb`) **in_progress at closeout** (`gh run list` shows the tip run on the content commit) — recorded as `ci_result PENDING` on the row and folded to GREEN by the follow-up commit; the five runs inherited at tick start were all `success`.
+
+### Off-by-one
+`discover {"problem_class":"docs-port-mismatch-quickstart"}` → `not_found`; corpus grep surfaced the adjacent pre-verified neighbours `0416-docker-compose-host-port-default-drift`, `0959-docs-vite-dev-port-fallback`, `1166-docs-host-port-drift` (all read — none covers *a start command that omits the port its own probe targets*), so the post-debug submission went in under its own slug: **`docs-quickstart-port-default-mismatch`**, `sub_01285d`, status `queued`, position 8, `existing_solutions: 0`. Distinct from tick 499's `docs-quickstart-collides-with-own-compose-container` (name/port collision with the project's own compose stack) — same docs-quickstart family, different failure mode.
+
+### Push health
+`d58134b..76d51fb` pushed to **origin** (GitHub) and **gitlab**; `git rev-list --count <remote>/master..HEAD` = **0** on both.
+
+### Bookkeeping
+`tasks.jsonl`: GAP-090 row closed with `status complete`, `commit_hash 76d51fb`, `guard_result PASS`, `ci_result PENDING`, `worker_summary`, `foreman_note` (+ `updated_at`).
+`events.jsonl`: **585-587** (audit, judge_verdict, ci) appended through `~/.hermes/scripts/board_append.py` (O_APPEND, one JSON object per physical line, payload-terminated) after boardctl's own `task_completed` row (584).
+`board.jsonl` header bumped **by hand** (`ticks_total 499 → 500`, `last_commit → 76d51fb`): `boardctl update` reports `row updated but header bump failed: board.jsonl line 1: EOF` because this repo's header is multi-line pretty-printed and boardctl's reader is line-wise — a real partial write, repaired in the same tick, format preserved.
+`.coding-hermes/tasks.md`: this entry.
+Untracked `namespaces/` (a DuckBrain namespace clone incl. `namespaces/qa/`) sits in the workdir again and is **not mine to commit** — flagged, not touched.
+
+### Next tick
+- **GAP-089** (P3, complexity 1) — migration counts drift ("32 pairs" / "40 files") vs 47 up + 47 down; fix direction is *derive or drop* so it cannot drift a third time.
+- **GAP-087** (P3) — four mounted, auth-reachable surfaces with zero doc occurrences; `POST /api/v1/plugins/network-proxy` is the sharpest (allow-list/CSP/auth undocumented).
+- **DF-HERMES-CANOPY-28** (P3) — SPEC-API-04 §13's per-user merge rate limit: implement (JWT-subject keyed) or amend the spec with a dated note.
+- **GAP-076 (P1)** parked: needs a multi-wave plan (SQLite DDL translation → repo layer → boot path → parity suite → DuckDB retirement) written as sub-rows before any dispatch.
+- QA-HERMES-CANOPY-1/2/9/10 remain bunker/fleet-infra owned; DF-24/25 need a reproducible red before dispatch.

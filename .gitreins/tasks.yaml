@@ -2803,3 +2803,13 @@ tasks:
   status: complete
   created_at: '2026-09-18T16:33:18.561486+00:00'
   completed_at: '2026-09-18T16:38:31.245677+00:00'
+- id: GAP-090
+  title: docs/INTEGRATION.md 8.2 documented start command binds :8080 while its green
+    probe targets :8091
+  criteria:
+  - The port in the 8.2 start command and the port in the 8.2 green probe are the
+    same, and the documented start-then-probe sequence answers 201 without editing
+    env. Docs-only.
+  status: complete
+  created_at: '2026-09-18T17:22:46.140720+00:00'
+  completed_at: '2026-09-18T17:27:15.895578+00:00'
