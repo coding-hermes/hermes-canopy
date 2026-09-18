@@ -1469,3 +1469,60 @@ Both UUIDs verified on disk in `~/duckbrain/namespaces/hermes-canopy/{config,eve
 - **DF-HERMES-CANOPY-28** (P3) — §13's per-user merge rate limit: implement or amend the spec.
 - **DF-24 / DF-25** — flakes with no reproducible red; measure before dispatching.
 - **GAP-076 (P1)** still owns the storage pivot (blocks GAP-077) and needs a multi-wave plan, not a dispatch; **GAP-080 phase 3** needs the retention decision + the §8 amendment.
+
+## Tick 499 — 2026-09-18 ~16:31Z → ~16:5xZ (WORK — GAP-088 LANDED: the self-host Quick Start Postgres step is on the compose contract, worker gpt-5.6-luna @ openai-codex, judge in flight at closeout)
+
+### Verdict
+Task-router scan offered FTR/PL rows; the full board read (LAST-WINS per id, line-wise parse of 358 rows / 320 unique ids, 0 parse failures) gave **300 complete / 20 pending**. Pick = **GAP-088 (P2)** — the stand-in PM's docs-drift set GAP-085/086 landed in ticks 497/498, so GAP-088 is the next P2 in that set and the sharpest of the survivors: the FIRST step a new self-hoster runs fails, and the failure mode is a *false green* that can leave canopyd attached to the wrong database. Skipped with rationale: GAP-076 (owner-ruling storage pivot, blocks GAP-077, needs a multi-wave plan not a dispatch), GAP-077/GAP-078/GAP-081/DF-20/DF-22 (decision-bound), QA-HERMES-CANOPY-1/2/9/10 (bunker/fleet-infra owned — GAP-076 is the only P1 left that is project-owned), FTR-06/PL-02..PL-06 (P3 post-MVP specs), DF-24/25 (no reproducible red — measure before dispatch).
+
+### Premise re-verified live BEFORE dispatch (the row understated it)
+- `docker ps` → `canopy-pg  Up 9 hours (healthy)  0.0.0.0:5437->5432/tcp` — the compose stack's container already owns the name.
+- `ss -ltnp` → a HOST postgres owns `127.0.0.1:5432` (pid 6784), so the documented `-p 5432:5432` would ALSO fail `EADDRINUSE` even with the name free.
+- `docker run -d --name canopy-pg -p 5432:5432 postgres:16-alpine` → `Conflict. The container name "/canopy-pg" is already in use`, **rc=125**.
+- `docker exec canopy-pg psql … 'select count(*) from nodes'` → **46** (the real data is on :5437, which the old block never used).
+So the registered defect was real and worse than documented: step 1 cannot succeed on this host on TWO counts, and step 2's `docker exec canopy-pg pg_isready` would have probed the compose container and reported a false green.
+
+### Dispatch / Worker
+- GitReins lifecycle first: `task create GAP-088` (criterion = name/port/compose-first-path invariants + docs-only) → `task start GAP-088` → completion after the commit.
+- Brief `/tmp/brief-gap088.md` (self-contained: the three collisions, the README/GAP-059 block quoted verbatim as the shape to mirror, the red/green evidence commands, 5 numbered ACs, the no-background-steps rule, the AGENTS.md/`docker compose` bans).
+- Worker `gpt-5.6-luna @ openai-codex` (the project's default lane; 4th consecutive clean dispatch on this project), tool-tracked background process, one attempt, 0 bytes of stdout for the first ~4 min while the tree already showed the edit — the luna lane's normal signature, judged on the tree, not the log.
+- Commit **c61ef6a** `docs(self-host): point Quick Start Postgres at the compose-stack contract (GAP-088)` — 1 file, **+23/−12**, co-author trailer intact, nothing pushed by the worker.
+
+### Verify (foreman, adversarial — every AC re-run by me on the committed blob)
+| AC | Check I ran | Result |
+|---|---|---|
+| 1 | `grep -n container_name docker-compose.yml` vs `git show c61ef6a:docs/SELF_HOST.md \| grep -n canopy-pg` | `canopy-pg` (compose:10) vs `canopy-pg-standalone` (doc:41/46) — different, no collision |
+| 2 | doc lines 43 and 50 | `-p 5437:5432` and `DB_PORT=5437` — equal, and equal to `docker-compose.yml:16` `${CANOPY_PG_HOST_PORT:-5437}:5432` |
+| 3 | guard against the LIVE stack + `bash -n` on the block | guard evaluates TRUE (compose running) → prints the skip message, executes no `docker run`/`docker exec`; block is valid shell (`bash -n` rc=0); prose names `docker compose up -d` and `up -d postgres` |
+| 4 | `git show --stat c61ef6a` | 1 file changed, `docs/SELF_HOST.md`, +23/−12 — docs-only |
+| 5 | each new claim re-measured | rc=125 conflict, `ss -ltn` port owners, `docker ps -a \| grep -x canopy-pg-standalone` rc=1 (name free), live DB 46 nodes |
+The worker's own deviations were checked, not trusted: the renumbered step labels (a top-level "step 2" that no longer exists would read as a missing step) and the kept `postgres:16-alpine` tag (`docker-compose.yml:9` + `docs/SELF_HOST.md:108` agree) both hold. Residual `5432` occurrences were listed and each is legitimate (binary default, remote/systemd PG, compose in-network DSN, the troubleshooting symptom corrected two lines later).
+
+### Gates
+Foreman fresh: `go build ./...` rc=0 · `go vet ./...` rc=0 · `bash -n` on the new block rc=0. The pre-commit guard printed `Tier 1: PASS` in ~0.2 s with "No supported source files found" — a **vacuous** pass for a docs-only diff, stated as such rather than quoted as gate evidence (the repo's standing rule).
+
+### Live proof
+No HTTP surface changed, so no isolated-stack probe was needed; the live proof is the collision evidence above (rc=125, port owners, name-free probe, 46 nodes on :5437) plus the guard's true-branch execution against the running stack. Nothing was started, stopped or dropped — read-only docker commands only, on a host running the live stack.
+
+### CI
+Run for `c61ef6a` in progress at closeout (`gh run list` shows the tip run on the content commit) — recorded as `ci_result: PENDING` and folded to GREEN by the follow-up commit; the five runs inherited at tick start were all `success`.
+
+### Off-by-one
+`discover` fired for the docs/quickstart class → `not_found`; a corpus grep found the directly relevant pre-verified answer `0665-docker-compose-port-conflict-docs-reality` (fix docs to reality, name the live owner of the port, prove with `docker compose config` + the live endpoints), which shaped the brief. The tick's own reusable lesson is submitted post-debug: a documented quickstart that starts a container with the SAME name/port the project's own compose stack declares cannot fail safely — the follow-up probe (`docker exec <name> pg_isready`) then tests the OTHER container and returns a false green.
+
+### Push health
+`2282cab..c61ef6a` pushed to **origin** (GitHub) and **gitlab**; `git rev-list --count <remote>/master..HEAD` = **0** on both.
+
+### Bookkeeping
+`tasks.jsonl`: the GAP-088 row (line 356, SPACED style) closed surgically with the full closure key set (`status complete`, `commit_hash c61ef6a`, `guard_result`, `ci_result PENDING`, `attempts 1`, `worker_status complete`, `files_changed 1`, `lines_added 23`, `lines_removed 12`, `primary_model/provider`, `exit_code 0`, `worker_summary`, `foreman_note`, timestamps) — untouched lines passed through byte-identically.
+`events.jsonl`: ids **576-581** (task_updated ×2, task_completed, audit, ci, judge_verdict-placeholder).
+`board.jsonl` header bumped by hand (pretty-printed; `boardctl` cannot bump it): `ticks_total 498 → 499`, `last_commit → c61ef6a`.
+`.coding-hermes/tasks.md`: this entry. Ticks 497/498 wrote no entries here (their board updates went into tasks.jsonl/events.jsonl) — this entry restores the tick log at 499, not 497.
+Untracked `namespaces/` (a duckbrain namespace clone, incl. `namespaces/qa/.git`) sits in the workdir and is NOT mine to commit — flagged, not touched.
+
+### Next tick
+- **GAP-090 (P2)** — the same class, one file over: `docs/INTEGRATION.md` §8.2 starts the raw binary with `DB_*` only (binds :8080) while its green probe four lines later targets :8091. Cheapest remaining P2 and provable by running the documented sequence.
+- **GAP-089 (P3, complexity 1)** — migration counts ("32 pairs" / "40 files") vs 47 up + 47 down; fix direction is derive-or-drop so it cannot drift a third time.
+- **GAP-087 (P3)** — four mounted, auth-reachable surfaces with zero doc occurrences; the `plugins/network-proxy` allow-list is the sharpest (undocumented security-relevant surface).
+- **DF-HERMES-CANOPY-28 (P3)** — SPEC-API-04 §13's per-user merge rate limit: implement or un-spec.
+- Parked: GAP-076 (P1, owner ruling, blocks GAP-077), GAP-080 phase 3 (needs the retention decision + the §8 amendment), GAP-081, GAP-078, DF-20, DF-24/25 (flakes with no reproducible red), QA-HERMES-CANOPY-* (bunker/fleet-infra).

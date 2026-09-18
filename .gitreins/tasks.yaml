@@ -2790,3 +2790,16 @@ tasks:
   status: complete
   created_at: '2026-09-18T08:01:08.065562+00:00'
   completed_at: '2026-09-18T08:13:16.793916+00:00'
+- id: GAP-088
+  title: docs/SELF_HOST.md Quick Start standalone-Postgres block collides with the
+    compose stack (container name + host port)
+  criteria:
+  - 'docs/SELF_HOST.md Quick Start: the standalone Postgres step starts a container
+    whose name DIFFERS from docker-compose.yml''s container_name (canopy-pg) and publishes
+    a host port EQUAL to the DB_PORT its own canopyd command uses; the block names
+    the compose-first path (docker compose up -d postgres) the way README.md does.
+    Docs-only diff (no Go/frontend source changes). Evidence: grep -n against docker-compose.yml
+    + the block, and the documented commands'' name/port invariants.'
+  status: complete
+  created_at: '2026-09-18T16:33:18.561486+00:00'
+  completed_at: '2026-09-18T16:38:31.245677+00:00'
