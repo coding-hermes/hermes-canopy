@@ -2759,3 +2759,17 @@ tasks:
   status: complete
   created_at: '2026-09-18T05:41:44.100847+00:00'
   completed_at: '2026-09-18T05:41:51.485217+00:00'
+- id: GAP-078
+  title: "Implement POST /trees/{tree_id}/merge (SPEC-API-04 \xA73) \u2014 synthesis\
+    \ merge endpoint"
+  criteria:
+  - "POST /api/v1/trees/{tree_id}/merge is mounted on the real router (chi.Walk parity),\
+    \ creates node_type=synthesis + 1 reply parent edge + N synthesis edges in ONE\
+    \ transaction, returns the \xA73.6 envelope {node,edges,merged_source_ids}, emits\
+    \ node_added + N+1 edge_added + tree_merged SSE events in order, and rejects every\
+    \ SPEC-API-04 \xA73.3 case with its documented code and HTTP status; proven by\
+    \ integration tests through newRouter against real PostgreSQL plus a green go\
+    \ build/vet/golangci-lint."
+  status: complete
+  created_at: '2026-09-18T06:29:37.902090+00:00'
+  completed_at: '2026-09-18T07:28:20.625715+00:00'

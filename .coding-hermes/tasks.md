@@ -1320,3 +1320,94 @@ Fix (**`1574a3d`**, `internal/service/multi_reference_test.go`, +41/−1, test-o
 - Board: new row **DF-HERMES-CANOPY-26** (P2, complexity 2) filed and closed in the same write pass — events **557** (`task_created`), **558** (`task_completed`), **559** (`audit` with the full sequence). `boardctl validate` signature unchanged (**40 errors / 185 warnings**, zero error lines naming row DF-26 or event 559).
 - **GitReins for DF-26: verdict `30b9f84f`** (tier1 PASS test mode full + tier2 PASS/COMPLETE; CLI printed `Verdict saved: 8a18d8e6`), recorded on the row after the fact. The judge ran its **own falsification** and independently reproduced the mechanism — `old form accepted tampered token, err=<nil>` at iteration 2004 of its loop — and confirmed the verifier was untouched (`multi_reference.go` absent from the fix commit).
 - Reusable law for the fleet: **a tamper test must mutate material that is (a) guaranteed to differ at the STRING level AND (b) significant at the BYTES level** — a fixed-suffix overwrite fails (a), a trailing base64url character fails (b).
+
+## Tick 495 — 2026-09-18 ~07:1xZ (worker dispatch — GAP-078, synthesis merge endpoint)
+
+### Verdict
+Board read directly (last-wins over 352 rows): 312 complete / 33 pending / 3 in_progress before this tick.
+Last-wins pending set = FTR-06 + PL-02..PL-06 (P3 post-MVP specs), GAP-076 (P1 storage pivot — a multi-wave
+rewrite, parked by every tick since the owner ruling, **not** one dispatch), GAP-077 (P2, BLOCKED by GAP-076:
+an ATTACH reader presupposes the SQLite graph store), GAP-078/080/081 (drift decisions), DF-HERMES-CANOPY-24/25
+(flakes with no reproducible red — the named red run is the green RERUN) and the bunker/fleet-infra
+`QA-HERMES-CANOPY-*` rows (not project-owned). **Picked GAP-078 (P2)**: the row offered *build* `POST /trees/{id}/merge`
+or *declare the substitution*, and the repo's own bulk-action UI still renders a **disabled Merge button** whose
+stated reason is that no endpoint backs it. Decision: **BUILD the spec'd endpoint** — additive framing, nothing
+un-specced, the SPEC-PL-06 multi-reference reply path untouched, `ErrSynthesisViaMergeOnly` intact.
+Premises re-verified at HEAD before dispatch: no `/merge` registration anywhere in `internal/server`/`internal/handler`;
+`migrations/000003:25` and `000004:22` already CHECK-allow `node_type='synthesis'` and `edge_type='synthesis'` (so no DDL).
+
+### Dispatch / Worker
+`gpt-5.6-luna` @ `openai-codex` (the project's proven lane), brief `/tmp/canopy-gap078-brief.md`, 1 attempt, 0 rework,
+**1 commit `849c107`** (10 files, +2120/−8). Liveness confirmed at ~1 min (0-byte log is normal for `-Q`; CPU + new file
+`internal/service/merge_service.go` at 4 min). Landed: `internal/service/merge_service.go` (MergeService over ONE pgx
+transaction: §3.3 catalog, §3.4 computations, §3.5 node + parent `reply` edge + N `synthesis` edges, §3.6/§3.7 snake_case
+envelope, §3.8 events published only after COMMIT), `internal/handler/merge_handler.go`, the mount in
+`internal/server/server.go` (authenticated `/api/v1` group + `membershipMW`, registered before the `/trees` wildcard),
+`cmd/canopyd/main.go` wiring, 767 lines of router-level integration tests + 255 unit lines, route-parity extension
+(route **and** middleware class), `docs/API.md` section + envelope row (the stale "merge endpoint is not implemented"
+drift note replaced), a dated status note in SPEC-API-04 §3 (no spec text rewritten), and `INVALID_SOURCE_NODE_ID`
+added to SPEC-API-07 only after all 19 codes were grepped first.
+
+### Gates (foreman-run, on `849c107`)
+`go build -o /dev/null ./cmd/canopyd` **PASS** · `go vet ./...` **clean** · `golangci-lint run ./...` **0 issues** ·
+`go test -run TestRouteParity ./internal/server/` **PASS** · `go test -run TestCreateMergeRequest ./internal/service/` **PASS** ·
+`CANOPY_TEST_ALLOW_SHARED_DB=1 go test -run TestMergeIntegration ./internal/handler/` **5/5 PASS in 11s**, the 22-row §3.3
+table PASS row-by-row.
+⚠️ **One honest note on the worker's full handler gate:** its first `./internal/handler/...` run hit the 900s ceiling
+inside a PRE-EXISTING test (`TestTM03_SearchNoMatches`, blocked ~31s in `testutil.TruncateAll` — DF-HERMES-CANOPY-25's
+class), and the clean re-run took **579.4s** (`ok`), i.e. the box was running the suite ~1.5× slower under fleet load.
+No in-process merge goroutine held the lock; the failure mode is PG/lock contention, not this change. Any future tick
+re-running the full handler package under load should expect a thin margin against a 900s ceiling.
+
+### Live proof (independent of the worker's report)
+Isolated throwaway stack: DB `canopy_probe_078`, HEAD binary `/tmp/canopyd-078`, `127.0.0.1:8099`, scratch HOME +
+`CANOPY_FILE_ROOT`, dev JWT (HS256, `dev-secret-change-me`), fixture from `scripts/seed-demo-data.sql`.
+`POST /api/v1/trees/b1655761…/merge` with the root as `target_parent_id` and two branch nodes as `source_node_ids`
+→ **HTTP 201**: `node_type=synthesis`, `parent_id`=target, `depth=1`, `sequence_num=11` (= previous max 10 + 1),
+`child_count=0`, `edited_at`/`deleted_at` null, `edges=3` (`reply root→merge`, `synthesis A→merge`, `synthesis B→merge`),
+`merged_source_ids` echoed in request order; the graph re-read showed the new synthesis node (11 nodes).
+Validation probes: `MIN_SOURCE_NODES` 400, `DUPLICATE_SOURCE_NODES` 400, `INVALID_CONTENT_FORMAT` 400,
+`SOURCE_TARGET_OVERLAP` 400, `INVALID_TARGET_PARENT_ID` 400, `TARGET_PARENT_NOT_FOUND` 404 — spec codes, spec statuses.
+Cleanup: listener killed, **`canopy_probe_078` DROPPED**; the deployed `:8091` binary and the live `canopy` DB were never
+written (read-only check afterwards: 2 users | 26 trees | 46 nodes). Honest note: the `SOURCE_NODE_NOT_FOUND` probe in the
+live pass answered `SOURCE_TARGET_OVERLAP` because the probe passed the ROOT as a source while the target defaulted to the
+root — the code's precedence is deliberate and the repo test `…/source_node_does_not_exist` asserts the 404 code correctly.
+
+### CI
+`gh run list` at tick start: the six most recent completed runs were ALL success (35312192119, 35311804038, 35311475715,
+35311008908, 35310757883, 35310000395) — **nothing pre-existing to file**. Content commit `849c107` pushed to
+**origin + gitlab** (`origin/master..HEAD` = 0, `gitlab/master..HEAD` = 0) → **run 35319648136 GREEN on the first attempt**.
+
+### GitReins
+`task create GAP-078` → `task start` before implementation; `task complete GAP-078` after the commit landed
+(backgrounded, per the ~15-min budget note). Tier 1 PASS (secrets/go_build/go_lint/go_tests, test mode full);
+Tier 2 verdict id is folded into the board row by the follow-up commit when the judge returns.
+
+### Off-by-one
+Health `{"status":"ok","uptime":"29h8m6s"}`. Discover call **actually fired** for
+`go-missing-spec-route-merge-endpoint` and `multiparent-edge-transaction` → both `not_found` (no cached answer for this
+class; nothing debugged from scratch this tick — the one non-trivial diagnosis was the handler-suite timeout, which
+matched the already-filed DF-HERMES-CANOPY-25 class, so nothing new was submitted).
+
+### Push health
+`git push origin master` + `git push gitlab master` → `c53c602..849c107` on both; parity re-verified with
+`git rev-list --count <remote>/master..HEAD` = 0 on both remotes.
+
+### Bookkeeping
+`tasks.jsonl`: GAP-078 row closed in place (SPACED style preserved; only line 320 changed against a pre-image) with
+`commit_hash 849c107`, `guard_result`, `ci_result`/`ci_runs`, `attempts 1`, `complexity 3`, counts, `primary_model/provider`,
+`worker_summary`/`reasoning`/`foreman_note`; two NEW rows filed — **DF-HERMES-CANOPY-27** (P2, wire the bulk Merge button to
+the live route; the frontend copy is now stale in the other direction) and **DF-HERMES-CANOPY-28** (P3, SPEC-API-04 §13's
+per-user merge rate limit is not implemented — implement or un-spec).
+`events.jsonl`: **560/561** `task_created` (DF-27/DF-28), **562** `task_completed` (full closure detail), **563** `audit`
+(pick rationale + premise verification + per-AC results), **564** `ci` (run id + inherited health).
+`board.jsonl` header patched by hand (pretty-printed file, `boardctl` cannot bump it): `ticks_total 494 → 495`,
+`last_commit → 849c107`, `last_tick`/`updated_at` → this tick.
+
+### Next tick
+- **DF-HERMES-CANOPY-27** (P2) — frontend bulk-Merge wiring; the endpoint is live, the UI still says it is not.
+- **DF-HERMES-CANOPY-28** (P3) — the spec'd merge rate limit: implement or amend §13.
+- **GAP-076 (P1)** still owns the storage pivot and blocks GAP-077; it needs a multi-wave plan, not a dispatch.
+- **DF-HERMES-CANOPY-25** watch is now CONFIRMED live (the handler package timed out once more under load at this tick);
+  if it repeats under a QUIET PG, escalate it as a real defect.
+- CI green at closeout; the board closeout commit triggers its own run (verify it in the next tick's inherited health).
