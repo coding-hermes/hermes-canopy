@@ -64,6 +64,11 @@ export interface RawManifestItem {
   title?: string | null;
   tokenCount?: number | null;
   truncated?: boolean | null;
+  /**
+   * The retriever's ordering score for a `retrieved_topic` item (GAP-080
+   * phase 4a). Omitted on every other kind, so `null`/absent reads as 0.
+   */
+  relevance?: number | null;
 }
 
 /** `internal/context.Manifest`, as it arrives (nil slices → `null`). */
@@ -76,6 +81,19 @@ export interface RawManifest {
   ancestry?: RawManifestItem[] | null;
   references?: RawManifestItem[] | null;
   cards?: RawManifestItem[] | null;
+  /**
+   * Retrieved tier (GAP-080 phase 4a): topic-search results folded into the
+   * payload. Omitted entirely when the tier was disabled or empty, so
+   * `null`/absent reads as an empty list on the view side.
+   */
+  retrieved?: RawManifestItem[] | null;
+  /**
+   * The retrieved tier's token allocation for this compile, recorded when the
+   * retrieval step RAN (GAP-080 phase 4a). Omitted (`null`) when it did not,
+   * so absent reads as 0 — a zero budget must NOT produce a misleading
+   * "budget" label in the UI.
+   */
+  retrievalBudget?: number | null;
   omittedCount?: number | null;
   omittedReason?: string | null;
   truncationMarkers?: string[] | null;
@@ -95,7 +113,7 @@ export interface CompiledContext {
 
 // ─── View shapes (normalised — arrays are always arrays) ───────────────
 
-export type ManifestItemKind = 'node' | 'topic' | 'card';
+export type ManifestItemKind = 'node' | 'topic' | 'card' | 'retrieved_topic';
 
 export interface ManifestItem {
   id: string;
@@ -103,6 +121,13 @@ export interface ManifestItem {
   title: string;
   tokenCount: number;
   truncated: boolean;
+  /**
+   * The retriever's ordering score for a `retrieved_topic` item (GAP-080
+   * phase 4a). `0` on every other kind — `relevance` is ONLY meaningfully set
+   * on the retrieved tier, so consumers display it only there. Unknown/missing
+   * on the wire stays `0` (never `null`).
+   */
+  relevance: number;
 }
 
 export interface Manifest {
@@ -114,6 +139,19 @@ export interface Manifest {
   ancestry: ManifestItem[];
   references: ManifestItem[];
   cards: ManifestItem[];
+  /**
+   * Retrieved tier (GAP-080 phase 4a). Always an array (null slices normalised
+   * to `[]`), but EMPTY when the tier was disabled or produced nothing — the
+   * panel renders no Retrieved section for an empty list.
+   */
+  retrieved: ManifestItem[];
+  /**
+   * The retrieved tier's token allocation for this compile. `0` when the step
+   * did not run (no `retrievalBudget` on the wire); the panel only shows a
+   * budget figure when this is non-zero, so a disabled tier never produces a
+   * misleading "0 tokens budget" label.
+   */
+  retrievalBudget: number;
   omittedCount: number;
   /** `"budget"` | `"depth"` | `""` */
   omittedReason: string;
@@ -274,7 +312,7 @@ export function budgetCappedNote(
 
 // ─── Normalisation ─────────────────────────────────────────────────────
 
-const KINDS: readonly ManifestItemKind[] = ['node', 'topic', 'card'];
+const KINDS: readonly ManifestItemKind[] = ['node', 'topic', 'card', 'retrieved_topic'];
 
 function toKind(raw: string | null | undefined): ManifestItemKind {
   const k = (raw ?? '').toLowerCase();
@@ -282,6 +320,10 @@ function toKind(raw: string | null | undefined): ManifestItemKind {
 }
 
 function toCount(raw: number | null | undefined): number {
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+}
+
+function toScore(raw: number | null | undefined): number {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
 }
 
@@ -298,6 +340,7 @@ function toItems(raw: RawManifestItem[] | null | undefined): ManifestItem[] {
     title: item?.title ?? '',
     tokenCount: toCount(item?.tokenCount),
     truncated: item?.truncated === true,
+    relevance: toScore(item?.relevance),
   }));
 }
 
@@ -321,6 +364,14 @@ export function normaliseManifest(
     ancestry: toItems(raw.ancestry),
     references: toItems(raw.references),
     cards: toItems(raw.cards),
+    // Phase 4a retrieved tier. Always an array (Go nulls normalised to `[]`,
+    // and absent is `[]` too); EMPTY when the tier was disabled/empty. The
+    // panel renders no Retrieved section for an empty list, so a disabled tier
+    // never leaves a blank heading behind.
+    retrieved: toItems(raw.retrieved),
+    // The tier's allocation, recorded only when the retrieval step RAN. `0`
+    // when absent — the panel shows a budget figure only when non-zero.
+    retrievalBudget: toCount(raw.retrievalBudget),
     omittedCount: toCount(raw.omittedCount),
     omittedReason: raw.omittedReason ?? '',
     truncationMarkers: toStrings(raw.truncationMarkers),
@@ -405,6 +456,20 @@ export function manifestItemTitle(item: ManifestItem): string {
   if (title) return title;
   const short = shortNodeId(item.id);
   return short || 'Untitled';
+}
+
+/**
+ * A retrieved item's relevance, printed as a whole-number percentage
+ * (GAP-080 phase 4b). The retriever emits a higher-is-better `0..1` score;
+ * the agent UI already renders that range as a percentage, so the context
+ * panel matches. Returns `null` when the score is absent/non-finite/negative
+ * — the panel shows nothing rather than a misleading "0% relevance" for an
+ * item that simply carried no score (only the retrieved tier sets one).
+ */
+export function relevanceLabel(score: number | null | undefined): string | null {
+  const value = typeof score === 'number' ? score : NaN;
+  if (!Number.isFinite(value) || value < 0) return null;
+  return `${Math.round(value * 100)}% relevance`;
 }
 
 /**

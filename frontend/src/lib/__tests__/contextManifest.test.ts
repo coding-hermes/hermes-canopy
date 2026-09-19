@@ -26,6 +26,7 @@ import {
   normaliseManifest,
   normaliseModelOptions,
   omissionNote,
+  relevanceLabel,
   type CompiledContext,
   type Manifest,
 } from '../contextManifest';
@@ -46,6 +47,8 @@ function manifest(overrides: Partial<Manifest> = {}): Manifest {
     ancestry: [],
     references: [],
     cards: [],
+    retrieved: [],
+    retrievalBudget: 0,
     omittedCount: 0,
     omittedReason: '',
     truncationMarkers: [],
@@ -477,6 +480,7 @@ describe('manifestItemTitle', () => {
         title: 'Child #3: DAG node',
         tokenCount: 10,
         truncated: false,
+        relevance: 0,
       }),
     ).toBe('Child #3: DAG node');
   });
@@ -488,13 +492,14 @@ describe('manifestItemTitle', () => {
       title: '   ',
       tokenCount: 10,
       truncated: false,
+      relevance: 0,
     });
     expect(label).toBe('019fb0c2…e000');
   });
 
   it('never renders an empty label', () => {
     expect(
-      manifestItemTitle({ id: '', kind: 'node', title: '', tokenCount: 0, truncated: false }),
+      manifestItemTitle({ id: '', kind: 'node', title: '', tokenCount: 0, truncated: false, relevance: 0 }),
     ).toBe('Untitled');
   });
 });
@@ -545,5 +550,133 @@ describe('contextErrorNote', () => {
   it('has a generic fallback and never surfaces [object Object]', () => {
     expect(contextErrorNote('boom')).toBe('Context unavailable.');
     expect(contextErrorNote('')).toBe('Context unavailable.');
+  });
+});
+
+// ─── Retrieved tier (GAP-080 phase 4b) ─────────────────────────────────
+
+describe('relevanceLabel', () => {
+  it('renders a higher-is-better 0..1 score as a whole-number percent', () => {
+    expect(relevanceLabel(0.83)).toBe('83% relevance');
+    expect(relevanceLabel(1)).toBe('100% relevance');
+    expect(relevanceLabel(0)).toBe('0% relevance');
+  });
+
+  it('is null when no score was present — never a misleading 0%', () => {
+    expect(relevanceLabel(null)).toBeNull();
+    expect(relevanceLabel(undefined)).toBeNull();
+    expect(relevanceLabel(Number.NaN)).toBeNull();
+    expect(relevanceLabel(-0.5)).toBeNull();
+  });
+});
+
+describe('normaliseManifest — retrieved tier', () => {
+  it('carries retrieved_topic items and their relevance, preserving the kind', () => {
+    const m = normaliseManifest({
+      content: '--- retrieved topic … ---',
+      manifest: {
+        requestId: 'req-1',
+        nodeId: NODE_ID,
+        compiledAt: '2026-08-08T10:00:00Z',
+        tokenBudget: 8000,
+        tokensUsed: 1240,
+        ancestry: null,
+        references: null,
+        cards: null,
+        retrieved: [
+          {
+            id: 'topic-a',
+            kind: 'retrieved_topic',
+            title: 'architecture',
+            tokenCount: 96,
+            truncated: false,
+            relevance: 0.91,
+          },
+        ],
+        retrievalBudget: 960,
+      },
+    });
+
+    expect(m?.retrieved).toHaveLength(1);
+    expect(m?.retrieved[0]?.kind).toBe('retrieved_topic');
+    expect(m?.retrieved[0]?.title).toBe('architecture');
+    expect(m?.retrieved[0]?.tokenCount).toBe(96);
+    // The exact backend field survives normalisation.
+    expect(m?.retrieved[0]?.relevance).toBe(0.91);
+    expect(m?.retrievalBudget).toBe(960);
+  });
+
+  it('normalises an absent retrieved tier to empty arrays / zero budget', () => {
+    const m = normaliseManifest({
+      content: '',
+      manifest: {
+        requestId: 'req-1',
+        nodeId: NODE_ID,
+        compiledAt: '2026-08-08T10:00:00Z',
+        tokenBudget: 8000,
+        tokensUsed: 12,
+        ancestry: null,
+        references: null,
+        cards: null,
+        truncationMarkers: null,
+        warnings: null,
+      },
+    });
+
+    expect(m?.retrieved).toEqual([]);
+    expect(m?.retrievalBudget).toBe(0);
+  });
+
+  it('treats a Go-null retrieved slice as an empty list (healthy disabled tier)', () => {
+    const m = normaliseManifest({
+      manifest: {
+        ancestry: null,
+        references: null,
+        cards: null,
+        retrieved: null,
+      },
+    });
+    expect(m?.retrieved).toEqual([]);
+    expect(m?.retrievalBudget).toBe(0);
+  });
+
+  it('preserves a relevance value on any item it arrived on (display is gated to the retrieved tier)', () => {
+    const m = normaliseManifest({
+      manifest: {
+        ancestry: [
+          { id: 'a', kind: 'node', title: 't', tokenCount: 1, relevance: 0.5 },
+        ],
+      },
+    });
+    // The normaliser does not drop a field that was present; the panel only
+    // renders a relevance badge for retrieved_topic items.
+    expect(m?.ancestry[0]?.relevance).toBe(0.5);
+  });
+
+  it('tolerates an unknown kind without losing the rest of the retrieved tier (early-return default)', () => {
+    const m = normaliseManifest({
+      manifest: {
+        retrieved: [
+          { id: 'a', kind: 'retrieved_topic', title: 'real', tokenCount: 7 },
+          { id: 'b', kind: 'wat-is-this', title: 'odd', tokenCount: 8 },
+        ],
+      },
+    });
+    expect(m?.retrieved).toHaveLength(2);
+    expect(m?.retrieved[0]?.kind).toBe('retrieved_topic');
+    expect(m?.retrieved[1]?.kind).toBe('node'); // unknown → default, item kept
+    expect(m?.retrieved[1]?.tokenCount).toBe(8);
+  });
+
+  it('does not leak an unknown relevance on a malformed numeric into NaN', () => {
+    const m = normaliseManifest({
+      manifest: {
+        retrieved: [
+          // A non-number relevance on the wire — `toScore` floors it to 0.
+          { id: 'a', kind: 'retrieved_topic', title: 't', tokenCount: 1, relevance: 'high' as unknown as number },
+        ],
+      },
+    });
+    expect(m?.retrieved[0]?.relevance).toBe(0);
   });
 });

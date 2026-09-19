@@ -541,6 +541,120 @@ describe('ContextManifestPanel — selection changes', () => {
   });
 });
 
+// ─── Retrieved tier (GAP-080 phase 4b) ─────────────────────────────────
+
+describe('ContextManifestPanel — retrieved tier', () => {
+  /** A body with a populated retrieved tier. */
+  function retrievedResponse(overrides: Record<string, unknown>) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url))
+            ? MODELS_BODY
+            : compiledBody({
+                retrieved: [
+                  {
+                    id: 'topic-a',
+                    kind: 'retrieved_topic',
+                    title: 'architecture',
+                    tokenCount: 96,
+                    truncated: false,
+                    relevance: 0.91,
+                  },
+                  {
+                    id: 'topic-b',
+                    kind: 'retrieved_topic',
+                    title: 'retrieval-design',
+                    tokenCount: 140,
+                    truncated: false,
+                    relevance: 0.74,
+                  },
+                ],
+                retrievalBudget: 960,
+                ...overrides,
+              }),
+        ),
+      ),
+    );
+  }
+
+  it('renders a labelled Retrieved section only when items are present', async () => {
+    retrievedResponse({});
+
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    const section = q('[data-testid="context-section-retrieved"]');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain('Retrieved · 2');
+
+    const items = container.querySelectorAll(
+      '[data-testid="context-manifest-item"][data-kind="retrieved_topic"]',
+    );
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toContain('architecture');
+    expect(items[0]?.textContent).toContain('96');
+    expect(items[0]?.textContent).toContain('91% relevance');
+    expect(items[1]?.textContent).toContain('140');
+    expect(items[1]?.textContent).toContain('74% relevance');
+  });
+
+  it('shows the tier allocation when retrievalBudget is non-zero', async () => {
+    retrievedResponse({});
+
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    const budget = q('[data-testid="context-section-retrieved-budget"]');
+    expect(budget).not.toBeNull();
+    expect(budget?.textContent).toContain('960');
+  });
+
+  it('renders NO Retrieved section for an absent tier (disabled)', async () => {
+    // The default compiledBody has no `retrieved` key at all.
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    expect(q('[data-testid="context-section-retrieved"]')).toBeNull();
+  });
+
+  it('renders NO Retrieved section for an explicitly empty tier', async () => {
+    fetchedRetrieved([]);
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    expect(q('[data-testid="context-section-retrieved"]')).toBeNull();
+  });
+
+  it('does not mislabel a zero retrievalBudget — no (0 allocated) badge', async () => {
+    // Tier ran but returned nothing AND budget omitted on the wire.
+    retrievedResponse({ retrieved: [], retrievalBudget: 0 });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    expect(q('[data-testid="context-section-retrieved"]')).toBeNull();
+  });
+
+  /** Helper: respond with a specific retrieved array (and no budget). */
+  function fetchedRetrieved(items: unknown[]) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url))
+            ? MODELS_BODY
+            : compiledBody({ retrieved: items as Record<string, unknown>[] }),
+        ),
+      ),
+    );
+  }
+});
+
 // ─── The two request knobs (GAP-080 phase 2b) ──────────────────────────
 
 describe('ContextManifestPanel — model choice', () => {
