@@ -2906,3 +2906,16 @@ tasks:
   status: complete
   created_at: '2026-09-19T00:20:37.986312+00:00'
   completed_at: '2026-09-19T00:31:53.129335+00:00'
+- id: GAP-076-W2
+  title: SQLite pivot wave 2 core store slice
+  criteria:
+  - 'Implement one coherent, tested wave-2 SQLite store slice from docs/SQLITE-PIVOT.md:
+    add the modernc.org/sqlite-backed core graph repository/store boundary for the
+    selected scope, preserve the existing public repository interfaces, cover UUID
+    generation, node sequence allocation, UTF-8 SHA-256 content hashing, WAL/foreign-key/busy-timeout
+    pragmas, and prove behavior with focused tests. Do not claim the full GAP-076
+    pivot or boot-path retirement; leave unimplemented scope explicit in code/docs.
+    go build ./..., go vet ./..., and focused tests must pass.'
+  status: complete
+  created_at: '2026-09-19T01:27:08.328068+00:00'
+  completed_at: '2026-09-19T01:39:21.126421+00:00'
