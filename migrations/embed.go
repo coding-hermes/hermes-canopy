@@ -28,7 +28,7 @@ func FS() embed.FS { return fs }
 
 // SQLiteFS returns the embedded SQLite migration filesystem, rooted at sqlite/ so that
 // names match FS()'s shape ("000002_trees.up.sql"). The sub-filesystem cannot fail: the
-// go:embed directive above is unsatisfiable at build time unless sqlite/ contains
+// embed directive above is unsatisfiable at build time unless sqlite/ contains
 // matching files.
 func SQLiteFS() iofs.FS {
 	sub, err := iofs.Sub(sqliteFS, "sqlite")
