@@ -2978,3 +2978,15 @@ tasks:
   status: complete
   created_at: '2026-09-19T07:44:27.431097+00:00'
   completed_at: '2026-09-19T08:04:12.624404+00:00'
+- id: DF-HERMES-CANOPY-31
+  title: Card SSE stream survives the 30s WriteTimeout (per-route write-deadline reset)
+  criteria:
+  - A real streaming client against a production-router http.Server with a SHORT WriteTimeout
+    observes card SSE heartbeat frames AFTER the WriteTimeout boundary (new deterministic
+    regression test); the stream resets its write deadline via http.NewResponseController
+    around frame writes; cardSSEHeartbeatInterval stays 30s per SPEC-PL-03 section
+    9.3; SetWriteDeadline failure is logged not swallowed; existing handler/card/server
+    suites pass; docs/API.md documents the idle-stream behaviour.
+  status: complete
+  created_at: '2026-09-19T16:53:21.892230+00:00'
+  completed_at: '2026-09-19T17:33:58.196427+00:00'
