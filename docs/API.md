@@ -973,7 +973,10 @@ Every successful connection writes, in order:
    `id:` is the event's sequence and `data:` is compact single-line JSON.
 3. later events appended while the connection is open, streamed live.
 
-An idle connection receives a `heartbeat` event every 30 seconds.
+An idle connection receives a `heartbeat` event every 30 seconds. The card SSE
+handler resets its write deadline for each frame, so an idle stream stays open
+past the server's 30-second `WriteTimeout`; a stuck connection is dropped by the
+bounded per-write deadline.
 
 **Frame shape:**
 ```text

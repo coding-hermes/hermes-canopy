@@ -39,6 +39,11 @@ const (
 	// of waiting half a minute.
 	cardSSEHeartbeatInterval = 30 * time.Second
 
+	// cardSSEWriteDeadline is twice the heartbeat cadence: clearing the server's
+	// 30s WriteTimeout keeps the idle stream open, while this bound still drops
+	// a peer that stops accepting writes.
+	cardSSEWriteDeadline = 2 * cardSSEHeartbeatInterval
+
 	// cardSSEBacklogLimit is the largest replay the stream serves
 	// (SPEC-PL-03 §10 CARD_SSE_BACKLOG_LIMIT). A request further behind than
 	// this is answered with a JSON 413 BEFORE any SSE header, so the client
@@ -159,6 +164,27 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// The server's WriteTimeout covers the whole response, so clear it after
+	// the initial flush. Each later frame gets its own bounded write deadline.
+	rc := http.NewResponseController(w)
+	deadlineSupported := true
+	warnUnsupportedDeadline := func(err error) {
+		log.Ctx(ctx).Warn().Err(err).Str("card_id", cardID.String()).
+			Msg("card sse: response writer does not support write deadlines")
+		deadlineSupported = false
+	}
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		warnUnsupportedDeadline(err)
+	}
+	setSSEWriteDeadline := func() {
+		if !deadlineSupported {
+			return
+		}
+		if err := rc.SetWriteDeadline(time.Now().Add(cardSSEWriteDeadline)); err != nil {
+			warnUnsupportedDeadline(err)
+		}
+	}
+
 	// 5. Snapshot, then replay. The replay reports the highest sequence it
 	// framed — the dedupe watermark the live loop below applies to an event
 	// that arrived on BOTH paths (see the loop's comment).
@@ -167,10 +193,11 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 		log.Ctx(ctx).Error().Err(err).Str("card_id", cardID.String()).Msg("card sse: snapshot frame")
 		return
 	}
+	setSSEWriteDeadline()
 	if err := writeSSEFrame(w, "", cardSSESnapshotEvent, snapshot); err != nil {
 		return
 	}
-	replayedThrough, err := h.replayCardEvents(ctx, w, cardID, cursor, card.Type)
+	replayedThrough, err := h.replayCardEvents(ctx, w, cardID, cursor, card.Type, setSSEWriteDeadline)
 	if err != nil {
 		log.Ctx(ctx).Warn().Err(err).Str("card_id", cardID.String()).Msg("card sse: replay aborted")
 		return
@@ -206,6 +233,7 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 				log.Ctx(ctx).Error().Err(err).Str("card_id", cardID.String()).Msg("card sse: event frame")
 				return
 			}
+			setSSEWriteDeadline()
 			if err := writeSSEFrame(w, strconv.FormatInt(ev.Sequence, 10), cardSSEEventName, body); err != nil {
 				return
 			}
@@ -216,6 +244,7 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 				log.Ctx(ctx).Error().Err(err).Str("card_id", cardID.String()).Msg("card sse: heartbeat frame")
 				return
 			}
+			setSSEWriteDeadline()
 			if err := writeSSEFrame(w, "", cardSSEHeartbeatEvent, body); err != nil {
 				return
 			}
@@ -242,6 +271,7 @@ func (h *CardHandler) replayCardEvents(
 	cardID uuid.UUID,
 	cursor int64,
 	cardType service.CardType,
+	setSSEWriteDeadline func(),
 ) (int64, error) {
 	var replayedThrough int64
 
@@ -262,6 +292,7 @@ func (h *CardHandler) replayCardEvents(
 		if err != nil {
 			return replayedThrough, err
 		}
+		setSSEWriteDeadline()
 		if err := writeSSEFrame(w, strconv.FormatInt(ev.Sequence, 10), cardSSEEventName, body); err != nil {
 			return replayedThrough, err
 		}

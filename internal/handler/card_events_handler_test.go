@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -485,6 +486,95 @@ func TestCardEventsSSEHeartbeatOnIdleStream(t *testing.T) {
 	env := decodeCardSSEEnvelope(t, last)
 	if env.EventType != "heartbeat" || env.CardID != cardID {
 		t.Fatalf("heartbeat envelope = %+v, want heartbeat for %s", env, cardID)
+	}
+}
+
+func TestCardSSE_SurvivesServerWriteTimeout(t *testing.T) {
+	svc, _, repo, _ := cardSSEStore(t)
+	cardID := seedCard(t, repo, 0)
+
+	const (
+		serverWriteTimeout = 300 * time.Millisecond
+		heartbeatInterval  = 80 * time.Millisecond
+	)
+	router := newCardSSERouter(svc, heartbeatInterval)
+	server := httptest.NewUnstartedServer(router)
+	server.Config.WriteTimeout = serverWriteTimeout
+	server.Start()
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		server.URL+"/cards/"+cardID.String()+"/events", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext: %v", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("GET card events: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET card events status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	type readResult struct {
+		body string
+		at   time.Time
+	}
+	frames := make(chan readResult, 32)
+	ended := make(chan error, 1)
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		reader := bufio.NewReader(resp.Body)
+		var frame strings.Builder
+		for {
+			line, readErr := reader.ReadString('\n')
+			if line != "" {
+				frame.WriteString(line)
+			}
+			if line == "\n" {
+				frames <- readResult{body: frame.String(), at: time.Now()}
+				frame.Reset()
+			}
+			if readErr != nil {
+				ended <- readErr
+				return
+			}
+		}
+	}()
+
+	streamStart := time.Now()
+	readWindow := 4 * serverWriteTimeout
+	window := time.NewTimer(readWindow)
+	defer window.Stop()
+	var heartbeatAfterWriteTimeout bool
+	for {
+		select {
+		case result := <-frames:
+			for _, frame := range parseSSEFrames(t, result.body) {
+				if frame.Event == "heartbeat" && result.at.Sub(streamStart) > serverWriteTimeout {
+					heartbeatAfterWriteTimeout = true
+				}
+			}
+		case err := <-ended:
+			t.Fatalf("card SSE connection ended before the read window: %v", err)
+		case <-window.C:
+			if !heartbeatAfterWriteTimeout {
+				t.Fatal("no heartbeat arrived after the server WriteTimeout boundary")
+			}
+			// Reaching the read-window deadline without an EOF/error proves the
+			// real TCP stream remained open beyond the server deadline.
+			cancel()
+			select {
+			case <-readDone:
+			case <-time.After(time.Second):
+				t.Fatal("card SSE reader did not stop after request cancellation")
+			}
+			return
+		}
 	}
 }
 
