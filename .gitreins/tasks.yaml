@@ -2919,3 +2919,35 @@ tasks:
   status: complete
   created_at: '2026-09-19T01:27:08.328068+00:00'
   completed_at: '2026-09-19T01:39:21.126421+00:00'
+- id: GAP-077
+  title: Hermes reader via read-only SQLite ATTACH
+  criteria:
+  - Implement read-only Hermes state.db snapshot reader with session browse/import
+    APIs, zero live DB lock contention, and focused tests
+  status: complete
+  created_at: '2026-09-19T03:21:15.667550+00:00'
+  completed_at: '2026-09-19T04:07:50.152272+00:00'
+- id: GAP-080-P4A
+  title: Context compiler retrieved tier (GAP-080 phase 4a)
+  criteria:
+  - Compiler gains an optional RetrievalReader seam plus a WithRetrieval option; an
+    unwired compiler produces byte-identical Content, Manifest JSON and ManifestHash
+    (existing internal/context tests pass unchanged)
+  - An enabled retrieved tier records items on manifest.retrieved (kind retrieved_topic,
+    relevance, tokenCount, retrievalBudget) and renders '--- retrieved topic <slug>
+    ---' blocks in payload order ancestry -> references -> retrieved -> cards
+  - Retrieved ordering is deterministic (relevance DESC, slug ASC, id ASC) and topics
+    already present as references are never duplicated into the retrieved tier
+  - The retrieved tier never spends more than floor(TokenBudget*12/100) tokens and
+    never exceeds the remaining budget
+  - 'Retrieval degrades safely: reader error, empty result, no budget and blank query
+    never fail a compile; no search is issued when there is no budget or no query;
+    an error yields exactly one ''retrieval failed: <err>'' warning'
+  - CONTEXT_RETRIEVAL_MAX (default 0 = disabled, validated 0..50) is parsed from the
+    environment and cmd/canopyd/main.go wires the internal/retrieval adapter when
+    it is greater than 0
+  - New tests cover the compiler tier, the internal/retrieval adapter and the config
+    knob, and at least one new test is proven RED against the pre-change tree
+  status: complete
+  created_at: '2026-09-19T04:42:54.270805+00:00'
+  completed_at: '2026-09-19T05:15:11.342844+00:00'
