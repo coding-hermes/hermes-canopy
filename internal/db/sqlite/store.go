@@ -250,7 +250,7 @@ func (s *Store) AppliedMigrations(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: AppliedMigrations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	names := []string{}
 	for rows.Next() {
