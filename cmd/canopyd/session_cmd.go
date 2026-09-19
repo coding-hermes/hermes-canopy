@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -17,6 +20,63 @@ import (
 
 // defaultOwnerID is the dev-user UUID used when CANOPY_OWNER_ID is unset.
 var defaultOwnerID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+// sessionSourceFlags are the read-source flags shared by the session
+// subcommands (GAP-077). They select the Hermes data Canopy reads:
+//
+//   - default: the newest Hermes state SNAPSHOT under
+//     $HOME/.hermes/state-backups (6-hourly, zstd/gzip/plain), read read-only
+//     through an ATTACH — the live state.db is never opened, so an import can
+//     never contend with (or write to) the gateway's database.
+//   - --db: read exactly that file, read-only. The escape hatch for a
+//     specific database; no snapshot resolution, no substitution.
+//   - --snapshot-dir / --max-snapshot-age: choose a different snapshot
+//     directory or relax the recency bound (0 = unbounded).
+type sessionSourceFlags struct {
+	dbPath      *string
+	snapshotDir *string
+	maxSnapAge  *time.Duration
+}
+
+// newSessionSourceFlags registers the shared source flags on fs.
+func newSessionSourceFlags(fs *flag.FlagSet) *sessionSourceFlags {
+	return &sessionSourceFlags{
+		dbPath:      fs.String("db", "", "read this Hermes state.db directly (read-only); bypasses the snapshot source"),
+		snapshotDir: fs.String("snapshot-dir", "", "directory of Hermes state snapshots (default $HOME/.hermes/state-backups)"),
+		maxSnapAge:  fs.Duration("max-snapshot-age", session.DefaultSnapshotMaxAge, "refuse the newest snapshot when it is older than this (0 disables the bound)"),
+	}
+}
+
+// open resolves the read source, returning the reader and a one-line
+// provenance description for the operator. A missing/stale snapshot is an
+// error — this never silently falls back to the live state.db.
+func (f *sessionSourceFlags) open() (*session.Reader, string, error) {
+	if *f.dbPath != "" {
+		r, err := session.OpenReader(*f.dbPath)
+		if err != nil {
+			return nil, "", err
+		}
+		return r, fmt.Sprintf("direct database %s (read-only)", *f.dbPath), nil
+	}
+	opts, err := session.DefaultSnapshotOptions()
+	if err != nil {
+		return nil, "", err
+	}
+	if *f.snapshotDir != "" {
+		opts.Dir = *f.snapshotDir
+	}
+	opts.MaxAge = *f.maxSnapAge
+	r, err := session.OpenSnapshotReader(opts)
+	if err != nil {
+		return nil, "", err
+	}
+	spec, ok := r.Snapshot()
+	if !ok {
+		return r, "snapshot (metadata unavailable)", nil
+	}
+	return r, fmt.Sprintf("snapshot %s (captured %s, %s old)",
+		spec.Path, spec.Stamp.Format(time.RFC3339), spec.Age(time.Now()).Round(time.Minute)), nil
+}
 
 // runSessionCmd dispatches session sub-subcommands.
 func runSessionCmd(args []string) {
@@ -37,13 +97,15 @@ func runSessionCmdE(args []string) int {
 		return 0
 	}
 	switch args[0] {
+	case "browse":
+		sessionBrowse(args[1:])
 	case "import":
 		sessionImport(args[1:])
 	case "associations-backfill":
 		sessionAssociationsBackfill(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown session subcommand: %s\n", args[0])
-		fmt.Fprintf(os.Stderr, "Available: import, associations-backfill\n")
+		fmt.Fprintf(os.Stderr, "Available: browse, import, associations-backfill\n")
 		return 1
 	}
 	return 0
@@ -52,24 +114,31 @@ func runSessionCmdE(args []string) int {
 // printSessionUsage documents the session subcommands. It is printed by
 // `canopyd session --help` (exit 0) and by a bare `canopyd session` (exit 1).
 func printSessionUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: canopyd session <import|associations-backfill> [flags...]\n\n")
+	fmt.Fprintf(os.Stderr, "Usage: canopyd session <browse|import|associations-backfill> [flags...]\n\n")
 	fmt.Fprintf(os.Stderr, "Subcommands:\n")
-	fmt.Fprintf(os.Stderr, "  import                  Import Hermes sessions from state.db into Canopy trees\n")
+	fmt.Fprintf(os.Stderr, "  browse                  List sessions (or one session's messages) from the read source\n")
+	fmt.Fprintf(os.Stderr, "  import                  Import Hermes sessions from the read source into Canopy trees\n")
 	fmt.Fprintf(os.Stderr, "  associations-backfill   Recompute association metadata for already-imported sessions\n\n")
-	fmt.Fprintf(os.Stderr, "Both read $HOME/.hermes/state.db (override with --db) and write to the\n")
-	fmt.Fprintf(os.Stderr, "PostgreSQL database configured by DB_*/CANOPY_DB_URL — they are in-process\n")
-	fmt.Fprintf(os.Stderr, "importers, not HTTP clients of a running canopyd.\n")
+	fmt.Fprintf(os.Stderr, "Read source: the newest 6-hourly Hermes state snapshot in\n")
+	fmt.Fprintf(os.Stderr, "$HOME/.hermes/state-backups (state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]), read\n")
+	fmt.Fprintf(os.Stderr, "read-only via SQLite ATTACH — the live ~/.hermes/state.db is never opened.\n")
+	fmt.Fprintf(os.Stderr, "Override with --db <path> (that file only), --snapshot-dir <dir>, or\n")
+	fmt.Fprintf(os.Stderr, "--max-snapshot-age <duration> (0 = no age bound).\n\n")
+	fmt.Fprintf(os.Stderr, "import and associations-backfill write to the PostgreSQL database configured\n")
+	fmt.Fprintf(os.Stderr, "by DB_*/CANOPY_DB_URL — they are in-process importers, not HTTP clients of a\n")
+	fmt.Fprintf(os.Stderr, "running canopyd. browse never writes to Canopy (or to the source).\n")
 }
 
-// sessionImport imports new Hermes sessions from state.db into Canopy
-// trees (WIRE-003). It runs in-process: state.db is opened read-only, the
-// Canopy services are built against the same PostgreSQL pool/config the
-// server uses, and the import is incremental — a watermark file under
-// ~/.canopy/ records the last imported session so re-runs never duplicate.
+// sessionImport imports new Hermes sessions from the read source into Canopy
+// trees (WIRE-003). It runs in-process: the Hermes data is opened read-only
+// (the 6-hourly snapshot by default — GAP-077 — or an explicit --db file), the
+// Canopy services are built against the same PostgreSQL pool/config the server
+// uses, and the import is incremental — a watermark file under ~/.canopy/
+// records the last imported session so re-runs never duplicate.
 func sessionImport(args []string) {
 	fs := flag.NewFlagSet("session import", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	dbPath := fs.String("db", "", "path to Hermes state.db (default $HOME/.hermes/state.db)")
+	src := newSessionSourceFlags(fs)
 	limit := fs.Int("limit", 0, "maximum number of new sessions to import (0 = unlimited)")
 	includeArchived := fs.Bool("include-archived", false, "also import archived sessions")
 	dryRun := fs.Bool("dry-run", false, "print what would be imported without writing")
@@ -81,9 +150,6 @@ func sessionImport(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: home directory: %v\n", err)
 		os.Exit(1)
-	}
-	if *dbPath == "" {
-		*dbPath = filepath.Join(home, ".hermes", "state.db")
 	}
 	watermarkPath := filepath.Join(home, ".canopy", "session-import.json")
 
@@ -99,12 +165,13 @@ func sessionImport(args []string) {
 
 	ctx := context.Background()
 
-	reader, err := session.OpenReader(*dbPath)
+	reader, source, err := src.open()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer func() { _ = reader.Close() }()
+	fmt.Printf("Source: %s\n", source)
 
 	// Canopy services — same pool/config the server uses.
 	cfg := config.FromEnv()
@@ -175,33 +242,24 @@ func printImportSummary(sum *session.ImportSummary, watermarkPath string) {
 }
 
 // sessionAssociationsBackfill recomputes and updates tree metadata for
-// already-imported Hermes sessions (WIRE-006). It reads sessions +
-// delegations from state.db, computes association metadata (parent/
-// children/delegation goals + title-parsed project/task/commit), looks
-// up the matching Canopy tree by metadata->>'session_id', and replaces
-// the tree's metadata JSON.
+// already-imported Hermes sessions (WIRE-006). It reads the Hermes session
+// source (the 6-hourly snapshot by default — GAP-077 — or an explicit --db
+// file), computes association metadata (parent/children/delegation goals +
+// title-parsed project/task/commit), looks up the matching Canopy tree by
+// metadata->>'session_id', and replaces the tree's metadata JSON.
 //
 // Safe to re-run: a second invocation produces identical metadata (the
-// session store is read-only, and the computation is deterministic).
+// session source is read-only, and the computation is deterministic).
 // Sessions whose trees don't exist in Canopy are silently skipped.
 //
-// Usage: canopyd session associations-backfill [--db path] [--dry-run]
+// Usage: canopyd session associations-backfill [--db path] [--snapshot-dir dir] [--dry-run]
 func sessionAssociationsBackfill(args []string) {
 	fs := flag.NewFlagSet("session associations-backfill", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	dbPath := fs.String("db", "", "path to Hermes state.db (default $HOME/.hermes/state.db)")
+	src := newSessionSourceFlags(fs)
 	dryRun := fs.Bool("dry-run", false, "print what would be updated without writing")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(1)
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: home directory: %v\n", err)
-		os.Exit(1)
-	}
-	if *dbPath == "" {
-		*dbPath = filepath.Join(home, ".hermes", "state.db")
 	}
 
 	owner := defaultOwnerID
@@ -217,12 +275,13 @@ func sessionAssociationsBackfill(args []string) {
 
 	ctx := context.Background()
 
-	reader, err := session.OpenReader(*dbPath)
+	reader, source, err := src.open()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer func() { _ = reader.Close() }()
+	fmt.Printf("Source: %s\n", source)
 
 	sessions, err := reader.ListSessions(ctx)
 	if err != nil {
@@ -295,4 +354,130 @@ func sessionAssociationsBackfill(args []string) {
 		fmt.Printf("  Skipped (error):  %d\n", skipped)
 	}
 	fmt.Printf("  Sessions skipped (no tree): %d\n", notFound)
+}
+
+// sessionBrowse prints what Canopy would read from the session source: the
+// session list (default) or one session's messages (--session). It is
+// read-only in both directions — it never touches the Canopy database, and the
+// source is opened read-only (GAP-077's browse surface for the snapshot
+// reader).
+//
+// Usage: canopyd session browse [--db path | --snapshot-dir dir] [--limit N] [--session ID]
+func sessionBrowse(args []string) {
+	os.Exit(sessionBrowseE(args))
+}
+
+// sessionBrowseE is sessionBrowse without the process exit so tests can assert
+// exit codes and capture output.
+func sessionBrowseE(args []string) int {
+	fs := flag.NewFlagSet("session browse", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	src := newSessionSourceFlags(fs)
+	limit := fs.Int("limit", 20, "maximum number of sessions to list (0 = all)")
+	sessionID := fs.String("session", "", "show this session's messages instead of the session list")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	ctx := context.Background()
+	reader, source, err := src.open()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer func() { _ = reader.Close() }()
+	fmt.Printf("Source: %s\n", source)
+
+	sessions, err := reader.ListSessions(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: list sessions: %v\n", err)
+		return 1
+	}
+	if *sessionID != "" {
+		return browseSessionMessages(ctx, reader, sessions, *sessionID)
+	}
+	return browseSessionList(ctx, reader, sessions, *limit)
+}
+
+// browseSessionList prints the session list with per-session message counts.
+func browseSessionList(ctx context.Context, reader *session.Reader, sessions []session.Session, limit int) int {
+	shown := sessions
+	if limit > 0 && len(shown) > limit {
+		shown = shown[:limit]
+	}
+	fmt.Printf("Sessions: %d of %d\n", len(shown), len(sessions))
+	if len(shown) == 0 {
+		fmt.Println("  (none)")
+		return 0
+	}
+	for _, s := range shown {
+		msgs, err := reader.ListMessages(ctx, s.ID)
+		count := "?"
+		if err == nil {
+			count = strconv.Itoa(len(msgs))
+		}
+		fmt.Printf("  %s  %s  %-10s  msgs=%-5s  %s\n",
+			s.ID,
+			s.StartedAt.Format(time.RFC3339),
+			browseOrDash(s.Source),
+			count,
+			browseOneLine(s.Title, 60))
+	}
+	return 0
+}
+
+// browseSessionMessages prints one session's messages.
+func browseSessionMessages(ctx context.Context, reader *session.Reader, sessions []session.Session, sessionID string) int {
+	var found *session.Session
+	for i := range sessions {
+		if sessions[i].ID == sessionID {
+			found = &sessions[i]
+			break
+		}
+	}
+	if found == nil {
+		fmt.Fprintf(os.Stderr, "Error: session %q not found in the session source\n", sessionID)
+		return 1
+	}
+	fmt.Printf("Session %s — %s (source=%s, model=%s, started=%s)\n",
+		found.ID, browseOrDash(found.Title), browseOrDash(found.Source),
+		browseOrDash(found.Model), found.StartedAt.Format(time.RFC3339))
+	msgs, err := reader.ListMessages(ctx, sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: list messages for %s: %v\n", sessionID, err)
+		return 1
+	}
+	fmt.Printf("Messages: %d\n", len(msgs))
+	for _, m := range msgs {
+		tool := ""
+		if m.ToolName != "" {
+			tool = " (" + m.ToolName + ")"
+		}
+		fmt.Printf("  %s  %-9s%s  %s\n",
+			m.Timestamp.Format(time.RFC3339), m.Role, tool, browseOneLine(m.Content, 200))
+	}
+	return 0
+}
+
+// browseOrDash renders an empty field as "-" so columns stay aligned.
+func browseOrDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "-"
+	}
+	return strings.TrimSpace(s)
+}
+
+// browseOneLine flattens a value to a single truncated line.
+func browseOneLine(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		return "-"
+	}
+	if max > 0 && len(s) > max {
+		runes := []rune(s)
+		if len(runes) > max {
+			return string(runes[:max]) + "…"
+		}
+	}
+	return s
 }

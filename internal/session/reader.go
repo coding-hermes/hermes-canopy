@@ -56,12 +56,24 @@
 //   - ISO-8601 TEXT timestamps     → parsed alongside SQLite REAL unix floats
 //   - missing idx_messages_session → irrelevant: mode=ro forbids the index
 //     self-heal (it writes), so queries simply run un-indexed
+//
+// Read sources (GAP-077). The production source is the 6-hourly Hermes state
+// SNAPSHOT, not the live database: OpenSnapshotReader resolves the newest
+// file under ~/.hermes/state-backups (snapshot.go documents the naming,
+// ordering, recency and failure rules), decompresses it to a private 0444
+// copy when it is compressed, and reads it through a read-only
+// ATTACH DATABASE against a scratch in-memory primary connection. The live
+// state.db is never opened by that path, so a Canopy import cannot take a
+// lock on — or write to — the file the gateway is holding open.
+// OpenReader(path) remains for the explicit --db override and tests: it opens
+// exactly the path it is given, read-only, and never substitutes another file.
 package session
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -71,6 +83,13 @@ import (
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no CGO)
 )
+
+// attachedSchema is the schema alias the snapshot database is ATTACHed as
+// (the GAP-077 contract spells it `ATTACH DATABASE 'file:<snapshot>?mode=ro'
+// AS hermes`). Every snapshot-mode query is written against it, which is what
+// keeps the scratch primary (:memory:) from ever being mistaken for the
+// source.
+const attachedSchema = "hermes"
 
 // Session is one row from the Hermes sessions table (schema subset).
 type Session struct {
@@ -96,9 +115,28 @@ type Message struct {
 	Timestamp  time.Time
 }
 
-// Reader provides read-only access to a Hermes state.db.
+// querier is the read surface both reader modes use: a pooled *sql.DB for a
+// direct open, or a single dedicated *sql.Conn that carries the ATTACH (and
+// the query_only pragma) for a snapshot open.
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// Reader provides read-only access to a Hermes state database, either directly
+// (OpenReader) or through a materialized snapshot (OpenSnapshotReader).
 type Reader struct {
+	// db owns the connection the queries run on. In snapshot mode it is a
+	// one-connection scratch pool whose only connection is held by q, so a
+	// caller must never query db directly there: it would block on the
+	// exhausted pool and would not see the attached schema anyway.
 	db      *sql.DB
+	conn    *sql.Conn                  // dedicated connection, snapshot mode only
+	q       querier                    // db (direct open) or conn (snapshot)
+	schema  string                     // SQL schema qualifier: "" (main) or attachedSchema
+	source  *snapshotSource            // materialized snapshot, snapshot mode only
+	spec    SnapshotSpec               // resolved snapshot metadata (zero for direct)
 	warn    *log.Logger                // degradation warnings; nil discards them
 	schemas map[string]map[string]bool // table -> observed column set
 }
@@ -109,14 +147,19 @@ var readerTables = [...]string{"sessions", "messages", "async_delegations"}
 
 // OpenReader opens path strictly read-only. mode=ro guarantees the live
 // Hermes store is never mutated; busy_timeout keeps queries from failing
-// with SQLITE_BUSY while Hermes writes concurrently.
+// with SQLITE_BUSY while Hermes writes concurrently. query_only is a second,
+// SQL-level guard: no statement on this handle can write, whatever the file
+// mode would allow.
+//
+// This is the explicit single-file override (CLI --db, tests). The production
+// path is OpenSnapshotReader, which reads the 6-hourly snapshot instead.
 //
 // On open the columns of sessions, messages, and async_delegations are
 // introspected (PRAGMA table_info). A missing table or column never fails
 // the open — each list method degrades per its own contract, so one
 // old-schema state.db cannot break an import run.
 func OpenReader(path string) (*Reader, error) {
-	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(10000)", path)
+	dsn := SnapshotURI(path) + "?mode=ro&_pragma=busy_timeout(10000)&_pragma=query_only(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("session: open %s: %w", path, err)
@@ -125,9 +168,130 @@ func OpenReader(path string) (*Reader, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("session: open %s: %w", path, err)
 	}
-	r := &Reader{db: db, warn: log.Default()}
+	r := &Reader{db: db, q: db, warn: log.Default()}
 	r.schemas = r.introspect()
 	return r, nil
+}
+
+// OpenSnapshotReader opens the newest usable Hermes state snapshot under
+// opts.Dir (default ~/.hermes/state-backups) as the read source (GAP-077).
+//
+// It never opens the live ~/.hermes/state.db: the snapshot is resolved
+// (ResolveSnapshot), decompressed to a private read-only copy when needed, and
+// ATTACHed read-only:
+//
+//	ATTACH DATABASE 'file:<copy>?mode=ro[&immutable=1]' AS hermes
+//
+// All queries are then written against hermes.<table>. A missing/unreadable
+// snapshot directory, no matching snapshot, or an out-of-date newest snapshot
+// is returned as an error (ErrSnapshotDir / ErrNoSnapshot / ErrSnapshotStale)
+// — there is no silent fallback. Callers that want a specific file pass it to
+// OpenReader instead.
+func OpenSnapshotReader(opts SnapshotOptions) (*Reader, error) {
+	spec, err := ResolveSnapshot(opts)
+	if err != nil {
+		return nil, err
+	}
+	source, err := spec.Materialize(opts)
+	if err != nil {
+		return nil, err
+	}
+	r, err := openAttachedReader(source, opts.Warn)
+	if err != nil {
+		_ = source.Close()
+		return nil, err
+	}
+	return r, nil
+}
+
+// openAttachedReader opens the prepared snapshot as a read-only ATTACH against
+// a scratch in-memory primary database. A single dedicated connection carries
+// the ATTACH and the query_only pragma, so no pooled-connection recycling can
+// ever produce a handle without them.
+func openAttachedReader(source *snapshotSource, warn *log.Logger) (*Reader, error) {
+	if source == nil {
+		return nil, errors.New("session: snapshot source is nil")
+	}
+	// The primary database is scratch space only; the queried data lives in
+	// the attached snapshot. It must not be a file: nothing here needs to
+	// persist, and a file primary would be a write target.
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return nil, fmt.Errorf("session: open scratch db: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("session: reserve scratch connection: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout(10000)"); err != nil {
+		_ = conn.Close()
+		_ = db.Close()
+		return nil, fmt.Errorf("session: scratch pragma: %w", err)
+	}
+	uri := SnapshotURI(source.Path) + "?mode=ro"
+	if source.Immutable {
+		// The copy is private and nothing else can write it, so SQLite may
+		// skip locking entirely.
+		uri += "&immutable=1"
+	}
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("ATTACH DATABASE '%s' AS %s", uri, attachedSchema)); err != nil {
+		_ = conn.Close()
+		_ = db.Close()
+		// ATTACH itself validates the file header, so a torn, truncated or
+		// non-SQLite snapshot fails right here.
+		return nil, fmt.Errorf("%w: %s: %v", ErrSnapshotInvalid, source.Path, err)
+	}
+	if _, err := conn.ExecContext(ctx, "PRAGMA query_only(1)"); err != nil {
+		_ = conn.Close()
+		_ = db.Close()
+		return nil, fmt.Errorf("session: snapshot query_only: %w", err)
+	}
+	r := &Reader{
+		db:     db,
+		conn:   conn,
+		q:      conn,
+		schema: attachedSchema,
+		source: source,
+		spec:   source.Spec,
+		warn:   log.Default(),
+	}
+	if warn != nil {
+		r.warn = warn
+	}
+	if err := r.verifyReadable(ctx); err != nil {
+		_ = conn.Close()
+		_ = db.Close()
+		return nil, err
+	}
+	r.schemas = r.introspect()
+	return r, nil
+}
+
+// verifyReadable proves the attached file really is a SQLite database before
+// any query is trusted. A torn snapshot (the backup timer mid-write) fails
+// here with ErrSnapshotInvalid instead of degrading into "no sessions".
+func (r *Reader) verifyReadable(ctx context.Context) error {
+	var version int
+	if err := r.q.QueryRowContext(ctx, fmt.Sprintf("PRAGMA %s.schema_version", r.schema)).Scan(&version); err != nil {
+		return fmt.Errorf("%w: %s: %v", ErrSnapshotInvalid, r.spec.Path, err)
+	}
+	return nil
+}
+
+// Snapshot reports the resolved snapshot a snapshot-mode reader is reading.
+// ok is false for a direct OpenReader, whose data comes from the path the
+// caller passed.
+func (r *Reader) Snapshot() (SnapshotSpec, bool) {
+	if r == nil || r.source == nil {
+		return SnapshotSpec{}, false
+	}
+	return r.spec, true
 }
 
 // SetWarnLogger routes degradation warnings to l (e.g. a test buffer or a
@@ -139,12 +303,49 @@ func (r *Reader) SetWarnLogger(l *log.Logger) {
 	r.warn = l
 }
 
-// Close releases the underlying database handle.
+// Close releases the underlying database handle and removes the private
+// snapshot copy, if one was materialized.
 func (r *Reader) Close() error {
-	if r == nil || r.db == nil {
+	if r == nil {
 		return nil
 	}
-	return r.db.Close()
+	var errs []error
+	if r.conn != nil {
+		if err := r.conn.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.conn = nil
+	}
+	if r.db != nil {
+		if err := r.db.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.db = nil
+	}
+	if r.source != nil {
+		if err := r.source.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.source = nil
+	}
+	return errors.Join(errs...)
+}
+
+// table qualifies a table name for the active read source.
+func (r *Reader) table(name string) string {
+	if r.schema == "" {
+		return name
+	}
+	return r.schema + "." + name
+}
+
+// tableInfo returns the introspection statement for a table, schema-qualified
+// on the attached snapshot so the scratch primary can never answer for it.
+func (r *Reader) tableInfo(name string) string {
+	if r.schema == "" {
+		return fmt.Sprintf("PRAGMA table_info(%s)", name)
+	}
+	return fmt.Sprintf("PRAGMA %s.table_info(%s)", r.schema, name)
 }
 
 // --- Schema introspection -----------------------------------------------------
@@ -158,7 +359,7 @@ func (r *Reader) introspect() map[string]map[string]bool {
 	out := make(map[string]map[string]bool, len(readerTables))
 	for _, table := range readerTables {
 		cols := map[string]bool{}
-		rows, err := r.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+		rows, err := r.q.QueryContext(context.Background(), r.tableInfo(table))
 		if err == nil {
 			for rows.Next() {
 				var cid, notNull, pk int
@@ -307,7 +508,7 @@ func (r *Reader) ListSessions(ctx context.Context) ([]Session, error) {
 	}
 	query := fmt.Sprintf(`
 		SELECT id, %s, %s, %s, %s, %s, %s, %s, %s
-		FROM sessions
+		FROM %s
 		%s`,
 		r.optExpr("sessions", "source", "''"),
 		r.optExpr("sessions", "display_name", "NULL"),
@@ -317,13 +518,14 @@ func (r *Reader) ListSessions(ctx context.Context) ([]Session, error) {
 		r.optExpr("sessions", "ended_at", "NULL"),
 		r.optExpr("sessions", "archived", "0"),
 		r.optExpr("sessions", "parent_session_id", "NULL"),
+		r.table("sessions"),
 		orderClause,
 	)
 	if !r.hasCol("sessions", "source") {
 		r.warnf("session: state.db sessions table has no source column " +
 			"(older hermes-agent schema); importing with empty Source values")
 	}
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("session: list sessions: %w", err)
 	}
@@ -411,17 +613,18 @@ func (r *Reader) ListMessages(ctx context.Context, sessionID string) ([]Message,
 	}
 	query := fmt.Sprintf(`
 		SELECT id, session_id, role, %s, %s, %s, %s
-		FROM messages
+		FROM %s
 		WHERE session_id = ?%s
 		%s`,
 		r.optExpr("messages", "content", "NULL"),
 		r.optExpr("messages", "tool_name", "NULL"),
 		r.optExpr("messages", "token_count", "NULL"),
 		r.optExpr("messages", "timestamp", "0"),
+		r.table("messages"),
 		activeFilter,
 		orderClause,
 	)
-	rows, err := r.db.QueryContext(ctx, query, sessionID)
+	rows, err := r.q.QueryContext(ctx, query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("session: list messages for %s: %w", sessionID, err)
 	}
@@ -498,13 +701,14 @@ func (r *Reader) ListDelegations(ctx context.Context) ([]Delegation, error) {
 	}
 	query := fmt.Sprintf(`
 		SELECT delegation_id, origin_session, %s, state, %s
-		FROM async_delegations
+		FROM %s
 		%s`,
 		r.optExpr("async_delegations", "parent_session_id", "NULL"),
 		r.optExpr("async_delegations", "task_json", "NULL"),
+		r.table("async_delegations"),
 		orderClause,
 	)
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.q.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("session: list delegations: %w", err)
 	}

@@ -970,13 +970,53 @@ CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
 > (the native/live default) or `:8092` (the compose API) for a scratch server.
 
 > `session import` and `session associations-backfill` are the exception: they run
-> in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly, plus
-> `--db` for the Hermes `state.db`), so they are configured like a server rather
-> than like an HTTP client.
+> in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly), so
+> they are configured like a server rather than like an HTTP client. See
+> [Hermes session source](#hermes-session-source-gap-077) for what they read.
 >
 > `card export` is the other exception: it reads the local per-type card stores
 > directly (`CANOPY_CARD_DATA_DIR`, default `~/.hermes/canopy/cards`) and never
 > touches the API or PostgreSQL — see [docs/CARD_EXPORT.md](docs/CARD_EXPORT.md).
+
+### Hermes session source (GAP-077)
+
+`canopyd session browse`, `session import` and `session associations-backfill`
+read Hermes session history from the **6-hourly state snapshot**, not from the
+live `~/.hermes/state.db`:
+
+- **Location:** `$HOME/.hermes/state-backups/` (override: `--snapshot-dir`).
+- **Names:** `state_<YYYYMMDD>-<HHMMSS>.db` with an optional `.zst` (current
+  producer) or `.gz` (legacy) suffix. Nothing else in that directory is ever
+  considered — the selection never leaves the directory and never follows a
+  symlink.
+- **Selection:** the newest file by its embedded timestamp (host-local, as
+  `date +%Y%m%d-%H%M%S` writes it), then mtime, then name. Snapshots are written
+  every 6 hours, so the newest is at most ~6h behind the gateway.
+- **Recency bound:** a newest snapshot older than `--max-snapshot-age`
+  (default `24h`) is refused instead of imported. `--max-snapshot-age 0`
+  disables the bound.
+- **Failure is loud, never a fallback.** A missing snapshot directory, no
+  matching file, or a stale newest file exits non-zero naming the path — Canopy
+  does not fall back to the live database. To read one specific database
+  (bypassing snapshots entirely) pass `--db <path>`; that file is opened
+  read-only too.
+- **Read-only, zero contention.** Compressed snapshots are decompressed into a
+  private `0444` copy under `$TMPDIR` (removed when the command ends) and opened
+  with a read-only `ATTACH DATABASE 'file:<copy>?mode=ro&immutable=1'`; every
+  query runs against that attached schema with `PRAGMA query_only(1)` set as a
+  second guard. Plain `.db` snapshots are read in place, read-only. The live
+  `state.db` is never opened, so no Canopy read can take a lock on, or write to,
+  the file the gateway holds open.
+- **Disk cost:** decompressing a current snapshot needs roughly 3× its
+  compressed size free under `$TMPDIR` (~17 GB for a ~5.4 GB `.zst`). Point
+  `TMPDIR` at a roomy filesystem if `/tmp` is small.
+
+```bash
+./bin/canopyd session browse                      # newest snapshot: session list
+./bin/canopyd session browse --session <id>       # one session's messages
+./bin/canopyd session import --limit 5 --dry-run  # what an import would add
+./bin/canopyd session import --db /path/state.db  # explicit file, read-only
+```
 
 ## Monitoring
 

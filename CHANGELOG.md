@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Hermes session source (GAP-077)
+- Session reads now come from the 6-hourly Hermes state SNAPSHOT (`~/.hermes/state-backups/state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]`), read read-only through `ATTACH DATABASE 'file:<copy>?mode=ro'` — the live `~/.hermes/state.db` is never opened, so browsing/importing cannot contend with (or write to) the gateway's database. Snapshot selection is deterministic (newest by embedded stamp, regular files only, no symlinks, no traversal), bounded by `--max-snapshot-age` (default 24h), and fails loudly rather than falling back to the live DB. New `canopyd session browse [--session <id>]` prints the session list/messages from that source; `session import` / `associations-backfill` use it by default, with `--db <path>` (read-only), `--snapshot-dir`, and `--max-snapshot-age 0` as explicit overrides.
+
 ### Phase 11 — Real-Time Wiring & Anti-Phantom Program (2026-08-08/09)
 - Real-time sync (WIRE-001): `/api/v1/events` SSE + frontend EventSource + Yjs pushUpdate — de-stubbed BUG-024
 - Context manifest panel (WIRE-002): token budget + ancestry from `/api/v1/context/{node_id}` in node detail UI
