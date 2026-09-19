@@ -405,3 +405,60 @@ func TestValidateContextModelWindowsProgrammatic(t *testing.T) {
 		t.Fatalf("Validate() with a blank model name = %v, want an error naming CONTEXT_MODEL_WINDOWS", err)
 	}
 }
+
+// --- CONTEXT_RETRIEVAL_MAX (GAP-080 phase 4a) -------------------------------
+
+func TestContextRetrievalMaxDefault(t *testing.T) {
+	if got := Default().ContextRetrievalMax; got != 0 {
+		t.Fatalf("Default().ContextRetrievalMax = %d, want 0 (tier disabled)", got)
+	}
+}
+
+func TestFromEnvContextRetrievalMax(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want int
+	}{
+		{"unset keeps the default", "", 0},
+		{"zero is accepted (explicitly disabled)", "0", 0},
+		{"one is accepted", "1", 1},
+		{"mid-range is accepted", "25", 25},
+		{"upper bound is accepted", "50", 50},
+		{"above range keeps the default", "51", 0},
+		{"negative keeps the default", "-1", 0},
+		{"non-numeric keeps the default", "abc", 0},
+		{"blank keeps the default", " ", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CONTEXT_RETRIEVAL_MAX", tc.env)
+			if got := FromEnv().ContextRetrievalMax; got != tc.want {
+				t.Fatalf("FromEnv() with CONTEXT_RETRIEVAL_MAX=%q = %d, want %d", tc.env, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateContextRetrievalMax pins the other half of the contract: a
+// value FromEnv would have ignored is a hard error on a Config built in code.
+func TestValidateContextRetrievalMax(t *testing.T) {
+	for _, n := range []int{0, 1, 25, 50} {
+		c := Default()
+		c.ContextRetrievalMax = n
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate() with CONTEXT_RETRIEVAL_MAX=%d = %v, want nil", n, err)
+		}
+	}
+	for _, n := range []int{-1, 51, 100} {
+		c := Default()
+		c.ContextRetrievalMax = n
+		err := c.Validate()
+		if err == nil {
+			t.Fatalf("Validate() with CONTEXT_RETRIEVAL_MAX=%d = nil, want error", n)
+		}
+		if !strings.Contains(err.Error(), "CONTEXT_RETRIEVAL_MAX") {
+			t.Fatalf("Validate() error %q does not name CONTEXT_RETRIEVAL_MAX", err)
+		}
+	}
+}

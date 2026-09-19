@@ -32,6 +32,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/mls"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
 	relaypkg "github.com/coding-hermes/hermes-canopy/internal/relay"
+	"github.com/coding-hermes/hermes-canopy/internal/retrieval"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
 	"github.com/coding-hermes/hermes-canopy/internal/server"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
@@ -472,13 +473,20 @@ func main() {
 		log.Info().Msg("prometheus metrics enabled on /metrics")
 	}
 
-	// Context compiler — GAP-001 budgeted context assembly.
+	// Context compiler — GAP-001 budgeted context assembly. The retrieved
+	// tier (GAP-080 phase 4a) is wired only when CONTEXT_RETRIEVAL_MAX > 0;
+	// at the default 0 the compiler is byte-identical to the pre-4a build.
+	var ctxOpts []ctxpkg.Option
+	if cfg.ContextRetrievalMax > 0 {
+		ctxOpts = append(ctxOpts, ctxpkg.WithRetrieval(retrieval.NewTopicRetriever(topicSearchSvc), cfg.ContextRetrievalMax))
+	}
 	ctxCompiler := ctxpkg.NewCompiler(
 		database.Nodes,
 		database.Topics,
 		cardDBMgr, // CardDBManager implements CardReader interface
 		ctxpkg.NewTokenEstimator(),
 		cfg.ContextMaxRefs,
+		ctxOpts...,
 	)
 
 	// Plugin registry — PL-01 Phase 1. Sandbox execution is wired later.

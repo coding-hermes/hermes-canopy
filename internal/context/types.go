@@ -97,6 +97,14 @@ type Manifest struct {
 	// when the turn was compiled from a multi-reference selection. Omitted
 	// entirely for ordinary turns.
 	MultiReference *MultiReferenceManifestEntry `json:"multiReference,omitempty"`
+
+	// Retrieved is the phase-4a retrieved tier (topic-search results folded
+	// into the payload). Omitted entirely when the tier is disabled or empty.
+	Retrieved []ManifestItem `json:"retrieved,omitempty"`
+
+	// RetrievalBudget is the tier's token allocation for this compile, recorded
+	// when the retrieval step RAN (searched), omitted when it did not.
+	RetrievalBudget int `json:"retrievalBudget,omitempty"`
 }
 
 // ManifestItem describes one component of the compiled context.
@@ -111,6 +119,10 @@ type ManifestItem struct {
 	// and was therefore exempted from the budget walk (GAP-080 phase 1).
 	// Omitted from the JSON for unpinned items.
 	Pinned bool `json:"pinned,omitempty"`
+
+	// Relevance is the retriever's ordering score for a retrieved item.
+	// Set only on the retrieved tier; omitted for every other kind.
+	Relevance float64 `json:"relevance,omitempty"`
 }
 
 // TokenEstimator estimates tokens for a string. Injectable for tests.
@@ -140,6 +152,22 @@ type TopicReader interface {
 // CardReader is satisfied by *card.SQLiteCardRepo.
 type CardReader interface {
 	GetByContextHash(ctx context.Context, contextHash string) ([]card.Card, error)
+}
+
+// --- Retrieved tier (GAP-080 phase 4a) ---
+
+// RetrievalItem is one candidate the retrieved tier may fold into the payload.
+type RetrievalItem struct {
+	ID        uuid.UUID // topic id
+	Slug      string
+	Title     string
+	Content   string  // retrieval snippet; already-extracted text, no DB access
+	Relevance float64 // higher is better; the retriever's own ordering signal
+}
+
+// RetrievalReader is the OPTIONAL retrieved-tier source (GAP-080 phase 4a).
+type RetrievalReader interface {
+	Retrieve(ctx context.Context, treeID uuid.UUID, query string, limit int) ([]RetrievalItem, error)
 }
 
 // --- Helpers ---

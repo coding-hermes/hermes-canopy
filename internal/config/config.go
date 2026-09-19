@@ -47,6 +47,15 @@ type Config struct {
 	ContextMaxRefs       int // CONTEXT_MAX_REFS, default 5 (soft) — hard cap is 2x this
 	ContextDefaultBudget int // CONTEXT_DEFAULT_BUDGET, default 8000 tokens
 
+	// ContextRetrievalMax caps how many topic-search results the context
+	// compiler's retrieved tier may fold into a payload (GAP-080 phase 4a):
+	// CONTEXT_RETRIEVAL_MAX, default 0 (tier disabled). 0..50 inclusive is
+	// accepted at parse time (0 = disabled); anything else keeps the
+	// default, matching the silent-keep behaviour of the sibling context
+	// knobs. A programmatically-built Config outside 0..50 is rejected by
+	// Validate().
+	ContextRetrievalMax int
+
 	// ContextBudgetPercent is the percentage of the SELECTED model's context
 	// window used as the default compilation budget (GAP-080 phase 2a):
 	// CONTEXT_BUDGET_PERCENT, default 60. It is a ceiling-free default — the
@@ -146,6 +155,7 @@ func Default() *Config {
 		ContextMaxAncestors:  50,
 		ContextMaxRefs:       5,
 		ContextDefaultBudget: 8000,
+		ContextRetrievalMax:  0,
 		ContextBudgetPercent: 60,
 		PluginMaxSize:        1048576,
 		GatewayBaseURL:       "http://127.0.0.1:8642",
@@ -273,6 +283,15 @@ func FromEnv() *Config {
 	if v := os.Getenv("CONTEXT_BUDGET_PERCENT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
 			c.ContextBudgetPercent = n
+		}
+	}
+	// CONTEXT_RETRIEVAL_MAX (GAP-080 phase 4a): max topic-search results the
+	// retrieved tier may fold into a payload. 0..50 inclusive is accepted
+	// (0 = tier disabled); anything else keeps the default 0, matching the
+	// silent-keep behaviour of the sibling context knobs.
+	if v := os.Getenv("CONTEXT_RETRIEVAL_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 50 {
+			c.ContextRetrievalMax = n
 		}
 	}
 	// CONTEXT_MODEL_WINDOWS (GAP-080 phase 2a follow-up): locally declared
@@ -411,6 +430,12 @@ func (c *Config) Validate() error {
 	// built Config is a programming error, not a user preference.
 	if c.ContextBudgetPercent < 0 || c.ContextBudgetPercent > 100 {
 		return fmt.Errorf("config: CONTEXT_BUDGET_PERCENT must be between 0 and 100 (got %d)", c.ContextBudgetPercent)
+	}
+	// GAP-080 phase 4a: same posture for CONTEXT_RETRIEVAL_MAX — FromEnv
+	// already ignores an out-of-range env value, so reaching Validate()
+	// with one means the Config was built in code.
+	if c.ContextRetrievalMax < 0 || c.ContextRetrievalMax > 50 {
+		return fmt.Errorf("config: CONTEXT_RETRIEVAL_MAX must be between 0 and 50 (got %d)", c.ContextRetrievalMax)
 	}
 	// GAP-080 phase 2a follow-up: the parse failure FromEnv() recorded for
 	// CONTEXT_MODEL_WINDOWS, reported here so the server refuses to start.

@@ -120,6 +120,42 @@ type CardReader interface {
 > to the pre-amendment shape. Implementation: `internal/context/compiler.go`
 > (`isPinned`, the step-4 walk); tests: `internal/context/compiler_pinned_test.go`.
 
+> **2026-09-19 amendment (GAP-080 phase 4a — retrieved tier):** the compiler
+> gained an OPTIONAL retrieved tier that folds topic-search results (the
+> SPEC-TM-03 topic FTS retrieval) into the compiled payload. **Position:** the
+> tier's blocks are placed between the references block and the cards block, so
+> the payload order is ancestry → references → retrieved → cards. **Token
+> share:** the tier's allocation is `floor(TokenBudget * 12 / 100)`
+> (`RetrievalSharePercent = 12` — the vision's tier share, the audit's 12%
+> figure), clamped by the budget remaining after ancestry and references; kept
+> retrieved tokens are deducted from the same shared budget the cards step
+> sees. **No budget, no search:** when the tier's allocation floors to 0 or the
+> remaining budget is exhausted, NO search is issued and NO warning is emitted —
+> the manifest's budget fields already show why, and a warning on every
+> pinned-overage compile would be noise. **Reference dedupe:** a retrieval hit
+> whose topic ID is already present in `manifest.References` is dropped — a
+> reference wins over a retrieval hit; duplicates within the retrieved set
+> collapse to the first occurrence. **Deterministic ordering:** candidates are
+> sorted by relevance DESC, then slug ASC (byte compare), then ID string ASC —
+> the reader's own order is never trusted. **Degrade path:** a reader error
+> appends exactly one `"retrieval failed: <err>"` warning and never fails the
+> compile (same partial-failure contract as references and cards); omitted
+> budget casualties warn as `"N retrieved items omitted (budget)"`. **Manifest
+> fields:** `Manifest.Retrieved []ManifestItem` (json `retrieved`, omitted when
+> empty/disabled) with items of `kind: "retrieved_topic"` carrying
+> `relevance` and `tokenCount`, and `Manifest.RetrievalBudget int` (json
+> `retrievalBudget`, omitted when the search did not run). **Knob:**
+> `CONTEXT_RETRIEVAL_MAX` (default 0 = tier disabled; accepted 0..50, out of
+> range keeps the default at parse time and is a hard error from `Validate()` on
+> a programmatically-built Config) wires the adapter at `cmd/canopyd/main.go`
+> when > 0. **Parity guarantee:** with the tier unwired (the default), the step
+> is a pure no-op — no search, no warning, no manifest field — and `Content`,
+> `Manifest` JSON and `ManifestHash` are byte-identical to the pre-4a compiler.
+> Implementation: `internal/context/retrieval.go` (step 5c),
+> `internal/retrieval/retrieval.go` (the `search.TopicSearchService` adapter);
+> tests: `internal/context/retrieval_test.go`,
+> `internal/retrieval/retrieval_test.go`.
+
 ## 3. Data Model
 
 No new DB tables. The compiler reads existing tables:

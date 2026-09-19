@@ -22,6 +22,12 @@ type compilerImpl struct {
 	cards   CardReader
 	est     TokenEstimator
 	maxRefs int // soft cap for references (hard cap = 2x)
+
+	// Retrieved tier (GAP-080 phase 4a). retrieval == nil or retrievalMax
+	// <= 0 means the tier is disabled and Compile is byte-identical to the
+	// pre-4a compiler.
+	retrieval    RetrievalReader
+	retrievalMax int
 }
 
 // isPinned reports whether a node's metadata JSON marks the node pinned: an
@@ -51,6 +57,27 @@ func isPinned(metadata []byte) bool {
 	return pinned
 }
 
+// RetrievalSharePercent is the retrieved tier's share of the compile's
+// TokenBudget (GAP-080 phase 4a — the vision's tier share, the audit's 12%
+// figure). The tier allocation is floor(TokenBudget * RetrievalSharePercent
+// / 100).
+const RetrievalSharePercent = 12
+
+// Option configures a compilerImpl built by NewCompiler.
+type Option func(*compilerImpl)
+
+// WithRetrieval enables the retrieved tier (GAP-080 phase 4a). A nil reader
+// or max <= 0 is a no-op (the tier stays disabled) — never a panic.
+func WithRetrieval(reader RetrievalReader, max int) Option {
+	return func(c *compilerImpl) {
+		if reader == nil || max <= 0 {
+			return
+		}
+		c.retrieval = reader
+		c.retrievalMax = max
+	}
+}
+
 // NewCompiler wires repositories + estimator into a Compiler.
 func NewCompiler(
 	nodes NodeReader,
@@ -58,14 +85,21 @@ func NewCompiler(
 	cards CardReader,
 	est TokenEstimator,
 	maxRefs int,
+	opts ...Option,
 ) Compiler {
-	return &compilerImpl{
+	c := &compilerImpl{
 		nodes:   nodes,
 		topics:  topics,
 		cards:   cards,
 		est:     est,
 		maxRefs: maxRefs,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(c)
+		}
+	}
+	return c
 }
 
 // Compile implements Compiler.
@@ -290,6 +324,18 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		}
 	}
 
+	// ── Step 5c: Retrieved tier (GAP-080 phase 4a) ─────────────────────
+	// Folds topic-search results into the payload between the references
+	// block and the cards block. Optional and disabled unless the compiler
+	// was built WithRetrieval — with the tier unwired this step is a no-op
+	// and the payload is byte-identical to the pre-4a compiler.
+	retContent, retItems, retWarnings := c.compileRetrieved(ctx, req, currentNode, manifest, remainingBudget)
+	manifest.Retrieved = retItems
+	manifest.Warnings = append(manifest.Warnings, retWarnings...)
+	for _, item := range retItems {
+		remainingBudget -= item.TokenCount
+	}
+
 	// ── Step 6: Cards ───────────────────────────────────────────────────
 	cardContent, cardItems, cardWarnings := c.compileCards(ctx, req, currentNode.Content, remainingBudget)
 	manifest.Cards = cardItems
@@ -300,6 +346,9 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	finalContent += joinSections(ancestryContent)
 	if len(refContent) > 0 {
 		finalContent += "\n\n" + joinSections(refContent)
+	}
+	if len(retContent) > 0 {
+		finalContent += "\n\n" + joinSections(retContent)
 	}
 	if len(cardContent) > 0 {
 		finalContent += "\n\n" + joinSections(cardContent)
