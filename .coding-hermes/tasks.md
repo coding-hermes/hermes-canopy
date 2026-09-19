@@ -1945,3 +1945,7 @@ the real-wire-vs-spec schema class.
 renderer dispatch** (spec-backed, frontend-only) or **DF-HERMES-CANOPY-31** (a one-line cadence change
 plus a real streaming regression test — the highest-value defect on the board, since it disables the
 liveness signal of the feature that just shipped). Watch: DF-24/25 (flakes under load), QA-HERMES-CANOPY-9/10 (fleet-owned).
+
+**CI follow-up (same tick, after the push):** the pushed head **`9814e59`** (which carries `fadd3c4`) is **GREEN** — GitHub run created 2026-09-19T08:08:44Z, `success` on the first attempt, so no `INT-CI` row was needed. Every run inherited at tick start was `success` as well. Push parity verified after the push: `origin/master` and `gitlab/master` both at `9814e59` with `rev-list --count <remote>/master..HEAD` = **0** on each.
+
+**Off-by-one (submitted):** `sub_bdbd95` — `sse-heartbeat-interval-equals-server-write-timeout` (the DF-31 class, with the fix options and the detection rule that a shortened-injection unit test cannot see it) and `sub_d03158` — `frontend-schemas-must-validate-the-real-wire-not-the-spec` (the real-wire-adaptation method used to verify this tick's client half). `discover` for both classes returned `not_found` before submission.
