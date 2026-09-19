@@ -533,6 +533,134 @@ func TestCardEventsSSELiveDeliveryAndUnsubscribe(t *testing.T) {
 	}
 }
 
+// appendDuringReplayService forces the subscribe->replay duplicate-delivery
+// window deterministically, with no sleeps: the handler registers its live
+// subscription BEFORE it reads the event log (so no append is missed), which
+// means an append landing in that window is published to the hub AND returned
+// by the replay query. This decorator creates exactly that state — the first
+// replay read appends through the real service and only then delegates to the
+// real read — so the stream sees one sequence on both paths.
+//
+// The embedded interface supplies every other method unchanged: the stream
+// still talks to the real service for the snapshot, the backlog guard, the
+// cursor and the live subscription.
+type appendDuringReplayService struct {
+	service.CardService
+
+	cardID   uuid.UUID
+	mutation map[string]any
+	once     sync.Once
+	err      error
+}
+
+func (s *appendDuringReplayService) ListCardEvents(
+	ctx context.Context,
+	cardID uuid.UUID,
+	afterSequence int64,
+	limit int,
+) ([]service.CardEvent, error) {
+	s.once.Do(func() {
+		_, s.err = s.CardService.UpdateCardData(ctx, s.cardID, s.mutation)
+	})
+	return s.CardService.ListCardEvents(ctx, cardID, afterSequence, limit)
+}
+
+// TestCardEventsSSEDedupesAppendDuringReplay is the regression test for the
+// duplicate-frame race: an append that lands while the handler is replaying is
+// delivered by the replay AND by the live hub. The client must still see one
+// frame per sequence, and a later live append must still be delivered.
+func TestCardEventsSSEDedupesAppendDuringReplay(t *testing.T) {
+	svc, _, repo, _ := cardSSEStore(t)
+	cardID := seedCard(t, repo, 2)
+
+	// Cursor 2 consumes both seeded events, so every card_event frame below is
+	// produced by the race window or by the live append — nothing else.
+	race := &appendDuringReplayService{
+		CardService: svc,
+		cardID:      cardID,
+		mutation:    map[string]any{"race": "during-replay"},
+	}
+
+	rec, stop := runCardSSEStream(t, newCardSSERouter(race, time.Hour),
+		"/cards/"+cardID.String()+"/events?after_sequence=2", nil)
+
+	// The forced append is published to the hub before the replay query runs,
+	// so this frame proves the race state was reached (and that the live
+	// subscription was already registered when the append happened).
+	rec.waitFor(t, `"race":"during-replay"`)
+
+	// A later append happens strictly after replay: it can only arrive live.
+	updated, err := svc.UpdateCardData(context.Background(), cardID, map[string]any{"later": "after-replay"})
+	if err != nil {
+		t.Fatalf("UpdateCardData (later live append): %v", err)
+	}
+	rec.waitFor(t, `"later":"after-replay"`)
+
+	stop()
+	if race.err != nil {
+		t.Fatalf("forced append during replay failed: %v", race.err)
+	}
+
+	_, body, _ := rec.snapshot()
+	frames := eventFrames(t, body)
+
+	// Exactly one frame per sequence: the raced append (sequence 3, framed by
+	// replay and suppressed on the live path) and the later live append.
+	if len(frames) != 2 {
+		t.Fatalf("card_event frames = %d, want 2 (one per sequence); stream:\n%s", len(frames), body)
+	}
+	racedSeq := int64(3) // seedCard(2) wrote sequences 1 and 2
+	if got := frames[0].ID; got != strconv.FormatInt(racedSeq, 10) {
+		t.Errorf("first frame id = %q, want %d (the append that landed during replay, delivered by replay)", got, racedSeq)
+	}
+	if got := frames[1].ID; got != strconv.FormatInt(updated.LastEventSeq, 10) {
+		t.Errorf("second frame id = %q, want the later live append %d", got, updated.LastEventSeq)
+	}
+	if updated.LastEventSeq != racedSeq+1 {
+		t.Fatalf("later append sequence = %d, want %d", updated.LastEventSeq, racedSeq+1)
+	}
+
+	seen := map[string]int{}
+	for _, f := range frames {
+		seen[f.ID]++
+	}
+	for id, n := range seen {
+		if n != 1 {
+			t.Errorf("sequence %s was framed %d times, want 1; stream:\n%s", id, n, body)
+		}
+	}
+}
+
+// TestCardEventsSSELiveAppendAfterCursorAheadOfLog pins the loss side of the
+// dedupe boundary. A client may present a cursor beyond the log (nothing is
+// replayed, so there is no replay watermark); the next real append must still
+// be delivered. A boundary floored at the cursor instead of the replay
+// watermark would silently swallow it.
+func TestCardEventsSSELiveAppendAfterCursorAheadOfLog(t *testing.T) {
+	svc, _, repo, _ := cardSSEStore(t)
+	cardID := seedCard(t, repo, 2)
+
+	rec, stop := runCardSSEStream(t, newCardSSERouter(svc, time.Hour),
+		"/cards/"+cardID.String()+"/events?after_sequence=999", nil)
+	rec.waitFor(t, "event: card_snapshot")
+
+	updated, err := svc.UpdateCardData(context.Background(), cardID, map[string]any{"later": "after-replay"})
+	if err != nil {
+		t.Fatalf("UpdateCardData: %v", err)
+	}
+	rec.waitFor(t, `"later":"after-replay"`)
+	stop()
+
+	_, body, _ := rec.snapshot()
+	frames := eventFrames(t, body)
+	if len(frames) != 1 {
+		t.Fatalf("card_event frames = %d, want 1 (the live append; the cursor replays nothing); stream:\n%s", len(frames), body)
+	}
+	if got := frames[0].ID; got != strconv.FormatInt(updated.LastEventSeq, 10) {
+		t.Fatalf("live frame id = %q, want the appended sequence %d", got, updated.LastEventSeq)
+	}
+}
+
 // TestCardEventsSSEServiceWithoutHubStillStreams pins the no-hub degradation:
 // snapshot + replay are served from the store, and no live channel exists (a
 // nil channel never fires).

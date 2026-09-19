@@ -89,7 +89,10 @@ type cardSSEEnvelope struct {
 //  3. `heartbeat` frames keep an idle connection warm every 30s (injectable).
 //  4. The subscription is registered before the first frame and released on
 //     return, so a cancelled request context ends the stream promptly and leaks
-//     nothing.
+//     nothing. Because the subscription precedes the replay, an append landing
+//     between the two is returned by the replay AND fanned out live; the live
+//     loop therefore drops any event the replay already framed, so each
+//     sequence reaches the client exactly once without ever being skipped.
 //
 // The snapshot frame deliberately carries no `id:` line. An SSE client that
 // sees no id keeps its previous Last-Event-ID, which is exactly right: the
@@ -156,7 +159,9 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	// 5. Snapshot, then replay.
+	// 5. Snapshot, then replay. The replay reports the highest sequence it
+	// framed — the dedupe watermark the live loop below applies to an event
+	// that arrived on BOTH paths (see the loop's comment).
 	snapshot, err := cardSSESnapshotBody(card)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("card_id", cardID.String()).Msg("card sse: snapshot frame")
@@ -165,7 +170,8 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 	if err := writeSSEFrame(w, "", cardSSESnapshotEvent, snapshot); err != nil {
 		return
 	}
-	if err := h.replayCardEvents(ctx, w, cardID, cursor, card.Type); err != nil {
+	replayedThrough, err := h.replayCardEvents(ctx, w, cardID, cursor, card.Type)
+	if err != nil {
 		log.Ctx(ctx).Warn().Err(err).Str("card_id", cardID.String()).Msg("card sse: replay aborted")
 		return
 	}
@@ -184,6 +190,16 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 		case ev, ok := <-events:
 			if !ok {
 				return
+			}
+			// Dedupe: the subscription is registered BEFORE the replay, so an
+			// append landing between the two is returned by the replay query
+			// AND fanned out to this channel — the client would be framed the
+			// same id twice. `replayedThrough` is the replay's highest framed
+			// sequence. It is deliberately NOT floored at the client's cursor:
+			// a cursor ahead of the log replays nothing, and flooring there
+			// would silently swallow the next real append.
+			if ev.Sequence <= replayedThrough {
+				continue
 			}
 			body, err := cardSSEEventBody(ev, card.Type)
 			if err != nil {
@@ -208,7 +224,14 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// replayCardEvents writes every stored event after cursor, in sequence order.
+// replayCardEvents writes every stored event after cursor, in sequence order,
+// and reports the highest sequence it wrote (0 when it wrote none).
+//
+// The returned watermark is what lets the stream's live loop drop an event the
+// replay already delivered. The subscription is registered BEFORE the replay
+// runs (subscribe-before-replay, so no append is missed), which means an append
+// landing in that window is published to the live channel AND returned by this
+// query: the client would otherwise be framed the same sequence twice.
 //
 // The replay is fetched at limit+1 on purpose: if the log grew past the backlog
 // limit between the pre-stream guard and this read, the extra row is the
@@ -219,10 +242,12 @@ func (h *CardHandler) replayCardEvents(
 	cardID uuid.UUID,
 	cursor int64,
 	cardType service.CardType,
-) error {
+) (int64, error) {
+	var replayedThrough int64
+
 	events, err := h.svc.ListCardEvents(ctx, cardID, cursor, cardSSEBacklogLimit+1)
 	if err != nil {
-		return err
+		return replayedThrough, err
 	}
 
 	if len(events) > cardSSEBacklogLimit {
@@ -235,13 +260,16 @@ func (h *CardHandler) replayCardEvents(
 	for _, ev := range events {
 		body, err := cardSSEEventBody(ev, cardType)
 		if err != nil {
-			return err
+			return replayedThrough, err
 		}
 		if err := writeSSEFrame(w, strconv.FormatInt(ev.Sequence, 10), cardSSEEventName, body); err != nil {
-			return err
+			return replayedThrough, err
+		}
+		if ev.Sequence > replayedThrough {
+			replayedThrough = ev.Sequence
 		}
 	}
-	return nil
+	return replayedThrough, nil
 }
 
 // parseCardEventCursor resolves the replay cursor from the request: the LARGER
