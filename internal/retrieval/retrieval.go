@@ -5,6 +5,12 @@
 // a live PostgreSQL, and this adapter must stay unit-testable without one.
 // The adapter is pure translation — no logging, no analytics writes, no
 // side effects of any kind (the search service's LogSearch is never called).
+//
+// GAP-080 phase 4c (DF-HERMES-CANOPY-29) adds the recall fallback: the tier's
+// query is the node's WHOLE content, and PostgreSQL's plainto_tsquery ANDs
+// every term, so a sentence-shaped message matched nothing at all. The search
+// now runs ALL-TERMS first and, only when that returns nothing, retries ONCE
+// in ANY-TERM (OR) mode.
 package retrieval
 
 import (
@@ -36,24 +42,42 @@ func NewTopicRetriever(searcher TopicSearcher) *TopicRetriever {
 // Retrieve maps a topic search to retrieval candidates, preserving the
 // searcher's result order (the compiler owns ordering and dedupe).
 //
+// Precision first, recall second (DF-HERMES-CANOPY-29): the ALL-TERMS search
+// runs first and its result is authoritative WHENEVER IT IS NON-EMPTY — a
+// query whose terms all occur in a topic still resolves exactly as it did
+// before the fallback existed, on one search. Only a clean EMPTY result
+// retries once in ANY-TERM (OR) mode, which is what makes the tier fire on
+// natural prose ("zebra migration runbook planning for the zebra cutover"
+// cannot match a "Zebra Runbook Cutover" topic under AND semantics).
+//
+// An ERROR never triggers the fallback: it is returned UNWRAPPED, so the
+// compiler's degrade path renders it verbatim in its single
+// `retrieval failed: ...` warning. That also covers the stop-words-only
+// query, which the search layer reports as an error (ErrSearchStopWordsOnly):
+// such a query has no significant term, so an ANY-TERM retry could not match
+// anything either and no second search is issued.
+//
 // A blank query or limit <= 0 means there is nothing to search for: no
-// search is issued and (nil, nil) is returned. A searcher error is
-// returned UNWRAPPED — the compiler owns the degrade path and renders it in
-// its warning verbatim.
+// search is issued at all and (nil, nil) is returned.
 func (r *TopicRetriever) Retrieve(ctx context.Context, treeID uuid.UUID, query string, limit int) ([]ctxpkg.RetrievalItem, error) {
 	if query == "" || limit <= 0 {
 		return nil, nil
 	}
-	results, _, _, err := r.searcher.Search(ctx, treeID, search.SearchOptions{
-		Query:      query,
-		MaxResults: limit,
-	})
+
+	results, err := r.search(ctx, treeID, query, limit, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(results) == 0 {
+		results, err = r.search(ctx, treeID, query, limit, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(results) == 0 {
 		return nil, nil
 	}
+
 	items := make([]ctxpkg.RetrievalItem, 0, len(results))
 	for _, res := range results {
 		items = append(items, ctxpkg.RetrievalItem{
@@ -65,4 +89,16 @@ func (r *TopicRetriever) Retrieve(ctx context.Context, treeID uuid.UUID, query s
 		})
 	}
 	return items, nil
+}
+
+// search runs one topic search in the requested match mode and returns its
+// results. Errors are handed back UNWRAPPED — the compiler owns the degrade
+// path and renders them verbatim.
+func (r *TopicRetriever) search(ctx context.Context, treeID uuid.UUID, query string, limit int, matchAnyTerms bool) ([]search.TopicSearchResult, error) {
+	results, _, _, err := r.searcher.Search(ctx, treeID, search.SearchOptions{
+		Query:         query,
+		MaxResults:    limit,
+		MatchAnyTerms: matchAnyTerms,
+	})
+	return results, err
 }

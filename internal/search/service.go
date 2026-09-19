@@ -49,12 +49,12 @@ const MaxTopics = 5
 // It carries only the fields needed for agent injection — not the full
 // db.Node. The repo layer maps from the database row to this type.
 type ContextNode struct {
-	ID         uuid.UUID `json:"id"`
-	TreeID     uuid.UUID `json:"tree_id"`
-	AuthorID   uuid.UUID `json:"author_id"`
-	Content    string    `json:"content"`
-	CreatedAt  time.Time `json:"created_at"`
-	SequenceNum int64    `json:"sequence_num"`
+	ID          uuid.UUID `json:"id"`
+	TreeID      uuid.UUID `json:"tree_id"`
+	AuthorID    uuid.UUID `json:"author_id"`
+	Content     string    `json:"content"`
+	CreatedAt   time.Time `json:"created_at"`
+	SequenceNum int64     `json:"sequence_num"`
 }
 
 // TopicSearchResult is a single search result returned to the client.
@@ -77,6 +77,21 @@ type SearchOptions struct {
 	Offset       int    `json:"offset"`
 	StatusFilter string `json:"status_filter"`
 	SortBy       string `json:"sort_by"`
+
+	// MatchAnyTerms opts OUT of the default ALL-TERMS matching: instead of
+	// requiring every term of Query to appear in a topic (plainto_tsquery
+	// ANDs them, so a sentence-shaped query usually matches nothing), the
+	// topic matches when it contains AT LEAST ONE significant term of the
+	// query (DF-HERMES-CANOPY-29).
+	//
+	// It is an in-process tuning knob for callers that ask search for
+	// CANDIDATES and rank/dedupe them themselves (the context compiler's
+	// retrieved tier via internal/retrieval), not an API surface: the tag is
+	// `json:"-"` so the field never enters or leaves a wire payload, and the
+	// HTTP search handler (which builds SearchOptions from query parameters)
+	// cannot set it. The zero value is the historical ALL-TERMS behaviour —
+	// byte-identical for every existing caller.
+	MatchAnyTerms bool `json:"-"`
 }
 
 // InjectContextRequest is the payload for the context injection endpoint.

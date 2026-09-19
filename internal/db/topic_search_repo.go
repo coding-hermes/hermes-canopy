@@ -7,7 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -63,13 +66,133 @@ func collectContextNodes(rows pgx.Rows) ([]search.ContextNode, error) {
 	return out, rows.Err()
 }
 
+// --- Match modes (DF-HERMES-CANOPY-29) -------------------------------------
+//
+// ALL-TERMS is the default and is unchanged: the RAW query is handed to
+// plainto_tsquery, which parses it for operators and ANDs the remaining
+// lexemes, so a topic must contain EVERY term to match.
+//
+// ANY-TERM is the opt-in mode (SearchOptions.MatchAnyTerms): the query is
+// sanitized into at most maxAnyTermLexemes significant terms, joined with
+// ` | `, and a topic matches when it contains AT LEAST ONE of them. The
+// context compiler's retrieved tier falls back to it because AND semantics
+// make a sentence-shaped node content match nothing at all
+// (DF-HERMES-CANOPY-29).
+
+const (
+	// plainTSQueryExpr is the ALL-TERMS tsquery expression: the raw query
+	// text, parsed by plainto_tsquery (operators ignored, no syntax errors on
+	// arbitrary input).
+	plainTSQueryExpr = "plainto_tsquery('english', $2)"
+
+	// anyTermTSQueryExpr is the ANY-TERM tsquery expression. $2 carries the
+	// SANITIZED `a | b | c` operand string built by buildAnyTermQuery — never
+	// the raw query, because to_tsquery INTERPRETS the operators it is given.
+	anyTermTSQueryExpr = "to_tsquery('english', $2)"
+
+	// maxAnyTermLexemes bounds how many significant terms an ANY-TERM query
+	// may carry. The terms are OR'd, so each extra term widens the match set;
+	// the bound keeps natural prose from matching half the tree.
+	maxAnyTermLexemes = 12
+
+	// minAnyTermRunes is the shortest token buildAnyTermQuery keeps.
+	// Single-character lexemes are REAL in english tsvectors (the parser
+	// splits "d'Artagnan" into `d` + `artagnan`), and an OR over single
+	// letters matches almost any topic — pure noise for a recall fallback.
+	minAnyTermRunes = 2
+)
+
+// buildAnyTermQuery turns free text into the operand string of an ANY-TERM
+// tsquery: the significant terms, lowercased and deduplicated in
+// first-occurrence order, joined with ` | `.
+//
+// Sanitization is BY CONSTRUCTION, not by escaping. PostgreSQL's tsquery text
+// parser does not treat quotes the way a SQL literal does — on PG 16.14 both
+// to_tsquery('english', quote_literal('a | b')) and its bare form parse the
+// `|` as the OR OPERATOR and yield the lexeme 'b' — so quoting or escaping a
+// raw query protects nothing. The only safe operand is one that cannot
+// express an operator: every rune that is not a letter or a digit acts as a
+// SEPARATOR, tokens shorter than minAnyTermRunes are dropped, duplicates
+// collapse to their first occurrence, and the walk stops at maxTerms.
+// Nothing else ever reaches to_tsquery.
+//
+// Stop words are deliberately NOT filtered here: to_tsquery runs the same
+// 'english' configuration the indexes were built with, so it applies the
+// stemmer and the stop-word list to each operand, and the resulting query
+// matches exactly the lexemes the tsvector columns store.
+//
+// Returns "" when no term survives — the caller maps that to the same
+// "nothing to search for" outcome as a stop-words-only query.
+func buildAnyTermQuery(text string, maxTerms int) string {
+	if maxTerms <= 0 || text == "" {
+		return ""
+	}
+	terms := make([]string, 0, maxTerms)
+	seen := make(map[string]bool, maxTerms)
+	var token []rune
+
+	flush := func() {
+		if len(token) == 0 {
+			return
+		}
+		term := strings.ToLower(string(token))
+		token = token[:0]
+		if len(terms) >= maxTerms || utf8.RuneCountInString(term) < minAnyTermRunes || seen[term] {
+			return
+		}
+		seen[term] = true
+		terms = append(terms, term)
+	}
+
+	for _, r := range text {
+		if len(terms) >= maxTerms {
+			break
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			token = append(token, r)
+			continue
+		}
+		flush()
+	}
+	flush()
+
+	return strings.Join(terms, " | ")
+}
+
+// tsQueryExprFor resolves the requested match mode into the tsquery SQL
+// expression and the value bound to $2. ok=false means the mode has no usable
+// term to search for: ANY-TERM with nothing left after sanitization.
+//
+// ALL-TERMS (the zero value of SearchOptions.MatchAnyTerms) returns the raw
+// query UNTOUCHED — the exact bytes the pre-DF-29 code bound to $2 — so the
+// default statement text and every existing caller are unaffected.
+func tsQueryExprFor(matchAny bool, query string) (expr, arg string, ok bool) {
+	if !matchAny {
+		return plainTSQueryExpr, query, true
+	}
+	arg = buildAnyTermQuery(query, maxAnyTermLexemes)
+	if arg == "" {
+		return anyTermTSQueryExpr, "", false
+	}
+	return anyTermTSQueryExpr, arg, true
+}
+
 // SearchTopics performs FTS across topics title/description (search_vector)
 // AND node content (topic_node_content_search.content_vector).
 // Uses ts_headline for snippet generation with <mark> highlighting.
+//
+// The tsquery expression in both statements below is supplied through the
+// %[1]s positional verb (ALL-TERMS: plainto_tsquery over the raw query;
+// ANY-TERM: to_tsquery over the sanitized operand string), %[2]s is the
+// status clause and %[3]s the ORDER BY. Positional verbs keep the statement
+// text independent of the order the arguments are passed in — the ALL-TERMS
+// rendering is byte-identical to the pre-DF-29 statement text.
 func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, opts search.SearchOptions) ([]search.TopicSearchResult, int, error) {
 	// Use plainto_tsquery for safety — it handles arbitrary user input
 	// without syntax errors (unlike to_tsquery which interprets & | ! etc).
-	// The raw query is passed as $2 to plainto_tsquery in the SQL.
+	// The raw query is passed as $2 to plainto_tsquery in the SQL; in the
+	// opt-in ANY-TERM mode $2 carries the sanitized operand string instead
+	// (see tsQueryExprFor).
 
 	// Check if the tsquery is empty after FTS parsing (stop words only).
 	var tsQueryValid bool
@@ -80,6 +203,18 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
 		return nil, 0, fmt.Errorf("db: check tsquery: %w", err)
 	}
 	if !tsQueryValid {
+		return nil, 0, search.ErrSearchStopWordsOnly
+	}
+
+	// Match mode (DF-HERMES-CANOPY-29). ALL-TERMS is the default and binds the
+	// RAW query to $2; ANY-TERM binds the sanitized `a | b | c` operand string.
+	// The parameter COUNT is the same in both modes, so the statement shape
+	// does not change with the mode — only the expression and $2's value do.
+	tsExpr, queryArg, ok := tsQueryExprFor(opts.MatchAnyTerms, opts.Query)
+	if !ok {
+		// ANY-TERM with no significant term left after sanitization (every
+		// token was a single character or a stop word): the same "nothing to
+		// search for" outcome as a stop-words-only query.
 		return nil, 0, search.ErrSearchStopWordsOnly
 	}
 
@@ -115,16 +250,16 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
                 t.status,
                 t.node_count,
                 t.last_active_at,
-                ts_rank(t.search_vector, plainto_tsquery('english', $2)) AS relevance,
+                ts_rank(t.search_vector, %[1]s) AS relevance,
                 ts_headline('english',
                     COALESCE(t.title,'') || ' ' || COALESCE(t.description,''),
-                    plainto_tsquery('english', $2),
+                    %[1]s,
                     'StartSel=<mark>, StopSel=</mark>, MaxWords=35, MinWords=15'
                 ) AS snippet
             FROM topics t
             WHERE t.tree_id = $1
-              AND t.search_vector @@ plainto_tsquery('english', $2)
-              %s
+              AND t.search_vector @@ %[1]s
+              %[2]s
         ),
         content_matches AS (
             SELECT
@@ -135,17 +270,17 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
                 t.status,
                 t.node_count,
                 t.last_active_at,
-                0.5 * MAX(ts_rank(tncs.content_vector, plainto_tsquery('english', $2))) AS relevance,
+                0.5 * MAX(ts_rank(tncs.content_vector, %[1]s)) AS relevance,
                 ts_headline('english',
                     string_agg(tncs.content_text, ' '),
-                    plainto_tsquery('english', $2),
+                    %[1]s,
                     'StartSel=<mark>, StopSel=</mark>, MaxWords=35, MinWords=15'
                 ) AS snippet
             FROM topics t
             JOIN topic_node_content_search tncs ON tncs.topic_id = t.id
             WHERE t.tree_id = $1
-              AND tncs.content_vector @@ plainto_tsquery('english', $2)
-              %s
+              AND tncs.content_vector @@ %[1]s
+              %[2]s
             GROUP BY t.id, t.tree_id, t.title, t.slug, t.status, t.node_count, t.last_active_at
         ),
         combined AS (
@@ -168,9 +303,9 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
             GROUP BY topic_id, tree_id, title, slug, status, node_count, last_active_at
         )
         SELECT COUNT(*) OVER() AS total, * FROM merged
-        %s
+        %[3]s
         LIMIT $3 OFFSET $4`,
-		statusClause, statusClause, orderBy)
+		tsExpr, statusClause, orderBy)
 
 	limit := opts.MaxResults
 	if limit <= 0 {
@@ -180,7 +315,7 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
 		limit = 100
 	}
 
-	rows, err := r.pool.Query(ctx, query, treeID, opts.Query, limit, opts.Offset)
+	rows, err := r.pool.Query(ctx, query, treeID, queryArg, limit, opts.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("db: search topics: %w", err)
 	}
@@ -201,20 +336,20 @@ func (r *PGTopicSearchRepo) SearchTopics(ctx context.Context, treeID uuid.UUID, 
 		countQuery := fmt.Sprintf(`
             WITH topic_matches AS (
                 SELECT t.id FROM topics t
-                WHERE t.tree_id = $1 AND t.search_vector @@ plainto_tsquery('english', $2) %s
+                WHERE t.tree_id = $1 AND t.search_vector @@ %[1]s %[2]s
             ),
             content_matches AS (
                 SELECT DISTINCT t.id FROM topics t
                 JOIN topic_node_content_search tncs ON tncs.topic_id = t.id
-                WHERE t.tree_id = $1 AND tncs.content_vector @@ plainto_tsquery('english', $2) %s
+                WHERE t.tree_id = $1 AND tncs.content_vector @@ %[1]s %[2]s
             )
             SELECT COUNT(*) FROM (
                 SELECT id FROM topic_matches
                 UNION
                 SELECT id FROM content_matches
             ) AS all_matches`,
-			statusClause, statusClause)
-		if err := r.pool.QueryRow(ctx, countQuery, treeID, opts.Query).Scan(&total); err != nil {
+			tsExpr, statusClause)
+		if err := r.pool.QueryRow(ctx, countQuery, treeID, queryArg).Scan(&total); err != nil {
 			return nil, 0, fmt.Errorf("db: count search results: %w", err)
 		}
 	}
