@@ -1802,3 +1802,37 @@ through `/ticks/tick502-df28-per-user-merge-rate-limit` (503-505 wrote none).
 Zod types + card store + `subscribeSse` on the card events route + renderer dispatch). Watch: DF-HERMES-CANOPY-24
 (CI-only gateway teardown flake), DF-HERMES-CANOPY-25 (handler package exceeding 10m under concurrent PG load —
 seen again this tick at 465s), QA-HERMES-CANOPY-9/10 (fleet QA-harness path assumptions, not project-owned).
+
+## Tick 507 — 2026-09-18 23:41Z → 2026-09-19 00:03Z (WORK: GAP-076 SQLite storage pivot, wave 1)
+
+**Verdict:** OK (work tick). Pick = **GAP-076** (P1) — the 2026-09-16 OWNER RULING that PostgreSQL must be
+replaced by SQLite, which ticks 495–506 parked as "multi-wave by design" without ever decomposing it. Parking an
+owner ruling indefinitely is the rot this tick breaks: wave 1 makes the first real increment and, in the same
+commit, writes the decomposition the pivot had been missing. Pending set at pick time: 15 pending / 321 unique ids.
+Rejected as not-project-owned or not-dispatchable: QA-HERMES-CANOPY-1/2/9/10 (bunker port pool, spawn mirror,
+QA-harness path assumptions), DF-HERMES-CANOPY-24/25 (unreproduced CI flakes), FTR-06 + PL-04..PL-06 (post-MVP
+deferred specs), GAP-080/081 (umbrella rows whose phase split is recorded below/in the new doc), GAP-077 (P2,
+explicitly blocked by GAP-076).
+
+**Dispatch/Worker:** gpt-5.6-luna @ openai-codex (subscription lane, the repo's established pairing), brief
+`/tmp/gap076-w1-brief.txt`, one worker, 1 attempt, 0 rework. Delivered commit **bd37b8f** (24 files).
+GitReins task `GAP-076-W1` created + started before the dispatch and completed after the commit:
+**Tier 1 PASS + Tier 2 PASS/COMPLETE, verdict `b2aae203`**.
+
+**Scope delivered (additive only — no behaviour change):**
+* `migrations/sqlite/000001..000010_{extensions,trees,nodes,edges,snapshots,node_content_hash,tree_events,users_profiles,approvals,profile_route}.{up,down}.sql` — 20 files, 644 lines: the SQLite translation of the 714 PG DDL lines in the batch, same table/column/nullability/PK sets, enums → `TEXT + CHECK (col IN (…))`, `jsonb` → `TEXT + json_valid`, `boolean` → `INTEGER 0/1`, `bytea` → `BLOB`, `timestamptz` → `TEXT` RFC3339 UTC, indexes incl. partial/unique/expression. `000001` is a documented no-op pair (no extensions or stored functions exist in SQLite; the `uuidv7()` DEFAULT becomes a wave-2 Go write-path obligation). Every PG trigger/function/extension that could not be translated is named in a SQLite comment with its PG file:line and owner.
+* `migrations/embed.go` — second embed (`//go:embed sqlite/*.sql`) + `SQLiteFS()`; the existing `FS()` and its `*.sql` scope are untouched (the harness asserts that structural property).
+* `migrations/sqlite_parity_test.go` — the parity harness: applies the batch up files in numeric order to an in-memory `modernc.org/sqlite` DB, introspects with `PRAGMA table_info`, compares table set (ORPHAN/MISSING), column set, nullability and PK against the PG DDL parsed out of the embedded `FS()`, checks index parity (47/48 — the GIN `to_tsvector` FTS index is a named exemption that must carry its file:line + wave-2 owner), enum value lists, inline FKs, PG-only syntax (comments stripped), the `000001` no-op, embed scope, and a reverse-order down pass that must leave zero objects.
+* `docs/SQLITE-PIVOT.md` — the wave-2 contract: applied translation rules (§2), verified SQLite semantics (§3), all **47** migrations classified mechanical/needs-decision/blocked with the PG file:line of every non-mechanical clause (§4), the wave-1 objects that became Go-critical obligations (§5), **six open decisions D1–D6** for the owner with options + recommendation (§6: timestamp representation, FTS5-vs-LIKE, id generation, trigger-vs-Go, json storage, pragma/WAL), the wave 2/3/4 plan (§7) and the wave-1 evidence (§8).
+
+**Verification (foreman-fresh, not the worker's word):**
+* Gates: `go build ./...` rc=0 · `go vet ./...` rc=0 · `go test ./migrations/... -count=1` ok · `go test ./... -short -count=1` = 28 packages ok / **0 FAIL** (29 packages).
+* Independent falsification of the harness (mine, on the committed tree): deleting `trees.description` → `FAIL … COLUMN MISSING: trees.description (PG 000002_trees.up.sql:13)`; appending `zz_orphan_probe` → `FAIL … ORPHAN TABLE …` + `DOWN MIGRATIONS INCOMPLETE`. Both restored byte-identical (sha256 re-verified) and re-run green.
+* Additivity proven, not asserted: `git diff HEAD~1 HEAD -- migrations/*.sql` is empty; `git show --name-only` lists only `docs/SQLITE-PIVOT.md`, `migrations/embed.go`, `migrations/sqlite_parity_test.go`, `migrations/sqlite/*` — nothing under `internal/db/`, `cmd/`, `internal/card/`.
+* Worker also derived and recorded verified PG→SQLite translation rules in the `sqlite-schema-migrations` skill (`references/postgres-to-sqlite-ddl-translation.md`) — several of them cost probe rounds (SQLite forbids a column definition after a table constraint; `sha3()` does not exist).
+
+**Push health:** `origin/master` and `gitlab/master` both at **bd37b8f**; `git rev-list --count origin/master..HEAD` = **0**, `gitlab/master..HEAD` = **0**.
+
+**Board bookkeeping:** `tasks.jsonl` GAP-076 row rewritten in place (line 318) — `worker_status` (wave 1 landed, waves 2–4 open), `waves` block (tick 507 / commit / verdict / artifacts / remaining waves), `foreman_note`, `updated_at`; the row stays **pending** because waves 2–4 (repo-layer swap behind 75 pgx importers, the boot path `cmd/canopyd/main.go:198`, retire PostgreSQL) are the actual pivot. `events.jsonl` appended ids **611** (`judge_verdict`) and **612** (`audit`); every other tasks.jsonl line byte-identical (hash-verified).
+
+**Next tick:** GAP-076 wave 2 is now decomposable — start from `docs/SQLITE-PIVOT.md` §6: resolve D1–D6 (or take the recommended option and record it), then the repo-layer swap in slices (17 `internal/db/*_repo.go` first). GAP-077 is unblocked the moment wave 2 writes land. Watch: DF-HERMES-CANOPY-24/25, QA-HERMES-CANOPY-9/10 (fleet-owned).

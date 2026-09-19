@@ -2882,3 +2882,18 @@ tasks:
   status: complete
   created_at: '2026-09-18T22:18:03.187421+00:00'
   completed_at: '2026-09-18T22:44:43.285469+00:00'
+- id: GAP-076-W1
+  title: 'SQLite storage pivot wave 1: core-graph DDL translation + parity harness
+    + wave plan'
+  criteria:
+  - go build ./... rc=0; go vet ./... rc=0; go test ./migrations/... -count=1 PASS
+    and go test ./... -short -count=1 PASS; the SQLite DDL batch 000001-000010 applies
+    in order and rolls back; the parity test compares every translated table/column/nullability/PK
+    against the PostgreSQL DDL and FAILS when a translated column is deleted or an
+    orphan table is added (both falsifications captured); no file under migrations/*.sql,
+    internal/db, cmd, internal/card is modified; migrations/embed.go gains SQLiteFS()
+    without changing FS(); docs/SQLITE-PIVOT.md carries the rule table, the 47-migration
+    inventory, the open-decisions list and the wave plan
+  status: complete
+  created_at: '2026-09-18T23:44:32.560066+00:00'
+  completed_at: '2026-09-19T00:00:03.677604+00:00'
