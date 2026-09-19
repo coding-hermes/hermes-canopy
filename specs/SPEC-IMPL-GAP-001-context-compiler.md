@@ -174,6 +174,41 @@ type CardReader interface {
 > `TestRetrieved_NodeTreeWinsOverConflictingRequestTree`,
 > `TestRetrieved_NodeWithoutTreeSkipsSearch`.
 
+> **2026-09-19 amendment (GAP-080 phase 4c — ANY-TERM recall fallback,
+> DF-HERMES-CANOPY-29):** the tier's query is the current node's WHOLE content,
+> and the topic search's default matching (`plainto_tsquery`) ANDs every
+> non-stopword term — so a sentence-shaped message required a topic to contain
+> EVERY term and matched nothing at all in practice (live probe: "zebra
+> migration runbook planning for the zebra cutover" matched no topic, while the
+> three-term "zebra runbook cutover" matched "Zebra Runbook Cutover").
+> **Decision — precision first, recall as an explicit fallback:** the adapter
+> (`internal/retrieval/retrieval.go`) runs the ALL-TERMS search first and its
+> result is authoritative whenever it is NON-EMPTY; only a clean EMPTY result
+> retries ONCE in ANY-TERM (OR) mode, requested through
+> `search.SearchOptions.MatchAnyTerms` — an in-process knob (`json:"-"`, never
+> populated by the HTTP search handler, so no wire contract changes).
+> ANY-TERM renders `to_tsquery('english', $2)` over a SANITIZED `a | b | c`
+> operand string built by `buildAnyTermQuery`
+> (`internal/db/topic_search_repo.go`): every non-alphanumeric rune is a
+> separator, tokens shorter than 2 runes are dropped, duplicates collapse to
+> their first occurrence, and the list stops at 12 significant terms. Quoting is
+> NOT a defence — PostgreSQL parses `|` inside a quoted tsquery operand as the
+> OR operator — so only tokens that cannot express an operator may reach
+> `to_tsquery`. **Unchanged by this amendment:** tier scope (the current node's
+> tree), the 12% tier share and the shared-budget deduction, the reference
+> dedupe, the deterministic ordering (relevance DESC → slug ASC → id ASC), the
+> manifest fields, and the default ALL-TERMS rendering, which stays
+> byte-identical for every existing caller including the HTTP topic search.
+> **Degrade path unchanged:** a reader ERROR never triggers the fallback and
+> still renders exactly one `"retrieval failed: <err>"` warning; a
+> stop-words-only query IS that error path (it issues ONE search, records
+> `retrievalBudget` and warns) — an ANY-TERM retry adds no second search because
+> no significant term survives sanitization. Tests: real-PostgreSQL
+> `internal/db/topic_search_any_term_pg_test.go`,
+> `internal/retrieval/retrieval_pg_test.go`; unit
+> `internal/db/topic_search_match_mode_test.go`,
+> `internal/retrieval/retrieval_test.go`.
+
 ## 3. Data Model
 
 No new DB tables. The compiler reads existing tables:
