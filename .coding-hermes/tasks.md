@@ -1836,3 +1836,16 @@ GitReins task `GAP-076-W1` created + started before the dispatch and completed a
 **Board bookkeeping:** `tasks.jsonl` GAP-076 row rewritten in place (line 318) — `worker_status` (wave 1 landed, waves 2–4 open), `waves` block (tick 507 / commit / verdict / artifacts / remaining waves), `foreman_note`, `updated_at`; the row stays **pending** because waves 2–4 (repo-layer swap behind 75 pgx importers, the boot path `cmd/canopyd/main.go:198`, retire PostgreSQL) are the actual pivot. `events.jsonl` appended ids **611** (`judge_verdict`) and **612** (`audit`); every other tasks.jsonl line byte-identical (hash-verified).
 
 **Next tick:** GAP-076 wave 2 is now decomposable — start from `docs/SQLITE-PIVOT.md` §6: resolve D1–D6 (or take the recommended option and record it), then the repo-layer swap in slices (17 `internal/db/*_repo.go` first). GAP-077 is unblocked the moment wave 2 writes land. Watch: DF-HERMES-CANOPY-24/25, QA-HERMES-CANOPY-9/10 (fleet-owned).
+
+**CI follow-up (same tick, after the push):** the wave-1 commit `bd37b8f` was **RED** at `golangci-lint`
+(staticcheck **SA9009**) — a doc-comment line in `migrations/embed.go` began with `go:embed`, so staticcheck
+parsed prose as a malformed compiler directive. Fixed in **`4ae4a0c`** (comment reword only, no code change) after
+reproducing with the CI's own linter version (`golangci-lint` v2.12.2, full repo → 0 issues) and re-running
+build/vet/migrations/short suite. The head is still red for an **unrelated, pre-existing** reason:
+`internal/handler` fails `TestCardEventsSSELiveDeliveryAndUnsubscribe` — "card_event frames = 2, want 1" — the
+SAME event (`id: 2`, `event_id 3ac5ea3a…`) delivered twice (once by the `after_sequence` replay, once by the live
+hub fan-out), because tick 506's handler registers the hub subscription before the replay pass. Green 10/10
+locally, red in both CI runs, so it is a CI-exposed race in shipped code, not machine noise. Filed as
+**`INT-CI-002` (P1, complexity 4, gpt-5.6-luna @ openai-codex)** with the raw frames, the root-cause shape and the
+required regression test — it is the recommended next pick because it also restores green CI. The pivot work
+itself is green in every run (`migrations` package PASS); `PL-03`'s `worker_status` now carries the defect pointer.
