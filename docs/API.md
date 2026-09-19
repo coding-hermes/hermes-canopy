@@ -976,7 +976,9 @@ Every successful connection writes, in order:
 An idle connection receives a `heartbeat` event every 30 seconds. The card SSE
 handler resets its write deadline for each frame, so an idle stream stays open
 past the server's 30-second `WriteTimeout`; a stuck connection is dropped by the
-bounded per-write deadline.
+bounded per-write deadline. Long-lived SSE routes are exempt from the server's
+global 60-second request timeout (see the tree events section), so a stream can
+stay open indefinitely; ordinary requests keep the 60s cap.
 
 **Frame shape:**
 ```text
@@ -1181,6 +1183,13 @@ GET /api/v1/trees/{tree_id}/events
 | `multi_reference_converged` | A multi-reference reply and all N of its reference edges are committed (SPEC-PL-06 §10.2 composite) |
 
 Heartbeat: `: heartbeat` (SSE comment, every 30s).
+
+**Request timeout exemption:** long-lived SSE routes — every GET path ending in
+`/events` or `/feed` (this endpoint, the card, plugin, federation, MLS, and
+gateway run streams, and the workspace channel feed) — are exempt from the
+server's global 60-second request timeout; a stream may stay open
+indefinitely. Ordinary requests, including `POST /api/v1/federation/events` and
+`GET /api/v1/federation/events/replay`, keep the 60s cap.
 
 **Connection limits:** 10 per user, 100 per tree, 10,000 server-wide.
 

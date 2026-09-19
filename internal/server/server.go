@@ -256,7 +256,11 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	r.Use(hlog.RequestIDHandler("req_id", "X-Request-Id"))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	// DF-HERMES-CANOPY-33: 60s cap for ordinary requests; long-lived SSE
+	// stream routes (GET .../events, .../feed) skip the context wrap —
+	// chi's WithTimeout ended every stream cleanly at ~60s and the client
+	// never retried. See internal/server/timeout.go.
+	r.Use(requestTimeoutExemptSSE(60 * time.Second))
 	r.Use(corsMiddleware(cfg.CORSOrigin))
 	r.Use(handler.BodySizeLimit(1024 * 1024)) // 1MB per SPEC-API-02 §10.1
 
