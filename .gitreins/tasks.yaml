@@ -2961,3 +2961,20 @@ tasks:
   status: complete
   created_at: '2026-09-19T06:41:35.081783+00:00'
   completed_at: '2026-09-19T07:18:37.605373+00:00'
+- id: PL-03-CLIENT
+  title: 'SPEC-PL-03 client half: typed card wire + Zod validation, gap-safe card
+    event store, live SSE card stream'
+  criteria:
+  - "SPEC-PL-03 \xA75/\xA75.3/\xA79 implemented client-side: frontend/src/types/card.ts\
+    \ carries zod schemas for the repo's actual snake_case card wire shapes plus spec-canonical\
+    \ types and adapters; the card event store applies card_snapshot only for a newer\
+    \ revision and card_event only on sequence === lastSequence+1, emitting an after_sequence\
+    \ replay request on a gap and a non-destructive error banner (never inventing\
+    \ an event) on a schema failure; the cards UI subscribes to GET /api/v1/cards/{id}/events\
+    \ through frontend/src/lib/sse.ts with eventTypes [card_snapshot,card_event,heartbeat]\
+    \ and a heartbeat liveness signal; unit tests cover the snapshot-revision rule,\
+    \ the exact-sequence rule, the gap replay, schema-failure surface and the stream\
+    \ handlers; frontend vitest + tsc + oxlint clean"
+  status: complete
+  created_at: '2026-09-19T07:44:27.431097+00:00'
+  completed_at: '2026-09-19T08:04:12.624404+00:00'

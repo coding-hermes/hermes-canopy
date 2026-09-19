@@ -1851,3 +1851,97 @@ required regression test — it is the recommended next pick because it also res
 itself is green in every run (`migrations` package PASS); `PL-03`'s `worker_status` now carries the defect pointer.
 
 **CI update (2026-09-19 00:26Z, after the final board push):** the run for `5e50ce8` is **GREEN** — so the `INT-CI-002` failure is **intermittent**, not deterministic (red on two runs of `4ae4a0c`, green on an unchanged-code push). The row stands: the failure output contains two frames with the same `sequence` and `event_id`, i.e. duplicate delivery proven from the raw stream, which is what the intermittency is masking. `INT-CI-002`'s title/detail were amended to the verified run history (red 35407921325 / red 35408102069 / red on rerun / green 5e50ce8) rather than the earlier "deterministic" claim.
+
+## Tick 516 — 2026-09-19 ~07:42Z → ~08:1xZ (WORK — SPEC-PL-03 CLIENT HALF LANDED: validated wire types, gap-safe card event store, live SSE subscription, worker, judge 3da76801)
+
+**Verdict:** OK (work tick). Pick = **PL-03** (P3), the only pending row that was both design-ready and
+whose open clause the earlier ticks had narrowed to a bounded deliverable. Pending set at pick time:
+360 rows / 324 unique ids / **21 pending**. Rejected as not-project-owned or not-dispatchable:
+QA-HERMES-CANOPY-1/2/9/10 (bunker port pool, spawn mirror, QA-harness path assumptions, stand-in
+workdir), DF-HERMES-CANOPY-24/25/30 (unreproduced CI flake, PG-load watch, stray-store housekeeping),
+FTR-06 + PL-04..PL-06 (post-MVP deferred specs), GAP-081 (owner decision), GAP-080 (its remaining
+phases 3 and 5b are product decisions — summariser choice, when a send is blocked).
+
+**Dispatch/Worker:** requested **gpt-5.6-luna @ openai-codex** (the repo's established pairing, and a
+live probe answered LANE_CODEX_OK minutes before the dispatch); the lane answered **HTTP 429 "The
+usage limit has reached"** two seconds into the run, so the configured fallback carried the work:
+**deepseek-v4-flash @ deepseek**, session `20260919_024506_0cadaa`. One worker, 1 attempt, 0 rework,
+commit **fadd3c4** (11 files, +2426/−1). The brief froze the backend and the wire shapes and required
+the worker to implement the SHIPPED wire and document every adaptation instead of changing Go code.
+
+**Scope delivered (client half of SPEC-PL-03 §5 / §5.3 / §9):**
+* `frontend/src/types/card.ts` — zod schemas for the three REAL wire shapes (`service.CardSummary` as
+  the `card_snapshot` body, whose card type is tagged `type`, not `card_type`; the stored snake_case
+  event row; the SSE envelope whose `card_type` is omitempty and whose `sequence` is 0 on a
+  heartbeat), the §5.1 canonical camelCase types, pure wire→canonical adapters, and parse helpers
+  that return `{ok:true,value}` / `{ok:false,issues,sequence,eventId}` — nothing throws at the UI.
+* `frontend/src/lib/cardStore.ts` — the §5.3 reducer: a snapshot applies only when strictly newer and
+  never advances the cursor; an event appends only at `sequence === lastSequence + 1`; a duplicate is
+  a no-op; a gap produces a replay request for `after_sequence = lastSequence` with no synthetic or
+  buffered event; a rejected payload adds a bounded (50) non-destructive error entry and mutates
+  nothing. Both adaptations are documented in the header with their `file:line` sources.
+* `frontend/src/hooks/useCardStream.ts` — one `subscribeSse` subscription (the app's only SSE
+  transport; it carries the bearer token) with `eventTypes: ['card_snapshot','card_event','heartbeat']`,
+  ONE bounded re-subscribe per distinct gap cursor (attempted cursors recorded, so a gap cannot loop),
+  heartbeat → `connection: 'live'`.
+* `frontend/src/components/CardActivityPanel.tsx` wired into `CardsPage.tsx` (row click opens the
+  panel for that card — one subscription at a time, owned by the panel): the §6.1 frame content
+  derivable from the wire, the live event list, a connection indicator and the rejection banner.
+  React text children only; no raw-HTML API anywhere in the file.
+* `docs/API.md` § Cards → “Client stream consumption”; `CHANGELOG.md` entry.
+
+**Foreman verification (independent of the worker's report):** `git show --name-status` = exactly the
+11 files, none under `internal/`, `cmd/`, `migrations/`; `npx tsc -b` exit 0; `npm test` **75 files /
+1359 tests PASS** (61 new); `npm run lint` (oxlint) exit 0, warnings only and all in pre-existing
+files; no `dangerouslySetInnerHTML`/`innerHTML` in the new panel; `go test ./internal/server/ -count=1`
+ok (the docs change keeps the § Cards route-parity guard green). **Falsification run by the foreman,
+not taken on trust:** mutating the exact-sequence guard to `seq > lastSequence` turned **9 tests RED**
+in `cardStore`+`useCardStream`; the file was restored byte-identical (md5 `1b2f8731…`, `diff` clean).
+
+**Live proof (HEAD-built scratch instance, `scripts/scratch-instance.sh --port 8125`, DB
+`canopy_scratch_516_59ce8ee1`, scratch HOME/FILE_ROOT, instance dropped afterwards):** a REAL
+`card_snapshot` frame and a REAL `card_event` frame captured off the wire were fed through the shipped
+schemas — both parsed, the canonical card resolved (appId `df-hermes-canopy-8`, compact/active,
+revision 1 from `last_event_seq`), the store applied sequence 1 with `replay: null` / `rejected: 0`,
+and a deliberately corrupted payload was rejected with named issues. The live `:8091` instance was
+never written to (200 throughout).
+
+**Two defects filed, not fixed this tick (both found by the live proof, not by reading):**
+* **DF-HERMES-CANOPY-31 (P2)** — the card SSE stream **dies at the transport's 30s WriteTimeout**, so
+  the §9.3 heartbeat never reaches a client: `internal/server/server.go:148` (`WriteTimeout: 30s`) vs
+  `internal/handler/card_events_handler.go:40` (`cardSSEHeartbeatInterval = 30s`). Two independent
+  captures (curl and urllib) on the HEAD-built instance both ended at exactly **30.0015s** with only
+  the snapshot frame (plus, at cursor 0, the replayed event) — no heartbeat, ever. The same repo
+  already solved this class for the gateway feed with a **20s** ticker (`gateway_handler.go:359-361`,
+  whose comment names the 30s WriteTimeout). Client impact on the work landed this tick: `'live'` can
+  never latch and the stream closes CLEANLY at 30s, which `lib/sse.ts` reports as `onClose`, not an
+  error — so the bounded retry never fires and the panel silently stops updating.
+* **DF-HERMES-CANOPY-32 (P3)** — the **live `:8091` binary predates the card SSE route** (404 on a real
+  card id; binary built 09-16 18:41 vs route landed in `628dce6` 09-18; `/health` still reports
+  schema 47 = embedded 47, so the staleness is route-level), and the mechanism meant to catch exactly
+  this is silent: `canopy-deploy-check.timer` is “active (elapsed) since 2026-09-17 01:10” with
+  `Trigger: n/a`, the service is inactive, `journalctl --user -u canopy-deploy-check.service` returns
+  **“-- No entries --”**, and `deploy-check-state.json` has not moved since 2026-09-17T00:41:19Z.
+
+**GitReins:** task `PL-03-CLIENT` created + started before the dispatch and completed after the
+commit — **Tier 1 PASS + Tier 2 PASS/COMPLETE**, verdict `3da76801`; the judge re-read the schemas, the
+store, the hook, the panel, the wiring and the tests, and re-ran vitest/tsc/oxlint itself.
+
+**Board bookkeeping:** `tasks.jsonl` line 89 (last-wins PL-03 row) rewritten in place — `commit_hash`
+`fadd3c4`, `guard_result`, `worker_status`, `foreman_note` with the tick note above the prior ones —
+and two rows APPENDED (`DF-HERMES-CANOPY-31`, `DF-HERMES-CANOPY-32`); a line-by-line comparison proves
+**every untouched line is byte-identical**. `events.jsonl` appended ids **651–656**
+(`task_dispatched`, `task_completed`, `audit`, two `task_created`, `ci_health`). `board.jsonl`:
+`ticks_total` 515 → **516**, `last_commit` = `fadd3c4`, `last_tick`/`updated_at` = 03:08. The row stays
+**pending** on purpose (§6.1 renderer dispatch by `(appId, cardType)`, the card-action invoke path and
+the DF-31 fix are the named residual), so the next tick inherits a bounded pick.
+
+**Off-by-one:** health `ok`. `discover` for `sse-client-subscription-replay-cursor` and
+`frontend-zod-wire-schema-mismatch` → `not_found` (no cached answer to reuse). Submissions
+(post-debug) recorded in the tick's off-by-one batch: the transport-WriteTimeout-vs-heartbeat class and
+the real-wire-vs-spec schema class.
+
+**Next tick:** GAP-080's remaining phases need owner decisions, so the bounded picks are **§6.1
+renderer dispatch** (spec-backed, frontend-only) or **DF-HERMES-CANOPY-31** (a one-line cadence change
+plus a real streaming regression test — the highest-value defect on the board, since it disables the
+liveness signal of the feature that just shipped). Watch: DF-24/25 (flakes under load), QA-HERMES-CANOPY-9/10 (fleet-owned).
