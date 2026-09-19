@@ -12,6 +12,11 @@
 *.pyc
 __pycache__/
 
+# DuckBrain namespace stores never belong in the repo (DF-HERMES-CANOPY-30):
+# a tool run with this cwd dropped a nested-git store here on 2026-09-18.
+# Real stores live in ~/duckbrain/namespaces/.
+/namespaces/
+
 # Go build artifacts
 # Root-anchored on purpose: a bare `canopyd` also matches the DIRECTORY
 # cmd/canopyd/, which silently makes every NEW file under it unaddable
