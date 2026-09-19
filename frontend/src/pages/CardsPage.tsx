@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Inbox,
   ChevronDown,
+  ChevronRight,
   Search,
   X,
   FileText,
@@ -21,6 +22,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import CardActivityPanel from '../components/CardActivityPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -248,15 +250,28 @@ function CreateCardDialog({
 
 function CardRow({
   card,
+  isSelected,
+  onOpen,
   onDelete,
 }: {
   card: CardSummary;
+  isSelected: boolean;
+  onOpen: () => void;
   onDelete: () => void;
 }) {
   const dotColor = STATUS_STYLES[card.status] ?? 'bg-content-muted';
 
   return (
-    <div className="rounded-lg border border-line-subtle bg-surface-panel p-4 hover:border-accent-2/40 group transition-colors">
+    <div
+      // §9: clicking a row opens that card's live activity panel (one
+      // subscription at a time — the panel subscribes, not the row).
+      onClick={onOpen}
+      className={`rounded-lg border bg-surface-panel p-4 group transition-colors cursor-pointer ${
+        isSelected
+          ? 'border-accent-2/60 ring-1 ring-inset ring-accent-2/30'
+          : 'border-line-subtle hover:border-accent-2/40'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -290,6 +305,18 @@ function CardRow({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              onOpen();
+            }}
+            className="p-1.5 rounded-md text-content-faint hover:text-content-primary hover:bg-surface-hover transition-colors"
+            title="Card activity"
+            aria-label={`Card activity for ${cardTypeLabel(card.type)} card`}
+            aria-expanded={isSelected}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
               onDelete();
             }}
             className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10 transition-colors"
@@ -316,6 +343,9 @@ export default function CardsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CardSummary | null>(null);
+  // The card whose live activity panel is open (null = closed). Exactly one
+  // at a time: the panel owns the stream subscription (SPEC-PL-03 §9).
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   const fetchTrees = useCallback(async () => {
     // Loading state handled by cards array being empty
@@ -349,6 +379,7 @@ export default function CardsPage() {
 
   const handleTreeSelect = (treeId: string) => {
     setSelectedTreeId(treeId);
+    setSelectedCardId(null);
     if (treeId) void fetchCards(treeId, typeFilter || undefined);
   };
 
@@ -362,6 +393,7 @@ export default function CardsPage() {
     try {
       await apiDelete(`/cards/${deleteTarget.id}`);
       setCards((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      if (selectedCardId === deleteTarget.id) setSelectedCardId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to archive card');
     } finally {
@@ -552,10 +584,20 @@ export default function CardsPage() {
             <CardRow
               key={card.id}
               card={card}
+              isSelected={card.id === selectedCardId}
+              onOpen={() => setSelectedCardId(card.id)}
               onDelete={() => setDeleteTarget(card)}
             />
           ))}
         </div>
+      )}
+
+      {/* Live card activity panel (SPEC-PL-03 §6.1 + §9) — one subscription */}
+      {selectedCardId && (
+        <CardActivityPanel
+          cardId={selectedCardId}
+          onClose={() => setSelectedCardId(null)}
+        />
       )}
 
       {/* Create dialog */}

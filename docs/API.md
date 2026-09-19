@@ -991,6 +991,49 @@ integer), `413 CARD_SSE_BACKLOG_LIMIT` (the replay would exceed 10,000 events �
 GET the card snapshot and reconnect with a fresh cursor), `404
 CARD_NOT_FOUND`, `400 INVALID_CARD_ID`.
 
+#### Client stream consumption
+
+The client half of SPEC-PL-03 §5/§9 lives in four files:
+
+| File | Role |
+|------|------|
+| `frontend/src/types/card.ts` | zod schemas for the three wire shapes + canonical §5.1 types + wire→canonical adapters |
+| `frontend/src/lib/cardStore.ts` | pure §5.3 reducer (snapshot ordering, exact-sequence append, gap → replay, rejections) |
+| `frontend/src/hooks/useCardStream.ts` | one live subscription per card, driving the store |
+| `frontend/src/components/CardActivityPanel.tsx` | §6.1 default frame + live event list + connection indicator |
+
+Transport is `subscribeSse` (`frontend/src/lib/sse.ts`) — the app's only SSE
+client, because native `EventSource` cannot send the `Authorization` header.
+The hook subscribes to `/cards/{card_id}/events` (adding `?after_sequence={n}`
+once it holds a cursor) with `eventTypes: ['card_snapshot', 'card_event',
+'heartbeat']`, validates every `data:` line, and maps the wire's snake_case onto
+the canonical camelCase types.
+
+Client rules (`frontend/src/lib/cardStore.ts`, `frontend/src/types/card.ts`):
+
+- a `card_snapshot` is applied only when its ordering key is **strictly newer**
+  than the stored one. The wire carries no `revision` field, so the key is the
+  summary's `last_event_seq` (exposed as the canonical `Card.revision`);
+- a snapshot **never advances the cursor** — it carries no `id:` line, so
+  `lastSequence` is untouched;
+- a `card_event` is appended only when `sequence === lastSequence + 1`; a
+  duplicate (`sequence <= lastSequence`) is a no-op, since the server already
+  dedupes across its own replay/live boundary;
+- a gap (`sequence > lastSequence + 1`) is **not** applied and never buffered:
+  the client re-subscribes once with `after_sequence = lastSequence` and records
+  that cursor so the same gap cannot loop;
+- a payload that fails validation becomes a non-destructive error entry (shown
+  as a banner in the activity panel) carrying its envelope `sequence` and, when
+  known, the nested `event_id`; the card and event state are left untouched. The
+  SSE `id:` line itself is not available at this layer — `lib/sse.ts` parses and
+  discards it;
+- `heartbeat` (which carries no `card_type` and sequence 0) only promotes the
+  connection indicator to *live*; it is not an event.
+
+In the UI, clicking a card row on the Cards page opens the activity panel for
+that card; exactly one stream subscription exists at a time (the panel owns it,
+not the row).
+
 ---
 
 ## Approvals
