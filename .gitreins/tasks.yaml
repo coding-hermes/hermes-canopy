@@ -2951,3 +2951,13 @@ tasks:
   status: complete
   created_at: '2026-09-19T04:42:54.270805+00:00'
   completed_at: '2026-09-19T05:15:11.342844+00:00'
+- id: DF-HERMES-CANOPY-29
+  title: 'Retrieved tier: OR-fallback topic search so natural prose retrieves topics'
+  criteria:
+  - Topic retrieval fires on a prose-shaped node content (the board's zebra probe),
+    while existing all-terms precision, tree scoping, manifest/parity contracts and
+    the degrade path stay unchanged; PG-backed test proves the OR branch against real
+    PostgreSQL; go build/vet/targeted suites + gitleaks green.
+  status: complete
+  created_at: '2026-09-19T06:41:35.081783+00:00'
+  completed_at: '2026-09-19T07:18:37.605373+00:00'
