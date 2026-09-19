@@ -39,20 +39,40 @@ func (s *stubRetrievalReader) Retrieve(ctx context.Context, treeID uuid.UUID, qu
 	return s.items, nil
 }
 
+// makeNodeWithTree is makeNode with the node's TreeID set — the retrieval
+// tier is scoped to the CURRENT NODE's tree, so the fixture node MUST carry
+// one (otherwise the fix in retrieval.go silently skips the tier for every
+// wired test).
+func makeNodeWithTree(id, author uuid.UUID, content string, treeID uuid.UUID) *db.Node {
+	n := makeNode(id, author, content)
+	n.TreeID = treeID
+	return n
+}
+
+// retrievalFixtureNodeTree builds the same fixture as retrievalFixture but
+// pins the CURRENT node's TreeID (the retrieval scope) to nodeTree. req.TreeID
+// is left as the fixture's own random tree so each test can override it.
+func retrievalFixtureNodeTree(content string, nodeTree uuid.UUID) (CompileRequest, *stubNodeReader) {
+	req, nodes := retrievalFixture(content)
+	nodes.nodes[req.NodeID].TreeID = nodeTree
+	return req, nodes
+}
+
 // retrievalFixture assembles a compile fixture: one current node with the
 // given content and an ancestry stub returning just that node. A FIXED
 // author id keeps the rendered ancestry byte-stable across the two
-// compiles of a parity test.
+// compiles of a parity test. The current node carries a real (random) TreeID
+// so the retrieved tier is in scope.
 func retrievalFixture(content string) (CompileRequest, *stubNodeReader) {
 	nodeID := uuid.New()
 	treeID := uuid.New()
 	author := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	nodes := &stubNodeReader{
 		nodes: map[uuid.UUID]*db.Node{
-			nodeID: makeNode(nodeID, author, content),
+			nodeID: makeNodeWithTree(nodeID, author, content, treeID),
 		},
 		getAncFn: func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
-			return []db.Node{*makeNode(nodeID, author, content)}, nil
+			return []db.Node{*makeNodeWithTree(nodeID, author, content, treeID)}, nil
 		},
 	}
 	return CompileRequest{
@@ -688,6 +708,118 @@ func TestRetrieved_ManifestJSONFields(t *testing.T) {
 	for _, key := range []string{`"retrieved"`, `"retrievalBudget"`, `"relevance"`} {
 		if strings.Contains(plainJSONStr, key) {
 			t.Errorf("unwired manifest JSON carries %s:\n%s", key, plainJSONStr)
+		}
+	}
+}
+
+// --- Scope rule (GAP-080 phase 4a) ----------------------------------------
+
+// TestRetrieved_ScopedToCurrentNodeTreeNotRequestTree proves the tier searches
+// the CURRENT NODE's tree, not the request's TreeID. The production callers
+// leave CompileRequest.TreeID zero (it is a form field no caller populates),
+// so this fixture does too — and the node's own tree NON-zero. The reader must
+// be queried against the node's tree and the hit must land in the payload.
+func TestRetrieved_ScopedToCurrentNodeTreeNotRequestTree(t *testing.T) {
+	nodeTree := uuid.New()
+	// Production shape: req.TreeID left at uuid.Nil (the handlers never send it).
+	req, nodes := retrievalFixtureNodeTree("topic search scoping", nodeTree)
+	req.TreeID = uuid.Nil
+
+	reader := &stubRetrievalReader{items: []RetrievalItem{
+		retrievalItem(uuid.New(), "node-tree-topic", "Node Tree", "scoped hit", 0.9),
+	}}
+	c := NewCompiler(nodes, &stubTopicReader{}, &stubCardReader{}, NewTokenEstimator(), 5,
+		WithRetrieval(reader, 5))
+	result, err := c.Compile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+
+	if reader.calls != 1 {
+		t.Fatalf("Retrieve called %d times, want 1", reader.calls)
+	}
+	if reader.lastTree != nodeTree {
+		t.Fatalf("Retrieve tree = %v, want the current node's tree %v (req.TreeID is %v)",
+			reader.lastTree, nodeTree, req.TreeID)
+	}
+	if len(result.Manifest.Retrieved) != 1 {
+		t.Fatalf("manifest.Retrieved has %d items, want 1 (the hit must fold in)", len(result.Manifest.Retrieved))
+	}
+	wantBlock := "--- retrieved topic node-tree-topic ---"
+	if !strings.Contains(result.Content, wantBlock) {
+		t.Errorf("Content missing the retrieved block %q; content:\n%s", wantBlock, result.Content)
+	}
+}
+
+// TestRetrieved_NodeTreeWinsOverConflictingRequestTree proves that when both
+// the request and the node carry a tree (and they differ), the NODE's tree is
+// the authoritative scope. A caller-supplied tree that disagrees with the
+// node's own tree is a bug in the caller, not an input to honour.
+func TestRetrieved_NodeTreeWinsOverConflictingRequestTree(t *testing.T) {
+	nodeTree := uuid.New()
+	reqTree := uuid.New()
+	if nodeTree == reqTree {
+		t.Fatal("test bug: node and request trees collided")
+	}
+	req, nodes := retrievalFixtureNodeTree("conflicting tree ids", nodeTree)
+	req.TreeID = reqTree
+
+	reader := &stubRetrievalReader{items: []RetrievalItem{
+		retrievalItem(uuid.New(), "winning-tree", "Winning Tree", "node wins", 0.9),
+	}}
+	c := NewCompiler(nodes, &stubTopicReader{}, &stubCardReader{}, NewTokenEstimator(), 5,
+		WithRetrieval(reader, 5))
+	result, err := c.Compile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+
+	if reader.calls != 1 {
+		t.Fatalf("Retrieve called %d times, want 1", reader.calls)
+	}
+	if reader.lastTree != nodeTree {
+		t.Fatalf("Retrieve tree = %v, want the NODE's tree %v, not the request's %v",
+			reader.lastTree, nodeTree, reqTree)
+	}
+	if len(result.Manifest.Retrieved) != 1 {
+		t.Fatalf("manifest.Retrieved has %d items, want 1 (the node's-tree hit must be kept)",
+			len(result.Manifest.Retrieved))
+	}
+}
+
+// TestRetrieved_NodeWithoutTreeSkipsSearch proves a current node with no tree
+// (TreeID == uuid.Nil) skips the tier silently: no search issued, no
+// manifest field, no warning, and the compile still succeeds.
+func TestRetrieved_NodeWithoutTreeSkipsSearch(t *testing.T) {
+	req, nodes := retrievalFixture("node with no tree")
+	// Force the node (and its ancestry stub) to carry no tree.
+	nodes.nodes[req.NodeID].TreeID = uuid.Nil
+	nodes.getAncFn = func(ctx context.Context, id uuid.UUID) ([]db.Node, error) {
+		return []db.Node{*makeNodeWithTree(req.NodeID, uuid.MustParse("00000000-0000-0000-0000-000000000001"), "node with no tree", uuid.Nil)}, nil
+	}
+
+	reader := &stubRetrievalReader{items: []RetrievalItem{
+		retrievalItem(uuid.New(), "should-not-appear", "Never", "must not be fetched", 0.9),
+	}}
+	c := NewCompiler(nodes, &stubTopicReader{}, &stubCardReader{}, NewTokenEstimator(), 5,
+		WithRetrieval(reader, 5))
+	result, err := c.Compile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("compile returned an error for a tree-less node: %v", err)
+	}
+
+	if reader.calls != 0 {
+		t.Fatalf("Retrieve called %d times, want 0 (no-tree node must skip silently)", reader.calls)
+	}
+	if len(result.Manifest.Retrieved) != 0 {
+		t.Errorf("manifest.Retrieved has %d items, want 0", len(result.Manifest.Retrieved))
+	}
+	if result.Manifest.RetrievalBudget != 0 {
+		t.Errorf("RetrievalBudget = %d, want 0 (no search was issued)", result.Manifest.RetrievalBudget)
+	}
+	for _, w := range result.Manifest.Warnings {
+		if strings.Contains(strings.ToLower(w), "retrieval") {
+			t.Errorf("unexpected retrieval warning for a no-tree node: %q", w)
 		}
 	}
 }

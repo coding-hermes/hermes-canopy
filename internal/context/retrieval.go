@@ -24,6 +24,11 @@ import (
 // `retrieval failed: ...` warning and nothing else (same partial-failure
 // contract as references and cards).
 //
+// The search is scoped to the CURRENT NODE's tree (`currentNode.TreeID`) —
+// never `req.TreeID`; see the scope comment in the body. A node with no tree
+// (`uuid.Nil`) skips the tier silently: no search, no warning, no
+// `retrievalBudget` on the manifest.
+//
 // It records manifest.RetrievalBudget (the tier's allocation) once the
 // search was ISSUED — an empty result still counts as a run search — and
 // mutates nothing else on the manifest. Kept tokens are DEDUCTED from the
@@ -38,6 +43,24 @@ func (c *compilerImpl) compileRetrieved(
 ) (sections []string, items []ManifestItem, warnings []string) {
 	// Tier disabled (or wired with a no-op option): no side effect at all.
 	if c.retrieval == nil || c.retrievalMax <= 0 {
+		return nil, nil, nil
+	}
+
+	// Scope: the CURRENT NODE's tree is the authoritative scope for this
+	// step — `currentNode.TreeID`, never `req.TreeID`. Both production
+	// callers (internal/handler/context_handler.go and
+	// internal/handler/gateway_handler.go) build the compile request
+	// WITHOUT a tree id, so a request-scoped search would run against the
+	// zero uuid, match no topic row, and leave the tier looking alive
+	// (it still records retrievalBudget) while retrieving nothing. The
+	// request field is therefore deliberately NOT consulted and there is
+	// no fallback that prefers it: a caller-supplied tree that disagrees
+	// with the node's own tree is a bug, not an input to honour.
+	//
+	// A node with no tree has nothing to scope the search to: skip
+	// silently — no search, no warning, no manifest field — the same
+	// "nothing to search against" posture as a blank query.
+	if currentNode.TreeID == uuid.Nil {
 		return nil, nil, nil
 	}
 
@@ -65,7 +88,7 @@ func (c *compilerImpl) compileRetrieved(
 		return nil, nil, nil
 	}
 
-	retrieved, err := c.retrieval.Retrieve(ctx, req.TreeID, query, c.retrievalMax)
+	retrieved, err := c.retrieval.Retrieve(ctx, currentNode.TreeID, query, c.retrievalMax)
 	// The search was issued (result nil, empty or not) — record the
 	// allocation on the manifest regardless of the outcome below.
 	manifest.RetrievalBudget = tierBudget

@@ -155,6 +155,24 @@ type CardReader interface {
 > `internal/retrieval/retrieval.go` (the `search.TopicSearchService` adapter);
 > tests: `internal/context/retrieval_test.go`,
 > `internal/retrieval/retrieval_test.go`.
+>
+> **Scope rule (GAP-080 phase 4a, same amendment):** the retrieved tier searches
+> the CURRENT NODE's tree — `currentNode.TreeID` passed to
+> `retrieval.Retrieve` — and `CompileRequest.TreeID` is NEVER consulted and has
+> no fallback that prefers it. Rationale: both production callers
+> (`internal/handler/context_handler.go:161` and
+> `internal/handler/gateway_handler.go:243`) build the compile request WITHOUT a
+> `TreeID`, so a request-scoped search would run against the zero uuid, match no
+> topic row, and silently disable the tier in production while every unit test
+> (which populated `req.TreeID`) stayed green. A request field no production
+> caller populates is not a scope — the authoritative scope is the node that is
+> actually being compiled. A node with no tree (`TreeID == uuid.Nil`) has
+> nothing to scope the search to; the tier is skipped silently (no search, no
+> warning, no `retrievalBudget`) — the same "nothing to search against"
+> posture as a blank query. Tests:
+> `TestRetrieved_ScopedToCurrentNodeTreeNotRequestTree`,
+> `TestRetrieved_NodeTreeWinsOverConflictingRequestTree`,
+> `TestRetrieved_NodeWithoutTreeSkipsSearch`.
 
 ## 3. Data Model
 
