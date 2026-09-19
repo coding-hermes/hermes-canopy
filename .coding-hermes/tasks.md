@@ -1849,3 +1849,5 @@ locally, red in both CI runs, so it is a CI-exposed race in shipped code, not ma
 **`INT-CI-002` (P1, complexity 4, gpt-5.6-luna @ openai-codex)** with the raw frames, the root-cause shape and the
 required regression test — it is the recommended next pick because it also restores green CI. The pivot work
 itself is green in every run (`migrations` package PASS); `PL-03`'s `worker_status` now carries the defect pointer.
+
+**CI update (2026-09-19 00:26Z, after the final board push):** the run for `5e50ce8` is **GREEN** — so the `INT-CI-002` failure is **intermittent**, not deterministic (red on two runs of `4ae4a0c`, green on an unchanged-code push). The row stands: the failure output contains two frames with the same `sequence` and `event_id`, i.e. duplicate delivery proven from the raw stream, which is what the intermittency is masking. `INT-CI-002`'s title/detail were amended to the verified run history (red 35407921325 / red 35408102069 / red on rerun / green 5e50ce8) rather than the earlier "deterministic" claim.
