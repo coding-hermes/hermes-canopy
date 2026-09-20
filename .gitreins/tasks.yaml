@@ -3098,3 +3098,16 @@ tasks:
   status: complete
   created_at: '2026-09-20T13:28:53.584964+00:00'
   completed_at: '2026-09-20T14:04:21.599092+00:00'
+- id: DF-HERMES-CANOPY-36-FOLLOWUP
+  title: Membership-gate the tree-scoped reads that bypassed GetTree
+  criteria:
+  - ExportTree and the whole /graph mount (stats/subtree/ancestors) carry the membership
+    gate on the REAL router (proved by chi.Walk middleware-chain parity in internal/server/route_parity_test.go,
+    control = an always-gated tree route under a different mount, test verified to
+    FAIL when the gates are removed); a non-member is refused 403 and a member/owner
+    is allowed 200 on those surfaces; treeIDFromPath resolves the /graph/trees/{id}/...
+    shape; go build/vet clean; golangci-lint 0 issues; full handler + server suites
+    pass with the shared-DB flag
+  status: complete
+  created_at: '2026-09-20T15:21:29.114711+00:00'
+  completed_at: '2026-09-20T15:21:29.675908+00:00'

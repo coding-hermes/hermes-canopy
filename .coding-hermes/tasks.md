@@ -2466,3 +2466,48 @@ go-shared-tree-member-403-owner-only-get) -> both `not_found` (honest no-cache; 
   at HEAD. DF-39/40 (P2), GAP-095/096 (P2, decision-bound), QA-15..24 (harness-source, skip w/ rationale unless
   routing changed). Tier 2 verdict for DF-36: poll `gitreins judge --status job-e172413fea4d45c1934a52574924e0c5`
   and backfill the row's judge_verdict if it differs from the Tier 1 id.
+
+### Tick 527 addendum — DF-36 Tier 2 verdict + follow-up fix (`17739dae`)
+
+The async Tier 2 judge finished after the first entry: verdict **`4a4ae2c6` / INCOMPLETE**. All technical clauses
+PASSED (it independently re-ran the acceptance test, the FULL handler suite `465.475s`, build/vet/gofmt, lint 0
+issues, and confirmed no AGENTS.md drift), and it FAILED the criterion on two points:
+
+1. **Process clause** — "worker does not push" is violated because the commit is the tip of origin/master and
+   gitlab/master. That is the FOREMAN's doing, not the worker's: this tick's mandate is "MANDATORY PUSH AFTER
+   EVERY COMMIT". The worker never pushed. Criterion-authoring artifact in the briefs; do not write that clause
+   into a criterion again — state the gate, not the push, as the acceptance condition.
+2. **A REAL defect** — the row's own detail named "graph/stats/export/SSE" as surfaces to fix, and the judge
+   proved they were still open: `ExportTree` (export_handler.go) carried a "Verify the requesting user owns this
+   tree" comment above a check that only tested `userID == uuid.Nil`, so **any authenticated caller could export
+   ANY tree (IDOR)**; `GET /graph/trees/{id}/stats` had no per-tree authorization at all; and the whole `/graph`
+   mount (subtree/ancestors/stats) was ungated.
+
+**Fix landed foreman-direct in `17739dae`** (small, mechanical, already-scoped — not worth a worker round trip):
+- `server.go`: the `/graph` mount and `GET /trees/{tree_id}/export` now carry the existing `membershipMW` — the
+  same gate every sibling tree route uses.
+- `middleware.go`: `treeIDFromPath` resolves the `/graph/trees/{id}/...` shape. **This part was load-bearing**:
+  the extractor only understood `api/v1/{nodes|trees}/{id}`, so it returned empty for `/graph` paths — wrapping
+  that mount WITHOUT this change would have silently no-op'd.
+- `export_handler.go`: the comment no longer claims an ownership check that is not there.
+- Owner safety proved by a temporary probe (deleted before commit): tree creation DOES insert the owner
+  `tree_members` row (`COUNT=1`, `IsMember=true`), so route-level gating cannot lock an owner out of their tree.
+
+**Evidence** (no phantom gates this time):
+- `internal/handler/tree_scoped_read_gates_test.go` — behaviour on the test router: non-member 403 on graph reads,
+  anon 401, member 200 after the real share route, owner 200.
+- `internal/server/route_parity_test.go` — route-level proof on the REAL router via `chi.Walk` middleware-chain
+  parity (the GAP-078 pattern), control = `/api/v1/trees/{}/events`, a gated tree route under a DIFFERENT mount.
+  **The test was verified to FAIL when the gates are removed** (`10 inline middleware, want 11 — its membership
+  gate is missing`) — a first control choice (`/graph/.../subtree`) was circular because that mount was the defect.
+- `internal/handler/api_integration_test.go` — the test harness now mirrors production wiring for `/graph` and
+  `/export` (it previously mirrored the pre-fix router, which is why the first probe returned 404/200).
+- Gates: `go build ./...` + `go vet ./...` clean; `golangci-lint` 0 issues on handler+server; handler sweep with
+  the shared-DB flag **PASS 371.4s exit 0**; server package suite PASS.
+- GitReins: `DF-HERMES-CANOPY-36-FOLLOWUP` created/started/completed; **Tier 1 `141542a4` PASS**; Tier 2 async
+  (`job-33b4e980387241ebba47f535ca7317b9`).
+- Pushed to origin + gitlab (`8b1579ea..17739dae`), 0/0 ahead.
+
+**Sibling-tick note:** commit `8b1579ea` ("add QA-HERMES-CANOPY-25..29 findings", QA foreman 2026-09-20) landed in
+this repo mid-tick and became the parent of my fix commit. No collision: all commits intact, no divergent work, and
+the push fast-forwarded cleanly on top of it.
