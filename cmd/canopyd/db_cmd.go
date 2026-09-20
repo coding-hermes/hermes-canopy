@@ -82,11 +82,11 @@ func exportSQLiteE(args []string) int {
 		return 2
 	}
 	target := config.DBTargetOf(cfg, os.Getenv)
+	_, _ = fmt.Fprintf(os.Stdout, "%s\n", target.Describe())
 	if err := sqlitestore.ExportPostgres(context.Background(), cfg.DSN(), *path); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "%s\n", target.Describe())
 	_, _ = fmt.Fprintf(os.Stdout, "SQLite export complete: %s\n", *path)
 	return 0
 }
