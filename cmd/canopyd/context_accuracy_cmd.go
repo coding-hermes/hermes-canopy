@@ -60,6 +60,12 @@ func runContextAccuracyCmdE(args []string) int {
 
 	ctx := context.Background()
 	cfg := config.FromEnv()
+	target := config.DBTargetOf(cfg, os.Getenv)
+	if *jsonOutput {
+		fmt.Fprintln(os.Stderr, target.Describe())
+	} else {
+		fmt.Println(target.Describe())
+	}
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: invalid configuration: %v\n", err)
 		return 1
@@ -130,6 +136,7 @@ func printContextAccuracyUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: canopyd context-accuracy --sample N [--json] [--min-accuracy P]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Measure ancestry and topic selection against an independent graph-derived golden set.")
+	fmt.Fprintln(os.Stderr, "  Opens the PostgreSQL database resolved from DB_* / CANOPY_DB_URL (built-in default localhost:5432; the project's compose stack is :5437).")
 	fmt.Fprintln(os.Stderr, "  --sample N          target nodes to measure (default 25; must be at least 1)")
 	fmt.Fprintln(os.Stderr, "  --json              emit the Score struct as JSON")
 	fmt.Fprintln(os.Stderr, "  --min-accuracy P    fail below ratio P, from 0.0 to 1.0")

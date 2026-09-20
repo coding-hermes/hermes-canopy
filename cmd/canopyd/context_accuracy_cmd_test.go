@@ -29,6 +29,13 @@ func TestContextAccuracyCommandUsageAndValidation(t *testing.T) {
 			if !strings.Contains(output, tt.text) {
 				t.Fatalf("output %q does not contain %q", output, tt.text)
 			}
+			if tt.name == "help" {
+				for _, want := range []string{"DB_* / CANOPY_DB_URL", ":5437"} {
+					if !strings.Contains(output, want) {
+						t.Errorf("help output %q does not contain %q", output, want)
+					}
+				}
+			}
 		})
 	}
 }

@@ -39,7 +39,7 @@ func printDBUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Copies the core graph tables (users, trees, nodes, edges) from the")
 	fmt.Fprintln(os.Stderr, "configured PostgreSQL database into a new SQLite file.")
-	fmt.Fprintln(os.Stderr, "PostgreSQL source uses CANOPY_DB_URL or the DB_* environment variables.")
+	fmt.Fprintln(os.Stderr, "PostgreSQL source resolves CANOPY_DB_URL or any non-empty DB_* variable; the built-in default is localhost:5432, while the project's development stack uses :5437.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Flags:")
 	fmt.Fprintln(os.Stderr, "  --sqlite-path <file>  Destination SQLite file (required)")
@@ -81,10 +81,12 @@ func exportSQLiteE(args []string) int {
 		fmt.Fprintf(os.Stderr, "Error: invalid configuration: %v\n", err)
 		return 2
 	}
+	target := config.DBTargetOf(cfg, os.Getenv)
 	if err := sqlitestore.ExportPostgres(context.Background(), cfg.DSN(), *path); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
+	_, _ = fmt.Fprintf(os.Stdout, "%s\n", target.Describe())
 	_, _ = fmt.Fprintf(os.Stdout, "SQLite export complete: %s\n", *path)
 	return 0
 }
