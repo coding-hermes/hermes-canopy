@@ -2208,3 +2208,87 @@ per-entry MISS output (`--max-miss-detail`; a 5-entry run emitted ~150 KB becaus
 ~2000-node chain, reproduced this tick at 409 missing ids on a single `--sample 1` run). GAP-095/GAP-096
 stay decision-bound; DF-24/25 are load-flakes to watch; the QA-HERMES-CANOPY-* cluster stays
 fleet-infra owned.
+
+## Tick 525 — 2026-09-20 ~12:57Z (WORK)
+
+**Verdict:** WORK. Board read directly: 384 rows / **343 complete / 26 pending / 15 duplicate** / 0 parse
+failures. Pick = **QA-HERMES-CANOPY-18** (P1), the highest-value actionable row: a *correctness* defect
+in the QA pipeline's own write path that silently leaves findings uncommitted while reporting success.
+The 09-20 routed QA cluster (QA-15..24) is fresh, but 15/16/17/19/20/21/23/24 fix UNTRACKED cron
+scripts (`~/.hermes/scripts/bunker-qa.sh`, `qa_discover.py`) — not committable in any repo — while QA-18
+alone has a tracked fix site. Wave: **not composed** — QA-18 is the only pick whose fix site is tracked,
+and no second independent tracked row exists (the prompt also caps ONE worker per tick). Serial path used.
+
+**Dispatch/Worker:** `gpt-5.6-luna @ openai-codex` (sub before PAYG — the lane that carried GAP-087/GAP-098
+on this repo), brief `/tmp/brief-qa18.md`, background `bash /tmp/dispatch-qa18.sh` (tool-tracked process;
+`-Q` log stayed 0 bytes until exit — liveness came from the tree, not the log). Fix site is NOT this repo:
+the QA pipeline is `examples/coding-hermes/qa.ts` in **hermes-dagger** (same precedent as QA-HERMES-CANOPY-8,
+hermes-dagger 4f18e70), so the commit landed there. One dispatch, **no rework**. Worker commit **105169c**
+(4 files, +196/−41) — passed the repo's own pre-commit guard (`go test -short ./...`) despite index
+contention from sibling bankai-POC ticks. Note: the worker's session died to `state.db is locked`
+(a sibling tick held it), so session-history liveness checks were unavailable — the tree and commit
+were the completion signal.
+
+**The defect (two independent causes, both fixed):**
+1. `git add .coding-hermes/board/tasks.jsonl` traverses a SYMLINK when the workdir is a stand-in stub
+   (`~/.hermes/stand-in/pm/<project>`, used by every `*-qa` scheduler row) → `fatal: pathspec ... is
+   beyond a symbolic link`; the row lands in the real board but is never committed.
+2. The honesty marker was broken by construction: `qa_board_append.py` itself prints `FILED=<n>` after
+   its own append verify, and the node grepped *that* — so a failed git tail still reported
+   `filed:1 / write_failed:false`. The marker proved the python append ran, nothing more.
+
+**Fix:** `readlink -f` the board → `git rev-parse --show-toplevel` from the resolved dir → `git -C "$R"
+add/commit -- "${B#$R/}"` (commit lands in the REAL repo, from a non-git stand-in cwd); `set -o pipefail`
+so a failing commit cannot be masked by `tail`; success marker is now a distinct **`BOARD_FILED=<n>`**
+emitted only after append AND commit both succeed. New regressions
+`TestQaBoardAppendSymlinkedStandInCommitsRealRepo` (test file :407) and
+`TestQaBoardAppendFailedCommitDoesNotClaimFiled` (:489); the commit-scope scanner learned `git -C ... commit`.
+
+**Verification (foreman, adversarial — not the worker's word):**
+- `git merge-base --is-ancestor 105169c HEAD` → the fix is at HEAD; `git show HEAD:...qa.ts` carries both markers.
+- `go build -o /dev/null ./cmd/dagger` exit 0; `go vet ./src/typescript/` clean.
+- `go test -count=1 ./src/typescript/ -run 'TestQaBoardAppend|TestBoardAppend'` → **ok 8.7s**;
+  verbose run: **11/11 PASS, zero SKIPs**, including both new regressions.
+- `golangci-lint run ./src/typescript/` → **0 issues** (binary v2.12.2 = the CI pin).
+- **Live legs run by the foreman** (`/tmp/qa18-live.sh`, `/tmp/qa18-legb.sh`):
+  (A) real tmp repo + stand-in whose `.coding-hermes/board` is a SYMLINK, run from the stand-in cwd
+  (provably not a git repo) → `APPENDED=1 PRIOR=1 TOTAL=2` … `[master 3e4656b]` … **`BOARD_FILED=1`**,
+  row present in the REAL board, real-repo `status --porcelain` clean;
+  (B) locked-index commit failure → `filed:0` path exercised: chain rc=**128**, helper's old `FILED=1`
+  present but **NO `BOARD_FILED`**, 1 commit in the repo (seed only), row left uncommitted (honest).
+  ⚠️ My first leg-B attempt was a HARNESS error, not a product finding: `git symbolic-ref HEAD
+  refs/heads/does-not-exist` does not force a failure — git just made a root commit and `BOARD_FILED=1`
+  was CORRECT. A forced-failure probe must break a git WRITE (index lock, unborn repo), not HEAD's ref.
+
+**Gates / Push:** `git push origin master` → **verified** `105169c` is contained in `origin/master`
+(`merge-base --is-ancestor` YES; `rev-list --count origin/master..HEAD` = 0). The `gitlab` mirror was
+5 commits behind and pushed this tick (`d4bffec..4fa63d7`), now 0 unpushed on both remotes.
+
+**CI:** 4/4 recent dagger runs report `conclusion=failure` — **the tracked billing block, not code rot**:
+job steps=0 for both `Test` and `Lint` plus the explicit annotation *"The job was not started because
+recent account payments have failed…"*. Already tracked as **INT-CI-009** (68 billing references on the
+dagger board); no duplicate row filed, per this repo's own tick-560 precedent. This tick's fix landed in
+hermes-dagger but the row lives on this board, so canopy's own CI (5/5 recent master runs success) is unchanged.
+
+**GitReins:** `task create` + `task start` before implementation, `task complete` after the commit landed.
+Verdict **`a038a915`** (artifact `.gitreins/history/2026-09-20/2cddc1da/verdict.json`): **tier1 PASS**
+(lint + secrets clean + **all 30 test packages ok**, full `-race` suite) and **tier2 PASS / COMPLETE**
+(criterion PASS, evaluated commit `82333a4b`, a descendant of `105169c`). Task left `complete` in
+tasks.yaml (the fleet default keeps completed tasks for audit).
+
+**Off-by-one:** health `{"status":"ok","uptime":"2h14m"}`. Discover fired BEFORE designing the fix —
+`POST /api/v1/problems/discover {"problem_class":"git-add-pathspec-beyond-symlink"}` → **not_found** (no
+cached answer, and NOT an API failure). Post-debug submission owed: `git-add-pathspec-beyond-symlink`
+(the `>>`-free command shape, the marker-gating rule, and the leg-B injection lesson).
+
+**Bookkeeping:** `QA-HERMES-CANOPY-18` → complete with commit_hash/verdict/files/lines/worker_summary;
+event **695** (task_completed, tick 525); `board.jsonl` header `ticks_total` 524 → **525**, `last_commit`
+= 105169c0. Diff is **3 lines, one per file** (spaced JSONL style preserved by per-line round-trip — no
+churn). DuckBrain: last `/ticks/` key was **519**; writing 525 this tick (520–524 were never written).
+
+**Next tick:** cheapest tracked picks remain **DF-HERMES-CANOPY-24** (CI teardown flake, recipe on the row)
+and **DF-HERMES-CANOPY-25** (handler timeout under concurrent PG load), then GAP-080 phase 3/4b (needs the
+retention-policy decision) and GAP-095 (usability dogfood round 2 — its precondition, the DF-32 redeploy,
+has landed). GAP-096 is decision-bound (owner ruling). QA-15/16/17/19/20/21/23/24 stay open and are
+**not** committable from a repo — they need a `~/.hermes/scripts` fix plus a tracked copy, or an owner
+call on where that harness source of record should live.
