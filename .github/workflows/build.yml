@@ -66,6 +66,9 @@ jobs:
         env:
           CANOPY_REQUIRE_DB: "1"
 
+      - name: Context-selection accuracy (GAP-098)
+        run: go test ./internal/ctxaccuracy/ -count=1 -v -run 'TestGoldenSet' | tee /tmp/ctx-accuracy.txt
+
       - name: Integration tests
         run: go test ./... -count=1 -run 'TestIntegration' -timeout=180s
         env:

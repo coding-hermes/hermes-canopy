@@ -92,11 +92,12 @@ type graphEdgeSummary struct {
 
 // knownSubcommands maps top-level subcommands to their handler.
 var knownSubcommands = map[string]struct{}{
-	"tree":    {},
-	"session": {},
-	"topic":   {},
-	"card":    {},
-	"db":      {},
+	"tree":             {},
+	"session":          {},
+	"topic":            {},
+	"card":             {},
+	"db":               {},
+	"context-accuracy": {},
 }
 
 // exitUnknownSubcommand is the exit code for CLI misuse: an argument that is
@@ -124,6 +125,8 @@ func runCLI() {
 		runCardCmd(os.Args[2:])
 	case "db":
 		runDBCmd(os.Args[2:])
+	case "context-accuracy":
+		runContextAccuracyCmd(os.Args[2:])
 	default:
 		os.Exit(refuseUnknownSubcommand(sub))
 	}
@@ -145,6 +148,7 @@ func printCLIUsage() {
 	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
 	fmt.Fprintf(os.Stderr, "  card export [flags]       Export the local card stores as deterministic JSONL (docs/CARD_EXPORT.md)\n")
 	fmt.Fprintf(os.Stderr, "  db export-sqlite [flags] Copy core graph data from PostgreSQL into a new SQLite file\n")
+	fmt.Fprintf(os.Stderr, "  context-accuracy [flags] Measure ancestry/topic selection accuracy\n")
 	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
 }
 

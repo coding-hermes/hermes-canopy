@@ -41,7 +41,7 @@ func TestStripServerFlags(t *testing.T) {
 }
 
 func TestIsSubcommand(t *testing.T) {
-	for _, sub := range []string{"tree", "session"} {
+	for _, sub := range []string{"tree", "session", "context-accuracy"} {
 		if !isSubcommand(sub) {
 			t.Errorf("isSubcommand(%q) = false, want true", sub)
 		}
