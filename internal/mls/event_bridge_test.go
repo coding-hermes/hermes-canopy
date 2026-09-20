@@ -123,6 +123,10 @@ func (h *mockSSEHub) Broadcast(treeID uuid.UUID, event sse.SSEEvent) sse.SSEEven
 	h.broadcasts = append(h.broadcasts, broadcastCall{treeID: treeID, event: event})
 	return event
 }
+func (h *mockSSEHub) ReplayRecent(context.Context, uuid.UUID, string, int) error {
+	return nil
+}
+
 func (h *mockSSEHub) ReplaySince(_ context.Context, _ uuid.UUID, _ string, _ string) error {
 	return nil
 }

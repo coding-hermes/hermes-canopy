@@ -134,9 +134,36 @@ type SSEHub interface {
 	Unsubscribe(treeID uuid.UUID, clientID string)
 	Broadcast(treeID uuid.UUID, event SSEEvent) SSEEvent
 	ReplaySince(ctx context.Context, treeID uuid.UUID, clientID string, sinceEventID string) error
+	ReplayRecent(ctx context.Context, treeID uuid.UUID, clientID string, max int) error
 	SubscriberCount(treeID uuid.UUID) int
 	TotalConnections() int
 	Shutdown(ctx context.Context) error
+}
+
+// WorkspaceAccessChecker authorizes an authenticated user for a workspace.
+// It is intentionally a small function seam so handlers can enforce
+// workspace membership without importing the collaboration service package.
+type WorkspaceAccessChecker func(ctx context.Context, userID, workspaceID uuid.UUID) error
+
+var workspaceAccessRegistry struct {
+	mu      sync.RWMutex
+	checker WorkspaceAccessChecker
+}
+
+// SetWorkspaceAccessChecker installs the process-wide checker used by the
+// production workspace-channel handler. Tests should prefer the handler option
+// so they do not share this mutable default.
+func SetWorkspaceAccessChecker(checker WorkspaceAccessChecker) {
+	workspaceAccessRegistry.mu.Lock()
+	workspaceAccessRegistry.checker = checker
+	workspaceAccessRegistry.mu.Unlock()
+}
+
+// CurrentWorkspaceAccessChecker returns the currently registered workspace checker.
+func CurrentWorkspaceAccessChecker() WorkspaceAccessChecker {
+	workspaceAccessRegistry.mu.RLock()
+	defer workspaceAccessRegistry.mu.RUnlock()
+	return workspaceAccessRegistry.checker
 }
 
 // --- Implementation --------------------------------------------------------
@@ -392,6 +419,33 @@ func (h *hub) ReplaySince(_ context.Context, treeID uuid.UUID, clientID string, 
 			"event buffer overflow — some events may be missing"))
 	}
 
+	for _, ev := range events {
+		if err := client.Send(ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReplayRecent sends the retained events for a tree to one subscribed client.
+// The caller supplies the cap so route-specific replay remains bounded.
+func (h *hub) ReplayRecent(_ context.Context, treeID uuid.UUID, clientID string, max int) error {
+	client := h.clientByID(clientID)
+	if client == nil {
+		return ErrClientNotFound
+	}
+	if max <= 0 {
+		max = DefaultLogSize
+	}
+
+	events, truncated, err := h.log.Since(treeID, 0, max)
+	if err != nil {
+		return err
+	}
+	if truncated {
+		_ = client.SendRaw(formatErrorEvent(treeID, "EVENT_BUFFER_OVERFLOW",
+			"event buffer overflow — some events may be missing"))
+	}
 	for _, ev := range events {
 		if err := client.Send(ev); err != nil {
 			return err

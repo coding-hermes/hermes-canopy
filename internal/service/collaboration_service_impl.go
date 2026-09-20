@@ -19,6 +19,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // Invitation TTL per SPEC-FTR-01 §2 decision 19 (one-time link) and the
@@ -32,17 +33,52 @@ const DefaultApprovalTTL = int64(300)
 // collaborationServiceImpl is the real implementation of
 // collaboration.CollaborationService.
 type collaborationServiceImpl struct {
-	repo db.WorkspaceRepo
-	now  func() time.Time
+	repo       db.WorkspaceRepo
+	now        func() time.Time
+	userReader UserReader
+}
+
+// UserReader is the identity lookup seam used to resolve member handles.
+type UserReader interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*db.User, error)
+}
+
+// CollaborationServiceOption customizes collaboration service dependencies.
+type CollaborationServiceOption func(*collaborationServiceImpl)
+
+// WithUserReader enables display-name-backed member handles. A nil reader
+// deliberately preserves the UUID fallback for callers without identity data.
+func WithUserReader(reader UserReader) CollaborationServiceOption {
+	return func(s *collaborationServiceImpl) { s.userReader = reader }
 }
 
 // NewCollaborationService creates a CollaborationService backed by the
 // given WorkspaceRepo.
-func NewCollaborationService(repo db.WorkspaceRepo) collaboration.CollaborationService {
-	return &collaborationServiceImpl{
+func NewCollaborationService(repo db.WorkspaceRepo, opts ...CollaborationServiceOption) collaboration.CollaborationService {
+	s := &collaborationServiceImpl{
 		repo: repo,
 		now:  time.Now,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+
+	// The channel handler is constructed by server.New with only the shared
+	// SSE hub. Register the same repo-backed membership rule here so the
+	// optional workspace_id gate is wired without changing that public
+	// server construction path.
+	sse.SetWorkspaceAccessChecker(func(ctx context.Context, userID, workspaceID uuid.UUID) error {
+		if _, err := repo.GetWorkspaceByID(ctx, workspaceID); err != nil {
+			return collaboration.ErrNotWorkspaceMember
+		}
+		if _, err := repo.GetMember(ctx, workspaceID, userID); err != nil {
+			return collaboration.ErrNotWorkspaceMember
+		}
+		return nil
+	})
+	return s
 }
 
 // CreateWorkspace creates a new workspace with the caller as admin.
@@ -380,9 +416,15 @@ func (s *collaborationServiceImpl) membersWithHandles(ctx context.Context, works
 
 	members := make([]collaboration.Member, 0, len(rows))
 	for _, m := range rows {
+		handle := m.UserID.String()
+		if s.userReader != nil {
+			if user, err := s.userReader.GetByID(ctx, m.UserID); err == nil && user != nil && strings.TrimSpace(user.DisplayName) != "" {
+				handle = user.DisplayName
+			}
+		}
 		members = append(members, collaboration.Member{
 			UserID:   m.UserID,
-			Handle:   m.UserID.String(),
+			Handle:   handle,
 			Role:     collaboration.Role(m.Role),
 			JoinedAt: m.JoinedAt,
 		})

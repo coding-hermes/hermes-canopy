@@ -87,16 +87,34 @@ func (r *workspaceChannelRegistry) get(id uuid.UUID) (channelInfo, bool) {
 type WorkspaceHandler struct {
 	hub      sse.SSEHub
 	channels *workspaceChannelRegistry
+	access   sse.WorkspaceAccessChecker
+}
+
+// WorkspaceHandlerOption customizes the optional workspace authorization seam.
+type WorkspaceHandlerOption func(*WorkspaceHandler)
+
+// WithWorkspaceAccessChecker injects a membership checker, primarily for
+// PG-independent tests. Production defaults to the checker registered by the
+// collaboration service.
+func WithWorkspaceAccessChecker(checker sse.WorkspaceAccessChecker) WorkspaceHandlerOption {
+	return func(h *WorkspaceHandler) { h.access = checker }
 }
 
 // NewWorkspaceHandler returns a handler wired to the given SSE hub. Channels
 // are seeded with the default set on construction. The hub comes from
 // server.New's sseHub argument — no DB dependency for MVP.
-func NewWorkspaceHandler(hub sse.SSEHub) *WorkspaceHandler {
-	return &WorkspaceHandler{
+func NewWorkspaceHandler(hub sse.SSEHub, opts ...WorkspaceHandlerOption) *WorkspaceHandler {
+	h := &WorkspaceHandler{
 		hub:      hub,
 		channels: newWorkspaceChannelRegistry(),
+		access:   sse.CurrentWorkspaceAccessChecker(),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(h)
+		}
+	}
+	return h
 }
 
 // Routes mounts the workspace channel endpoints.
@@ -118,8 +136,34 @@ type channelListItem struct {
 	SubscriberCount int       `json:"subscriber_count,omitempty"`
 }
 
+// authorizeWorkspace applies the optional query-parameter workspace scope.
+// An absent parameter deliberately preserves the legacy unscoped route.
+func (h *WorkspaceHandler) authorizeWorkspace(w http.ResponseWriter, r *http.Request) bool {
+	rawID := r.URL.Query().Get("workspace_id")
+	if rawID == "" {
+		return true
+	}
+	workspaceID, err := uuid.Parse(rawID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_WORKSPACE_ID",
+			"workspace_id must be a valid UUID")
+		return false
+	}
+	if h.access == nil || h.access(r.Context(), UserIDFromContext(r.Context()), workspaceID) != nil {
+		// Do not distinguish a missing workspace from a valid workspace where
+		// the caller is not a member: the channel surface has no existence
+		// oracle by design.
+		writeError(w, http.StatusForbidden, "WORKSPACE_NOT_FOUND", "workspace not found")
+		return false
+	}
+	return true
+}
+
 // ListChannels returns the list of available channels as a JSON array.
 func (h *WorkspaceHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeWorkspace(w, r) {
+		return
+	}
 	channels := h.channels.list()
 	items := make([]channelListItem, 0, len(channels))
 	for _, ch := range channels {
@@ -159,6 +203,9 @@ type channelMessageData struct {
 // SendMessage accepts a message body, validates it, broadcasts a
 // "channel_message" event to the channel, and returns 202.
 func (h *WorkspaceHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeWorkspace(w, r) {
+		return
+	}
 	channelID, ok := parseChannelID(w, r)
 	if !ok {
 		return
@@ -224,6 +271,9 @@ func (h *WorkspaceHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 // landing between the flush and Subscribe is never missed.
 func (h *WorkspaceHandler) ChannelEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if !h.authorizeWorkspace(w, r) {
+		return
+	}
 
 	// 1. Parse + validate channel_id.
 	channelID, ok := parseChannelID(w, r)
@@ -308,6 +358,12 @@ func (h *WorkspaceHandler) ChannelEvents(w http.ResponseWriter, r *http.Request)
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
 		if err := h.hub.ReplaySince(ctx, channelID, client.ID(), lastID); err != nil {
 			log.Ctx(ctx).Warn().Err(err).Str("last_event_id", lastID).Msg("channel replay failed")
+		}
+	} else if r.URL.Query().Get("replay") != "false" {
+		// Replay the hub's bounded per-channel ring on a fresh page load.
+		// Replay failures are non-fatal: the live stream remains available.
+		if err := h.hub.ReplayRecent(ctx, channelID, client.ID(), sse.DefaultLogSize); err != nil {
+			log.Ctx(ctx).Warn().Err(err).Msg("recent channel replay failed")
 		}
 	}
 	if err := client.Flush(); err != nil {

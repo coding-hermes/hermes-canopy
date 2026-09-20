@@ -1927,7 +1927,40 @@ SPEC-API-06. Unless a route says otherwise, failures use the standard
 | POST | `/api/v1/collab/{workspace_id}/join` | Bearer | 200 `{"ok":true}` |
 | POST | `/api/v1/collab/{workspace_id}/leave` | Bearer | 204, no body |
 
-### Workspace object and members
+### Workspace channels
+
+Mounted at `/api/v1/workspace/channels`. The channel registry remains in memory
+and the seeded `general` and `agents` channel IDs are deterministic. All three
+routes accept the optional `workspace_id` query parameter:
+
+| Method | Path | Success |
+|---|---|---|
+| GET | `/api/v1/workspace/channels?workspace_id={uuid}` | 200 channel array |
+| POST | `/api/v1/workspace/channels/{channel_id}/message?workspace_id={uuid}` | 202 message object |
+| GET | `/api/v1/workspace/channels/{channel_id}/feed?workspace_id={uuid}` | 200 SSE stream |
+
+When `workspace_id` is present, the authenticated caller must be a member. A
+non-member, missing workspace, or soft-deleted workspace receives the same
+`403` envelope to avoid an existence oracle:
+
+```json
+{"error":{"code":"WORKSPACE_NOT_FOUND","message":"workspace not found"}}
+```
+
+A malformed `workspace_id` receives `400`:
+
+```json
+{"error":{"code":"INVALID_WORKSPACE_ID","message":"workspace_id must be a valid UUID"}}
+```
+
+Omitting `workspace_id` preserves the legacy unscoped channel behavior. The
+message feed replays the retained, bounded channel history when a client
+connects without `Last-Event-ID`, in sequence order, and then continues with
+live `channel_message` events. Set `replay=false` to disable replay on a fresh
+connection; reconnects carrying `Last-Event-ID` retain cursor-based replay.
+
+---
+
 
 Workspace responses are bare objects with the fields `id`, `owner_id`, `name`,
 `tree_id` (omitted when unbound), `members`, `approval_ttl`, `created_at`, and
