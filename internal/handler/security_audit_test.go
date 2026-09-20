@@ -65,6 +65,26 @@ func (s *secGroupStub) UpdateEpoch(_ context.Context, gid []byte, epoch uint64, 
 	}
 	return db.ErrNotFound
 }
+func (s *secGroupStub) SetGroupSecret(_ context.Context, gid, secret []byte) error {
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(gid) {
+			g.GroupSecret = append([]byte(nil), secret...)
+			return nil
+		}
+	}
+	return db.ErrNotFound
+}
+func (s *secGroupStub) SetGroupSecretIfAbsent(_ context.Context, gid, secret []byte) error {
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(gid) {
+			if len(g.GroupSecret) == 0 {
+				g.GroupSecret = append([]byte(nil), secret...)
+			}
+			return nil
+		}
+	}
+	return db.ErrNotFound
+}
 func (s *secGroupStub) Delete(_ context.Context, gid []byte) error {
 	for wid, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(gid) {

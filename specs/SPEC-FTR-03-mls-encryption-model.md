@@ -4,6 +4,8 @@
 > **References:** SPEC-FTR-01, SPEC-FTR-02, T1.7-Security-Protocol (`T1.7-mls-encryption.md`), SPEC-DM-03, SPEC-API-06, ARCHITECTURE.md, RFC 9420
 > **Commit:** _(to be filled)_
 
+> 2026-09-20 implementation status amendment: the shipped MLS surface is an interim server-side group-key model (persistent rotated epoch secret). It is NOT RFC 9420 MLS: no forward secrecy within an epoch, no post-compromise security, no ratchet tree. Cross-member encrypt/decrypt works; the real RFC 9420 implementation remains a future dependency decision (D2).
+
 ---
 
 ## 1. Purpose

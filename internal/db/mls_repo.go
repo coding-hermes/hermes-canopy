@@ -19,6 +19,8 @@ type MLSGroupRepo interface {
 	Create(ctx context.Context, group *MLSGroup) error
 	GetByWorkspace(ctx context.Context, workspaceID uuid.UUID) (*MLSGroup, error)
 	UpdateEpoch(ctx context.Context, groupID []byte, epoch uint64, treeHash []byte) error
+	SetGroupSecret(ctx context.Context, groupID, secret []byte) error
+	SetGroupSecretIfAbsent(ctx context.Context, groupID, secret []byte) error
 	Delete(ctx context.Context, groupID []byte) error
 }
 
@@ -54,6 +56,7 @@ type MLSGroup struct {
 	Epoch          uint64    `db:"epoch"`
 	TreeHash       []byte    `db:"tree_hash_bytes"`
 	EncryptedState []byte    `db:"encrypted_state"`
+	GroupSecret    []byte    `db:"group_secret"`
 	CreatedAt      time.Time `db:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at"`
 }
@@ -119,9 +122,9 @@ func (r *PGMLSGroupRepo) Create(ctx context.Context, group *MLSGroup) error {
 	}
 
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.CreatedAt, group.UpdatedAt)
+		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.GroupSecret, group.CreatedAt, group.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("mls_group: create: %w", err)
 	}
@@ -132,9 +135,9 @@ func (r *PGMLSGroupRepo) GetByWorkspace(ctx context.Context, workspaceID uuid.UU
 	var stateJSON []byte
 	g := &MLSGroup{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, created_at, updated_at
+		`SELECT group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, created_at, updated_at
 		 FROM mls_groups WHERE workspace_id = $1`, workspaceID).
-		Scan(&g.ID, &g.WorkspaceID, &g.CipherSuite, &g.Epoch, &g.TreeHash, &stateJSON, &g.CreatedAt, &g.UpdatedAt)
+		Scan(&g.ID, &g.WorkspaceID, &g.CipherSuite, &g.Epoch, &g.TreeHash, &stateJSON, &g.GroupSecret, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("mls_group: %w", ErrNotFound)
@@ -156,6 +159,29 @@ func (r *PGMLSGroupRepo) UpdateEpoch(ctx context.Context, groupID []byte, epoch 
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("mls_group: %w", ErrNotFound)
+	}
+	return nil
+}
+
+func (r *PGMLSGroupRepo) SetGroupSecret(ctx context.Context, groupID, secret []byte) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE mls_groups SET group_secret = $1, updated_at = now() WHERE group_id = $2`,
+		secret, groupID)
+	if err != nil {
+		return fmt.Errorf("mls_group: set group secret: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("mls_group: %w", ErrNotFound)
+	}
+	return nil
+}
+
+func (r *PGMLSGroupRepo) SetGroupSecretIfAbsent(ctx context.Context, groupID, secret []byte) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE mls_groups SET group_secret = $1, updated_at = now() WHERE group_id = $2 AND group_secret IS NULL`,
+		secret, groupID)
+	if err != nil {
+		return fmt.Errorf("mls_group: set group secret if absent: %w", err)
 	}
 	return nil
 }

@@ -38,12 +38,17 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 	}
 
 	now := time.Now().UTC()
+	groupSecret := make([]byte, 32)
+	if _, err := rand.Read(groupSecret); err != nil {
+		return nil, err
+	}
 	group := &db.MLSGroup{
 		ID:          groupID,
 		WorkspaceID: workspaceID,
 		CipherSuite: "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
 		Epoch:       0,
 		TreeHash:    groupID,
+		GroupSecret: groupSecret,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -95,6 +100,51 @@ func deriveKey(domain string, src []byte) []byte {
 	return h.Sum(nil)
 }
 
+func (s *MLSServiceImpl) advanceEpoch(ctx context.Context, grp *db.MLSGroup) error {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return err
+	}
+	if err := s.groups.SetGroupSecret(ctx, grp.ID, secret); err != nil {
+		return err
+	}
+	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+}
+
+// groupKeyMaterial returns the durable group secret, lazily provisioning
+// pre-migration groups. The conditional update gives concurrent backfills a
+// single winner; the read-back makes every caller converge on that value.
+func (s *MLSServiceImpl) groupKeyMaterial(ctx context.Context, grp *db.MLSGroup) ([]byte, error) {
+	if len(grp.GroupSecret) > 0 {
+		return append([]byte(nil), grp.GroupSecret...), nil
+	}
+
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return nil, err
+	}
+	if err := s.groups.SetGroupSecretIfAbsent(ctx, grp.ID, secret); err != nil {
+		return nil, err
+	}
+
+	stored, err := s.groups.GetByWorkspace(ctx, grp.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(stored.GroupSecret) == 0 {
+		return nil, fmt.Errorf("mls: group secret was not persisted")
+	}
+	return append([]byte(nil), stored.GroupSecret...), nil
+}
+
+func (s *MLSServiceImpl) groupAESKey(ctx context.Context, grp *db.MLSGroup) ([]byte, error) {
+	secret, err := s.groupKeyMaterial(ctx, grp)
+	if err != nil {
+		return nil, err
+	}
+	return deriveKey("mls-app-key-v1", secret), nil
+}
+
 func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID uuid.UUID, keyPackage MLSKeyPackage, welcomeBytes []byte) error {
 	grp, err := s.groups.GetByWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -125,7 +175,7 @@ func (s *MLSServiceImpl) JoinGroup(ctx context.Context, workspaceID, profileID u
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	return s.advanceEpoch(ctx, grp)
 }
 
 func (s *MLSServiceImpl) LeaveGroup(ctx context.Context, workspaceID, profileID uuid.UUID) error {
@@ -138,7 +188,7 @@ func (s *MLSServiceImpl) LeaveGroup(ctx context.Context, workspaceID, profileID 
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	return s.advanceEpoch(ctx, grp)
 }
 
 func (s *MLSServiceImpl) RemoveMember(ctx context.Context, workspaceID, profileID, callerProfileID uuid.UUID) error {
@@ -151,7 +201,7 @@ func (s *MLSServiceImpl) RemoveMember(ctx context.Context, workspaceID, profileI
 		return err
 	}
 
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	return s.advanceEpoch(ctx, grp)
 }
 
 func (s *MLSServiceImpl) Encrypt(ctx context.Context, workspaceID, profileID uuid.UUID, plaintext []byte) (MLSCiphertext, error) {
@@ -165,11 +215,15 @@ func (s *MLSServiceImpl) Encrypt(ctx context.Context, workspaceID, profileID uui
 		return MLSCiphertext{}, ErrNotGroupMember
 	}
 
-	// Derive AES-256 key from the group's encryption key material.
-	// In a full MLS implementation, this would use the group's epoch secret.
-	aesKey := sha256.Sum256(append(grp.ID, member.EncryptionPublicKey...))
+	// The interim server-side model uses one persisted group secret for
+	// every member. Domain separation keeps this application key distinct
+	// from other group-secret uses.
+	aesKey, err := s.groupAESKey(ctx, grp)
+	if err != nil {
+		return MLSCiphertext{}, err
+	}
 
-	block, err := aes.NewCipher(aesKey[:])
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return MLSCiphertext{}, fmt.Errorf("mls: new cipher: %w", err)
 	}
@@ -213,15 +267,16 @@ func (s *MLSServiceImpl) Decrypt(ctx context.Context, workspaceID, profileID uui
 		return nil, ErrEpochMismatch
 	}
 
-	member, err := s.members.GetByProfile(ctx, grp.ID, profileID)
+	_, err = s.members.GetByProfile(ctx, grp.ID, profileID)
 	if err != nil {
 		return nil, ErrNotGroupMember
 	}
+	aesKey, err := s.groupAESKey(ctx, grp)
+	if err != nil {
+		return nil, err
+	}
 
-	// Derive the same AES-256 key from the group key material.
-	aesKey := sha256.Sum256(append(grp.ID, member.EncryptionPublicKey...))
-
-	block, err := aes.NewCipher(aesKey[:])
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return nil, fmt.Errorf("mls: new cipher: %w", err)
 	}
@@ -270,7 +325,7 @@ func (s *MLSServiceImpl) CommitProposals(ctx context.Context, workspaceID, profi
 		return nil, ErrProposalRejected
 	}
 
-	if err := s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash); err != nil {
+	if err := s.advanceEpoch(ctx, grp); err != nil {
 		return nil, err
 	}
 
@@ -282,14 +337,11 @@ func (s *MLSServiceImpl) CommitProposals(ctx context.Context, workspaceID, profi
 }
 
 func (s *MLSServiceImpl) GetEpochSecret(ctx context.Context, workspaceID uuid.UUID) ([]byte, error) {
-	_, err := s.groups.GetByWorkspace(ctx, workspaceID)
+	grp, err := s.groups.GetByWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-
-	secret := make([]byte, 32)
-	_, _ = rand.Read(secret)
-	return append([]byte(nil), secret...), nil
+	return s.groupKeyMaterial(ctx, grp)
 }
 
 func (s *MLSServiceImpl) GetGroupState(ctx context.Context, workspaceID uuid.UUID) (*MLSGroupState, error) {

@@ -58,7 +58,9 @@ type MLSGroupMember struct {
 	LastActive          time.Time `json:"last_active"`
 }
 
-// MLSCiphertext is an opaque RFC 9420 application-message representation.
+// MLSCiphertext is an opaque application-message compatibility shape.
+// WireFormat is retained for API compatibility; this interim service is not
+// an RFC 9420 parser or implementation.
 type MLSCiphertext struct {
 	GroupID         []byte `json:"group_id"`
 	Epoch           uint64 `json:"epoch"`

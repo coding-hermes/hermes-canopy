@@ -333,6 +333,8 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 | Card | Per-type SQLite | Structured data nodes with interactive behavior |
 | Transport | PostgreSQL | Multi-transport connection management (SSE, WebSocket, NATS) |
 
+> 2026-09-20 amendment: the MLS surface is an interim server-side group-key model (persistent rotated epoch secret). It is NOT RFC 9420 MLS: no forward secrecy within an epoch, no post-compromise security, no ratchet tree. Cross-member encrypt/decrypt works; the real RFC 9420 implementation remains a future dependency decision (SPEC-FTR-03 D2).
+
 **Storage reality.** Graph data (trees, nodes, edges, topics, profiles, approvals,
 events, snapshots) lives in **PostgreSQL** today. **Cards do not use DuckDB:** they
 ship on **per-type SQLite databases** (`modernc.org/sqlite`, CGo-free, pure Go)

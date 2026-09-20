@@ -1,6 +1,7 @@
 package mls
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -44,6 +45,28 @@ func (s *groupRepoStub) UpdateEpoch(_ context.Context, groupID []byte, epoch uin
 			g.Epoch = epoch
 			g.TreeHash = treeHash
 			g.UpdatedAt = time.Now().UTC()
+			return nil
+		}
+	}
+	return db.ErrNotFound
+}
+
+func (s *groupRepoStub) SetGroupSecret(_ context.Context, groupID, secret []byte) error {
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
+			g.GroupSecret = append([]byte(nil), secret...)
+			return nil
+		}
+	}
+	return db.ErrNotFound
+}
+
+func (s *groupRepoStub) SetGroupSecretIfAbsent(_ context.Context, groupID, secret []byte) error {
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
+			if len(g.GroupSecret) == 0 {
+				g.GroupSecret = append([]byte(nil), secret...)
+			}
 			return nil
 		}
 	}
@@ -427,6 +450,84 @@ func TestEncryptDecryptRoundtrip(t *testing.T) {
 	}
 }
 
+func TestMLS_CrossMemberRoundTrip(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	aliceID := uuid.New()
+	bobID := uuid.New()
+
+	if _, err := svc.CreateGroup(ctx, wsID, aliceID, Ed25519KeyPair{PublicKey: []byte("alice")}); err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+	if err := svc.JoinGroup(ctx, wsID, bobID, MLSKeyPackage{}, nil); err != nil {
+		t.Fatalf("JoinGroup() error = %v", err)
+	}
+
+	want := []byte("cross-member plaintext")
+	ciphertext, err := svc.Encrypt(ctx, wsID, aliceID, want)
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
+	got, err := svc.Decrypt(ctx, wsID, bobID, ciphertext)
+	if err != nil {
+		t.Fatalf("Decrypt() as Bob error = %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Decrypt() = %q, want %q", got, want)
+	}
+}
+
+func TestMLS_RemovedMemberCannotDecryptFuture(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	aliceID := uuid.New()
+	bobID := uuid.New()
+
+	if _, err := svc.CreateGroup(ctx, wsID, aliceID, Ed25519KeyPair{PublicKey: []byte("alice")}); err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+	if err := svc.JoinGroup(ctx, wsID, bobID, MLSKeyPackage{}, nil); err != nil {
+		t.Fatalf("JoinGroup() error = %v", err)
+	}
+
+	before, err := svc.groups.GetByWorkspace(ctx, wsID)
+	if err != nil {
+		t.Fatalf("GetByWorkspace() before leave error = %v", err)
+	}
+	staleGroup := *before
+	staleGroup.ID = append([]byte(nil), before.ID...)
+	staleGroup.TreeHash = append([]byte(nil), before.TreeHash...)
+	staleGroup.GroupSecret = append([]byte(nil), before.GroupSecret...)
+	alice, err := svc.members.GetByProfile(ctx, before.ID, aliceID)
+	if err != nil {
+		t.Fatalf("GetByProfile() for Alice error = %v", err)
+	}
+	staleAlice := *alice
+
+	if err := svc.LeaveGroup(ctx, wsID, bobID); err != nil {
+		t.Fatalf("LeaveGroup() error = %v", err)
+	}
+	future, err := svc.Encrypt(ctx, wsID, aliceID, []byte("future plaintext"))
+	if err != nil {
+		t.Fatalf("Encrypt() after leave error = %v", err)
+	}
+	if _, err := svc.Decrypt(ctx, wsID, bobID, future); err == nil {
+		t.Fatal("Decrypt() as removed Bob unexpectedly succeeded")
+	}
+
+	stale := newTestService()
+	if err := stale.groups.Create(ctx, &staleGroup); err != nil {
+		t.Fatalf("create stale group: %v", err)
+	}
+	if err := stale.members.Add(ctx, staleGroup.ID, &staleAlice); err != nil {
+		t.Fatalf("add stale Alice: %v", err)
+	}
+	if _, err := stale.Decrypt(ctx, wsID, aliceID, future); err == nil {
+		t.Fatal("Decrypt() with pre-leave state unexpectedly accepted future ciphertext")
+	}
+}
 func TestDecrypt_EpochMismatch(t *testing.T) {
 	svc := newTestService()
 	ctx := context.Background()
@@ -593,6 +694,30 @@ func TestGetEpochSecret(t *testing.T) {
 	}
 }
 
+func TestMLS_GetEpochSecretPersisted(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	creatorID := uuid.New()
+
+	if _, err := svc.CreateGroup(ctx, wsID, creatorID, Ed25519KeyPair{PublicKey: []byte("alice")}); err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+	first, err := svc.GetEpochSecret(ctx, wsID)
+	if err != nil {
+		t.Fatalf("first GetEpochSecret() error = %v", err)
+	}
+	second, err := svc.GetEpochSecret(ctx, wsID)
+	if err != nil {
+		t.Fatalf("second GetEpochSecret() error = %v", err)
+	}
+	if len(first) != 32 || len(second) != 32 {
+		t.Fatalf("secret lengths = %d and %d, want 32", len(first), len(second))
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("GetEpochSecret() returned different bytes for the same group")
+	}
+}
 func TestGetGroupState(t *testing.T) {
 	svc := newTestService()
 	ctx := context.Background()
