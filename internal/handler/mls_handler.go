@@ -79,7 +79,6 @@ func (h *MLSHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID      uuid.UUID `json:"workspace_id"`
 		CreatorProfileID uuid.UUID `json:"creator_profile_id"`
 		AdminPublicKey   []byte    `json:"admin_public_key"`
-		AdminPrivateKey  []byte    `json:"admin_private_key"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
@@ -90,13 +89,12 @@ func (h *MLSHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.AdminPublicKey) != ed25519.PublicKeySize || len(req.AdminPrivateKey) != ed25519.PrivateKeySize {
-		writeError(w, http.StatusBadRequest, "INVALID_KEY_PAIR", "admin_public_key and admin_private_key must be valid Ed25519 keys")
+	if len(req.AdminPublicKey) != ed25519.PublicKeySize {
+		writeError(w, http.StatusBadRequest, "INVALID_KEY_PAIR", "admin_public_key must be a valid Ed25519 public key")
 		return
 	}
 	keyPair := mls.Ed25519KeyPair{
-		PublicKey:  ed25519.PublicKey(req.AdminPublicKey),
-		PrivateKey: ed25519.PrivateKey(req.AdminPrivateKey),
+		PublicKey: ed25519.PublicKey(req.AdminPublicKey),
 	}
 
 	group, err := h.svc.CreateGroup(r.Context(), workspaceID, req.CreatorProfileID, keyPair)
@@ -247,10 +245,11 @@ func (h *MLSHandler) GenerateKeyPackage(w http.ResponseWriter, r *http.Request) 
 		WorkspaceID uuid.UUID         `json:"workspace_id"`
 		ProfileID   uuid.UUID         `json:"profile_id"`
 		Credential  mls.MLSCredential `json:"credential"`
-		PublicKey   []byte            `json:"public_key"`
-		PrivateKey  []byte            `json:"private_key"`
 	}
-	if err := decodeJSON(r, &req); err != nil {
+	// Keep this request lenient for backwards compatibility: legacy clients that
+	// still send private material get the same successful public-only contract,
+	// while that unknown field is ignored by the decoder.
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
 		return
 	}
@@ -258,19 +257,11 @@ func (h *MLSHandler) GenerateKeyPackage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "WORKSPACE_ID_MISMATCH", "workspace_id must match the route workspace")
 		return
 	}
-	if len(req.PublicKey) != ed25519.PublicKeySize || len(req.PrivateKey) != ed25519.PrivateKeySize {
-		writeError(w, http.StatusBadRequest, "INVALID_KEY_PAIR", "public_key and private_key must be valid Ed25519 keys")
-		return
-	}
 	if req.Credential.ProfileID == uuid.Nil {
 		req.Credential.ProfileID = req.ProfileID
 	}
-	keyPair := mls.Ed25519KeyPair{
-		PublicKey:  ed25519.PublicKey(req.PublicKey),
-		PrivateKey: ed25519.PrivateKey(req.PrivateKey),
-	}
 
-	kp, err := h.kpMgr.GenerateKeyPackage(r.Context(), req.ProfileID, req.Credential, keyPair)
+	kp, err := h.kpMgr.GenerateKeyPackage(r.Context(), req.ProfileID, req.Credential)
 	if err != nil {
 		h.writeMLSError(w, r, err, "generate key package")
 		return
@@ -488,7 +479,8 @@ func (h *MLSHandler) writeMLSError(w http.ResponseWriter, r *http.Request, err e
 		errors.Is(err, mls.ErrInvalidCredential):
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 	case errors.Is(err, mls.ErrMemberAlreadyInGroup),
-		errors.Is(err, mls.ErrUnauthorizedCommit):
+		errors.Is(err, mls.ErrUnauthorizedCommit),
+		errors.Is(err, mls.ErrEpochConflict):
 		writeError(w, http.StatusConflict, "CONFLICT", err.Error())
 	default:
 		log.Ctx(r.Context()).Error().Err(err).Str("operation", strings.TrimSpace(operation)).Msg("mls request failed")

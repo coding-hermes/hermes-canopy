@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 // groupRepoStub is an in-memory MLSGroupRepo keyed by workspaceID.
 type groupRepoStub struct {
+	mu     sync.RWMutex
 	groups map[uuid.UUID]*db.MLSGroup
 }
 
@@ -27,19 +29,29 @@ func newGroupRepoStub() *groupRepoStub {
 }
 
 func (s *groupRepoStub) Create(_ context.Context, group *db.MLSGroup) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.groups[group.WorkspaceID] = group
 	return nil
 }
 
 func (s *groupRepoStub) GetByWorkspace(_ context.Context, workspaceID uuid.UUID) (*db.MLSGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	g, ok := s.groups[workspaceID]
 	if !ok {
 		return nil, db.ErrNotFound
 	}
-	return g, nil
+	copy := *g
+	copy.ID = append([]byte(nil), g.ID...)
+	copy.TreeHash = append([]byte(nil), g.TreeHash...)
+	copy.GroupSecret = append([]byte(nil), g.GroupSecret...)
+	return &copy, nil
 }
 
 func (s *groupRepoStub) UpdateEpoch(_ context.Context, groupID []byte, epoch uint64, treeHash []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
 			g.Epoch = epoch
@@ -51,7 +63,27 @@ func (s *groupRepoStub) UpdateEpoch(_ context.Context, groupID []byte, epoch uin
 	return db.ErrNotFound
 }
 
+func (s *groupRepoStub) AdvanceEpochIfCurrent(_ context.Context, groupID []byte, expectedEpoch, nextEpoch uint64, treeHash, secret []byte) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
+			if g.Epoch != expectedEpoch {
+				return false, nil
+			}
+			g.Epoch = nextEpoch
+			g.TreeHash = append([]byte(nil), treeHash...)
+			g.GroupSecret = append([]byte(nil), secret...)
+			g.UpdatedAt = time.Now().UTC()
+			return true, nil
+		}
+	}
+	return false, db.ErrNotFound
+}
+
 func (s *groupRepoStub) SetGroupSecret(_ context.Context, groupID, secret []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
 			g.GroupSecret = append([]byte(nil), secret...)
@@ -62,6 +94,8 @@ func (s *groupRepoStub) SetGroupSecret(_ context.Context, groupID, secret []byte
 }
 
 func (s *groupRepoStub) SetGroupSecretIfAbsent(_ context.Context, groupID, secret []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
 			if len(g.GroupSecret) == 0 {
@@ -74,6 +108,8 @@ func (s *groupRepoStub) SetGroupSecretIfAbsent(_ context.Context, groupID, secre
 }
 
 func (s *groupRepoStub) Delete(_ context.Context, groupID []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for wid, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(groupID) {
 			delete(s.groups, wid)
@@ -157,6 +193,7 @@ func (s *keyPackageRepoStub) Expire(_ context.Context, _ uuid.UUID) error {
 
 // proposalRepoStub is an in-memory MLSPendingProposalRepo keyed by hex(groupID).
 type proposalRepoStub struct {
+	mu        sync.Mutex
 	proposals map[string][]*db.MLSPendingProposal
 }
 
@@ -165,6 +202,8 @@ func newProposalRepoStub() *proposalRepoStub {
 }
 
 func (s *proposalRepoStub) Create(_ context.Context, groupID []byte, proposalType string, proposerID uuid.UUID, proposalBytes []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := hex.EncodeToString(groupID)
 	p := &db.MLSPendingProposal{
 		ID:            uuid.New(),
@@ -179,6 +218,8 @@ func (s *proposalRepoStub) Create(_ context.Context, groupID []byte, proposalTyp
 }
 
 func (s *proposalRepoStub) ListByGroup(_ context.Context, groupID []byte) ([]db.MLSPendingProposal, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := hex.EncodeToString(groupID)
 	props, ok := s.proposals[key]
 	if !ok {
@@ -192,6 +233,8 @@ func (s *proposalRepoStub) ListByGroup(_ context.Context, groupID []byte) ([]db.
 }
 
 func (s *proposalRepoStub) DeleteAll(_ context.Context, groupID []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := hex.EncodeToString(groupID)
 	delete(s.proposals, key)
 	return nil
@@ -670,6 +713,66 @@ func TestCommitProposals_Success(t *testing.T) {
 	}
 	if len(props) != 0 {
 		t.Fatalf("proposals remaining = %d, want 0", len(props))
+	}
+
+	// A replay after the proposal set was consumed must not ratchet again.
+	_, err = svc.CommitProposals(ctx, wsID, creatorID)
+	if !errors.Is(err, ErrProposalRejected) {
+		t.Fatalf("replayed CommitProposals() error = %v, want ErrProposalRejected", err)
+	}
+	g, err = svc.groups.GetByWorkspace(ctx, wsID)
+	if err != nil {
+		t.Fatalf("GetByWorkspace() after replay error = %v", err)
+	}
+	if g.Epoch != 1 {
+		t.Fatalf("epoch after replay = %d, want 1", g.Epoch)
+	}
+}
+
+func TestCommitProposals_ConcurrentCommitAdvancesOnce(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	creatorID := uuid.New()
+
+	if _, err := svc.CreateGroup(ctx, wsID, creatorID, Ed25519KeyPair{PublicKey: []byte("pk")}); err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+	if err := svc.AddExternalProposal(ctx, wsID, creatorID, []byte(`{"add":{"member":"concurrent"}}`)); err != nil {
+		t.Fatalf("AddExternalProposal() error = %v", err)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := svc.CommitProposals(ctx, wsID, creatorID)
+			errs <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	errCount := 0
+	for err := range errs {
+		if err != nil {
+			errCount++
+		}
+	}
+	if errCount == 0 {
+		t.Fatal("concurrent commits: expected at least one error")
+	}
+	g, err := svc.groups.GetByWorkspace(ctx, wsID)
+	if err != nil {
+		t.Fatalf("GetByWorkspace() after concurrent commits: %v", err)
+	}
+	if g.Epoch != 1 {
+		t.Fatalf("epoch after concurrent commits = %d, want 1", g.Epoch)
 	}
 }
 

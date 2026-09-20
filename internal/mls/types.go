@@ -21,10 +21,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Ed25519KeyPair holds one profile identity keypair. PrivateKey is never serialized.
+// Ed25519KeyPair carries the public identity key used by server-side MLS
+// operations. Private signing material is never accepted by the service.
 type Ed25519KeyPair struct {
-	PublicKey  ed25519.PublicKey  `json:"public_key"`
-	PrivateKey ed25519.PrivateKey `json:"-"`
+	PublicKey ed25519.PublicKey `json:"public_key"`
 }
 
 // MLSGroup is the persisted public summary of one workspace MLS group.
@@ -106,7 +106,7 @@ type MLSService interface {
 
 // KeyPackageManager manages 24-hour member key packages.
 type KeyPackageManager interface {
-	GenerateKeyPackage(ctx context.Context, profileID uuid.UUID, credential MLSCredential, keyPair Ed25519KeyPair) (MLSKeyPackage, error)
+	GenerateKeyPackage(ctx context.Context, profileID uuid.UUID, credential MLSCredential) (MLSKeyPackage, error)
 	GetKeyPackage(ctx context.Context, profileID uuid.UUID) (MLSKeyPackage, error)
 	ExpireKeyPackage(ctx context.Context, keyPackageID uuid.UUID) error
 }
@@ -125,6 +125,7 @@ var (
 	ErrMemberAlreadyInGroup = errors.New("mls: profile is already a group member")
 	ErrMemberNotInGroup     = errors.New("mls: profile is not in the group")
 	ErrUnauthorizedCommit   = errors.New("mls: caller is not authorized to commit proposals")
+	ErrEpochConflict        = errors.New("mls: group epoch changed during proposal commit")
 	ErrWelcomeUndelivered   = errors.New("mls: welcome has not been acknowledged")
 )
 

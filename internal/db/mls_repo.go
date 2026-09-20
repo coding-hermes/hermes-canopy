@@ -19,6 +19,7 @@ type MLSGroupRepo interface {
 	Create(ctx context.Context, group *MLSGroup) error
 	GetByWorkspace(ctx context.Context, workspaceID uuid.UUID) (*MLSGroup, error)
 	UpdateEpoch(ctx context.Context, groupID []byte, epoch uint64, treeHash []byte) error
+	AdvanceEpochIfCurrent(ctx context.Context, groupID []byte, expectedEpoch, nextEpoch uint64, treeHash, secret []byte) (bool, error)
 	SetGroupSecret(ctx context.Context, groupID, secret []byte) error
 	SetGroupSecretIfAbsent(ctx context.Context, groupID, secret []byte) error
 	Delete(ctx context.Context, groupID []byte) error
@@ -161,6 +162,18 @@ func (r *PGMLSGroupRepo) UpdateEpoch(ctx context.Context, groupID []byte, epoch 
 		return fmt.Errorf("mls_group: %w", ErrNotFound)
 	}
 	return nil
+}
+
+func (r *PGMLSGroupRepo) AdvanceEpochIfCurrent(ctx context.Context, groupID []byte, expectedEpoch, nextEpoch uint64, treeHash, secret []byte) (bool, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE mls_groups
+		 SET epoch = $1, tree_hash_bytes = $2, group_secret = $3, updated_at = now()
+		 WHERE group_id = $4 AND epoch = $5`,
+		nextEpoch, treeHash, secret, groupID, expectedEpoch)
+	if err != nil {
+		return false, fmt.Errorf("mls_group: advance epoch if current: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 func (r *PGMLSGroupRepo) SetGroupSecret(ctx context.Context, groupID, secret []byte) error {

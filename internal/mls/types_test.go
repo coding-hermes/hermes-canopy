@@ -69,8 +69,7 @@ func TestMLSEventTypeConstants(t *testing.T) {
 
 func TestEd25519KeyPair_Serialization(t *testing.T) {
 	kp := Ed25519KeyPair{
-		PublicKey:  []byte("public-key-bytes-are-here!!!!!!"),
-		PrivateKey: []byte("private-key-should-be-hidden!!!!!"),
+		PublicKey: []byte("public-key-bytes-are-here!!!!!!"),
 	}
 
 	data, err := json.Marshal(kp)
@@ -87,18 +86,6 @@ func TestEd25519KeyPair_Serialization(t *testing.T) {
 	}
 	if string(decoded.PublicKey) != string(kp.PublicKey) {
 		t.Fatalf("public_key = %q, want %q", string(decoded.PublicKey), string(kp.PublicKey))
-	}
-
-	// PrivateKey must NOT be in JSON output
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("unmarshal to map: %v", err)
-	}
-	if _, exists := raw["private_key"]; exists {
-		t.Fatal("private_key was serialized to JSON, but has json:\"-\" tag")
-	}
-	if _, exists := raw["PrivateKey"]; exists {
-		t.Fatal("PrivateKey (Go field name) was serialized to JSON")
 	}
 }
 

@@ -105,10 +105,14 @@ func (s *MLSServiceImpl) advanceEpoch(ctx context.Context, grp *db.MLSGroup) err
 	if _, err := rand.Read(secret); err != nil {
 		return err
 	}
-	if err := s.groups.SetGroupSecret(ctx, grp.ID, secret); err != nil {
+	advanced, err := s.groups.AdvanceEpochIfCurrent(ctx, grp.ID, grp.Epoch, grp.Epoch+1, grp.TreeHash, secret)
+	if err != nil {
 		return err
 	}
-	return s.groups.UpdateEpoch(ctx, grp.ID, grp.Epoch+1, grp.TreeHash)
+	if !advanced {
+		return ErrEpochConflict
+	}
+	return nil
 }
 
 // groupKeyMaterial returns the durable group secret, lazily provisioning

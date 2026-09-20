@@ -65,6 +65,21 @@ func (s *secGroupStub) UpdateEpoch(_ context.Context, gid []byte, epoch uint64, 
 	}
 	return db.ErrNotFound
 }
+func (s *secGroupStub) AdvanceEpochIfCurrent(_ context.Context, gid []byte, expectedEpoch, nextEpoch uint64, th, secret []byte) (bool, error) {
+	for _, g := range s.groups {
+		if hex.EncodeToString(g.ID) == hex.EncodeToString(gid) {
+			if g.Epoch != expectedEpoch {
+				return false, nil
+			}
+			g.Epoch = nextEpoch
+			g.TreeHash = append([]byte(nil), th...)
+			g.GroupSecret = append([]byte(nil), secret...)
+			g.UpdatedAt = time.Now().UTC()
+			return true, nil
+		}
+	}
+	return false, db.ErrNotFound
+}
 func (s *secGroupStub) SetGroupSecret(_ context.Context, gid, secret []byte) error {
 	for _, g := range s.groups {
 		if hex.EncodeToString(g.ID) == hex.EncodeToString(gid) {

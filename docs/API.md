@@ -2225,6 +2225,24 @@ GET /api/v1/workspaces/{workspace_id}/mls/state
 POST /api/v1/workspaces/{workspace_id}/mls/key-packages
 ```
 
+**Request body:**
+```json
+{
+  "workspace_id": "uuid (optional; when present must match the route)",
+  "profile_id": "uuid (required)",
+  "credential": {
+    "profile_id": "uuid (optional; defaults to profile_id)",
+    "identity": "base64-profile-identity (required)",
+    "credential_type": "string (required)",
+    "signature_public_key": "base64-ed25519-public-key (required; 32 bytes)"
+  }
+}
+```
+
+The request contains public credential material only. The server never accepts,
+stores, derives, or returns a client signing private key. A successful request
+returns `201` with the generated key-package metadata and bytes.
+
 ### Get Key Package
 
 ```
@@ -2236,6 +2254,12 @@ GET /api/v1/workspaces/{workspace_id}/mls/key-packages
 ```
 POST /api/v1/workspaces/{workspace_id}/mls/commit-proposals
 ```
+
+A successful commit consumes the pending proposal set and advances the group
+epoch exactly once. Replaying after the proposals have been consumed returns
+`409 CONFLICT` (`mls: group epoch changed during proposal commit`) when a
+concurrent commit won the epoch compare-and-swap; a replay that observes no
+pending proposals continues to return `ErrProposalRejected`.
 
 ### MLS Events
 

@@ -121,13 +121,12 @@ func mlsRequest(t *testing.T, srvURL, method, path string, body any) *http.Reque
 // generateEd25519KeyPair generates a valid Ed25519 key pair for testing.
 func generateEd25519KeyPair(t *testing.T) mls.Ed25519KeyPair {
 	t.Helper()
-	pub, priv, err := ed25519.GenerateKey(nil)
+	pub, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("generate ed25519 key: %v", err)
 	}
 	return mls.Ed25519KeyPair{
-		PublicKey:  ed25519.PublicKey(pub),
-		PrivateKey: ed25519.PrivateKey(priv),
+		PublicKey: ed25519.PublicKey(pub),
 	}
 }
 
@@ -196,7 +195,6 @@ func TestBE12d_MLSGroupCRUD(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": creatorProfileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", createBody)
 	resp, err := srv.Client().Do(req)
@@ -308,7 +306,6 @@ func TestBE12d_MLSMemberManagement(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": creatorProfileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", createBody)
 	resp, err := srv.Client().Do(req)
@@ -469,7 +466,6 @@ func TestBE12d_MLSEncryptionRoundtrip(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": profileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", createBody)
 	resp, err := srv.Client().Do(req)
@@ -571,7 +567,6 @@ func TestBE12d_MLSErrorCases(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": profileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", createBody)
 	resp, err := srv.Client().Do(req)
@@ -720,7 +715,6 @@ func TestBE12d_MLSValidationErrors(t *testing.T) {
 		"workspace_id":       uuid.New().String(), // different from URL param
 		"creator_profile_id": profileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	basePath := "/api/v1/workspaces/" + workspaceID.String() + "/mls"
 	req = mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", mismatchBody)
@@ -744,7 +738,6 @@ func TestBE12d_MLSValidationErrors(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": profileID.String(),
 		"admin_public_key":   []byte("too-short"),
-		"admin_private_key":  []byte("also-short"),
 	}
 	req = mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", badKeyBody)
 	resp, err = srv.Client().Do(req)
@@ -825,7 +818,6 @@ func TestBE12d_MLSProposals(t *testing.T) {
 		"workspace_id":       workspaceID.String(),
 		"creator_profile_id": profileID.String(),
 		"admin_public_key":   []byte(keyPair.PublicKey),
-		"admin_private_key":  []byte(keyPair.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, basePath+"/groups", createBody)
 	resp, err := srv.Client().Do(req)
@@ -926,7 +918,6 @@ func TestBE12d_MLSMultipleGroups(t *testing.T) {
 		"workspace_id":       wsID1.String(),
 		"creator_profile_id": profileID1.String(),
 		"admin_public_key":   []byte(kp1.PublicKey),
-		"admin_private_key":  []byte(kp1.PrivateKey),
 	}
 	req := mlsRequest(t, srv.URL, http.MethodPost, base1+"/groups", body1)
 	resp, err := srv.Client().Do(req)
@@ -944,7 +935,6 @@ func TestBE12d_MLSMultipleGroups(t *testing.T) {
 		"workspace_id":       wsID2.String(),
 		"creator_profile_id": profileID2.String(),
 		"admin_public_key":   []byte(kp2.PublicKey),
-		"admin_private_key":  []byte(kp2.PrivateKey),
 	}
 	req = mlsRequest(t, srv.URL, http.MethodPost, base2+"/groups", body2)
 	resp, err = srv.Client().Do(req)

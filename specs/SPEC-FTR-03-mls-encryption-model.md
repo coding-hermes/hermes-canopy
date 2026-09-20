@@ -49,7 +49,7 @@ Canopy MVP remains local and unencrypted as stated in AGENTS.md. MLS activates w
 
 ## 3. Go Interface Definitions
 
-The following single package is syntactically compilable Go. UUID values are UUIDv7 at creation time; `github.com/google/uuid` is already the identifier convention used by the project specifications. Concrete implementations must keep `PrivateKey` and serialized group secrets out of JSON and logs.
+The following single package is syntactically compilable Go. UUID values are UUIDv7 at creation time; `github.com/google/uuid` is already the identifier convention used by the project specifications. Client signing private keys and serialized group secrets stay out of JSON and logs; MLS key-package requests carry public credential material only.
 
 ### 3.1 MLS Service, Domain Types, and Key Packages
 
@@ -66,10 +66,9 @@ import (
     "github.com/google/uuid"
 )
 
-// Ed25519KeyPair holds one profile identity keypair. PrivateKey is never serialized.
+// Ed25519KeyPair carries the public identity key used by server-side MLS operations.
 type Ed25519KeyPair struct {
-    PublicKey  ed25519.PublicKey  `json:"public_key"`
-    PrivateKey ed25519.PrivateKey `json:"-"`
+    PublicKey ed25519.PublicKey `json:"public_key"`
 }
 
 // MLSGroup is the persisted public summary of one workspace MLS group.
@@ -149,7 +148,7 @@ type MLSService interface {
 
 // KeyPackageManager manages 24-hour member key packages.
 type KeyPackageManager interface {
-    GenerateKeyPackage(ctx context.Context, profileID uuid.UUID, credential MLSCredential, keyPair Ed25519KeyPair) (MLSKeyPackage, error)
+    GenerateKeyPackage(ctx context.Context, profileID uuid.UUID, credential MLSCredential) (MLSKeyPackage, error)
     GetKeyPackage(ctx context.Context, profileID uuid.UUID) (MLSKeyPackage, error)
     ExpireKeyPackage(ctx context.Context, keyPackageID uuid.UUID) error
 }

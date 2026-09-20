@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -604,18 +603,12 @@ func (m *pgMLSKeyPackageManager) GenerateKeyPackage(
 	ctx context.Context,
 	profileID uuid.UUID,
 	credential mls.MLSCredential,
-	keyPair mls.Ed25519KeyPair,
 ) (mls.MLSKeyPackage, error) {
 	if credential.ProfileID == uuid.Nil || credential.ProfileID != profileID {
 		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
 	}
-	derivedPub, ok := keyPair.PrivateKey.Public().(ed25519.PublicKey)
 	if len(credential.Identity) == 0 || credential.CredentialType == "" ||
-		len(credential.SignaturePublicKey) != ed25519.PublicKeySize ||
-		len(keyPair.PublicKey) != ed25519.PublicKeySize ||
-		len(keyPair.PrivateKey) != ed25519.PrivateKeySize ||
-		!bytes.Equal(credential.SignaturePublicKey, keyPair.PublicKey) ||
-		!ok || !bytes.Equal(derivedPub, keyPair.PublicKey) {
+		len(credential.SignaturePublicKey) != ed25519.PublicKeySize {
 		return mls.MLSKeyPackage{}, mls.ErrInvalidCredential
 	}
 
