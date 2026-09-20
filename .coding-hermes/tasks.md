@@ -2589,3 +2589,115 @@ Bookkeeping: tasks.jsonl 1 row → complete + closure keys (commit_hash/files_ch
 DuckBrain: `/ticks/tick531-qa27-clean-machine-suite-red` → id **438b141a-85c9-4f1b-9b66-1b8bfbabfa97** (git-committed, recall-verified in ns hermes-canopy).
 Off-by-one: health probe 200 (`uptime 6h33m`); `POST /api/v1/problems/discover` with `problem_class=canopy-maintenance-tick` → `not_found` (fired, not copied). Nothing non-trivial was debugged this tick (no error was chased — the defect was reproduced and falsified by test runs), so no post-debug submission.
 Next tick: **DF-HERMES-CANOPY-40** (P2 workspace channels global + no feed replay + raw-UUID handles — real surface, but it is three owners decisions in one row; consider splitting it into DF-40a/40b/40c first) or **DF-HERMES-CANOPY-41** (P3 bunker install-leg doc gap). Parked: GAP-076 (owner ruling, blocks GAP-077), GAP-096 (owner decision), QA-15..29 (harness/bunker-owned, skip with rationale). Verify tier2 ea315d5b + CI green for 386a65a2 next tick.
+
+## Tick 532 — 2026-09-20 21:05Z → 22:25Z (WAVE — DF-HERMES-CANOPY-40 + DF-HERMES-CANOPY-41 landed, 2 workers)
+
+**Verdict: OK (WAVE, 2 workers).** Board at tick start: 360 rows / 360 unique ids / **329 complete / 31 pending** / 0 parse failures.
+Pick set: **DF-HERMES-CANOPY-40** (P2, workspace channels are global + no feed replay + raw-UUID handles — a real code
+surface, verified live by the 09-20 dogfood run) and **DF-HERMES-CANOPY-41** (P3, install docs: rootless Docker +
+the go prerequisite). WAVE_BUDGET 12 → composed a **2-worker wave**; middle-out disjointness: DF-41 touches only
+`README.md` + `docs/SELF_HOST.md` (top band, docs), DF-40 touches `internal/{sse,handler,service,server}` +
+`cmd/canopyd/main.go` + `docs/API.md` (engine band) — no shared import chain, no file overlap. Manifest written
+BEFORE dispatch: `.coding-hermes/waves/hermes-canopy-2026-09-20-21-05-05.json` (base_sha `33667b25`).
+Serial would have been the lazy default; a docs row and an engine row are exactly the structural pair the wave
+protocol exists for.
+
+**Premises (re-verified at HEAD `33667b25` before dispatch, not copied from the row):**
+- D1 confirmed: `internal/server/server.go:454` mounted the in-memory channel registry under `authMW` with no
+  workspace scoping / no membership check; channel ids are `uuid.NewSHA1(channelNamespace, name)` for `general`/`agents`
+  and `review_handler.go:43` reuses the same derivation for `reviewEventsChannel`.
+- D2 confirmed: `ChannelEvents` replayed only when a `Last-Event-ID` header was present — a fresh page load got
+  live-only. The hub already logs every broadcast, so replay was reachable through the existing log.
+- D3 confirmed at code level: `membersWithHandles`'s own doc comment claims it resolves `users.display_name`, but the
+  loop hard-coded `Handle: m.UserID.String()`.
+- Row-40's "three fixes in one row" concern (recorded in the tick-531 entry) was resolved by ONE brief rather than a
+  40a/40b/40c split: all three share the same two files, so splitting them would have put three workers on one import chain.
+
+**Dispatch:** 2 workers, `gpt-5.6-luna @ openai-codex` (the repo's proven lane), one worktree each
+(`~/.hermes/scripts/worktree.sh new hermes-canopy <taskid>`), `gitreins task create/start` for BOTH rows BEFORE
+dispatch. 0-byte `-Q` logs for the whole run (the luna signature) — liveness judged on the trees.
+
+| task | worktree / branch | attempts | commit(s) | judge verdict | merge |
+|---|---|---|---|---|---|
+| DF-HERMES-CANOPY-41 | `/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-41` @ `wt/DF-HERMES-CANOPY-41` | 1 (clean) | `539e436f` | tier2 `35af7b88` PASS/COMPLETE | merged `7fbe4264` |
+| DF-HERMES-CANOPY-40 | `/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-40` @ `wt/DF-HERMES-CANOPY-40` | 2 (attempt 1 REJECTED) | `3c313488` + `790dad3d` | tier1 `a901f6a8` PASS; tier2 `2a8e4207` PASS/COMPLETE | merged `8a68c69e` |
+
+**Foreman REJECTION on DF-40 attempt 1 (the load-bearing review).** `3c313488` had the right shape and green
+tests, and was still wrong in three ways — all found by reading the diff against the acceptance criteria:
+1. it invented a **process-wide mutable global** (`sse.SetWorkspaceAccessChecker` + a package registry var) and made
+   `NewCollaborationService` mutate it as a construction side effect (last-constructed wins; `internal/service` grew
+   an `internal/sse` import for it);
+2. the feature was **DEAD CODE in production**: `server.go` constructed the handler with no option, so
+   `authorizeWorkspace` answered **403 for every `?workspace_id=` request, member or not**;
+3. A3 was unreachable in production: `main.go` never passed `WithUserReader`, so handles stayed raw UUIDs.
+Attempt 2 (`790dad3d`) fixed exactly that: the seam type moved into `internal/handler`, one clean method
+`collaboration.CollaborationService.AuthorizeWorkspaceAccess` on the service (pure repo calls,
+`ErrNotFound`/`ErrNotWorkspaceMember`), and the wiring landed at `internal/server/server.go:455-458`
+(`collabSvc.AuthorizeWorkspaceAccess`, nil-guarded for DB-free route-parity tests) plus
+`cmd/canopyd/main.go:442-444` (`service.WithUserReader(database.Users)`). The global is gone
+(`grep -c` = 0 in both files).
+
+**Note on the real trap this tick exposed:** a worker-authored test proved the OPTION works while the production
+path passed nothing — a green suite over dead wiring. The rework brief's P1 required a test that builds the handler
+the way production builds it (real `service.NewCollaborationService(fakeRepo)` → `collabSvc.AuthorizeWorkspaceAccess`
+→ HTTP), and that test is what fails on the attempt-1 tree.
+
+**What landed (5 files of code + 2 docs):**
+- DF-40: `?workspace_id=` on all three channel routes, membership-gated through the collaboration service
+  (member 200 / non-member 403 `WORKSPACE_NOT_FOUND` / unknown 403 / non-UUID 400 `INVALID_WORKSPACE_ID`);
+  **absent param = byte-identical legacy behaviour** (no checker call — asserted). New additive
+  `SSEHub.ReplayRecent(ctx, streamID, clientID, max)` over the existing event log, wired on a fresh feed connect
+  (no `Last-Event-ID`), `?replay=false` opts out, replay failures stay non-fatal; `review_event` on `general`
+  keeps replaying. `membersWithHandles` now resolves `users.display_name` with UUID fallback; `docs/API.md` updated.
+- DF-41: rootless/per-user Docker note (`DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock` + the
+  `permission denied ... /var/run/docker.sock` symptom) in **README.md:594** and **docs/SELF_HOST.md:152**; the
+  Go prerequisite moved out of the compose Quick Start (README:730 "required for build-from-source"), Node retained.
+  Worker's own checks: `grep -n DOCKER_HOST` hits both files; `docker-compose.yml` facts verified
+  (`postgres:16-alpine`, `${CANOPY_PG_HOST_PORT:-5437}:5432`, `8092:8080`).
+
+**Gates (foreman-run, FRESH, on the MERGED tree `8a68c69e` — not on a branch tip):**
+`go build ./...` OK · `go vet ./...` OK · `golangci-lint run ./...` **0 issues** (v2.12.2, the CI pin) ·
+`go test ./internal/sse/... ./internal/service/... ./internal/server/...` **ok 1.231s / 0.007s / 0.672s exit 0** ·
+`CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 ./internal/handler/... -timeout=900s` →
+**ok 576.797s, HANDLER_EXIT=0** · frontend `vitest run` **78 files / 1383 tests PASS** · `npx tsc -b` 0 ·
+`npx oxlint src` 0 errors (16 pre-existing warnings) · `gitleaks detect --no-git` **no leaks** (359.8 MB).
+Worker side (branch tip): focused suites PASS, shared-DB handler PASS 381.3s, and per-fix falsification observed
+(no checker → member 403; no reader → UUID handle; replay call removed → the connect test times out) with every
+restored file md5-identical to its HEAD blob.
+
+**GitReins:** both rows `task create` + `task start` BEFORE dispatch. `complete` run post-merge from the MAIN tree:
+DF-41 tier2 **`35af7b88` PASS/COMPLETE** (it re-derived the criterion itself: commit touches only the two docs, both
+greps quoted, Go absent from both compose paths, Node retained). DF-40 tier1 **`a901f6a8` PASS** (guard full:
+secrets/go_build/go_lint/go_tests) + tier2 **`2a8e4207` PASS/COMPLETE** on `8a68c69e` (a keyword-parse fallback after
+the judge's JSON response failed to parse — a keyword-parsed COMPLETE is a valid PASS per the close recipe).
+⚠️ Both `verdict.json` files carry `passed: true` but no `verdict` string field; read `.passed`, not `.verdict`.
+
+**CI:** content+merge commit `8a68c69e` → run **35540840546 GREEN** (first attempt). Pre-tick runs were 8/8 green —
+**no CI failures to flag this tick.**
+
+**Push health:** origin `33667b25..8a68c69e`, gitlab `3e6b9ddf..8a68c69e`; `git rev-list --count` = **0** on BOTH
+remotes. (The workflow-scope HTTPS refusal did not recur — this diff touches no `.github/workflows/` file.)
+
+**Worktrees:** `git worktree list` → the two wave worktrees are **KEPT** (unmerged-branch bookkeeping still pending at
+cut-off time; their branches are the evidence this tick's judge verdicts were computed from). Reap them next tick with
+`~/.hermes/scripts/worktree.sh reap hermes-canopy`.
+
+**Bookkeeping:** tasks.jsonl — DF-40 and DF-41 both `status: complete` + `commit_hash` (2 lines changed);
+events.jsonl +5 (711/712 `task_updated` in_progress, 713/714 `task_completed`, 715 `verification` with the wave table);
+board.jsonl header `ticks_total` 531→532, `ticks_idle` unchanged (0 — this was a work tick), `last_commit` `386a65a2`→`8a68c69e`.
+⚠️ `boardctl` writes worked for rows/events but its header bump failed (board.jsonl handling), so the header was
+patched by hand — and the FIRST hand-patch rewrote it as pretty-printed multi-line; re-normalized to the file's own
+single-line style before commit (`git diff --stat` = 1 line).
+
+**Off-by-one:** health probe 200 (`uptime 7h18m`); discover fired for `workspace-channel-authorization`,
+`sse-feed-history-replay`, `members-display-name-resolution` → all **not_found** (real requests, not copied lines).
+No submission owed: nothing was debugged — the defects were verified by reading code and the rework was driven by an
+adversarial diff review, not by an error.
+
+**Next tick:** **DF-HERMES-CANOPY-40's residual** — channels are still process-global (the workspace_id gate is
+opt-in per request, so an unscoped client keeps today's behaviour by design and a per-workspace channel *inventory*
+is not part of this row). Then **GAP-095** (usability dogfood round 2 — now the highest-value remaining product row)
+or **QA-HERMES-CANOPY-15/16/17/20** (P1 harness rows: these name `qa_discover.py` / `bunker-qa.sh`, which are
+**host scripts, not files in this repo** — a worker cannot land them here; they need the fleet-infra owner).
+Parked: GAP-076 (owner ruling, blocks GAP-077), GAP-080 phases 3/5b, GAP-096 (owner decision), DF-42* candidates from
+the 09-20 dogfood. Reap the two worktrees; verify CI on the board-closeout commit.

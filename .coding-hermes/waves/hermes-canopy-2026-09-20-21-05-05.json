@@ -1,0 +1,52 @@
+{
+  "tick_id": "hermes-canopy-2026-09-20-21-05-05",
+  "project": "hermes-canopy",
+  "repo": "/home/kara/hermes-canopy",
+  "base_sha": "33667b2557150da9ccd6d2cee58882207bb9df98",
+  "composed_at": "2026-09-20T21:12:00-05:00",
+  "mode": "wave",
+  "wave_budget": 12,
+  "workers": [
+    {
+      "task": "DF-HERMES-CANOPY-40",
+      "title": "Workspace channels scoped per workspace + feed history replay + member display names",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-40",
+      "branch": "wt/DF-HERMES-CANOPY-40",
+      "base_sha": "33667b25",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-df40.md",
+      "log": "/tmp/worker-df40.log",
+      "file_scope": [
+        "internal/sse/sse_hub.go",
+        "internal/handler/workspace_handler.go",
+        "internal/service/collaboration_service_impl.go",
+        "internal/service/collaboration_service_impl_members_test.go",
+        "internal/sse/sse_hub_test.go",
+        "internal/handler/workspace_handler_test.go",
+        "internal/handler/api_integration_test.go",
+        "internal/sync/engine_test.go",
+        "internal/mls/event_bridge_test.go",
+        "internal/relay/session_event_test.go",
+        "internal/service/approval_service_test.go",
+        "docs/API.md"
+      ],
+      "merge": "pending"
+    },
+    {
+      "task": "DF-HERMES-CANOPY-41",
+      "title": "Install docs: rootless Docker note + Go prerequisite placement",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-41",
+      "branch": "wt/DF-HERMES-CANOPY-41",
+      "base_sha": "33667b25",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-df41.md",
+      "log": "/tmp/worker-df41.log",
+      "file_scope": ["README.md", "docs/SELF_HOST.md"],
+      "merge": "pending"
+    }
+  ],
+  "disjointness": "middle-out: 41 touches README.md + docs/SELF_HOST.md only (top band, docs); 40 touches internal/{sse,handler,service} + docs/API.md. No shared import chain (docs vs engine packages); no file overlap.",
+  "recovery_notes": "If this tick dies: poll git log in each worktree path, verify each branch tip against .coding-hermes/board/tasks.jsonl rows for DF-40/DF-41, merge serially per the foreman merge checklist."
+}

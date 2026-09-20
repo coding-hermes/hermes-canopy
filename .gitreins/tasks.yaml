@@ -3163,3 +3163,30 @@ tasks:
   status: complete
   created_at: '2026-09-20T20:33:55.040249+00:00'
   completed_at: '2026-09-20T20:52:33.920271+00:00'
+- id: DF-HERMES-CANOPY-40
+  title: Workspace channels are global, have no feed replay, and members render raw
+    UUID handles
+  criteria:
+  - 'Scope channels per workspace (membership-gated: non-member GET list=403 WORKSPACE_NOT_FOUND,
+    POST message=403, feed=403; member/cross-workspace GET=200; no workspace_id or
+    ?workspace_id= preserves current behaviour exactly), replay recent history on
+    feed connect (new additive SSEHub method ReplayRecent + hub impl from the existing
+    event log; no Last-Event-ID header required; engine back-compat to existing log
+    size), and resolve member handles to users.display_name falling back to the UUID
+    string. Non-workspace-scoped channel events (review_event on general) must keep
+    replaying.'
+  status: complete
+  created_at: '2026-09-20T21:19:36.872674+00:00'
+  completed_at: '2026-09-20T22:10:44.767690+00:00'
+- id: DF-HERMES-CANOPY-41
+  title: Install docs assume a root-owned Docker daemon and oversell the go prerequisite
+    on the compose path
+  criteria:
+  - 'docs/SELF_HOST.md and README.md: add a rootless Docker note naming DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock
+    and the observed permission-denied symptom; move the Go prerequisite out of the
+    compose quick-start into the build-from-source section (Node stays for the PWA
+    dev path). Files limited to README.md + docs/SELF_HOST.md; no code, no AGENTS.md,
+    no docs/API.md.'
+  status: complete
+  created_at: '2026-09-20T21:19:37.439805+00:00'
+  completed_at: '2026-09-20T22:10:42.117112+00:00'
