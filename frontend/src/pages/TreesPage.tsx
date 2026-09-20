@@ -15,7 +15,6 @@ import {
   Hash,
   User,
   AlertCircle,
-  Inbox,
   Search,
   ChevronDown,
   ChevronRight,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { useGatewayRuns } from '../hooks/useGatewayRuns';
 import {
   buildTreeSections,
@@ -635,22 +635,10 @@ export default function TreesPage() {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state — first-run onboarding (GAP-093): the full human card
+          replaces the old bare "No trees yet" box when the list is empty. */}
       {!loading && !error && trees.length === 0 && (
-        <div className="rounded-xl border border-line-subtle bg-surface-panel p-12 text-center">
-          <Inbox className="w-10 h-10 text-content-faint/50 mx-auto mb-3" />
-          <h2 className="text-sm font-medium text-content-secondary mb-1">No trees yet</h2>
-          <p className="text-xs text-content-muted mb-4">
-            Create your first conversation tree to get started.
-          </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-accent-2-600 hover:bg-accent-2-500 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create Tree
-          </button>
-        </div>
+        <FirstRunOnboarding onOpenCreate={() => setShowCreate(true)} />
       )}
 
       {/* Grouped tree cards (session trees by source; workspace ungrouped) */}

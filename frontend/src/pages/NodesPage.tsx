@@ -21,7 +21,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { apiGet, apiPatch, apiPost, apiDelete } from '../lib/api';
 import { readStoredTreeId, resolveDemoAliasSync } from '../lib/activeTree';
 import { NodeTreeRow, type TreeRowNode } from '../components/NodeTreeRow';
@@ -933,7 +933,11 @@ export default function NodesPage() {
         </div>
         {!treesLoading && trees.length === 0 && (
           <p className="text-xs text-content-muted mt-1">
-            No trees available. Create one first on the Trees page.
+            No trees yet —{' '}
+            <Link to="/trees" className="underline text-accent-2-300 hover:text-accent-2-200" data-testid="nodes-create-first-tree-link">
+              create your first tree
+            </Link>{' '}
+            (or import one) on the Trees page, then come back here.
           </p>
         )}
       </div>

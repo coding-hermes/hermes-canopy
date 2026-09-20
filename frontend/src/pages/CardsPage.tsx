@@ -22,6 +22,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import { Link } from 'react-router-dom';
 import CardActivityPanel from '../components/CardActivityPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -488,6 +489,13 @@ export default function CardsPage() {
           <h2 className="text-sm font-medium text-content-secondary mb-1">Select a tree</h2>
           <p className="text-xs text-content-muted">
             Cards are attached to nodes within conversation trees. Select a tree above to browse its cards.
+          </p>
+          <p className="text-xs text-content-muted mt-2" data-testid="cards-no-trees-hint">
+            No trees yet?{' '}
+            <Link to="/trees" className="underline text-accent-2-300 hover:text-accent-2-200">
+              Create your first tree
+            </Link>{' '}
+            (or import one) on the Trees page.
           </p>
         </div>
       )}

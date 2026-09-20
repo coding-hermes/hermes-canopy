@@ -100,6 +100,38 @@ open http://localhost:5173  # dev mode (Vite dev server)
 # see the Note under "Production (Manual)" below, or deploy/reference-proxy.py.
 ```
 
+## First 10 minutes (GAP-093)
+
+Start here if this is your first time opening the PWA. No demo data is seeded
+into your instance by default — what you see is only what you (or your agents)
+create.
+
+1. **Empty trees list = onboarding card.** With zero trees, `/trees` shows a
+   "Welcome to Canopy" card with three real actions:
+   - **Create your first tree** → the standard Create Tree dialog (title +
+     root message are required; it POSTs to `/api/v1/trees`).
+   - **Import a tree from an export file…** → pick a Canopy tree export JSON
+     (produced by `GET /api/v1/trees/{id}/export`, e.g. from another instance
+     or a backup). It POSTs to `/api/v1/trees/import` and opens the imported
+     tree. Malformed files are rejected locally with the reason — nothing
+     reaches the server.
+   - **Hermes session import** is a command-line step today: run
+     `./bin/canopyd session import` from the repo root against the running
+     server (see [Hermes session source (GAP-077)](#hermes-session-source-gap-077)
+     for what it reads and `--dry-run` to preview). There is no in-browser
+     session import yet.
+2. **First node.** Open the new tree — the Tree View canvas has a message
+   composer at the bottom (`button[aria-label="Send message"]`). Type and
+   send: your message appears on the canvas immediately.
+3. **First agent run (optional).** The Dashboard (`/`) posts to the live
+   Hermes gateway when one is reachable (`/api/v1/gateway/status`). Without a
+   gateway it says so — nothing is faked.
+
+Isolated throwaway instance (own DB, port, HOME, file root — nothing shared
+with a live instance): `scripts/scratch-instance.sh` — recipe in
+[docs/SCRATCH_INSTANCE.md](docs/SCRATCH_INSTANCE.md). Full integration guide:
+[docs/INTEGRATION.md](docs/INTEGRATION.md).
+
 ## Authentication (dev mode)
 
 Canopy uses HS256 JWT Bearer tokens for authentication. In development you **never
