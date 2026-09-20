@@ -18,6 +18,12 @@ type CollaborationService interface {
 	// missing. Callers must be members (ErrNotWorkspaceMember otherwise).
 	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*Workspace, error)
 
+	// AuthorizeWorkspaceAccess reports whether userID may act inside workspaceID.
+	// It returns ErrNotFound when the workspace does not exist and
+	// ErrNotWorkspaceMember when the caller is not a member (the channel
+	// surface deliberately exposes no existence oracle).
+	AuthorizeWorkspaceAccess(ctx context.Context, userID, workspaceID uuid.UUID) error
+
 	// UpdateWorkspace updates workspace metadata (name, description,
 	// tree_id, approval_ttl). The caller must be admin.
 	UpdateWorkspace(ctx context.Context, workspaceID uuid.UUID, name, description string, treeID *uuid.UUID, approvalTTL int64) (*Workspace, error)

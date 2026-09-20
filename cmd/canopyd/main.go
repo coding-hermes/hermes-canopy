@@ -439,7 +439,10 @@ func main() {
 
 	// Collaboration service — SPEC-FTR-01 Phase P1 (workspace CRUD,
 	// membership, invitations). Identity = users (see internal/collaboration).
-	collabSvc := service.NewCollaborationService(db.NewPGWorkspaceRepo(database.Pool))
+	collabSvc := service.NewCollaborationService(
+		db.NewPGWorkspaceRepo(database.Pool),
+		service.WithUserReader(database.Users),
+	)
 
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
 	profileRouter := hermes.NewPGProfileRouter(

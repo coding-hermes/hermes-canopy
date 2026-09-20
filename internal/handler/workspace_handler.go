@@ -9,6 +9,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	stdsync "sync"
@@ -83,20 +84,22 @@ func (r *workspaceChannelRegistry) get(id uuid.UUID) (channelInfo, bool) {
 
 // --- WorkspaceHandler -------------------------------------------------------
 
+// WorkspaceAccessChecker authorizes an authenticated user for a workspace.
+type WorkspaceAccessChecker func(ctx context.Context, userID, workspaceID uuid.UUID) error
+
 // WorkspaceHandler exposes the workspace channels surface (SPEC-023 §5).
 type WorkspaceHandler struct {
 	hub      sse.SSEHub
 	channels *workspaceChannelRegistry
-	access   sse.WorkspaceAccessChecker
+	access   WorkspaceAccessChecker
 }
 
 // WorkspaceHandlerOption customizes the optional workspace authorization seam.
 type WorkspaceHandlerOption func(*WorkspaceHandler)
 
-// WithWorkspaceAccessChecker injects a membership checker, primarily for
-// PG-independent tests. Production defaults to the checker registered by the
-// collaboration service.
-func WithWorkspaceAccessChecker(checker sse.WorkspaceAccessChecker) WorkspaceHandlerOption {
+// WithWorkspaceAccessChecker injects the production membership checker or a
+// PG-independent test seam.
+func WithWorkspaceAccessChecker(checker WorkspaceAccessChecker) WorkspaceHandlerOption {
 	return func(h *WorkspaceHandler) { h.access = checker }
 }
 
@@ -107,7 +110,6 @@ func NewWorkspaceHandler(hub sse.SSEHub, opts ...WorkspaceHandlerOption) *Worksp
 	h := &WorkspaceHandler{
 		hub:      hub,
 		channels: newWorkspaceChannelRegistry(),
-		access:   sse.CurrentWorkspaceAccessChecker(),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -150,9 +152,10 @@ func (h *WorkspaceHandler) authorizeWorkspace(w http.ResponseWriter, r *http.Req
 		return false
 	}
 	if h.access == nil || h.access(r.Context(), UserIDFromContext(r.Context()), workspaceID) != nil {
-		// Do not distinguish a missing workspace from a valid workspace where
-		// the caller is not a member: the channel surface has no existence
-		// oracle by design.
+		// Fail closed when a scoped request has no injected checker; the
+		// legacy unscoped path above remains unchanged. Do not distinguish
+		// a missing workspace from a valid workspace where the caller is not
+		// a member: the channel surface has no existence oracle by design.
 		writeError(w, http.StatusForbidden, "WORKSPACE_NOT_FOUND", "workspace not found")
 		return false
 	}

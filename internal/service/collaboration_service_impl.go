@@ -19,7 +19,6 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
-	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // Invitation TTL per SPEC-FTR-01 §2 decision 19 (one-time link) and the
@@ -64,21 +63,19 @@ func NewCollaborationService(repo db.WorkspaceRepo, opts ...CollaborationService
 			opt(s)
 		}
 	}
-
-	// The channel handler is constructed by server.New with only the shared
-	// SSE hub. Register the same repo-backed membership rule here so the
-	// optional workspace_id gate is wired without changing that public
-	// server construction path.
-	sse.SetWorkspaceAccessChecker(func(ctx context.Context, userID, workspaceID uuid.UUID) error {
-		if _, err := repo.GetWorkspaceByID(ctx, workspaceID); err != nil {
-			return collaboration.ErrNotWorkspaceMember
-		}
-		if _, err := repo.GetMember(ctx, workspaceID, userID); err != nil {
-			return collaboration.ErrNotWorkspaceMember
-		}
-		return nil
-	})
 	return s
+}
+
+// AuthorizeWorkspaceAccess reports whether userID may act inside workspaceID.
+// The handler deliberately collapses both errors into WORKSPACE_NOT_FOUND.
+func (s *collaborationServiceImpl) AuthorizeWorkspaceAccess(ctx context.Context, userID, workspaceID uuid.UUID) error {
+	if _, err := s.repo.GetWorkspaceByID(ctx, workspaceID); err != nil {
+		return collaboration.ErrNotFound
+	}
+	if _, err := s.repo.GetMember(ctx, workspaceID, userID); err != nil {
+		return collaboration.ErrNotWorkspaceMember
+	}
+	return nil
 }
 
 // CreateWorkspace creates a new workspace with the caller as admin.

@@ -140,32 +140,6 @@ type SSEHub interface {
 	Shutdown(ctx context.Context) error
 }
 
-// WorkspaceAccessChecker authorizes an authenticated user for a workspace.
-// It is intentionally a small function seam so handlers can enforce
-// workspace membership without importing the collaboration service package.
-type WorkspaceAccessChecker func(ctx context.Context, userID, workspaceID uuid.UUID) error
-
-var workspaceAccessRegistry struct {
-	mu      sync.RWMutex
-	checker WorkspaceAccessChecker
-}
-
-// SetWorkspaceAccessChecker installs the process-wide checker used by the
-// production workspace-channel handler. Tests should prefer the handler option
-// so they do not share this mutable default.
-func SetWorkspaceAccessChecker(checker WorkspaceAccessChecker) {
-	workspaceAccessRegistry.mu.Lock()
-	workspaceAccessRegistry.checker = checker
-	workspaceAccessRegistry.mu.Unlock()
-}
-
-// CurrentWorkspaceAccessChecker returns the currently registered workspace checker.
-func CurrentWorkspaceAccessChecker() WorkspaceAccessChecker {
-	workspaceAccessRegistry.mu.RLock()
-	defer workspaceAccessRegistry.mu.RUnlock()
-	return workspaceAccessRegistry.checker
-}
-
 // --- Implementation --------------------------------------------------------
 
 // hub is the concrete SSEHub. It tracks subscribers per tree, routes

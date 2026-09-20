@@ -16,6 +16,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
@@ -593,7 +595,112 @@ func TestAPI_WorkspaceChannels_PostAndFeedViaFullAPI(t *testing.T) {
 	}
 }
 
-func newScopedWorkspaceTestServer(t *testing.T, checker sse.WorkspaceAccessChecker) (*httptest.Server, sse.SSEHub, uuid.UUID) {
+type productionWiringWorkspaceRepo struct {
+	workspace db.WorkspaceRow
+	member    db.WorkspaceMemberRow
+}
+
+func (r *productionWiringWorkspaceRepo) CreateWorkspace(context.Context, *db.WorkspaceRow) (*db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetWorkspaceByID(_ context.Context, id uuid.UUID) (*db.WorkspaceRow, error) {
+	if id != r.workspace.ID {
+		return nil, db.ErrNotFound
+	}
+	row := r.workspace
+	return &row, nil
+}
+func (r *productionWiringWorkspaceRepo) UpdateWorkspace(context.Context, uuid.UUID, string, string, *uuid.UUID, int64) (*db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) DeleteWorkspace(context.Context, uuid.UUID) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) ListWorkspacesForUser(context.Context, uuid.UUID) ([]db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) AddMember(context.Context, uuid.UUID, uuid.UUID, int) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetMember(_ context.Context, workspaceID, userID uuid.UUID) (*db.WorkspaceMemberRow, error) {
+	if workspaceID != r.member.WorkspaceID || userID != r.member.UserID {
+		return nil, db.ErrNotFound
+	}
+	member := r.member
+	return &member, nil
+}
+func (r *productionWiringWorkspaceRepo) ListMembers(context.Context, uuid.UUID) ([]db.WorkspaceMemberRow, error) {
+	return []db.WorkspaceMemberRow{r.member}, nil
+}
+func (r *productionWiringWorkspaceRepo) UpdateMemberRole(context.Context, uuid.UUID, uuid.UUID, int) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) RemoveMember(context.Context, uuid.UUID, uuid.UUID) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) CreateInvitation(context.Context, *db.InvitationRow) (*db.InvitationRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetInvitationByHash(context.Context, string) (*db.InvitationRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) ConsumeInvitation(context.Context, uuid.UUID) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func TestWorkspace_ChannelWorkspaceScopeProductionWiring(t *testing.T) {
+	workspaceID := uuid.New()
+	memberID := uuid.New()
+	nonMemberID := uuid.New()
+	repo := &productionWiringWorkspaceRepo{
+		workspace: db.WorkspaceRow{ID: workspaceID},
+		member:    db.WorkspaceMemberRow{WorkspaceID: workspaceID, UserID: memberID},
+	}
+	collabSvc := service.NewCollaborationService(repo)
+
+	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
+	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
+	h := NewWorkspaceHandler(hub, WithWorkspaceAccessChecker(collabSvc.AuthorizeWorkspaceAccess))
+	r := chi.NewRouter()
+	r.Use(AuthMiddleware("canopy-dev-secret"))
+	r.Mount("/api/v1/workspace/channels", h.Routes())
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	cases := []struct {
+		name       string
+		workspace  string
+		userID     uuid.UUID
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "member", workspace: workspaceID.String(), userID: memberID, wantStatus: http.StatusOK},
+		{name: "non-member", workspace: workspaceID.String(), userID: nonMemberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
+		{name: "unknown workspace", workspace: uuid.New().String(), userID: memberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
+		{name: "invalid workspace", workspace: "not-a-uuid", userID: memberID, wantStatus: http.StatusBadRequest, wantCode: "INVALID_WORKSPACE_ID"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := wsGet(t, srv, "/api/v1/workspace/channels?workspace_id="+tc.workspace, wsBearer(t, tc.userID))
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
+			}
+			if tc.wantCode == "" {
+				return
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Code != tc.wantCode {
+				t.Fatalf("error code = %q, want %q", body.Error.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func newScopedWorkspaceTestServer(t *testing.T, checker WorkspaceAccessChecker) (*httptest.Server, sse.SSEHub, uuid.UUID) {
 	t.Helper()
 	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
 	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
