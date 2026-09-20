@@ -236,6 +236,29 @@ available, and re-run this parity harness as part of CI.
 migrations directory (after the historical record is archived), `docker compose` Postgres references and
 `docs/INTEGRATION.md §2`. Only after wave 3 has run green for a full release cycle.
 
+### Amendment — 2026-09-20 — GAP-097 boot-path wave
+
+The board's "wave 1" is the boot-path work described here as the next wave after the additive DDL artifact.
+GAP-097 landed the following additive runtime pieces without changing the default PostgreSQL behavior:
+
+* `CANOPY_DB_DRIVER` is parsed and validated as exactly `postgres` (default) or `sqlite`; `CANOPY_SQLITE_PATH`
+  defaults to `~/.canopy/canopy.sqlite`.
+* SQLite boot opens the store with the D6 pragma set, refuses a database newer than the embedded core batch,
+  applies `migrations.SQLiteFS()` through the existing `ApplyCoreSchema`, and runs a table/column parity check.
+  The result is logged before the SQLite path refuses to construct the full server.
+* `canopyd db export-sqlite --sqlite-path <file>` (with `--dsn` as an alias) performs a one-time, non-empty-target-
+  refusing PostgreSQL-to-SQLite export for `users`, `trees`, `nodes`, and `edges`, checks per-table counts, and
+  verifies node SHA-256 content hashes. It returns 0 for success, 1 for an operational/export failure, and 2 for
+  command misuse.
+
+SQLite full-server boot remains intentionally refused after the core schema/parity self-check. The uncovered
+surfaces are the PostgreSQL-backed relay configuration/registry, event and snapshot persistence, approvals and
+audit, MLS, topics and topic search, transport configuration/events, plugin registry, file-viewer metadata,
+federation identity, merge persistence, collaboration workspace persistence, profile routing, and NATS
+configuration. The existing SQLite core repos cover users, trees, nodes, and edges only. Wave 2 must either add
+thin implementations for those surfaces or keep each surface explicitly gated; it must not silently fall back to
+PostgreSQL.
+
 ## 8. Wave-1 evidence
 
 `go test ./migrations/ -run TestSQLiteParity -count=1 -v` — eight sub-checks:
