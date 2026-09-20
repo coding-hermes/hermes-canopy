@@ -11,9 +11,10 @@ import (
 )
 
 type fixtureGraph struct {
-	targets []Target
-	parents map[uuid.UUID][]uuid.UUID
-	topics  map[uuid.UUID][]uuid.UUID
+	targets     []Target
+	parents     map[uuid.UUID][]uuid.UUID
+	edgeParents map[uuid.UUID][]uuid.UUID
+	topics      map[uuid.UUID][]uuid.UUID
 }
 
 func (f fixtureGraph) SampleTargets(_ stdctx.Context, sample int) ([]Target, error) {
@@ -23,7 +24,18 @@ func (f fixtureGraph) SampleTargets(_ stdctx.Context, sample int) ([]Target, err
 	return f.targets[:sample], nil
 }
 
-func (f fixtureGraph) IncomingParents(_ stdctx.Context, nodeID uuid.UUID) ([]uuid.UUID, error) {
+func (f fixtureGraph) ParentIDParent(_ stdctx.Context, nodeID uuid.UUID) (uuid.UUID, error) {
+	parents := f.parents[nodeID]
+	if len(parents) == 0 {
+		return uuid.Nil, nil
+	}
+	return parents[0], nil
+}
+
+func (f fixtureGraph) EdgeParents(_ stdctx.Context, nodeID uuid.UUID) ([]uuid.UUID, error) {
+	if f.edgeParents != nil {
+		return f.edgeParents[nodeID], nil
+	}
 	return f.parents[nodeID], nil
 }
 
@@ -69,7 +81,7 @@ func fixture() (fixtureGraph, []GoldenEntry, []*ctx.CompiledContext) {
 	return graph, golden, compiled
 }
 
-func TestGoldenSet_DerivesIndependentGraphWalk(t *testing.T) {
+func TestGoldenSet_DerivesParentIDChain(t *testing.T) {
 	graph, want, _ := fixture()
 	got, err := NewGoldenSetDeriver(graph).Derive(stdctx.Background(), 2)
 	if err != nil {
@@ -97,6 +109,9 @@ func TestGoldenSet_Fixture_ScoresExactly(t *testing.T) {
 	if score.Accuracy != 1 {
 		t.Fatalf("accuracy = %f, want 1", score.Accuracy)
 	}
+	if score.RootsSampled != 0 || score.NonrootSampled != 2 || score.DepthScored != 2 || score.EdgeOnlyAncestors != 0 || score.Warning != "" {
+		t.Fatalf("unexpected sample composition: %+v", score)
+	}
 	if len(score.PerEntry) != 0 {
 		t.Fatalf("happy path PerEntry = %+v, want empty", score.PerEntry)
 	}
@@ -120,6 +135,43 @@ func TestGoldenSet_Fixture_DroppedAncestryIsMiss(t *testing.T) {
 	}
 }
 
+func TestGoldenSet_EdgeOnlyAncestryIsDiagnosticNotMiss(t *testing.T) {
+	graph, golden, compiled := fixture()
+	edgeOnly := uuid.MustParse("00000000-0000-0000-0000-000000000008")
+	graph.edgeParents = map[uuid.UUID][]uuid.UUID{
+		golden[0].NodeID: {golden[0].ExpectedNodes[1], edgeOnly},
+	}
+	got, err := NewGoldenSetDeriver(graph).Derive(stdctx.Background(), 1)
+	if err != nil {
+		t.Fatalf("Derive: %v", err)
+	}
+	if len(got[0].EdgeOnlyAncestors) != 1 || got[0].EdgeOnlyAncestors[0] != edgeOnly {
+		t.Fatalf("edge-only ancestors = %v, want [%s]", got[0].EdgeOnlyAncestors, edgeOnly)
+	}
+	score := ScoreGolden(got, compiled[:1])
+	if score.NodeMiss != 0 || score.EdgeOnlyAncestors != 1 || score.Accuracy != 1 {
+		t.Fatalf("edge-only diagnostic changed score: %+v", score)
+	}
+}
+
+func TestScoreGolden_RootOnlySampleWarns(t *testing.T) {
+	root := rootID()
+	entries := []GoldenEntry{{NodeID: root, ExpectedNodes: []uuid.UUID{root}}}
+	compiled := []*ctx.CompiledContext{{Manifest: &ctx.Manifest{
+		Ancestry: []ctx.ManifestItem{{ID: root, Kind: "node"}},
+	}}}
+	score := ScoreGolden(entries, compiled)
+	if score.Accuracy != 1 {
+		t.Fatalf("accuracy = %f, want 1 for the deliberately vacuous fixture", score.Accuracy)
+	}
+	if score.RootsSampled != 1 || score.NonrootSampled != 0 || score.DepthScored != 0 {
+		t.Fatalf("unexpected root-only composition: %+v", score)
+	}
+	if score.Warning == "" {
+		t.Fatal("root-only perfect score has no discrimination warning")
+	}
+}
+
 func TestGoldenSet_MissingCompiledResultCountsAllExpected(t *testing.T) {
 	_, golden, _ := fixture()
 	score := ScoreGolden(golden[:1], nil)
@@ -134,7 +186,12 @@ func TestGoldenSet_MissingCompiledResultCountsAllExpected(t *testing.T) {
 func TestGoldenSet_Fixture_PrintsAccuracy(t *testing.T) {
 	_, golden, compiled := fixture()
 	score := ScoreGolden(golden, compiled)
-	fmt.Printf("SELECTION_ACCURACY=%.2f%%\n", score.Accuracy*100)
+	got := fmt.Sprintf("SELECTION_ACCURACY=%.2f%%", score.Accuracy*100)
+	want := "SELECTION_ACCURACY=100.00%"
+	if got != want {
+		t.Fatalf("printed accuracy = %q, want %q", got, want)
+	}
+	fmt.Println(got)
 }
 
 func rootID() uuid.UUID  { return uuid.MustParse("00000000-0000-0000-0000-000000000002") }

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
@@ -138,37 +139,105 @@ func printContextAccuracyScore(score ctxaccuracy.Score) {
 	fmt.Printf("SELECTION_ACCURACY=%.2f%%\n", score.Accuracy*100)
 	fmt.Printf("entries=%d node_hit=%d node_miss=%d node_extra=%d topic_hit=%d topic_miss=%d\n",
 		score.Total, score.NodeHit, score.NodeMiss, score.NodeExtra, score.TopicHit, score.TopicMiss)
+	fmt.Printf("roots_sampled=%d nonroot_sampled=%d depth_scored=%d edge_only_ancestors=%d root_fallback=%t\n",
+		score.RootsSampled, score.NonrootSampled, score.DepthScored, score.EdgeOnlyAncestors, score.RootFallback)
+	if score.Warning != "" {
+		fmt.Println(score.Warning)
+	}
 	if len(score.PerEntry) == 0 {
 		fmt.Println("misses=none")
 		return
 	}
 	for _, entry := range score.PerEntry {
-		fmt.Printf("MISS tree=%s node=%s missing=%v extra=%v\n", entry.TreeID, entry.NodeID, entry.Missing, entry.Extra)
+		fmt.Printf("MISS tree=%s node=%s missing=%v extra=%v edge_only_ancestors=%v\n", entry.TreeID, entry.NodeID, entry.Missing, entry.Extra, entry.EdgeOnlyAncestors)
 	}
 }
 
-// pgAccuracyGraphReader reads the graph directly. Its parent query follows
-// active graph edges rather than nodes.parent_id, keeping golden derivation
-// independent from the compiler's NodeReader.GetAncestors path.
+// pgAccuracyGraphReader reads the graph directly. Golden ancestry follows
+// nodes.parent_id, matching PGNodeRepo.GetAncestors. EdgeParents is retained
+// as a separate diagnostic walk for GAP-073 multi-parent/edge-only paths.
 type pgAccuracyGraphReader struct {
 	pool *pgxpool.Pool
 }
 
 func (r *pgAccuracyGraphReader) SampleTargets(ctx context.Context, sample int) ([]ctxaccuracy.Target, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT tree_id, id
-		FROM nodes
-		WHERE deleted_at IS NULL
-		ORDER BY sequence_num ASC, id ASC
+		WITH RECURSIVE ancestry(target_id, ancestor_id, parent_id, depth) AS (
+			SELECT n.id, p.id, p.parent_id, 1
+			FROM nodes n
+			JOIN nodes p ON p.id = n.parent_id
+			WHERE n.deleted_at IS NULL
+			  AND p.deleted_at IS NULL
+			  AND n.parent_id IS NOT NULL
+			  AND n.id <> p.id
+			UNION ALL
+			SELECT a.target_id, p.id, p.parent_id, a.depth + 1
+			FROM ancestry a
+			JOIN nodes p ON p.id = a.parent_id
+			WHERE p.deleted_at IS NULL
+			  AND a.depth < 10000
+		),
+		eligible AS (
+			SELECT DISTINCT n.tree_id, n.id, n.sequence_num
+			FROM nodes n
+			JOIN ancestry a ON a.target_id = n.id
+			WHERE n.deleted_at IS NULL
+		),
+		ranked AS (
+			SELECT tree_id, id, sequence_num,
+			       row_number() OVER (
+				       PARTITION BY tree_id
+				       ORDER BY sequence_num DESC, id DESC
+			       ) AS tree_rank
+			FROM eligible
+		)
+		SELECT tree_id, id, false, false
+		FROM ranked
+		ORDER BY tree_rank ASC, sequence_num DESC, id ASC
 		LIMIT $1`, sample)
 	if err != nil {
-		return nil, fmt.Errorf("sample nodes: %w", err)
+		return nil, fmt.Errorf("sample non-root nodes: %w", err)
 	}
 	defer rows.Close()
+	targets, err := scanAccuracyTargets(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) >= sample {
+		return targets, nil
+	}
+
+	remaining := sample - len(targets)
+	rootRows, err := r.pool.Query(ctx, `
+		WITH ranked AS (
+			SELECT tree_id, id, sequence_num,
+			       row_number() OVER (
+				       PARTITION BY tree_id
+				       ORDER BY sequence_num ASC, id ASC
+			       ) AS tree_rank
+			FROM nodes
+			WHERE deleted_at IS NULL AND parent_id IS NULL
+		)
+		SELECT tree_id, id, true, true
+		FROM ranked
+		ORDER BY tree_rank ASC, sequence_num ASC, id ASC
+		LIMIT $1`, remaining)
+	if err != nil {
+		return nil, fmt.Errorf("fill sample with root nodes: %w", err)
+	}
+	defer rootRows.Close()
+	roots, err := scanAccuracyTargets(rootRows)
+	if err != nil {
+		return nil, err
+	}
+	return append(targets, roots...), nil
+}
+
+func scanAccuracyTargets(rows pgx.Rows) ([]ctxaccuracy.Target, error) {
 	var targets []ctxaccuracy.Target
 	for rows.Next() {
 		var target ctxaccuracy.Target
-		if err := rows.Scan(&target.TreeID, &target.NodeID); err != nil {
+		if err := rows.Scan(&target.TreeID, &target.NodeID, &target.IsRoot, &target.RootFallback); err != nil {
 			return nil, fmt.Errorf("scan sample node: %w", err)
 		}
 		targets = append(targets, target)
@@ -179,7 +248,22 @@ func (r *pgAccuracyGraphReader) SampleTargets(ctx context.Context, sample int) (
 	return targets, nil
 }
 
-func (r *pgAccuracyGraphReader) IncomingParents(ctx context.Context, nodeID uuid.UUID) ([]uuid.UUID, error) {
+func (r *pgAccuracyGraphReader) ParentIDParent(ctx context.Context, nodeID uuid.UUID) (uuid.UUID, error) {
+	var parent *uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+		SELECT parent_id
+		FROM nodes
+		WHERE id = $1 AND deleted_at IS NULL`, nodeID).Scan(&parent)
+	if errors.Is(err, pgx.ErrNoRows) || parent == nil {
+		return uuid.Nil, nil
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("read parent_id parent: %w", err)
+	}
+	return *parent, nil
+}
+
+func (r *pgAccuracyGraphReader) EdgeParents(ctx context.Context, nodeID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT e.source_id
 		FROM edges e
@@ -187,26 +271,26 @@ func (r *pgAccuracyGraphReader) IncomingParents(ctx context.Context, nodeID uuid
 		WHERE e.target_id = $1
 		  AND e.deleted_at IS NULL
 		  AND n.deleted_at IS NULL
+		  AND e.source_id <> e.target_id
 		  AND e.edge_type IN ('reply', 'fork', 'synthesis')
 		ORDER BY e.sequence_num ASC, e.source_id ASC`, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("read graph parents: %w", err)
+		return nil, fmt.Errorf("read edge parents: %w", err)
 	}
 	defer rows.Close()
 	var parents []uuid.UUID
 	for rows.Next() {
 		var parent uuid.UUID
 		if err := rows.Scan(&parent); err != nil {
-			return nil, fmt.Errorf("scan graph parent: %w", err)
+			return nil, fmt.Errorf("scan edge parent: %w", err)
 		}
 		parents = append(parents, parent)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read graph parents: %w", err)
+		return nil, fmt.Errorf("read edge parents: %w", err)
 	}
 	return parents, nil
 }
-
 func (r *pgAccuracyGraphReader) TopicIDs(ctx context.Context, nodeID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT topic_id

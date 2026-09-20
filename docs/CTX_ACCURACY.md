@@ -12,13 +12,17 @@ The denominator is not an average of per-entry ratios. `NodeExtra` counts manife
 
 ## Independence
 
-The golden set walks active incoming `reply`, `fork`, and `synthesis` edges directly with a breadth-first traversal and reads active topic membership/reference rows separately. The compiler's normal ancestry read path follows `nodes.parent_id` through `NodeReader.GetAncestors`; the harness never calls that method, so it can expose disagreement between the graph and the compiler's selected ancestry instead of comparing a manifest with its own source.
+The compiler's ancestry contract is `PGNodeRepo.GetAncestors` in `internal/db/node_repo.go:135-161`: its recursive CTE joins `n.id = chain.parent_id`, so it follows the `nodes.parent_id` chain. The golden expectation follows that same parent-id mechanism through `GraphReader.ParentIDParent`. This is intentional: a parent-id chain is a contract check, not an independent graph-mechanism check.
+
+The separate `GraphReader.EdgeParents` walk reads active `reply`, `fork`, and `synthesis` edges for diagnostics only. `PGNodeRepo.GetSubtree` in `internal/db/node_repo.go:164-198` is the repository method that walks `edges` and handles GAP-073 multi-parent paths. Any node reachable through edges but absent from the parent-id chain is reported as `edgeOnlyAncestors`; it is not counted as a compiler miss because `GetAncestors` does not promise to include it. Topic membership/reference rows are read separately.
 
 ## CLI
 
-The command uses the live PostgreSQL database configured by `CANOPY_DB_URL` or the `DB_*` environment variables. It samples 25 targets by default:
+The command uses the live PostgreSQL database configured by `CANOPY_DB_URL` or the `DB_*` environment variables. It prefers active non-root targets with live parent-id ancestry, round-robins target selection across trees, and fills a short sample with roots only when fewer eligible non-roots exist. It samples 25 targets by default:
 
     canopyd context-accuracy --sample 25
+
+Human and JSON output include `rootsSampled`, `nonrootSampled`, and `depthScored`; the last is the number of entries whose expected parent-id ancestry has more than one node. `edgeOnlyAncestors` is diagnostic detail, not part of the miss denominator. If no entry exercises multi-node ancestry and no topics are covered, the score carries and the human path prints a warning that it is not meaningful. A `rootFallback` value identifies a sample filled with roots.
 
 A human-readable run prints a line such as `SELECTION_ACCURACY=93.75%` followed by per-entry misses. JSON output is available for automation:
 
