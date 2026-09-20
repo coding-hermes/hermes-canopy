@@ -1,0 +1,33 @@
+{
+  "tick_id": "hermes-canopy-2026-09-20-05-15-37",
+  "project": "hermes-canopy",
+  "base_sha": "92d4518",
+  "created_at": "2026-09-20T05:15:37-05:00",
+  "merge_order": ["GAP-092", "GAP-097"],
+  "workers": [
+    {
+      "task_id": "GAP-092",
+      "title": "LOAD-HYGIENE: bound test-suite host load (audit + fix worst offender)",
+      "worktree": "/home/kara/worktrees/hermes-canopy-GAP-092",
+      "branch": "wt/GAP-092",
+      "base_sha": "92d4518",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-GAP-092.md",
+      "log": "/tmp/worker-GAP-092.log",
+      "scope": "test code only — no production-code changes"
+    },
+    {
+      "task_id": "GAP-097",
+      "title": "SQLite runtime cutover wave 1: CANOPY_DB_DRIVER flag + boot parity self-check + PG->SQLite migration tool",
+      "worktree": "/home/kara/worktrees/hermes-canopy-GAP-097",
+      "branch": "wt/GAP-097",
+      "base_sha": "92d4518",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-GAP-097.md",
+      "log": "/tmp/worker-GAP-097.log",
+      "scope": "config, boot path, new migration-tool package + tests"
+    }
+  ]
+}
