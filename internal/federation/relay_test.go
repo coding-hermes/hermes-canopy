@@ -14,7 +14,6 @@ import (
 )
 
 func TestPGRelayQueueOverflowDropsOldest(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID, treeID, peerID := uuid.New(), uuid.New(), uuid.New(), uuid.New()

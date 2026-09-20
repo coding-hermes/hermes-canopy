@@ -145,7 +145,6 @@ func TestSelectorHysteresisAndFallback(t *testing.T) {
 }
 
 func TestTransportRepositoryRoundTrip(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	repo := db.NewPGTransportConnectionRepo(pool)
 	ctx := context.Background()

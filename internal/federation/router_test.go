@@ -14,7 +14,6 @@ import (
 
 func routeFixtures(t *testing.T) (*PGProfileRouter, uuid.UUID, uuid.UUID, uuid.UUID) {
 	t.Helper()
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID := uuid.New(), uuid.New()

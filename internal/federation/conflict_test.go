@@ -11,7 +11,6 @@ import (
 )
 
 func TestConcurrentWriteLWWAndReplayIdempotency(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID, treeID, nodeID := uuid.New(), uuid.New(), uuid.New(), uuid.New()

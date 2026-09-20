@@ -218,11 +218,8 @@ func (t *outageTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return recorder.Result(), nil
 }
 
-// TestFederationRelayQueueThenReplayAcrossOutage uses two separately migrated
-// PostgreSQL instances and an in-process HTTP transport so CANOPY_REQUIRE_DB=1
-// fails loudly when the required :5437 database is unavailable.
+// Fail-loud behavior is carried by the "PG-backed federation + transport tests" CI step; locally, the testutil gate skips when PostgreSQL is absent.
 func TestFederationRelayQueueThenReplayAcrossOutage(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	senderPool := testutil.NewIntegrationPool(t)
 	receiverPool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()

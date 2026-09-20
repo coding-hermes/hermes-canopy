@@ -18,7 +18,6 @@ import (
 )
 
 func TestFederationHandlerHandshake(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID := uuid.New(), uuid.New()
@@ -105,7 +104,6 @@ func TestFederationHandlerHandshake(t *testing.T) {
 }
 
 func TestFederationHandlerRouteEndpoints(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID := uuid.New(), uuid.New()
@@ -173,7 +171,6 @@ func TestFederationHandlerRouteEndpoints(t *testing.T) {
 }
 
 func TestFederationConflictManualResolveEndpoint(t *testing.T) {
-	t.Setenv("CANOPY_REQUIRE_DB", "1")
 	pool := testutil.NewIntegrationPool(t)
 	ctx := context.Background()
 	ownerID, profileID, treeID, nodeID, peerID, conflictID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
