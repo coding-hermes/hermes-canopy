@@ -2389,3 +2389,80 @@ namespace `hermes-canopy`).
 DF-HERMES-CANOPY-36/37/38 are now the highest-value project-owned rows (share-grants-reads, missing
 SPEC-API-06 collab endpoints, second-user onboarding) — all P1, all separate surfaces, so *they* are a
 genuine wave candidate next tick. GAP-096 stays decision-bound. QA-15..24 remain non-repo harness rows.
+
+## Tick 527 — 2026-09-20 ~14:55Z (WORK)
+
+### Verdict
+Board read directly from `.coding-hermes/board/tasks.jsonl` (LAST-WINS per id): **31 pending -> 30 pending** after
+this tick. Picked **DF-HERMES-CANOPY-36 (P1, dogfood-2026-09-20-collab-mls)** -- the top project-owned row: the
+dogfood P0-class UX break where a share grant gives the invitee WRITE (POST /trees/{id}/nodes 201) but not READ
+(GET /trees/{id} 403 NOT_TREE_OWNER). Wave composition attempted and REJECTED: DF-36/37/38 all touch
+tree_handler.go + docs/API.md + route-parity surfaces (NOT mutually independent); QA-15..24 are routed rows whose
+source lives in the trouble/dagger repos, not committable from this workdir. **Serial path, 1 worker.**
+
+Premise re-verified at HEAD `87d0aa2f` by reading the code before dispatch: `internal/server/server.go:373` mounts
+`r.Mount("/trees", treeHandler.Routes())` with NO `TreeMembershipMiddleware` (node subroutes DO get it), and
+`tree_handler.go` carries three inline "BUG-016 fix" owner-only checks (GetTree ~197, UpdateTree ~220,
+DeleteTree ~267). `PGTreeMemberRepo.IsMember` (internal/db/user_repo.go:494) already existed as the lookup.
+Off-by-one discover fired for two candidate classes (chi-handler-authorization-ownership-vs-membership-middleware,
+go-shared-tree-member-403-owner-only-get) -> both `not_found` (honest no-cache; fresh design warranted).
+
+### Dispatch / Worker
+- Model/provider: **`gpt-5.6-luna` @ `openai-codex`** (project's proven lane; glm-5.3-flash stays fallback-only
+  after 3 recorded zero-liveness dead dispatches).
+- Brief: `/tmp/canopy-df36-brief.md` (self-contained: goal, pre-verified root cause, 9 testable ACs, security
+  direction -- reads widen to members, mutations stay owner-only -- banned background sweeps, "do NOT push").
+- Liveness: stdout log 0 bytes (known luna signature) -- proved via state.db sessions (three fresh sessions from
+  09:22:33 local, one at 37 messages within 2 min) and then by tree artifacts (`tree_handler.go` M +
+  `tree_share_acceptance_test.go` ??), then by the commit itself (`9894bd1d`).
+- Worker session `20260920_092233_953c4c`; single commit, single attempt, no rework cycle.
+
+### The fix (what landed -- commit `9894bd1d`, +180/-8, 2 files, internal/handler/ only)
+- `GetTree`: explicit `TOKEN_MISSING` for unauthenticated; owner short-circuit then `h.members.IsMember` via new
+  `canViewTree` helper (INTERNAL_ERROR on repo failure, 403 otherwise). Message no longer misleading:
+  "you do not have access to this tree".
+- `UpdateTree`/`DeleteTree`: stay owner-only via new `isTreeOwner` helper (same non-misleading message; behavior
+  unchanged for non-owners).
+- `tree_share_acceptance_test.go` (146 lines): two identities against the shared-DB test stack -- pre-share
+  invitee GET -> 403 with an explicit anti-regression assertion that the message is NOT "you do not own this tree";
+  owner shares by email -> invitee GET 200 -> member node-create 201; PATCH/DELETE stay 403; owner GET 200.
+
+### Gates (foreman-run, fresh)
+- `go build ./...` + `go vet ./...`: PASS. `golangci-lint run ./internal/handler/...`: **0 issues** (v2.12.2, CI parity).
+- `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -run TestDFHermesCanopy36 ./internal/handler/`: **PASS 5.755s** (real PG, 0 SKIP).
+- Foreman full handler sweep (background): **PASS 427.9s, exit 0** (shared-DB flag on).
+- Worker's own report: build/vet/lint PASS, acceptance test PASS 4.17s, full handler sweep PASS 426.6s, pre-commit
+  Tier 1 guard PASS. WARN: my post-commit `gitreins guard` returned a **no-op PASS in ~0.1s** (clean tree ->
+  "No supported source files found") -- recorded as PHANTOM, not evidence; the sweeps above are the load-bearing gates.
+
+### GitReins
+- `gitreins task create DF-HERMES-CANOPY-36 -> task start` before dispatch (criterion = the two-identity test + gates).
+- `task complete` -> **Tier 1 verdict `ae87b59b` PASS**; Tier 2 dispatched ASYNC (`gitreins judge --async`,
+  job `job-e172413fea4d45c1934a52574924e0c5`) per the long-tier doctrine. Task left in tasks.yaml (fleet default).
+
+### CI + push
+- Pushed `9894bd1d` to **origin (GitHub) and gitlab** immediately after commit; `rev-list --count` = 0/0 ahead.
+- CI: master was 4/4 green on tick-526 commits pre-push; the content commit's run **completed success** (headSha
+  9894bd1d, createdAt 14:46:02Z) -- verified before this entry. Board-closeout run triggers on this push and is
+  re-checked by the next tick's read.
+
+### Off-by-one
+- Health/discover probed (see Verdict): two problem classes -> `not_found`. Nothing debugged beyond the
+  already-reproduced row premise; no submission this tick (no non-trivial debug loop ran).
+
+### Bookkeeping (JSONL)
+- tasks.jsonl: DF-36 row flipped surgical (1+/1-, spaced-style preserved) with commit/judge/model/attempt/
+  summary/note key set matching the T526 closure shape. events.jsonl: id 697 appended as task_completed
+  (a stray empty `audit` event created by bare `boardctl event` seconds earlier was converted IN PLACE -- same id,
+  no hole, no junk row shipped). board.jsonl header: last_tick 14:52:38Z, ticks_total 526->527,
+  last_commit = 9894bd1d (content commit). Pending grep recount: 30.
+- DuckBrain: pre-write tail showed `/ticks/tick526-df35-mls-cross-member-decrypt`; wrote
+  `/ticks/tick527-df36-shared-tree-read` (ID `790ff7f5-42f5-4ff5-8c3d-3c698b119c3a`), verified on disk in
+  `namespaces/hermes-canopy/event/2026-09/current.jsonl`. WARN: the CLI now REJECTS bare keys (path must start with `/`).
+
+### Next tick
+- Pending backlog 30: DF-37 (SPEC-API-06 surface missing vs spec, P1) and DF-38 (second-identity FK 500, P1) are
+  the natural next picks -- NOTE they may now partially overlap the landed read-membership change; re-verify premise
+  at HEAD. DF-39/40 (P2), GAP-095/096 (P2, decision-bound), QA-15..24 (harness-source, skip w/ rationale unless
+  routing changed). Tier 2 verdict for DF-36: poll `gitreins judge --status job-e172413fea4d45c1934a52574924e0c5`
+  and backfill the row's judge_verdict if it differs from the Tier 1 id.

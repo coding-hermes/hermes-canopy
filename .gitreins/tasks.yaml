@@ -3074,3 +3074,27 @@ tasks:
   status: complete
   created_at: '2026-09-20T10:49:47.236931+00:00'
   completed_at: '2026-09-20T11:24:38.375916+00:00'
+- id: DF-HERMES-CANOPY-36
+  title: 'Shared tree invisible to shared editor: tree GET enforces ownership only'
+  criteria:
+  - 'CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/handler/... passes with a new
+    two-identity share-acceptance test proving: owner creates tree; second user GET
+    /trees/{id} -> 403 before share; owner shares (permission=editor) -> 201; second
+    user GET -> 200 and can POST a node; go build + go vet clean; golangci-lint run
+    on changed packages reports 0 issues; read surfaces (tree GET + any tree-scoped
+    read gating on ownership) accept tree_members rows while Update/Delete stay owner-only;
+    no AGENTS.md changes; worker does not push'
+  status: complete
+  created_at: '2026-09-20T14:20:51.835398+00:00'
+  completed_at: '2026-09-20T14:45:40.254713+00:00'
+- id: DF-HERMES-CANOPY-35
+  title: 'MLS cross-member decryption impossible: sender-key vs recipient-key AES
+    derivation'
+  criteria:
+  - CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/mls/ passes with new cross-member
+    round-trip, removed-member-cannot-decrypt-future, and persisted-epoch-secret tests
+    all PASS (not SKIP); go build + go vet clean; migration 000048 adds nullable mls_groups.group_secret
+    with up+down; docs carry dated interim-model amendments; no AGENTS.md changes
+  status: complete
+  created_at: '2026-09-20T13:28:53.584964+00:00'
+  completed_at: '2026-09-20T14:04:21.599092+00:00'
