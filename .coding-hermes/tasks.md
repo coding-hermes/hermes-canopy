@@ -2292,3 +2292,100 @@ retention-policy decision) and GAP-095 (usability dogfood round 2 — its precon
 has landed). GAP-096 is decision-bound (owner ruling). QA-15/16/17/19/20/21/23/24 stay open and are
 **not** committable from a repo — they need a `~/.hermes/scripts` fix plus a tracked copy, or an owner
 call on where that harness source of record should live.
+
+## Tick 526 — 2026-09-20 ~14:05Z (WORK)
+
+### Verdict
+Board read directly from `.coding-hermes/board/tasks.jsonl` (393 lines; LAST-WINS per id): **32 pending → 31 pending**
+after this tick. Picked **DF-HERMES-CANOPY-35 (P0, project-owned)** — the top-priority row and the only P0
+on the board. Wave composition was attempted first: the eligible independent set (DF-36/37/38/39/40/41, GAP-095/096)
+was rejected as a wave because they all touch overlapping auth/share/MLS surfaces and the wave budget would have
+been spent on tasks whose briefs are decision-bound (GAP-096 needs an owner ruling; QA-15..24 are harness-source
+rows not committable from this repo). **Serial path taken.**
+
+Premise re-verified at HEAD `245a56fc` by reading the code before dispatch (not from the row):
+`internal/mls/service.go` `Encrypt` derived `aesKey = sha256(grp.ID || member.EncryptionPublicKey)` with
+`member` = the **SENDER**, while `Decrypt` derived the same expression with `member` = the **RECIPIENT**.
+Different keys by construction, and both from **public non-secret** material — so every ciphertext was
+readable only by its own sender, and the existing `TestEncryptDecryptRoundtrip` round-tripped as the SAME
+user, which is exactly why it never caught this. `GetEpochSecret` returned fresh random bytes per call.
+
+### Dispatch / Worker
+- Model/provider: **`gpt-5.6-luna` @ `openai-codex`** (the project's proven lane; glm-5.3-flash has 3
+  recorded zero-liveness dead dispatches here and stays fallback-only).
+- Brief: `/tmp/canopy-df35-brief.md` (self-contained; goal, numbered steps, 8 acceptance criteria, risk, banned
+  background sweeps, explicit "NEVER touch AGENTS.md / .github/workflows", "do NOT push").
+- Liveness: 0-byte stdout log for the whole dispatch — the known luna signature. Liveness proved by
+  **tree artifacts** (`internal/db/mls_repo.go`, `internal/mls/service.go`, `migrations/000048_*` appearing)
+  and then by the commit. Worker exit was NOT awaited as the done-signal; the commit was (`63e7d23d`).
+
+### The fix (what actually landed)
+Chosen direction = **interim honest group-key model** (server-side), not a real RFC 9420 dependency — that
+remains a future dependency decision (SPEC-FTR-03 D2), stated as such in the docs rather than implied.
+
+- `migrations/000048_mls_group_secret.{up,down}.sql` — `ALTER TABLE mls_groups ADD COLUMN group_secret BYTEA`
+  (nullable; existing rows lazily backfilled). Picked up automatically — migrations are embedded via
+  `migrations/embed.go` glob.
+- `internal/db/mls_repo.go` — `GroupSecret` on the model; SELECT/INSERT carry the column; new
+  `SetGroupSecret` + `SetGroupSecretIfAbsent` (conditional UPDATE = single-winner race guard, then read-back
+  to converge).
+- `internal/mls/service.go` — `groupKeyMaterial` (lazy provision) → `groupAESKey` = `deriveKey("mls-app-key-v1", secret)`;
+  **Encrypt and Decrypt now call it**, so both sides share one key. New `advanceEpoch` rotates the secret on
+  `JoinGroup` / `LeaveGroup` / `RemoveMember` / `CommitProposals` alongside the epoch bump, so a removed member
+  cannot decrypt FUTURE ciphertext. Nonce / AAD / wire shape unchanged.
+- Tests: `TestMLS_CrossMemberRoundTrip` (Alice encrypts → **Bob** decrypts), `TestMLS_RemovedMemberCannotDecryptFuture`
+  (post-leave ciphertext rejected under both live and frozen pre-leave state), `TestMLS_GetEpochSecretPersisted`.
+- Docs honesty (dated amendments, marking not rewriting): `README.md`, `specs/SPEC-FTR-03` header blockquote,
+  `internal/mls/types.go` comment — "interim server-side group-key model ... NOT RFC 9420: no forward secrecy
+  within an epoch, no post-compromise security, no ratchet tree". `AGENTS.md` deliberately untouched (protected
+  instruction file); its "MLS has SHIPPED" claim is the remaining owner-visible honesty item.
+
+### Gates (all fresh, run by the foreman)
+| Gate | Result |
+|---|---|
+| `go build -o /dev/null ./cmd/canopyd` | exit 0 |
+| `go vet ./...` | exit 0 |
+| 3 new MLS tests (`-v`) | **3 PASS / 0 SKIP** |
+| `go test ./internal/mls/` | ok 0.004s |
+| `CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/mls/ ./internal/handler/ -timeout=900s` | **GATE_EXIT=0** (handler 430.2s) |
+| `golangci-lint run ./internal/mls/... ./internal/db/...` (v2.12.2 = CI pin) | **0 issues** |
+| `gitleaks detect --no-git -c .gitleaks.toml` | **0 leaks** (352 MB scanned) |
+
+The combined shared-DB MLS+handler sweep is the AC the worker could not finish inside its own tool ceiling
+(it said so honestly in its report); the foreman ran it in the background and recorded the real exit code above.
+
+### GitReins
+- `task create DF-HERMES-CANOPY-35 …` + `task start` **before** implementation.
+- `task complete` after the commit landed → **Tier 2 verdict `708539fe` = PASS** ("All sub-requirements
+  verified: three new MLS tests PASS (not SKIP), build/vet clean, migration 000048 adds nullable group_secret
+  with up+down, dated docs amendments present, no AGENTS.md changes."). Verdict id recorded on the board row.
+
+### CI + push
+- Content commit `63e7d23d` pushed to **origin + gitlab**; closeout `f05b3c09`; verdict-record commit `3fb032dc`.
+  `git rev-list --count origin/master..HEAD` = **0**, gitlab = **0**.
+- CI: run for `63e7d23d` was **in_progress** at closeout (recorded as `pending_on_push`, run URL implied by the
+  commit); the 5 most recent completed master runs before it were **5/5 success** — no red CI to flag and no
+  CI row to file. This tick created no failing run.
+
+### Board repair (unplanned, worth recording)
+`events.jsonl` **line 709 held events 694 and 695 glued on one physical line with no newline** (a tick-525
+writer defect), which makes line-wise readers die on that segment. Repaired by splitting them onto separate
+lines with both payloads preserved byte-identical, then appending this tick's event **696**. `tasks.jsonl`
+update was a single-line surgical round-trip (spaced style preserved): pending **32 → 31**, and a set-diff
+proves **DF-HERMES-CANOPY-35 is the only row that changed state**.
+
+### Off-by-one
+Health: `GET /health` → `{"status":"ok","uptime":"3h49m"}`. Discovered **before** designing the fix:
+`POST /api/v1/problems/discover` for `mls-cross-member-decryption-sender-recipient-key-mismatch` and
+`go-pg-migration-additive-nullable-column` → both **not_found** (no cached answer existed). Submitted the
+learning post-debug as `go-symmetric-encryption-per-party-key-derivation` → **`sub_7b47f1` (queued)**.
+
+### DuckBrain
+Pre-write state: `/ticks/` keys ran to `tick516-pl03-client-half` (517-525 never written). Wrote
+`/ticks/tick526-df35-mls-cross-member-decrypt` -> UUID **08e6e46d-b42b-4f69-8a85-42fbd4d21466** (committed to git,
+namespace `hermes-canopy`).
+
+### Next tick
+DF-HERMES-CANOPY-36/37/38 are now the highest-value project-owned rows (share-grants-reads, missing
+SPEC-API-06 collab endpoints, second-user onboarding) — all P1, all separate surfaces, so *they* are a
+genuine wave candidate next tick. GAP-096 stays decision-bound. QA-15..24 remain non-repo harness rows.
