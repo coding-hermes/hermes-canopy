@@ -3,7 +3,10 @@
   "project": "hermes-canopy",
   "base_sha": "92d4518",
   "created_at": "2026-09-20T05:15:37-05:00",
-  "merge_order": ["GAP-092", "GAP-097"],
+  "merge_order": [
+    "GAP-092",
+    "GAP-097"
+  ],
   "workers": [
     {
       "task_id": "GAP-092",
@@ -29,5 +32,9 @@
       "log": "/tmp/worker-GAP-097.log",
       "scope": "config, boot path, new migration-tool package + tests"
     }
-  ]
+  ],
+  "finished_at": "2026-09-20T08:11:00Z",
+  "status": "recovered",
+  "recovered_by": "hermes-canopy-2026-09-20-08-04-06",
+  "recovery_note": "Both merges proven ancestors of master; board rows closed tick 522 (events 685); CI 3/3 green; worktrees+branches reaped. Judge debt backfilled: gitreins GAP-092/097 completed (verdicts f19baf2b/ab1ac4e0) + async tier2 jobs dispatched."
 }
