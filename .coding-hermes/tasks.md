@@ -2358,7 +2358,7 @@ The combined shared-DB MLS+handler sweep is the AC the worker could not finish i
 - `task create DF-HERMES-CANOPY-35 …` + `task start` **before** implementation.
 - `task complete` after the commit landed → **Tier 2 verdict `708539fe` = PASS** ("All sub-requirements
   verified: three new MLS tests PASS (not SKIP), build/vet clean, migration 000048 adds nullable group_secret
-  with up+down, dated docs amendments present, no AGENTS.md changes."). Verdict id recorded on the board row.
+  with up+down, dated docs amendments present, no AGENTS.md changes."). Verdict id recorded on the board row; the verdict ARTIFACT directory id differs () — both are cited, per this repo's known printed-id vs dir-id divergence. Artifact confirms tier1 PASS (secrets/go_build/go_lint/go_tests) + tier2 COMPLETE on commit 63e7d23d.
 
 ### CI + push
 - Content commit `63e7d23d` pushed to **origin + gitlab**; closeout `f05b3c09`; verdict-record commit `3fb032dc`.
