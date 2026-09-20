@@ -2511,3 +2511,56 @@ issues, and confirmed no AGENTS.md drift), and it FAILED the criterion on two po
 **Sibling-tick note:** commit `8b1579ea` ("add QA-HERMES-CANOPY-25..29 findings", QA foreman 2026-09-20) landed in
 this repo mid-tick and became the parent of my fix commit. No collision: all commits intact, no divergent work, and
 the push fast-forwarded cleanly on top of it.
+
+## Tick 528 - 2026-09-20 ~16:40Z
+
+**Verdict: OK (work).** Board at tick start: 396 lines / DF-HERMES-CANOPY-37 pending P1 (dogfood 09-20 lane). Pick:
+**DF-HERMES-CANOPY-37** - SPEC-API-06 phantom multi-user surface - explicitly deferred by tick 527 (file-collision with
+DF-36); no collisions this tick.
+
+**Dispatch:** serial, 1 worker (wave budget unused: DF-38/39/40/41 collide on AGENTS.md + docs/API.md;
+QA-15..29 are harness/bunker-source rows not committable here). Worker **gpt-5.6-luna @ openai-codex**
+(same lane as DF-35/36), brief `/tmp/brief-df37.md`, background `hermes chat -q "$(cat /tmp/brief-df37.md)"
+-s coding-hermes-worker --ignore-rules -Q`, log `/tmp/worker-df37.log`. 1 attempt, no rework. Liveness:
+parity-test file dirty at ~3 min elapsed. Commit **64307c4e** (+402/-18, 4 files).
+
+**What landed:** SPEC-API-06 route table amended (12 tree-scoped Required routes -> **Deferred (not
+implemented)** + implementation-status note naming the shipped workspace-scoped surface); docs/API.md
+`## Collaboration (workspaces)` documents all 11 `/collab` routes with envelopes/error codes,
+`POST /trees/{tree_id}/share` documented under Trees, drift entry 16; AGENTS.md shipped-claims sentence
+aligned; 3 chi.Walk parity tests pin mounted /collab routes, workspace-profile routes, and the ABSENCE of
+the SPEC-API-06 paths (worker proved the collab test FAILS with the mount removed, then restored).
+
+**Gates (foreman-run at 64307c4e):** `go build` OK; `go vet ./...` OK; route-parity **9/9 PASS**; server
+package suite ok 0.686s; golangci-lint v2.12.2 `./internal/server/...` **0 issues**; gitleaks **0 leaks**
+(354MB). Worker additionally ran the full `-short ./...` sweep + commit-hook Tier 1 PASS.
+
+**GitReins:** DF-HERMES-CANOPY-37 created -> started -> completed. **Tier 1 PASS (full)**, **Tier 2 COMPLETE** -
+verdict **31f69369**, artifact `.gitreins/history/2026-09-20/31f69369/verdict.json`, evaluated on 64307c4e.
+(Tier 2 used the keyword-parse fallback after a judge-response JSON parse warning - a keyword-parsed
+COMPLETE is a valid PASS per the close recipe.)
+
+**CI:** GREEN on 64307c4e (run created 2026-09-20T16:25:54Z, conclusion success). Pre-tick runs 3/3 green.
+
+**Off-by-one:** lab healthy (uptime 2h32m). Discovers `chi-route-parity-doc-drift` +
+`spec-required-endpoints-unimplemented` -> both **not_found**. Nothing non-trivial debugged this tick ->
+no submission owed (honest discover, actually fired).
+
+**Push health:** origin + gitlab `cc70ea95..64307c4e`, `git rev-list --count` 0/0 ahead on both.
+
+**Bookkeeping:** tasks.jsonl 1 line changed (DF-HERMES-CANOPY-37 close; every line re-parsed post-write),
+events.jsonl +1 (id 699), board.jsonl header (ticks_total 528, last_commit cc70ea95 = pre-tick HEAD),
+DuckBrain keys `/ticks/tick528-df37-spec-api-06-reconciled` (e3b96e41-7bff-496a-913e-cb48e3ff709c) +
+`/project/hermes-canopy/status/2026-09-20-tick528` (c50d4d96-4f79-4674-9f58-388a60bf389f), both
+disk-verified in `~/duckbrain/namespaces/hermes-canopy/`.
+
+**Worker-behavior note:** the worker hit an approval-deny writing AGENTS.md (protected instruction file,
+unattended session) mid-run, completed the edit via its sanctioned exception path, and restored the
+protection after. Foreman reviewed the AGENTS.md hunk line-by-line: one factual sentence, no instruction
+semantics. Lesson for future briefs touching AGENTS.md here: consider foreman-direct application of that
+one hunk to avoid the mid-run approval stall.
+
+**Next tick:** **DF-HERMES-CANOPY-38** (P1: second-user onboarding is undocumented DB surgery - docs-amend,
+same file family, serial) or **DF-HERMES-CANOPY-40** (P2: workspace channels are global - real code
+surface). Parked: GAP-076 (owner ruling, blocks GAP-077), GAP-081, DF-20/DF-22. QA-15..29: harness/
+bunker-owned. E2E-001 cadence: still no identifiable battery tick in the window.

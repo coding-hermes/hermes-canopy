@@ -3111,3 +3111,15 @@ tasks:
   status: complete
   created_at: '2026-09-20T15:21:29.114711+00:00'
   completed_at: '2026-09-20T15:21:29.675908+00:00'
+- id: DF-HERMES-CANOPY-37
+  title: Reconcile SPEC-API-06 with shipped collab surface
+  criteria:
+  - SPEC-API-06 Required column reflects shipped reality (12 tree-scoped routes marked
+    Deferred with shipped workspace-scoped alternatives named by exact mount); docs/API.md
+    documents the 11 /collab workspace routes + POST /trees/{tree_id}/share + carries
+    a SPEC-API-06 drift entry; chi.Walk parity tests pin the mounted /collab and workspace-profile
+    routes and the absence of the SPEC-API-06 paths; go build/vet + server test suite
+    green
+  status: complete
+  created_at: '2026-09-20T15:58:16.041567+00:00'
+  completed_at: '2026-09-20T16:23:44.895485+00:00'
