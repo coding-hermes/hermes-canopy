@@ -3003,3 +3003,12 @@ tasks:
   status: complete
   created_at: '2026-09-19T19:44:29.068731+00:00'
   completed_at: '2026-09-19T19:55:27.547365+00:00'
+- id: GAP-093
+  title: Human-first onboarding pass
+  criteria:
+  - Quickstart, empty-state UI, import/create first-run path, and a first-run E2E
+    test that actually walks the human path (not skipped on a populated DB) satisfy
+    the board criteria
+  status: complete
+  created_at: '2026-09-20T00:40:02.271778+00:00'
+  completed_at: '2026-09-20T00:57:53.732653+00:00'
