@@ -1,9 +1,15 @@
 # SPEC-API-06 — Multi-User & Profile Endpoints
 
-> **Status:** Spec | **Blocks:** BE-08 (Profile Routing), BE-11 (HTTP Router), FE-07 (Multi-User Features), INT-02 (Multi-User Integration)
+> **Status:** Amended 2026-09-20 — the tree-scoped routes below are Deferred (not implemented) | **Blocks:** BE-08 (Profile Routing), BE-11 (HTTP Router), FE-07 (Multi-User Features), INT-02 (Multi-User Integration)
 > **References:** SPEC-DM-04 (user/profile DDL), SPEC-DM-01 (trees/nodes), SPEC-DM-03 (approvals — references users/profiles), ARCHITECTURE.md §2.2, SPEC-API-05 (approval endpoints)
 
 ---
+
+> **Implementation status (2026-09-20):** The twelve tree-scoped endpoints in
+> this document were reproduced as raw 404 responses (with no error envelope)
+> at HEAD `85eaf18` during the dogfood run. They were never mounted. This status
+> amendment follows finding DF-HERMES-CANOPY-37: the shipped product intent is
+> provided by the workspace-scoped collaboration surface described in §3.2.
 
 ## 1. Purpose
 
@@ -32,22 +38,47 @@ Canopy has two participant types: **humans** (user accounts) and **Hermes profil
 
 ## 3. Endpoints
 
-### 3.1 Route Summary
+### 3.1 Deferred (not implemented) route summary
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/trees/{tree_id}/invite` | Required | Invite a user or profile to a tree |
-| GET | `/trees/{tree_id}/invites` | Required | List pending invites for a tree |
-| DELETE | `/trees/{tree_id}/invites/{invite_id}` | Required | Cancel a pending invite |
-| POST | `/invites/{token}/accept` | Required | Accept an invite via token |
-| POST | `/invites/{token}/decline` | Required | Decline an invite via token |
-| GET | `/trees/{tree_id}/members` | Required | List tree members |
-| PATCH | `/trees/{tree_id}/members/{member_id}` | Required | Update member role or settings |
-| DELETE | `/trees/{tree_id}/members/{member_id}` | Required | Remove a member from the tree |
-| GET | `/profiles` | Required | List profiles owned by authenticated user |
-| POST | `/profiles` | Required | Create a new Hermes profile |
-| PATCH | `/profiles/{profile_id}` | Required | Update a profile |
-| PATCH | `/trees/{tree_id}/profiles/{profile_id}/visibility` | Required | Toggle profile visibility per tree |
+The following twelve endpoint definitions are retained as the deferred
+implementation contract. They are not mounted today.
+
+| Method | Path | Auth | Status | Description |
+|--------|------|------|--------|-------------|
+| POST | `/trees/{tree_id}/invite` | Required | **Deferred (not implemented)** | Invite a user or profile to a tree |
+| GET | `/trees/{tree_id}/invites` | Required | **Deferred (not implemented)** | List pending invites for a tree |
+| DELETE | `/trees/{tree_id}/invites/{invite_id}` | Required | **Deferred (not implemented)** | Cancel a pending invite |
+| POST | `/invites/{token}/accept` | Required | **Deferred (not implemented)** | Accept an invite via token |
+| POST | `/invites/{token}/decline` | Required | **Deferred (not implemented)** | Decline an invite via token |
+| GET | `/trees/{tree_id}/members` | Required | **Deferred (not implemented)** | List tree members |
+| PATCH | `/trees/{tree_id}/members/{member_id}` | Required | **Deferred (not implemented)** | Update member role or settings |
+| DELETE | `/trees/{tree_id}/members/{member_id}` | Required | **Deferred (not implemented)** | Remove a member from the tree |
+| GET | `/profiles` | Required | **Deferred (not implemented)** | List profiles owned by authenticated user |
+| POST | `/profiles` | Required | **Deferred (not implemented)** | Create a new Hermes profile |
+| PATCH | `/profiles/{profile_id}` | Required | **Deferred (not implemented)** | Update a profile |
+| PATCH | `/trees/{tree_id}/profiles/{profile_id}/visibility` | Required | **Deferred (not implemented)** | Toggle profile visibility per tree |
+
+### 3.2 Current implementation: workspace collaboration
+
+The shipped collaboration product intent uses workspace scope. Its exact mounts
+are:
+
+- `/api/v1/collab/` — workspace collection: `GET` lists the caller's
+  workspaces and `POST` creates one.
+- `/api/v1/collab/{workspace_id}` — `GET`, `PATCH`, and `DELETE` a workspace.
+- `/api/v1/collab/{workspace_id}/members` — `GET` members;
+  `PATCH`/`DELETE /members/{user_id}` manage a member.
+- `/api/v1/collab/{workspace_id}/invite`, `/join`, and `/leave` — invitation,
+  join, and leave actions.
+- `/api/v1/workspaces/{workspace_id}/profiles` — the shipped workspace-scoped
+  profile routes: `GET`/`POST` the collection, `GET /active`, and
+  `DELETE /{profile_name}`.
+- `POST /api/v1/trees/{tree_id}/share` — the shipped tree-sharing route; the
+  tree owner resolves an invitee by `user_id` UUID first, then by email.
+
+These mounts are the current implementation and are not substitutes that should
+be silently read as the deferred tree-scoped contract above. The API reference
+in `docs/API.md` documents their request and response envelopes.
 
 ---
 

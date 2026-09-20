@@ -26,7 +26,7 @@ Technical power users working with AI agents across multi-session projects who n
 Single-user, desktop-first PWA + local server. Branch from any message. Multi-node synthesis. Searchable topics with #references. Visible context manifest + token budget. Three Cards (compact, expanded, iteration). Import/export. Basic plugin sandbox.
 
 ## Shipped beyond the MVP framing
-Workspace CRUD, profiles, workspace channels, membership checks and MLS group encryption (SPEC-FTR-01/03) are live behind auth. The primary UX is still desktop-first single-user, but the multi-user surfaces are no longer "deferred".
+Workspace CRUD, profiles, workspace channels, membership checks and MLS group encryption (SPEC-FTR-01/03) are live behind auth. Tree-scoped invite/member/profile endpoints from SPEC-API-06 are not shipped; the shipped collaboration surface is workspace-scoped `/collab` plus `POST /api/v1/trees/{id}/share`. The primary UX is still desktop-first single-user, but these implemented multi-user surfaces are no longer "deferred".
 
 ## Deferred (Post-MVP)
 The full multi-user collaboration UX and multi-user CRDTs (the workspace/profile/channel/MLS surfaces listed above have shipped), approval gates, arbitrary JS plugins, multi-agent federation, all deployment modes beyond local server.

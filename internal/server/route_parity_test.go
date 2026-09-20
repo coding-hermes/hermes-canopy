@@ -664,6 +664,108 @@ func TestRouteParityDocumentedReviewRoutes(t *testing.T) {
 	}
 }
 
+// TestRouteParityCollabRoutes pins the workspace-scoped collaboration mount
+// to every route registered by CollabHandler.Routes. This is intentionally a
+// route-table check rather than an HTTP probe: auth middleware answers before
+// chi's NotFound handler, so a missing route can otherwise look like a normal
+// authentication failure.
+func TestRouteParityCollabRoutes(t *testing.T) {
+	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1/collab")
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+
+	want := []string{
+		"GET /api/v1/collab",
+		"POST /api/v1/collab",
+		"GET /api/v1/collab/{}",
+		"PATCH /api/v1/collab/{}",
+		"DELETE /api/v1/collab/{}",
+		"GET /api/v1/collab/{}/members",
+		"PATCH /api/v1/collab/{}/members/{}",
+		"DELETE /api/v1/collab/{}/members/{}",
+		"POST /api/v1/collab/{}/invite",
+		"POST /api/v1/collab/{}/join",
+		"POST /api/v1/collab/{}/leave",
+	}
+	var missing []string
+	for _, route := range want {
+		if !mounted[route] {
+			missing = append(missing, route)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("workspace collaboration route(s) are not mounted:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
+// TestRouteParityWorkspaceProfileRoutes pins the current workspace-scoped
+// profile surface. SPEC-API-06's unscoped profile routes are a separate,
+// deferred surface and are checked for absence below.
+func TestRouteParityWorkspaceProfileRoutes(t *testing.T) {
+	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1/workspaces/{}/profiles")
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+
+	want := []string{
+		"GET /api/v1/workspaces/{}/profiles",
+		"POST /api/v1/workspaces/{}/profiles",
+		"GET /api/v1/workspaces/{}/profiles/active",
+		"DELETE /api/v1/workspaces/{}/profiles/{}",
+	}
+	var missing []string
+	for _, route := range want {
+		if !mounted[route] {
+			missing = append(missing, route)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("workspace profile route(s) are not mounted:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
+// TestSpecAPI06RequiredRoutesAbsent pins the other side of the parity
+// decision: the twelve tree-scoped routes retained in SPEC-API-06 are not
+// mounted. If a future implementation adds one, this test fails until the
+// specification and API reference are amended to describe the new surface.
+func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
+	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1")
+	if walkedTotal < 40 {
+		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+
+	deferred := []string{
+		"POST /api/v1/trees/{}/invite",
+		"GET /api/v1/trees/{}/invites",
+		"DELETE /api/v1/trees/{}/invites/{}",
+		"POST /api/v1/invites/{}/accept",
+		"POST /api/v1/invites/{}/decline",
+		"GET /api/v1/trees/{}/members",
+		"PATCH /api/v1/trees/{}/members/{}",
+		"DELETE /api/v1/trees/{}/members/{}",
+		"GET /api/v1/profiles",
+		"POST /api/v1/profiles",
+		"PATCH /api/v1/profiles/{}",
+		"PATCH /api/v1/trees/{}/profiles/{}/visibility",
+	}
+	var mountedDeferred []string
+	for _, route := range deferred {
+		if mounted[route] {
+			mountedDeferred = append(mountedDeferred, route)
+		}
+	}
+	if len(mountedDeferred) > 0 {
+		t.Fatalf("SPEC-API-06 deferred route(s) are mounted:\n  %s", strings.Join(mountedDeferred, "\n  "))
+	}
+}
+
+// TestRouteParitySpecAPI06RequiredRoutesAbsent aliases the explicit absence
+// test into the TestRouteParity acceptance selector used by the repository.
+func TestRouteParitySpecAPI06RequiredRoutesAbsent(t *testing.T) {
+	TestSpecAPI06RequiredRoutesAbsent(t)
+}
+
 // TestRouteParityTreeScopedReadsAreMembershipGated pins the DF-HERMES-CANOPY-36
 // follow-up discovered by the Tier 2 judge: two tree-scoped READ surfaces were
 // mounted WITHOUT the membership gate that every sibling tree route carries.

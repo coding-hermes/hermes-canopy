@@ -289,6 +289,53 @@ DELETE /api/v1/trees/{tree_id}
 
 **Error codes:** `NOT_TREE_OWNER` (403), `TREE_NOT_FOUND` (404)
 
+### Share Tree
+
+```
+POST /api/v1/trees/{tree_id}/share
+```
+
+Tree sharing is owner-only. The endpoint resolves an invitee by `user_id`
+(UUID) first when present, otherwise by `email`; if both are supplied,
+`user_id` takes precedence. The handler's role-like request field is named
+`permission` (not `role`) and accepts `viewer`, `editor`, or `admin`; an omitted
+or unknown value defaults to the least-privileged `viewer` role. `message` is
+accepted as an optional client message but is not persisted in the share record.
+
+**Request body:**
+```json
+{
+  "user_id": "uuid (optional)",
+  "email": "string (optional)",
+  "permission": "viewer | editor | admin (optional)",
+  "message": "string (optional)"
+}
+```
+
+At least one of `user_id` or `email` is required. The response is a bare
+share record (not wrapped in `{"share": ...}`):
+
+**Response (201):**
+```json
+{
+  "treeId": "uuid",
+  "userId": "uuid",
+  "email": "friend@example.com",
+  "permission": "viewer",
+  "memberId": "uuid"
+}
+```
+
+`user_id` is resolved before `email`, and a successful share creates the tree
+membership immediately; there is no separate tree invite-token response.
+
+**Error codes:** `INVALID_TREE_ID` (400), `INVALID_BODY` (400),
+`INVALID_USER_ID` (400), `VALIDATION_ERROR` (400), `TOKEN_MISSING` (401),
+`NOT_TREE_OWNER` (403), `TREE_NOT_FOUND` (404), `USER_NOT_FOUND` (404),
+`TREE_DELETED` (410), `ALREADY_MEMBER` (409), `SERVICE_UNAVAILABLE` (503),
+`NOT_IMPLEMENTED` (501 when the server is built without share dependencies),
+`INTERNAL_ERROR` (500).
+
 ---
 
 ## Nodes
@@ -1856,6 +1903,197 @@ DELETE /api/v1/workspaces/{workspace_id}/profiles/{profile_name}
 
 ---
 
+## Collaboration (workspaces)
+
+Mounted at `/api/v1/collab`. All eleven routes require
+`Authorization: Bearer <token>`. This is the shipped collaboration surface;
+it is workspace-scoped rather than the deferred tree-scoped routes retained in
+SPEC-API-06. Unless a route says otherwise, failures use the standard
+`{"error":{"code":"…","message":"…"}}` envelope.
+
+### Route summary
+
+| Method | Path | Auth | Success |
+|---|---|---|---|
+| GET | `/api/v1/collab` | Bearer | 200 `{"workspaces":[…]}` |
+| POST | `/api/v1/collab` | Bearer | 201 `{"workspace_id":…,"name":…,"role":…,"members":[…]}` |
+| GET | `/api/v1/collab/{workspace_id}` | Bearer | 200 bare workspace object |
+| PATCH | `/api/v1/collab/{workspace_id}` | Bearer | 200 bare updated workspace object |
+| DELETE | `/api/v1/collab/{workspace_id}` | Bearer | 204, no body |
+| GET | `/api/v1/collab/{workspace_id}/members` | Bearer | 200 `{"members":[…]}` |
+| PATCH | `/api/v1/collab/{workspace_id}/members/{user_id}` | Bearer | 200 `{"ok":true}` |
+| DELETE | `/api/v1/collab/{workspace_id}/members/{user_id}` | Bearer | 204, no body |
+| POST | `/api/v1/collab/{workspace_id}/invite` | Bearer | 201 `{"token":…,"expires_at":…}` |
+| POST | `/api/v1/collab/{workspace_id}/join` | Bearer | 200 `{"ok":true}` |
+| POST | `/api/v1/collab/{workspace_id}/leave` | Bearer | 204, no body |
+
+### Workspace object and members
+
+Workspace responses are bare objects with the fields `id`, `owner_id`, `name`,
+`tree_id` (omitted when unbound), `members`, `approval_ttl`, `created_at`, and
+`updated_at`. A member has `user_id`, `handle`, numeric `role`, and
+`joined_at`. The list routes return non-null arrays, including when the result
+is empty.
+
+### List workspaces
+
+```
+GET /api/v1/collab
+```
+
+**Response (200):** `{"workspaces":[…]}`. There is no request body.
+
+**Error codes:** `TOKEN_MISSING` (401), `INTERNAL_ERROR` (500).
+
+### Create workspace
+
+```
+POST /api/v1/collab
+```
+
+**Request body:** `{"name":"string"}`.
+
+**Response (201):**
+```json
+{
+  "workspace_id": "uuid",
+  "name": "Project",
+  "role": "admin",
+  "members": [
+    {"user_id": "uuid", "handle": "bane", "role": 2, "joined_at": "RFC3339"}
+  ]
+}
+```
+
+**Error codes:** `TOKEN_MISSING` (401), `INVALID_BODY` (400),
+`INTERNAL_ERROR` (500).
+
+### Get workspace
+
+```
+GET /api/v1/collab/{workspace_id}
+```
+
+**Response (200):** Bare workspace object. No request body.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `TOKEN_MISSING` (401),
+`NOT_WORKSPACE_MEMBER` (403), `NOT_FOUND` (404), `INTERNAL_ERROR` (500).
+
+### Update workspace
+
+```
+PATCH /api/v1/collab/{workspace_id}
+```
+
+**Request body:** partial JSON; supported fields are `name`, `description`,
+`tree_id`, and `approval_ttl` (seconds).
+
+**Response (200):** Bare updated workspace object.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `INVALID_BODY` (400),
+`TOKEN_MISSING` (401), `PERMISSION_DENIED` (403), `NOT_FOUND` (404),
+`INTERNAL_ERROR` (500).
+
+### Delete workspace
+
+```
+DELETE /api/v1/collab/{workspace_id}
+```
+
+**Response:** `204 No Content`.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `TOKEN_MISSING` (401),
+`PERMISSION_DENIED` (403), `NOT_FOUND` (404), `INTERNAL_ERROR` (500).
+
+### List workspace members
+
+```
+GET /api/v1/collab/{workspace_id}/members
+```
+
+**Response (200):** `{"members":[…]}` using the member shape above.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `TOKEN_MISSING` (401),
+`NOT_WORKSPACE_MEMBER` (403), `NOT_FOUND` (404), `INTERNAL_ERROR` (500).
+
+### Update a member role
+
+```
+PATCH /api/v1/collab/{workspace_id}/members/{user_id}
+```
+
+**Request body:** `{"role":0|1|2}` where the collaboration roles are viewer,
+editor, and admin respectively.
+
+**Response (200):** `{"ok":true}`.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `INVALID_USER_ID` (400),
+`INVALID_BODY` (400), `TOKEN_MISSING` (401), `PERMISSION_DENIED` (403),
+`NOT_FOUND` (404), `INTERNAL_ERROR` (500).
+
+### Remove a member
+
+```
+DELETE /api/v1/collab/{workspace_id}/members/{user_id}
+```
+
+**Response:** `204 No Content`.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `INVALID_USER_ID` (400),
+`TOKEN_MISSING` (401), `PERMISSION_DENIED` (403), `NOT_FOUND` (404),
+`INTERNAL_ERROR` (500).
+
+### Generate an invitation
+
+```
+POST /api/v1/collab/{workspace_id}/invite
+```
+
+No request body is read. The caller must be an admin.
+
+**Response (201):**
+```json
+{
+  "token": "url-safe-token",
+  "expires_at": "RFC3339"
+}
+```
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `TOKEN_MISSING` (401),
+`PERMISSION_DENIED` (403), `NOT_FOUND` (404), `DUPLICATED` (409),
+`INTERNAL_ERROR` (500).
+
+### Join a workspace
+
+```
+POST /api/v1/collab/{workspace_id}/join?token=<invitation-token>
+```
+
+No request body is read. The invitation token is required as the `token` query
+parameter.
+
+**Response (200):** `{"ok":true}`.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `INVALID_TOKEN` (400),
+`TOKEN_MISSING` (401), `NOT_FOUND` (404), `DUPLICATED` (409),
+`INTERNAL_ERROR` (500).
+
+### Leave a workspace
+
+```
+POST /api/v1/collab/{workspace_id}/leave
+```
+
+No request body is read. The workspace owner cannot leave.
+
+**Response:** `204 No Content`.
+
+**Error codes:** `INVALID_WORKSPACE_ID` (400), `TOKEN_MISSING` (401),
+`PERMISSION_DENIED` (403), `NOT_FOUND` (404), `NOT_WORKSPACE_MEMBER` (403),
+`INTERNAL_ERROR` (500).
+
+---
+
 ## Transports
 
 Mounted at `/api/v1/transports`. All require auth.
@@ -2800,3 +3038,16 @@ actual code:
     deterministically from the name/PR so they survive a restart), and the review
     verdict is a deterministic simulation derived from the PR string — no model
     is called.
+
+16. **SPEC-API-06 multi-user routes:** SPEC-API-06 marked twelve tree-scoped
+    invite, membership, and profile routes as Required, but none is mounted on
+    the real router. Live probes and the route table both show raw chi 404s
+    with no error envelope for those paths. The shipped collaboration surface
+    is the workspace-scoped `/api/v1/collab` mount (workspace CRUD, members,
+    invitations, join, and leave), plus workspace profiles at
+    `/api/v1/workspaces/{workspace_id}/profiles` and tree sharing at
+    `POST /api/v1/trees/{tree_id}/share`. The SPEC-API-06 Required column was
+    amended to Deferred (not implemented) in this commit; the parity tests
+    `TestRouteParityCollabRoutes`, `TestRouteParityWorkspaceProfileRoutes`,
+    and `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
+    sides.
