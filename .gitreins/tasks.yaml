@@ -3123,3 +3123,15 @@ tasks:
   status: complete
   created_at: '2026-09-20T15:58:16.041567+00:00'
   completed_at: '2026-09-20T16:23:44.895485+00:00'
+- id: DF-HERMES-CANOPY-38
+  title: Auto-provision users rows from dev-secret JWT subs on first request (second-user
+    onboarding 500s)
+  criteria:
+  - AC1 dev-secret JWT with unseen UUID sub can POST /api/v1/collab 2xx (no 500);
+    AC2 users row id=sub,hermes_user_id=sub exists; AC3 idempotent re-requests; AC4
+    non-dev secret unknown sub gets 4xx actionable error not blanket 500; AC5 existing
+    dev-user tests stay green; AC6 new tests fail when fix reverted; AC7 build/vet/lint
+    clean
+  status: complete
+  created_at: '2026-09-20T16:51:45.862621+00:00'
+  completed_at: '2026-09-20T17:44:25.044275+00:00'
