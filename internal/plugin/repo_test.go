@@ -13,9 +13,9 @@ import (
 
 // These are integration tests: they require PostgreSQL and are skipped when
 // CANOPY_SKIP_INTEGRATION is set (testutil.SkipIfNoDB pattern).
-// Each test gets a fresh, uniquely-named database via NewIntegrationPool,
-// which runs all migrations (including 000022-000024) and drops the
-// database on cleanup.
+// Tests use one migrated database per test binary; NewSharedIntegrationPool
+// truncates it before each helper call, preserving the empty-schema isolation
+// contract without rebuilding all migrations for every repository test.
 
 func newTestRepo(t *testing.T) (*PGPluginRepo, uuid.UUID, uuid.UUID) {
 	t.Helper()
@@ -23,7 +23,7 @@ func newTestRepo(t *testing.T) (*PGPluginRepo, uuid.UUID, uuid.UUID) {
 		t.Skip("short mode: plugin PG integration")
 	}
 	testutil.SkipIfNoDB(t)
-	pool := testutil.NewIntegrationPool(t)
+	pool := testutil.NewSharedIntegrationPool(t)
 	repo := NewPGPluginRepo(pool)
 
 	userID, profileID := insertTestProfile(t, pool)
