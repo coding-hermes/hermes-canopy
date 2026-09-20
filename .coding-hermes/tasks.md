@@ -1,4 +1,18 @@
 
+## Dogfood Findings (2026-09-20)
+
+Verdict: PROMISING-BUT-ROUGH
+Promise: "Workspace CRUD, profiles, workspace channels, membership checks and MLS group encryption (SPEC-FTR-01/03) are live behind auth" (AGENTS.md).
+Angle: the multi-user collab stack — the one surface no prior run (08-17, 08-27, 09-10, 09-14, 09-16) had touched. Two identities (Alice/Bob JWTs), full lifecycle, HEAD 85eaf18 on a scratch DB (:5438/:8098). Full walk + recipe: `docs/dogfood/2026-09-20-integration.md`. Install leg (bunker las-bunker-03, agent 33c0cbb7, documented clone URL + `docker compose up -d --build`): RC=0 in 153s, /health 200 schema 47/47, authed API 200 — installability PROVEN, no SKIPPED row.
+
+- [P0] DF-HERMES-CANOPY-35 — MLS cross-member decryption is impossible: Encrypt derives the AES key from the SENDER's public key, Decrypt from the RECIPIENT's, so only the sender can read a ciphertext (Bob decrypting Alice's message → 500 "mls: gcm open: message authentication failed"). Key material is public/non-secret by construction; ratchet_tree is null; yet AGENTS.md claims SPEC-FTR-03 "SHIPPED". Real-use break of the headline collab claim.
+- [P1] DF-HERMES-CANOPY-36 — Tree share grants writes but not reads: after POST /trees/{id}/share → 201 (editor), the grantee's POST .../nodes works (seq 2/3, author visible to owner) while GET /trees/{id} still 403s NOT_TREE_OWNER. Sharing is half-wired; the tree list/GET path ignores tree_members.
+- [P1] DF-HERMES-CANOPY-37 — SPEC-API-06's "Required" invite/member endpoints are a phantom: /trees/{t}/invite, /trees/{t}/members, /invites/{token}/accept, ... all return chi's literal "404 page not found" (never mounted), while an UNDOCUMENTED /trees/{t}/share route does the (partial) job; docs/API.md has no /collab section at all.
+- [P1] DF-HERMES-CANOPY-38 — Second-user onboarding is undocumented DB surgery: any JWT sub without a users row reads fine (200) but its first write 500s on workspaces_owner_id_fkey with no client-visible hint; only user …0001 is auto-provisioned; the hermes_user_id=sub seeding convention lives only in bootstrap.go source.
+- [P2] DF-HERMES-CANOPY-39 — MLS provisioning is disjoint: MLS FKs need the profiles TABLE (no API path; only a SQL seed in mls_integration_test.go), while the API's profile endpoints write the unrelated profile_route table (one-active-per-workspace: activating Bob's profile silently deactivated Alice's); key-packages accepts/stores PRIVATE keys server-side; commit-proposals bumps epoch with zero proposals.
+- [P2] DF-HERMES-CANOPY-40 — Channels are global (any authenticated user reads/posts general+agents; not workspace-scoped despite the name) with no history replay for late joiners; member handles render as raw UUIDs.
+- [P3] DF-HERMES-CANOPY-41 — Install docs assume a root-owned docker.sock; rootless layouts need an undocumented DOCKER_HOST override, and the README's go 1.25+ prerequisite is false for the compose path.
+
 ## Dogfood Findings (2026-09-16)
 Verdict: PROMISING-BUT-ROUGH
 Promise: {"entry_point":"Go single binary `canopyd` (HTTP/JSON REST API server on :8091 + SSE event hub + embedded migrations, API-only — does NOT serve the PWA); companion entry points are the React/TS Vite PWA on :5173 (separate static serve in prod), CLI subcommands in the same binary (`canopyd serve|tree

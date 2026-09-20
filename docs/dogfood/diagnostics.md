@@ -266,3 +266,57 @@ even when each *instance* is fixed:
 - **Verified-fixed confirmations from this run:** GAP-068 (compose without
   .env) and GAP-066 (topic root_node_id) re-tested at HEAD 9bbe3dc — both
   hold on a fresh clone + fresh DB.
+
+## 8. 2026-09-20 update — the collab/MLS surface is a façade on real plumbing
+
+**What this section teaches:** the difference between "the plumbing works" and
+"the feature works". Canopy's multi-user stack is both at once: the guards,
+envelopes and lifecycle state machine are real code doing real things, while
+the two flagship promises (MLS encryption, SPEC-API-06 invites) are shape
+without substance. A user asking "can two people collaborate in Canopy?"
+deserves this distinction, not a test-suite color.
+
+**How the surface is built.** Three disjoint identity stores: `users` (JWT
+sub-keyed; only `…0001` auto-provisioned by dev bootstrap), the `profiles`
+table (UUID-keyed, MLS's FK target, no API path), and `profile_route`
+(name-keyed per-workspace routing rows — what the "profiles" API actually
+writes). Workspace membership lives in `workspace_members` (invites =
+random tokens, 7-day TTL). Tree sharing adds `tree_members` rows via an
+undocumented `/trees/{t}/share` route. Channels are an in-memory registry —
+global, not workspace-scoped, no persistence.
+
+**The MLS lesson (the one worth repeating).** `internal/mls/service.go`
+passes an interface-shaped test suite while being unable to deliver a message
+between two members: Encrypt keys on the sender's public key, Decrypt on the
+recipient's — so every ciphertext has exactly one reader, its author. The
+envelope types, cipher-suite strings and `mls_ciphertext_v1` wire formats are
+faithful; the substance is per-sender AES-GCM with keys stored in plaintext
+next to the data they "protect". Errors hit live: cross-decrypt →
+`mls: gcm open: cipher: message authentication failed` (500, not even a
+4xx); epoch-bump-on-join invalidates in-flight ciphertexts
+(`ErrEpochMismatch`); commit-proposals bumps the epoch with zero proposals.
+**Right way:** judge "shipped" crypto by a cross-principal round-trip test
+(A encrypts → B decrypts), never by schema/shape parity — the same lesson as
+the burndown-chart JSON-island case: read the payload, not the picture.
+
+**The onboarding lesson.** A signed JWT authenticates (200 on reads) but the
+user's first write dies on `workspaces_owner_id_fkey` with a silent 500; the
+fix (a `users` row with `hermes_user_id = sub`) exists only in
+bootstrap.go source. GAP-064 fixed exactly this for user `…0001`; the
+multi-identity surfaces grew without inheriting the provisioning story.
+**Right way:** any surface keyed to an identity needs (a) auto-provision on
+first authenticated use or (b) a documented seed path — and FK failures on
+identity rows should map to a 4xx that names the missing row.
+
+**Install leg (what held up).** Fresh clone (documented public GitHub URL) →
+`docker compose up -d --build` → RC=0 in 153s → `/health` 200 schema 47/47 →
+authed API 200 on a virgin DB. GAP-068 (no `.env` needed) still holds. New
+friction: docs assume a root-owned docker.sock; rootless layouts need
+`DOCKER_HOST` (undocumented). Compose-path users don't need `go 1.25+`.
+
+**What actually works (so nobody re-learns this):** workspace CRUD with
+correct 401/403/404 envelopes; invite-token join (role 1 vs owner role 2);
+live cross-user channel delivery over SSE (event `channel_message` with full
+payload within one second); tree share → grantee node writes visible to the
+owner; MLS group create/join/leave/epoch mechanics and the
+`mls:welcome_message` SSE broadcast.

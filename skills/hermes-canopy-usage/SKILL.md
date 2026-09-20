@@ -6,8 +6,9 @@ description: >-
   gateway surface (GAP-050), and the pitfalls that waste time (stale deployed
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
-  Written from the 2026-08-17, 08-27, 09-10 and 09-14 deep dogfood runs.
-version: 2.2.0
+  Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16 and 09-20 deep
+  dogfood runs.
+version: 2.3.0
 category: software-development
 ---
 
@@ -102,6 +103,38 @@ All require auth AND an acting profile (fresh DBs: see pitfall #9 seed).
 | GET | `/api/v1/viewers` | built-in registry (audio_video, code, image, json, …) with `supportsMime`/`supportsExtensions` |
 | GET | `/api/v1/viewers/{slug}` | one viewer |
 | POST | `/api/v1/viewers/dispatch` | JSON `{"file_id":"…","tree_id":"…"}` → 200 `{viewerSlug, renderType, bundlePath, isBuiltIn,…}` |
+
+## Multi-user collab / workspace / MLS surface (verified 2026-09-20)
+
+Two-identity walkthrough recipe (Alice + Bob JWTs, distinct subs), the working
+sequence and every verified shape live in `docs/dogfood/2026-09-20-integration.md`.
+Short version:
+
+- **Second+ users need hand-seeded `users` rows** on fresh DBs (bootstrap only
+  provisions `…0001`): `INSERT INTO users (id, hermes_user_id, email,
+  display_name, is_active) VALUES ('<sub>','<sub>','<e>','<n>',true)` — the
+  `hermes_user_id = JWT sub` convention is only in `internal/db/bootstrap.go`.
+  Without it: reads 200, first WRITE 500s on `workspaces_owner_id_fkey`.
+- **Workspace collab (real, `/api/v1/collab`):** POST create (admin), GET
+  non-member → 403 `NOT_WORKSPACE_MEMBER`, PATCH, POST `/{ws}/invite` →
+  `{token,expires_at}` (7d), POST `/{ws}/join?token=` → 200, GET `/{ws}/members`
+  → roles admin=2/member=1. **NOT in docs/API.md at all** (read
+  `internal/handler/collab_handler.go`).
+- **Tree share:** `POST /api/v1/trees/{id}/share`
+  `{"email":"…","permission":"viewer|editor|admin"}` → 201. Grantee node
+  WRITES work; GET tree still 403s (DF-36). SPEC-API-06's own invite/member
+  endpoints are NOT mounted (404 page not found — DF-37).
+- **MLS (DF-35: mechanics only, NOT real MLS):** create/join/leave/epoch and
+  the `mls:welcome_message` SSE broadcast work; **cross-member decrypt is
+  impossible** (sender-only; other members get 500 gcm auth failed).
+  `ratchet_tree` null; NOT RFC 9420 despite the shapes. Requires `profiles`
+  TABLE rows — no API creates them; seed SQL is in
+  `internal/handler/mls_integration_test.go` (`ensureProfile`). The API's
+  "profiles" endpoints write `profile_route` (unrelated concept;
+  one-active-per-workspace).
+- **Channels (`/api/v1/workspace/channels`):** global `general`/`agents` for
+  ANY authenticated user (not workspace-scoped); POST `/{ch}/message` → 202;
+  SSE `/{ch}/feed` is LIVE-ONLY (no history replay — connect before sending).
 
 ## Known pitfalls (updated 2026-09-10)
 
