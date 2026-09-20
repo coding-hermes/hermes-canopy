@@ -43,10 +43,15 @@
       "provider": "openai-codex",
       "brief": "/tmp/brief-df41.md",
       "log": "/tmp/worker-df41.log",
-      "file_scope": ["README.md", "docs/SELF_HOST.md"],
+      "file_scope": [
+        "README.md",
+        "docs/SELF_HOST.md"
+      ],
       "merge": "pending"
     }
   ],
   "disjointness": "middle-out: 41 touches README.md + docs/SELF_HOST.md only (top band, docs); 40 touches internal/{sse,handler,service} + docs/API.md. No shared import chain (docs vs engine packages); no file overlap.",
-  "recovery_notes": "If this tick dies: poll git log in each worktree path, verify each branch tip against .coding-hermes/board/tasks.jsonl rows for DF-40/DF-41, merge serially per the foreman merge checklist."
+  "recovery_notes": "If this tick dies: poll git log in each worktree path, verify each branch tip against .coding-hermes/board/tasks.jsonl rows for DF-40/DF-41, merge serially per the foreman merge checklist.",
+  "finished_at": "2026-09-20T22:47:00-05:00",
+  "recovery": "recovered by tick hermes-canopy-2026-09-20-22-45-48: both branches verified merged (790dad3d, 539e436f), board rows complete, worktrees+branches already removed, remote parity 0 unpushed"
 }
