@@ -35,8 +35,12 @@ import (
 
 // multiUserAuthHeader creates a Bearer token for the given user ID.
 func multiUserAuthHeader(t *testing.T, userID uuid.UUID) string {
+	return multiUserAuthHeaderWithSecret(t, "canopy-dev-secret", userID)
+}
+
+func multiUserAuthHeaderWithSecret(t *testing.T, secret string, userID uuid.UUID) string {
 	t.Helper()
-	tok := signedToken(t, "canopy-dev-secret", jwt.MapClaims{
+	tok := signedToken(t, secret, jwt.MapClaims{
 		"sub": userID.String(),
 		"exp": time.Now().Add(time.Hour).Unix(),
 	})
@@ -45,6 +49,10 @@ func multiUserAuthHeader(t *testing.T, userID uuid.UUID) string {
 
 // multiUserRequest builds an authenticated request with the given user's JWT.
 func multiUserRequest(t *testing.T, srvURL, method, path string, userID uuid.UUID, body any) *http.Request {
+	return multiUserRequestWithSecret(t, srvURL, method, path, userID, body, "canopy-dev-secret")
+}
+
+func multiUserRequestWithSecret(t *testing.T, srvURL, method, path string, userID uuid.UUID, body any, secret string) *http.Request {
 	t.Helper()
 	var r *http.Request
 	var err error
@@ -62,7 +70,7 @@ func multiUserRequest(t *testing.T, srvURL, method, path string, userID uuid.UUI
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	r.Header.Set("Authorization", multiUserAuthHeader(t, userID))
+	r.Header.Set("Authorization", multiUserAuthHeaderWithSecret(t, secret, userID))
 	return r
 }
 

@@ -285,7 +285,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	}
 
 	// === Authenticated routes ===
-	authMW := handler.AuthMiddleware(jwtSecret)
+	authMW := handler.AuthMiddlewareWithUserRepo(jwtSecret, userRepo)
 	membershipMW := handler.TreeMembershipMiddleware(membersRepo)
 
 	r.Route("/api/v1", func(r chi.Router) {

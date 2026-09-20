@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,17 +31,22 @@ import (
 type collabTestServer struct {
 	Server *httptest.Server
 	Pool   *pgxpool.Pool
+	Secret string
 }
 
 // newCollabTestServer builds a chi router with auth + collab routes.
 func newCollabTestServer(t *testing.T, pool *pgxpool.Pool) *collabTestServer {
+	return newCollabTestServerWithSecret(t, pool, "canopy-dev-secret")
+}
+
+func newCollabTestServerWithSecret(t *testing.T, pool *pgxpool.Pool, secret string) *collabTestServer {
 	t.Helper()
 
 	// Build the collaboration service on the real repo.
 	collabSvc := service.NewCollaborationService(db.NewPGWorkspaceRepo(pool))
 
 	r := chi.NewRouter()
-	authMW := AuthMiddleware("canopy-dev-secret")
+	authMW := AuthMiddlewareWithUserRepo(secret, db.NewPGUserRepo(pool))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
@@ -49,7 +55,7 @@ func newCollabTestServer(t *testing.T, pool *pgxpool.Pool) *collabTestServer {
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return &collabTestServer{Server: srv, Pool: pool}
+	return &collabTestServer{Server: srv, Pool: pool, Secret: secret}
 }
 
 // collabUser inserts a user row with the exact UUID used as the JWT sub.
@@ -69,8 +75,79 @@ func collabUser(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, displayName 
 	}
 }
 
-// sha256Sum returns the hex SHA-256 digest of s (matches the service's
-// token hashing for direct invitation inserts).
+func TestCollabAutoProvisionsDevJWTSubject(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	userID := uuid.New()
+	srv := newCollabTestServerWithSecret(t, pool, db.DevJWTSecretDefault)
+
+	resp := doCollab(t, srv, http.MethodGet, "/api/v1/collab/", userID, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /collab: status=%d, want 200; body=%s", resp.StatusCode, readBody(t, resp))
+	}
+	_ = resp.Body.Close()
+
+	workspaceID := createCollabWorkspace(t, srv, userID, "auto-provisioned")
+	if workspaceID == uuid.Nil {
+		t.Fatal("POST /collab returned nil workspace id")
+	}
+
+	var gotID, gotHermesID string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT id::text, hermes_user_id FROM users WHERE id = $1`, userID).Scan(&gotID, &gotHermesID); err != nil {
+		t.Fatalf("query auto-provisioned user: %v", err)
+	}
+	if gotID != userID.String() || gotHermesID != userID.String() {
+		t.Fatalf("provisioned user = (%q, %q), want (%q, %q)", gotID, gotHermesID, userID, userID)
+	}
+}
+
+func TestCollabDevJWTProvisioningIsIdempotentAndPreservesUser(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	userID := uuid.New()
+	collabUser(t, pool, userID, "ExistingUser")
+	srv := newCollabTestServerWithSecret(t, pool, db.DevJWTSecretDefault)
+
+	for range 2 {
+		resp := doCollab(t, srv, http.MethodGet, "/api/v1/collab/", userID, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /collab: status=%d, want 200; body=%s", resp.StatusCode, readBody(t, resp))
+		}
+		_ = resp.Body.Close()
+	}
+
+	var count int
+	var email, displayName string
+	if err := pool.QueryRow(context.Background(), `
+		SELECT count(*), max(email), max(display_name)
+		FROM users WHERE id = $1`, userID).Scan(&count, &email, &displayName); err != nil {
+		t.Fatalf("query idempotent user: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("users row count = %d, want 1", count)
+	}
+	if email != "ExistingUser@canopy.dev" || displayName != "ExistingUser" {
+		t.Fatalf("existing user changed: email=%q display_name=%q", email, displayName)
+	}
+}
+
+func TestCollabProductionUnknownJWTSubjectIsActionable(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	userID := uuid.New()
+	srv := newCollabTestServerWithSecret(t, pool, "production-secret")
+
+	resp := doCollab(t, srv, http.MethodPost, "/api/v1/collab/", userID, map[string]any{"name": "must be rejected"})
+	body := readBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST /collab: status=%d, want 403; body=%s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, "USER_NOT_PROVISIONED") || !strings.Contains(body, "ask the operator") {
+		t.Fatalf("body=%s, want actionable USER_NOT_PROVISIONED response", body)
+	}
+}
+
 func sha256Sum(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return fmt.Sprintf("%x", sum[:])
@@ -79,7 +156,7 @@ func sha256Sum(s string) string {
 // collabRequest builds an authenticated request against the collab server.
 func collabRequest(t *testing.T, srv *collabTestServer, method, path string, userID uuid.UUID, body any) *http.Request {
 	t.Helper()
-	return multiUserRequest(t, srv.Server.URL, method, path, userID, body)
+	return multiUserRequestWithSecret(t, srv.Server.URL, method, path, userID, body, srv.Secret)
 }
 
 // doCollab performs a request and returns the response.

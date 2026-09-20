@@ -45,6 +45,13 @@ type UserRepo interface {
 	Update(ctx context.Context, id uuid.UUID, displayName string, avatarURL *string) (*User, error)
 }
 
+// UserProvisioner is the optional identity bootstrap capability used by the
+// dev-secret authentication middleware. It is separate from UserRepo so
+// read-only or non-Postgres implementations do not gain a write obligation.
+type UserProvisioner interface {
+	EnsureByID(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
 // PGUserRepo is the pgx-backed UserRepo implementation.
 type PGUserRepo struct {
 	pool *pgxpool.Pool
@@ -85,6 +92,25 @@ func (r *PGUserRepo) Create(ctx context.Context, u *User) (*User, error) {
 		return nil, fmt.Errorf("db: insert user: %w", err)
 	}
 	return &out, nil
+}
+
+// EnsureByID inserts the user identity represented by id when it does not
+// already exist. It deliberately uses the JWT subject for both users.id and
+// users.hermes_user_id so FK-backed writes can use the authenticated UUID.
+// Existing rows are left untouched, including their email and display name.
+func (r *PGUserRepo) EnsureByID(ctx context.Context, id uuid.UUID) (bool, error) {
+	if id == uuid.Nil {
+		return false, errors.New("db: user id is nil")
+	}
+	tag, err := r.pool.Exec(ctx, `
+        INSERT INTO users (id, hermes_user_id, display_name, is_active)
+        VALUES ($1, $2, $3, true)
+        ON CONFLICT (id) DO NOTHING`,
+		id, id.String(), "Hermes user "+id.String())
+	if err != nil {
+		return false, fmt.Errorf("db: ensure user: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // GetByID returns the active (not soft-deleted) user with the given ID.
