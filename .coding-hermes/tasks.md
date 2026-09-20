@@ -2564,3 +2564,14 @@ one hunk to avoid the mid-run approval stall.
 same file family, serial) or **DF-HERMES-CANOPY-40** (P2: workspace channels are global - real code
 surface). Parked: GAP-076 (owner ruling, blocks GAP-077), GAP-081, DF-20/DF-22. QA-15..29: harness/
 bunker-owned. E2E-001 cadence: still no identifiable battery tick in the window.
+
+## Tick 530 — 2026-09-20 19:37Z (DF-HERMES-CANOPY-39)
+Verdict: WORK. 33 pending pre-tick; pick DF-HERMES-CANOPY-39 (P2, live-dogfood product defect). P1 rows QA-15/16/17/20/22/23 are QA-harness/stand-in-workdir issues (bunker-owned, skip-with-rationale per ops doctrine). CI on master green 3/3 pre-tick.
+Premises: re-verified at HEAD 20e16716 before dispatch. (c) private-key intake CONFIRMED (mls_handler.go decoded private_key; main.go cross-validated it); (d) missing ratchet CONFIRMED (CommitProposals advanced epoch unconditionally when proposals existed); (a)/(b) STALE — no SetProfile exists at HEAD and profiles table (000008) carries no MLS columns → row re-scoped to the two live defects; staleness recorded in event 704.
+Dispatch: gpt-5.6-luna @ openai-codex, brief /tmp/brief-df39.md, background hermes chat -Q (log 0 bytes until exit; liveness via dirty tree at ~2 min: internal/mls/types.go first). First attempt, no rework. Commit d51229a0 (+295/−64, 13 files): private-key intake removed (lenient legacy-field 201 path), Ed25519KeyPair private material dropped, epoch CAS via AdvanceEpochIfCurrent + ErrEpochConflict → 409, new tests (mls_key_package_test.go, security_audit_test.go, TestCommitProposals_ConcurrentCommitAdvancesOnce), docs/API.md + SPEC-FTR-03 amended.
+Gates (foreman, fresh, post-commit tree): go build OK; go vet OK (mls/handler/cmd/db); golangci-lint (touched pkgs) 0 issues; CANOPY_TEST_ALLOW_SHARED_DB=1 mls ok 0.004s; handler ok 407.9s.
+Verify: A1 zero private-key request intake (grep clean; remaining private_key = federation's own server-side identity, pre-existing); A2 docs private_key=0 hits + 409 replay text; A3 CAS + ErrEpochConflict proven in working tree.
+GitReins: task create/start before dispatch; task complete fired post-commit (Tier 2 pending at board-commit time — verdict id to be read from .gitreins, see event 705 + next tick).
+Board: tasks.jsonl 1 row → complete (DF-HERMES-CANOPY-39); events 704 task_completed + 705 verification; surgical edit diff = exactly 1 mod + 2 appends.
+CI: content commit run pending; check next tick. Off-by-one: not needed (no debugging beyond premise checks).
+Next tick: DF-HERMES-CANOPY-40 (P2 channels global — real surface, same file family) or PL-03; verify DF-39 Tier 2 verdict + CI on d51229a0.
