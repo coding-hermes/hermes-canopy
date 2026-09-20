@@ -3012,3 +3012,19 @@ tasks:
   status: complete
   created_at: '2026-09-20T00:40:02.271778+00:00'
   completed_at: '2026-09-20T00:57:53.732653+00:00'
+- id: GAP-094
+  title: 'Human resume UX: recent-trees resume affordance on DashboardPage'
+  criteria:
+  - 'AC1: DashboardPage renders a Recent trees list from the trees API sorted by last
+    activity desc (top 8), each entry showing relative last-activity time and node
+    count; covered by vitest. AC2: clicking an entry navigates to /tree/:treeId with
+    the context manifest panel visible on arrival (URL-driven param such as ?manifest=1);
+    covered by vitest. AC3: tree list payload exposes a last-activity timestamp (MAX(nodes.created_at)
+    per tree, or an honest edited_at fallback documented in docs/API.md and labeled
+    in the UI); covered by a Go test if backend changed. AC4: npm run build passes
+    in frontend/, frontend vitest suite passes, go build ./... passes and affected
+    Go packages pass go test -count=1. AC5: diff confined to dashboard/tree-list/manifest
+    wiring + tests; commit subject starts ''Addresses GAP-094''.'
+  status: complete
+  created_at: '2026-09-20T03:02:25.689549+00:00'
+  completed_at: '2026-09-20T04:18:09.106673+00:00'
