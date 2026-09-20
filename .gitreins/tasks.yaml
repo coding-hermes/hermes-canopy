@@ -3135,3 +3135,18 @@ tasks:
   status: complete
   created_at: '2026-09-20T16:51:45.862621+00:00'
   completed_at: '2026-09-20T17:44:25.044275+00:00'
+- id: DF-HERMES-CANOPY-39
+  title: MLS key-packages must not accept client private keys; CommitProposals needs
+    an epoch ratchet
+  criteria:
+  - '1) The key-package request contract carries no private key material: POST workspaces/{id}/mls/key-packages
+    no longer decodes a private_key field, docs/API.md key-packages schema matches
+    the handler, and no code path stores or returns private key material. 2) CommitProposals
+    cannot advance the group epoch twice for the same commit: replaying the call with
+    no new pending proposals leaves mls_groups.epoch unchanged. 3) go build ./cmd/canopyd
+    passes, go vet clean, golangci-lint on touched packages reports 0 issues, and
+    CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/mls/... ./internal/handler/...
+    passes with new tests covering both behaviors.'
+  status: complete
+  created_at: '2026-09-20T18:52:03.396870+00:00'
+  completed_at: '2026-09-20T19:36:18.900710+00:00'
