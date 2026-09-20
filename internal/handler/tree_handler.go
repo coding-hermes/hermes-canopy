@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -179,6 +180,11 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
 	q := r.URL.Query()
 	opts := service.GetTreeOptions{
 		IncludeStats:   q.Get("include_stats") != "false",
@@ -190,10 +196,14 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the requesting user owns this tree (BUG-016 fix).
-	userID := UserIDFromContext(r.Context())
-	if userID != uuid.Nil && out.OwnerID != uuid.Nil && out.OwnerID != userID {
-		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
+	allowed, err := h.canViewTree(r.Context(), id, userID, out.OwnerID)
+	if err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("tree access check failed")
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not verify tree access")
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not have access to this tree")
 		return
 	}
 	writeJSON(w, 200, out)
@@ -217,8 +227,8 @@ func (h *TreeHandler) UpdateTree(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	if existing.OwnerID != uuid.Nil && existing.OwnerID != userID {
-		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
+	if !isTreeOwner(existing.OwnerID, userID) {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not have access to this tree")
 		return
 	}
 
@@ -263,8 +273,8 @@ func (h *TreeHandler) DeleteTree(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	if existing.OwnerID != uuid.Nil && existing.OwnerID != userID {
-		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not own this tree")
+	if !isTreeOwner(existing.OwnerID, userID) {
+		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not have access to this tree")
 		return
 	}
 
@@ -276,6 +286,22 @@ func (h *TreeHandler) DeleteTree(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Internal helpers -------------------------------------------------------
+
+func isTreeOwner(ownerID, userID uuid.UUID) bool {
+	return ownerID != uuid.Nil && ownerID == userID
+}
+
+// canViewTree allows the owner and any active tree member to read a tree.
+// Tree-level mutations intentionally use isTreeOwner instead.
+func (h *TreeHandler) canViewTree(ctx context.Context, treeID, userID, ownerID uuid.UUID) (bool, error) {
+	if isTreeOwner(ownerID, userID) {
+		return true, nil
+	}
+	if h.members == nil {
+		return false, nil
+	}
+	return h.members.IsMember(ctx, treeID, userID)
+}
 
 func (h *TreeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
