@@ -21,6 +21,12 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 	DBSchema   string
+	// DBDriver selects the runtime database backend. The default is postgres so
+	// an unset CANOPY_DB_DRIVER keeps the historical boot path unchanged.
+	DBDriver string
+	// SQLitePath is used when DBDriver is sqlite. It defaults below the canopy
+	// data directory and may be overridden with CANOPY_SQLITE_PATH.
+	SQLitePath string
 
 	// HTTP
 	HTTPAddr string
@@ -146,6 +152,8 @@ func Default() *Config {
 		DBName:               "canopy",
 		DBSSLMode:            "disable",
 		DBSchema:             "public",
+		DBDriver:             "postgres",
+		SQLitePath:           defaultSQLitePath(),
 		HTTPAddr:             ":8080",
 		LogLevel:             "info",
 		LogFormat:            "text",
@@ -212,10 +220,34 @@ func parseContextModelWindows(raw string) (map[string]int, error) {
 	return windows, nil
 }
 
+// defaultSQLitePath returns the conventional canopy runtime database path.
+// It is deliberately derived without consulting CANOPY_SQLITE_PATH so Default
+// remains a stable, side-effect-free baseline for tests and callers.
+func defaultSQLitePath() string {
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		return filepath.Join(home, ".canopy", "canopy.sqlite")
+	}
+	return filepath.Join(".canopy", "canopy.sqlite")
+}
+
+// parseDBDriver returns the configured backend, preserving an explicit value so
+// Validate can reject typos rather than silently falling back to PostgreSQL.
+func parseDBDriver(raw string) string {
+	if raw == "" {
+		return "postgres"
+	}
+	return raw
+}
+
 // FromEnv loads configuration from environment variables,
 // falling back to Default() values when unset.
 func FromEnv() *Config {
 	c := Default()
+	c.DBDriver = parseDBDriver(os.Getenv("CANOPY_DB_DRIVER"))
+	if v := os.Getenv("CANOPY_SQLITE_PATH"); v != "" {
+		c.SQLitePath = v
+	}
 	if v := os.Getenv("DB_HOST"); v != "" {
 		c.DBHost = v
 	}
@@ -422,6 +454,12 @@ func FromEnv() *Config {
 // rather than a panic inside chi's ClientIPFromXFF (which panics on invalid
 // prefixes).
 func (c *Config) Validate() error {
+	if c.DBDriver != "postgres" && c.DBDriver != "sqlite" {
+		return fmt.Errorf("config: CANOPY_DB_DRIVER must be postgres or sqlite (got %q)", c.DBDriver)
+	}
+	if c.DBDriver == "sqlite" && strings.TrimSpace(c.SQLitePath) == "" {
+		return fmt.Errorf("config: CANOPY_SQLITE_PATH must not be empty when CANOPY_DB_DRIVER=sqlite")
+	}
 	if c.PluginMaxSize < 0 {
 		return fmt.Errorf("config: PLUGIN_MAX_SIZE must not be negative (got %d)", c.PluginMaxSize)
 	}

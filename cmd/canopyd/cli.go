@@ -96,6 +96,7 @@ var knownSubcommands = map[string]struct{}{
 	"session": {},
 	"topic":   {},
 	"card":    {},
+	"db":      {},
 }
 
 // exitUnknownSubcommand is the exit code for CLI misuse: an argument that is
@@ -121,6 +122,8 @@ func runCLI() {
 		runTopicCmd(os.Args[2:])
 	case "card":
 		runCardCmd(os.Args[2:])
+	case "db":
+		runDBCmd(os.Args[2:])
 	default:
 		os.Exit(refuseUnknownSubcommand(sub))
 	}
@@ -141,6 +144,7 @@ func printCLIUsage() {
 	fmt.Fprintf(os.Stderr, "  session associations-backfill [flags]  Recompute association metadata for imported sessions\n")
 	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection: detect, proposals, config\n")
 	fmt.Fprintf(os.Stderr, "  card export [flags]       Export the local card stores as deterministic JSONL (docs/CARD_EXPORT.md)\n")
+	fmt.Fprintf(os.Stderr, "  db export-sqlite [flags] Copy core graph data from PostgreSQL into a new SQLite file\n")
 	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
 }
 
@@ -894,7 +898,8 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode)\n")
 	fmt.Fprintf(os.Stderr, "  tree <subcmd> [args...]   Tree CRUD from the command line (see `canopyd tree --help`)\n")
 	fmt.Fprintf(os.Stderr, "  session <subcmd> [flags]  Browse/import Hermes sessions from the state snapshot (see `canopyd session --help`)\n")
-	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection proposals + config (see `canopyd topic --help`)\n\n")
+	fmt.Fprintf(os.Stderr, "  topic <subcmd> [flags]    Topic detection proposals + config (see `canopyd topic --help`)\n")
+	fmt.Fprintf(os.Stderr, "  db export-sqlite [flags] Copy core graph data from PostgreSQL into a new SQLite file\n\n")
 	fmt.Fprintf(os.Stderr, "The tree/session/topic subcommands are HTTP clients of a running canopyd;\n")
 	fmt.Fprintf(os.Stderr, "they target CANOPY_SERVER_URL (default %s).\n\n", defaultServerURL)
 	fmt.Fprintf(os.Stderr, "Flags:\n")
@@ -914,6 +919,8 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "Key environment variables:\n")
 	fmt.Fprintf(os.Stderr, "  HTTP_ADDR       listen address (default :8080)\n")
 	fmt.Fprintf(os.Stderr, "  CANOPY_DB_URL   postgres:// DSN (overrides all DB_* fields)\n")
+	fmt.Fprintf(os.Stderr, "  CANOPY_DB_DRIVER postgres (default) or sqlite\n")
+	fmt.Fprintf(os.Stderr, "  CANOPY_SQLITE_PATH SQLite file path (default ~/.canopy/canopy.sqlite)\n")
 	fmt.Fprintf(os.Stderr, "  DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SCHEMA, DB_SSLMODE\n")
 	fmt.Fprintf(os.Stderr, "  JWT_SECRET      HS256 signing secret (default dev-secret-change-me)\n")
 	fmt.Fprintf(os.Stderr, "  LOG_LEVEL, LOG_FORMAT, METRICS_ENABLED, CORS_ORIGIN\n")

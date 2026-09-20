@@ -462,3 +462,43 @@ func TestValidateContextRetrievalMax(t *testing.T) {
 		}
 	}
 }
+
+func TestDBDriverDefaultsToPostgres(t *testing.T) {
+	t.Setenv("CANOPY_DB_DRIVER", "")
+	c := FromEnv()
+	if c.DBDriver != "postgres" {
+		t.Fatalf("FromEnv().DBDriver = %q, want postgres", c.DBDriver)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("default config validation = %v", err)
+	}
+}
+
+func TestDBDriverSQLiteAndPath(t *testing.T) {
+	t.Setenv("CANOPY_DB_DRIVER", "sqlite")
+	t.Setenv("CANOPY_SQLITE_PATH", "/tmp/canopy-gap-097.sqlite")
+	c := FromEnv()
+	if c.DBDriver != "sqlite" || c.SQLitePath != "/tmp/canopy-gap-097.sqlite" {
+		t.Fatalf("SQLite config = driver %q path %q", c.DBDriver, c.SQLitePath)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("SQLite config validation = %v", err)
+	}
+}
+
+func TestDBDriverRejectsUnknownValue(t *testing.T) {
+	c := Default()
+	c.DBDriver = "mysql"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "CANOPY_DB_DRIVER") {
+		t.Fatalf("Validate(mysql) = %v, want a CANOPY_DB_DRIVER error", err)
+	}
+}
+
+func TestSQLiteRequiresPath(t *testing.T) {
+	c := Default()
+	c.DBDriver = "sqlite"
+	c.SQLitePath = "  "
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "CANOPY_SQLITE_PATH") {
+		t.Fatalf("Validate(SQLite with blank path) = %v, want a CANOPY_SQLITE_PATH error", err)
+	}
+}

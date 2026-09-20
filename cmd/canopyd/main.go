@@ -25,6 +25,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	sqlitestore "github.com/coding-hermes/hermes-canopy/internal/db/sqlite"
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
 	"github.com/coding-hermes/hermes-canopy/internal/fileviewer"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
@@ -191,6 +192,24 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// SQLite wave-1 boot: open the core-graph store, apply the embedded
+	// migrations, and fail closed on schema drift before any server surface is
+	// constructed. The full server still has PostgreSQL-only repositories;
+	// refusing here is intentional and is documented in SQLITE-PIVOT.md.
+	if cfg.DBDriver == "sqlite" {
+		sqliteStore, err := sqlitestore.OpenRuntime(ctx, cfg.SQLitePath)
+		if err != nil {
+			log.Fatal().Err(err).Str("path", cfg.SQLitePath).Msg("SQLite boot/parity self-check failed")
+		}
+		defer func() { _ = sqliteStore.Close() }()
+		version, err := sqlitestore.CoreSchemaVersion(ctx, sqliteStore)
+		if err != nil {
+			log.Fatal().Err(err).Msg("SQLite schema version check failed")
+		}
+		log.Info().Str("path", cfg.SQLitePath).Int64("schema_version", version).Msg("SQLite schema parity self-check passed")
+		log.Fatal().Msg("SQLite core-graph boot succeeded, but full canopyd boot is refused: PostgreSQL-only repository surfaces remain (relay, events/snapshots, approvals, MLS, topics, transport, plugins, file viewer, federation, and profile routing)")
+	}
 
 	// Initialize the database and inject the tree service into HTTP routes.
 	database, err := db.New(ctx, db.PoolConfig{DSN: cfg.DSN()})
