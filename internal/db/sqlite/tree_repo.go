@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -266,6 +267,60 @@ func (r *TreeRepo) CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUID)
 		return nil, fmt.Errorf("db: count nodes by tree ids: %w", err)
 	}
 	return counts, nil
+}
+
+// LastActivityByTreeIDs returns the most recent live (non-soft-deleted) node created_at
+// per tree for the given ids. The canonical-text timestamps sort correctly as TEXT, so
+// MAX(created_at) keeps PG parity with LastActivityByTreeIDs; trees without live nodes
+// are absent from the map. An empty input returns an empty map without querying.
+func (r *TreeRepo) LastActivityByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	latest := make(map[uuid.UUID]time.Time, len(treeIDs))
+	if len(treeIDs) == 0 {
+		return latest, nil
+	}
+	q, err := r.conn()
+	if err != nil {
+		return nil, err
+	}
+	args := make([]any, 0, len(treeIDs))
+	for _, id := range treeIDs {
+		args = append(args, idArg(id))
+	}
+	rows, err := q.QueryContext(ctx, `
+        SELECT tree_id, MAX(created_at)
+        FROM nodes
+        WHERE tree_id IN (`+placeholders(len(args))+`) AND deleted_at IS NULL
+        GROUP BY tree_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: last activity by tree ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			treeID string
+			at     sql.NullString
+		)
+		if err := rows.Scan(&treeID, &at); err != nil {
+			return nil, fmt.Errorf("db: scan last activity: %w", err)
+		}
+		id, err := uuid.Parse(treeID)
+		if err != nil {
+			return nil, fmt.Errorf("db: scan last activity: nodes.tree_id %q: %w", treeID, err)
+		}
+		if !at.Valid {
+			continue // no live nodes → absent from the map, like the PG repo
+		}
+		parsed, err := DecodeTime(at.String)
+		if err != nil {
+			return nil, fmt.Errorf("db: scan last activity: nodes.created_at %q: %w", at.String, err)
+		}
+		latest[id] = parsed
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("db: last activity by tree ids: %w", err)
+	}
+	return latest, nil
 }
 
 // Update replaces the mutable fields and bumps edited_at.

@@ -9,6 +9,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   Send,
@@ -23,6 +24,7 @@ import {
   XCircle,
   TerminalSquare,
   MessageSquareText,
+  History,
 } from 'lucide-react';
 import {
   useGatewayRuns,
@@ -30,6 +32,7 @@ import {
   type GatewayRun,
   type GatewayRunEvent,
 } from '../hooks/useGatewayRuns';
+import { apiGet } from '../lib/api';
 
 // ─── helpers ──────────────────────────────────────────────────────────
 
@@ -62,6 +65,131 @@ const STATUS_STYLES: Record<string, string> = {
   disconnected: 'bg-surface-hover text-content-muted ring-line-subtle',
   not_found: 'bg-surface-hover text-content-muted ring-line-subtle',
 };
+
+// ─── recent trees (GAP-094) ─────────────────────────────────────────────
+
+/**
+ * The subset of GET /trees the resume list needs. `last_activity` is the
+ * newest live node's created_at (MAX(nodes.created_at), documented in
+ * docs/API.md); it is absent for trees with no live nodes — those sort
+ * last by created_at instead of inventing activity they don't have.
+ */
+interface RecentTree {
+  id: string;
+  title: string;
+  node_count?: number;
+  last_activity?: string;
+  created_at?: string;
+}
+
+const RECENT_TREES_LIMIT = 8;
+
+/** Fetch a page of trees and order it for the resume list. */
+export async function loadRecentTrees(): Promise<RecentTree[]> {
+  const body = await apiGet<{ trees?: RecentTree[] }>(
+    '/trees?limit=50&sort=created_desc',
+  );
+  const trees = body.trees ?? [];
+  return [...trees]
+    .sort((a, b) => {
+      const at = a.last_activity ? Date.parse(a.last_activity) : NaN;
+      const bt = b.last_activity ? Date.parse(b.last_activity) : NaN;
+      const aValid = Number.isFinite(at);
+      const bValid = Number.isFinite(bt);
+      if (aValid && bValid && at !== bt) return bt - at;
+      if (aValid !== bValid) return aValid ? -1 : 1;
+      // Neither has activity (or they tie): fall back to creation, newest first.
+      const ac = a.created_at ? Date.parse(a.created_at) : 0;
+      const bc = b.created_at ? Date.parse(b.created_at) : 0;
+      return bc - ac;
+    })
+    .slice(0, RECENT_TREES_LIMIT);
+}
+
+function RecentTreesSection() {
+  const navigate = useNavigate();
+  const [trees, setTrees] = useState<RecentTree[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const recent = await loadRecentTrees();
+        if (!cancelled) setTrees(recent);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <section className="flex min-h-0 flex-col rounded-lg border border-line-subtle bg-surface-panel">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-2.5">
+        <History className="h-4 w-4 text-accent-2-300" />
+        <span className="text-sm font-semibold tracking-tight text-content-primary">
+          Recent trees
+        </span>
+        <span className="ml-auto text-[10px] text-content-faint">
+          pick up where the conversation left off
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {error !== null ? (
+          <p
+            className="px-3 py-6 text-center text-xs text-content-faint"
+            data-testid="recent-trees-error"
+          >
+            {error}
+          </p>
+        ) : trees === null ? (
+          <p className="px-3 py-6 text-center text-xs text-content-faint">
+            Loading recent trees…
+          </p>
+        ) : trees.length === 0 ? (
+          <p
+            className="px-3 py-6 text-center text-xs text-content-faint"
+            data-testid="recent-trees-empty"
+          >
+            No trees yet — create one from the Trees page.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line-subtle" data-testid="recent-trees-list">
+            {trees.map((tree) => (
+              <li key={tree.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/tree/${tree.id}?manifest=1`)}
+                  className="flex w-full items-start gap-2 px-4 py-2.5 text-left transition-colors hover:bg-surface-hover/60"
+                  data-testid={`recent-tree-${tree.id}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium text-content-primary">
+                      {tree.title}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-content-faint">
+                      {tree.last_activity
+                        ? `active ${timeAgo(tree.last_activity)}`
+                        : 'no activity yet'}
+                      {typeof tree.node_count === 'number'
+                        ? ` · ${tree.node_count} ${tree.node_count === 1 ? 'node' : 'nodes'}`
+                        : ''}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   return (
@@ -350,39 +478,42 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        {/* Right column: run registry */}
-        <section className="flex min-h-0 flex-col rounded-lg border border-line-subtle bg-surface-panel">
-          <div className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-2.5">
-            <Activity className="h-4 w-4 text-accent-2-300" />
-            <span className="text-sm font-semibold tracking-tight text-content-primary">Hermes runs</span>
-            {status && (
-              <span className="ml-auto text-[10px] text-content-faint" data-testid="run-counts">
-                {status.active_runs} active · {status.run_count} total
-              </span>
-            )}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {loading && runs.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-content-faint">Loading gateway state…</p>
-            ) : runs.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-content-faint" data-testid="runs-empty">
-                No runs yet. Send a message to create the first real Hermes run.
-              </p>
-            ) : (
-              <ul className="divide-y divide-line-subtle" data-testid="runs-list">
-                {runs.map((run) => (
-                  <RunRow
-                    key={run.run_id}
-                    run={run}
-                    selected={run.run_id === selectedRunId}
-                    onSelect={() => setSelectedRunId(run.run_id)}
-                    onStop={() => void stopRun(run.run_id)}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
+        {/* Right column: run registry + recent trees (GAP-094) */}
+        <div className="flex min-h-0 flex-col gap-4">
+          <RecentTreesSection />
+          <section className="flex min-h-0 flex-1 flex-col rounded-lg border border-line-subtle bg-surface-panel">
+            <div className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-2.5">
+              <Activity className="h-4 w-4 text-accent-2-300" />
+              <span className="text-sm font-semibold tracking-tight text-content-primary">Hermes runs</span>
+              {status && (
+                <span className="ml-auto text-[10px] text-content-faint" data-testid="run-counts">
+                  {status.active_runs} active · {status.run_count} total
+                </span>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading && runs.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-content-faint">Loading gateway state…</p>
+              ) : runs.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-content-faint" data-testid="runs-empty">
+                  No runs yet. Send a message to create the first real Hermes run.
+                </p>
+              ) : (
+                <ul className="divide-y divide-line-subtle" data-testid="runs-list">
+                  {runs.map((run) => (
+                    <RunRow
+                      key={run.run_id}
+                      run={run}
+                      selected={run.run_id === selectedRunId}
+                      onSelect={() => setSelectedRunId(run.run_id)}
+                      onStop={() => void stopRun(run.run_id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

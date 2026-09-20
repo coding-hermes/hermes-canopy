@@ -33,6 +33,12 @@ func (s *stubExportTreeRepo) CountNodesByTreeIDs(_ context.Context, _ []uuid.UUI
 	return map[uuid.UUID]int{}, nil
 }
 
+// LastActivityByTreeIDs satisfies the TreeRepo interface; the export path
+// never reads last activity, so an empty map is correct.
+func (s *stubExportTreeRepo) LastActivityByTreeIDs(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	return map[uuid.UUID]time.Time{}, nil
+}
+
 func (s *stubExportTreeRepo) GetByID(_ context.Context, id uuid.UUID) (*db.Tree, error) {
 	t, ok := s.trees[id]
 	if !ok {

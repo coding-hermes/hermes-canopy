@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"testing"
@@ -25,6 +26,17 @@ func (r *treeRepoStub) CountNodesByTreeIDs(_ context.Context, treeIDs []uuid.UUI
 		counts[id] = len(r.trees)
 	}
 	return counts, nil
+}
+
+// LastActivityByTreeIDs returns a deterministic fake: every stub tree's
+// last activity is its root-node position marker in CreatedAt (the stub
+// sets no nodes, so the value only needs to be present and stable).
+func (r *treeRepoStub) LastActivityByTreeIDs(_ context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	latest := make(map[uuid.UUID]time.Time, len(treeIDs))
+	for _, id := range treeIDs {
+		latest[id] = mustParseTime("2026-07-23T12:00:00Z")
+	}
+	return latest, nil
 }
 
 func (r *treeRepoStub) Create(_ context.Context, tree *db.Tree) (*db.Tree, error) {
@@ -445,4 +457,77 @@ func mustParseTime(s string) time.Time {
 		panic(err)
 	}
 	return t
+}
+
+// GAP-094: ListTrees stamps each summary's LastActivity from the repo's
+// MAX(nodes.created_at) map — the resume affordance sorts on it. The wire
+// shape is asserted too: the field is a POINTER precisely because
+// `omitempty` does not omit a zero time.Time, so an inactive tree must come
+// back without the key rather than reporting activity at year 1.
+func TestListTrees_FillsLastActivity(t *testing.T) {
+	idA := uuid.MustParse("00000000-0000-7000-8000-00000000000a")
+	idB := uuid.MustParse("00000000-0000-7000-8000-00000000000b")
+	repo := &treeRepoStub{
+		trees: []db.Tree{
+			{ID: idA, CreatedAt: mustParseTime("2026-07-23T10:00:00Z")},
+			{ID: idB, CreatedAt: mustParseTime("2026-07-23T09:00:00Z")},
+		},
+	}
+	svc := &TreeServiceImpl{
+		treeRepo: repo,
+		nodeRepo: &nodeRepoStub{},
+		edgeRepo: &edgeRepoStub{},
+	}
+
+	page, err := svc.ListTrees(context.Background(), ListTreesParams{
+		Limit:  10,
+		Status: TreeStatusActive,
+		Sort:   SortCreatedDesc,
+	})
+	if err != nil {
+		t.Fatalf("ListTrees() error = %v", err)
+	}
+	want := mustParseTime("2026-07-23T12:00:00Z") // the stub's deterministic answer
+	for _, ts := range page.Trees {
+		if ts.LastActivity == nil {
+			t.Errorf("tree %s: LastActivity is nil, want the repo-supplied %v", ts.ID, want)
+			continue
+		}
+		if !ts.LastActivity.Equal(want) {
+			t.Errorf("tree %s: LastActivity = %v, want %v", ts.ID, ts.LastActivity, want)
+		}
+	}
+
+	// Wire shape: present and RFC3339 for an active tree, ABSENT for a tree
+	// the repo reported no activity for.
+	if len(page.Trees) == 0 {
+		t.Fatal("ListTrees returned no trees to check the wire shape on")
+	}
+	b, err := json.Marshal(page.Trees[0])
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
+	if raw, ok := fields["last_activity"]; !ok {
+		t.Errorf("wire shape %s has no last_activity key, want the timestamp", b)
+	} else if got := string(raw); got != `"2026-07-23T12:00:00Z"` {
+		t.Errorf("last_activity = %s, want \"2026-07-23T12:00:00Z\"", got)
+	}
+
+	// A summary the repo returned nothing for stays keyless.
+	quiet := TreeSummary{ID: uuid.New(), Title: "quiet", CreatedAt: mustParseTime("2026-07-23T10:00:00Z")}
+	empty, err := json.Marshal(quiet)
+	if err != nil {
+		t.Fatalf("marshal quiet summary: %v", err)
+	}
+	var quietFields map[string]json.RawMessage
+	if err := json.Unmarshal(empty, &quietFields); err != nil {
+		t.Fatalf("unmarshal quiet summary: %v", err)
+	}
+	if raw, ok := quietFields["last_activity"]; ok {
+		t.Errorf("inactive tree wire shape carries last_activity = %s, want the key absent", raw)
+	}
 }

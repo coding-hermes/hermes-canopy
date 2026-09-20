@@ -196,6 +196,14 @@ GET /api/v1/trees
 
 **Query params:** `sort`, `status`, `search`, `limit` (int), `cursor` (UUID)
 
+**Tree fields:** each tree carries `last_activity` (RFC3339, optional) — the
+`created_at` of the most recent live (non-soft-deleted) node in the tree,
+i.e. `MAX(nodes.created_at)` per tree (GAP-094). It is when the conversation
+last actually moved; the tree row's `updated_at` only reflects edits to the
+tree row itself. Trees with no live nodes omit the field. The dashboard's
+"Recent trees" resume list sorts on it (desc) and labels it as
+"active `<relative time>`".
+
 **Response (200):**
 ```json
 {

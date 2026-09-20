@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import DashboardPage from '../DashboardPage.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -102,6 +102,48 @@ const RUN_DONE = {
   events: [{ event: 'run.completed', run_id: 'run_done', timestamp: 2, output: 'ok' }],
 };
 
+// ─── Recent trees fixtures (GAP-094) ───────────────────────────────────
+
+/**
+ * Deliberately NOT in last-activity order: the list must sort by
+ * `last_activity` desc. TIMES are relative to a fixed "now" so the relative
+ * label is deterministic.
+ */
+const NOW = Date.parse('2026-09-19T12:00:00Z');
+
+function minutesAgo(min: number): string {
+  return new Date(NOW - min * 60_000).toISOString();
+}
+
+const TREE_STALE = {
+  id: 'tree-stale',
+  title: 'Stale conversation',
+  node_count: 3,
+  last_activity: minutesAgo(600),
+  created_at: minutesAgo(5000),
+};
+const TREE_FRESH = {
+  id: 'tree-fresh',
+  title: 'Fresh conversation',
+  node_count: 7,
+  last_activity: minutesAgo(2),
+  created_at: minutesAgo(300),
+};
+const TREE_MIDDLE = {
+  id: 'tree-middle',
+  title: 'Middle conversation',
+  node_count: 1,
+  last_activity: minutesAgo(45),
+  created_at: minutesAgo(1000),
+};
+/** No live nodes → no last_activity; sorts after every active tree. */
+const TREE_QUIET = {
+  id: 'tree-quiet',
+  title: 'Quiet conversation',
+  node_count: 0,
+  created_at: minutesAgo(1),
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -114,6 +156,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 let container: HTMLDivElement;
 let root: Root;
 const fetchMock = vi.fn();
+/** Trees the /trees branch answers with; tests mutate this per case. */
+let treeFixtures: unknown[] = [];
+/** Every location the router visited, so navigation can be asserted. */
+let visited: Array<{ pathname: string; search: string }> = [];
 
 function routeFetch(url: string): Response {
   if (url.startsWith('/api/v1/gateway/status')) {
@@ -127,6 +173,9 @@ function routeFetch(url: string): Response {
       return jsonResponse({ run_id: 'run_appr', choice: 'once', resolved: true });
     }
     return jsonResponse({ runs: [RUN_RUNNING, RUN_APPROVAL, RUN_DONE] });
+  }
+  if (url.startsWith('/api/v1/trees')) {
+    return jsonResponse({ trees: treeFixtures });
   }
   return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
 }
@@ -146,9 +195,28 @@ function renderDashboard() {
   root = createRoot(container);
   act(() => {
     root.render(
-      createElement(MemoryRouter, null, createElement(DashboardPage)),
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/'] },
+        createElement(RouteWatcher),
+        createElement(Routes, null, [
+          createElement(Route, { key: 'dash', path: '/', element: createElement(DashboardPage) }),
+          createElement(Route, {
+            key: 'tree',
+            path: '/tree/:treeId',
+            element: createElement('div', { 'data-testid': 'tree-view-stub' }, 'tree view'),
+          }),
+        ]),
+      ),
     );
   });
+}
+
+/** Records every location the router moves to (navigation assertions). */
+function RouteWatcher() {
+  const location = useLocation();
+  visited.push({ pathname: location.pathname, search: location.search });
+  return null;
 }
 
 async function flushPromises(): Promise<void> {
@@ -164,6 +232,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   MockEventSource.instances = [];
   vi.stubGlobal('EventSource', MockEventSource);
+  treeFixtures = [];
+  visited = [];
 });
 
 afterEach(() => {
@@ -283,5 +353,111 @@ describe('DashboardPage', () => {
       ([url]) => String(url) === '/api/v1/gateway/runs/run_abc/stop',
     );
     expect(after.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Recent trees resume affordance (GAP-094) ──────────────────────────
+
+describe('DashboardPage — recent trees (GAP-094)', () => {
+  it('renders the recent list sorted by last activity desc with node counts', async () => {
+    treeFixtures = [TREE_STALE, TREE_QUIET, TREE_FRESH, TREE_MIDDLE];
+    renderDashboard();
+    await flushPromises();
+
+    const list = container.querySelector('[data-testid="recent-trees-list"]');
+    expect(list).not.toBeNull();
+
+    // Order is by last_activity DESC — the fixture array is deliberately
+    // not in that order, and TREE_QUIET (no activity) goes last even though
+    // it is the most recently CREATED tree.
+    const ids = Array.from(list!.querySelectorAll('li button')).map((el) =>
+      el.getAttribute('data-testid')?.replace('recent-tree-', ''),
+    );
+    expect(ids).toEqual(['tree-fresh', 'tree-middle', 'tree-stale', 'tree-quiet']);
+
+    // Entry fields: title, relative last-activity label, node count.
+    const fresh = container.querySelector('[data-testid="recent-tree-tree-fresh"]')!;
+    expect(fresh.textContent).toContain('Fresh conversation');
+    expect(fresh.textContent).toContain('active');
+    expect(fresh.textContent).toContain('7 nodes');
+
+    // Singular node label, and an honest no-activity label instead of a
+    // fabricated timestamp.
+    const middle = container.querySelector('[data-testid="recent-tree-tree-middle"]')!;
+    expect(middle.textContent).toContain('1 node');
+    expect(middle.textContent).not.toContain('1 nodes');
+    const quiet = container.querySelector('[data-testid="recent-tree-tree-quiet"]')!;
+    expect(quiet.textContent).toContain('no activity yet');
+    expect(quiet.textContent).not.toContain('active');
+  });
+
+  it('caps the list at the 8 most recent trees', async () => {
+    treeFixtures = Array.from({ length: 12 }, (_, i) => ({
+      id: `tree-${i}`,
+      title: `Conversation ${i}`,
+      node_count: i,
+      last_activity: minutesAgo(i),
+      created_at: minutesAgo(1000 + i),
+    }));
+    renderDashboard();
+    await flushPromises();
+
+    const rows = container.querySelectorAll('[data-testid="recent-trees-list"] li');
+    expect(rows).toHaveLength(8);
+    const ids = Array.from(rows).map((el) =>
+      el.querySelector('button')?.getAttribute('data-testid')?.replace('recent-tree-', ''),
+    );
+    expect(ids).toEqual(['tree-0', 'tree-1', 'tree-2', 'tree-3', 'tree-4', 'tree-5', 'tree-6', 'tree-7']);
+  });
+
+  it('clicking an entry navigates to /tree/<id>?manifest=1', async () => {
+    treeFixtures = [TREE_FRESH, TREE_STALE];
+    renderDashboard();
+    await flushPromises();
+
+    expect(visited.some((v) => v.pathname === '/')).toBe(true);
+
+    const entry = container.querySelector(
+      '[data-testid="recent-tree-tree-fresh"]',
+    ) as HTMLButtonElement;
+    expect(entry).not.toBeNull();
+    await act(async () => {
+      entry.click();
+      await Promise.resolve();
+    });
+    await flushPromises();
+
+    // The URL the manifest deep-link contract requires (AC2).
+    expect(visited).toContainEqual({ pathname: '/tree/tree-fresh', search: '?manifest=1' });
+    // And the tree route actually rendered — the navigation is real, not
+    // just a location change.
+    expect(container.querySelector('[data-testid="tree-view-stub"]')).not.toBeNull();
+  });
+
+  it('shows the empty state when there are no trees', async () => {
+    treeFixtures = [];
+    renderDashboard();
+    await flushPromises();
+    expect(container.querySelector('[data-testid="recent-trees-empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="recent-trees-list"]')).toBeNull();
+  });
+
+  it('surfaces a trees API failure without breaking the dashboard', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.startsWith('/api/v1/trees')) {
+        return Promise.resolve(
+          jsonResponse({ error: { message: 'trees are down' } }, 500),
+        );
+      }
+      return Promise.resolve(routeFetch(u));
+    });
+    renderDashboard();
+    await flushPromises();
+
+    const err = container.querySelector('[data-testid="recent-trees-error"]');
+    expect(err?.textContent).toContain('trees are down');
+    // The rest of the dashboard is unaffected.
+    expect(container.querySelector('[data-testid="run-row-run_abc"]')).not.toBeNull();
   });
 });

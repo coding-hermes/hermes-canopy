@@ -296,6 +296,39 @@ export default function TreeView() {
     setFocusNodeId(deepLinkNodeId);
   }, [deepLinkNodeId, hasNode]);
 
+  /*
+   * Manifest deep-link (GAP-094). The dashboard's "Recent trees" resume
+   * list links here with `?manifest=1` — arriving from a resume click means
+   * the reader wants the context manifest surfaced, not just the canvas.
+   * The panel itself always renders when a node is selected; what this
+   * actually drives is the SELECTION: a tree whose replica has hydrated
+   * gets its newest live node selected on arrival, which is what makes the
+   * inspector show a manifest instead of nothing. Read-only on the params
+   * object and gated on the same Yjs-has-hydrated signal as the node
+   * deep-link above (identity of `searchParams` changes every render —
+   * BUG hermes-canopy UI-02).
+   */
+  const manifestDeepLink = searchParams.get('manifest') === '1';
+  const newestLiveNode = useMemo(() => {
+    let newest: { id: string; createdAt: number } | null = null;
+    for (const n of tree.nodes) {
+      const created = Date.parse(n.data?.createdAt ?? '') || 0;
+      if (!newest || created > newest.createdAt) {
+        newest = { id: n.id, createdAt: created };
+      }
+    }
+    return newest?.id ?? null;
+  }, [tree.nodes]);
+
+  useEffect(() => {
+    if (!manifestDeepLink || !newestLiveNode) return;
+    // An explicit `?node=` is a deliberate choice and wins; so does a
+    // selection the reader already made. Only the bare resume link (no
+    // node param, nothing selected yet) picks the newest node.
+    if (deepLinkNodeId || selectedNodeId) return;
+    setSelectedNodeId(newestLiveNode);
+  }, [manifestDeepLink, newestLiveNode, selectedNodeId, deepLinkNodeId]);
+
   // ── Multi-user presence ──────────────────────────────────────────
   const {
     remotePresence,

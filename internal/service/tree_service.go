@@ -266,6 +266,16 @@ type TreeSummary struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	Role             MemberRole `json:"role"`
 
+	// LastActivity is the created_at of the most recent live node in the
+	// tree (MAX(nodes.created_at), GAP-094) — when the conversation last
+	// actually moved, as opposed to UpdatedAt (the tree row's edited_at).
+	// A pointer, not a time.Time: `omitempty` does NOT omit a zero
+	// time.Time (it is a struct, so it serializes as
+	// "0001-01-01T00:00:00Z"), which would make a tree with no live nodes
+	// report activity two millennia ago. nil → the field is absent, and
+	// the UI shows "no activity yet".
+	LastActivity *time.Time `json:"last_activity,omitempty"`
+
 	// Session-import fields (UI-LIVE-001). Additive and optional:
 	// empty/omitted for trees that were not imported from Hermes
 	// sessions. session_id comes from trees.metadata; source is taken
@@ -724,6 +734,34 @@ func (s *TreeServiceImpl) fillNodeCounts(ctx context.Context, summaries []TreeSu
 	for i := range summaries {
 		if n, ok := counts[summaries[i].ID]; ok {
 			summaries[i].NodeCount = n
+		}
+	}
+	s.fillLastActivity(ctx, summaries)
+}
+
+// fillLastActivity stamps each summary with MAX(nodes.created_at) over the
+// page's trees (GAP-094) — the resume affordance sorts on this. Cosmetic
+// like fillNodeCounts: a repo failure leaves LastActivity zero (omitted in
+// JSON) rather than failing the list. Trees without live nodes stay zero.
+func (s *TreeServiceImpl) fillLastActivity(ctx context.Context, summaries []TreeSummary) {
+	if len(summaries) == 0 {
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(summaries))
+	for _, t := range summaries {
+		ids = append(ids, t.ID)
+	}
+	latest, err := s.treeRepo.LastActivityByTreeIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for i := range summaries {
+		if at, ok := latest[summaries[i].ID]; ok {
+			// Copy: the map value's address is not safe to retain, and a
+			// pointer (not a zero time.Time) is what keeps an inactive tree
+			// from reporting activity at year 1 (see the TreeSummary field).
+			at := at
+			summaries[i].LastActivity = &at
 		}
 	}
 }

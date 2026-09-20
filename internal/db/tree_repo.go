@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,11 @@ type TreeRepo interface {
 	// tree for the given ids. Missing ids are absent from the map.
 	// BUG-041: replaces the NodeCount=1 stub in ListTrees.
 	CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error)
+	// LastActivityByTreeIDs returns the most recent live (non-soft-deleted)
+	// node created_at per tree for the given ids. Trees without live nodes
+	// are absent from the map — the caller decides what "no activity"
+	// means (GAP-094).
+	LastActivityByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]time.Time, error)
 }
 
 // PGTreeRepo is the pgx-backed TreeRepo implementation.
@@ -237,6 +243,36 @@ func (r *PGTreeRepo) CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUI
 		counts[id] = n
 	}
 	return counts, rows.Err()
+}
+
+// LastActivityByTreeIDs returns the most recent live (non-soft-deleted)
+// node created_at per tree for the given ids. One batched GROUP BY over
+// idx_nodes_tree_created; trees without live nodes are absent from the
+// map (the caller decides the fallback). Feeds the list payload's
+// last_activity field (GAP-094).
+func (r *PGTreeRepo) LastActivityByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	latest := make(map[uuid.UUID]time.Time, len(treeIDs))
+	if len(treeIDs) == 0 {
+		return latest, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+        SELECT tree_id, max(created_at)
+        FROM nodes
+        WHERE tree_id = ANY($1) AND deleted_at IS NULL
+        GROUP BY tree_id`, treeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("db: last activity by tree ids: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var at time.Time
+		if err := rows.Scan(&id, &at); err != nil {
+			return nil, fmt.Errorf("db: scan last activity: %w", err)
+		}
+		latest[id] = at
+	}
+	return latest, rows.Err()
 }
 
 // ListKeyset returns a page of active trees using keyset (cursor)

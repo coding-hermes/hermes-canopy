@@ -312,3 +312,58 @@ func TestSQLiteTreeRepoSchemaConstraintsAreEnforced(t *testing.T) {
 		t.Error("Create with malformed metadata succeeded, want the json_valid CHECK to reject it")
 	}
 }
+
+// GAP-094: LastActivityByTreeIDs returns MAX(nodes.created_at) per tree over
+// live nodes only. Timestamps are written explicitly (the wall-clock default
+// has millisecond resolution, so rapid inserts would tie and make "which node
+// is newest" unassertable), and a nodeless sibling tree proves the absence
+// convention.
+func TestSQLiteTreeRepoLastActivityByTreeIDs(t *testing.T) {
+	s, trees, nodes, _ := newGraphRepos(t)
+	ctx := context.Background()
+
+	tree := mustTree(t, ctx, trees, "activity")
+	nodeless := mustTree(t, ctx, trees, "quiet")
+
+	if empty, err := trees.LastActivityByTreeIDs(ctx, nil); err != nil || len(empty) != 0 {
+		t.Errorf("LastActivityByTreeIDs(nil) = %v (err %v), want an empty map without a query", empty, err)
+	}
+	if latest, err := trees.LastActivityByTreeIDs(ctx, []uuid.UUID{tree.ID, nodeless.ID}); err != nil {
+		t.Fatalf("LastActivityByTreeIDs: %v", err)
+	} else if len(latest) != 0 {
+		t.Errorf("LastActivityByTreeIDs = %v, want an empty map (no nodes yet)", latest)
+	}
+
+	old := mustNode(t, ctx, nodes, tree.ID, nil, "older")
+	newer := mustNode(t, ctx, nodes, tree.ID, nil, "newer")
+	// Backdate the first node so the MAX is unambiguous even at ms resolution.
+	if _, err := s.DB().ExecContext(ctx, `UPDATE nodes SET created_at = ? WHERE id = ?`,
+		EncodeTime(newer.CreatedAt.Add(-time.Hour)), old.ID.String()); err != nil {
+		t.Fatalf("backdate older node: %v", err)
+	}
+
+	latest, err := trees.LastActivityByTreeIDs(ctx, []uuid.UUID{tree.ID, nodeless.ID})
+	if err != nil {
+		t.Fatalf("LastActivityByTreeIDs(2 trees): %v", err)
+	}
+	if got, ok := latest[tree.ID]; !ok {
+		t.Errorf("tree %s absent from %v, want its newest node's created_at", tree.ID, latest)
+	} else if !got.Equal(newer.CreatedAt) {
+		t.Errorf("LastActivityByTreeIDs[tree] = %v, want the newest node's created_at %v", got, newer.CreatedAt)
+	}
+	if _, ok := latest[nodeless.ID]; ok {
+		t.Errorf("nodeless tree %s present in %v, want absent (zero by convention)", nodeless.ID, latest)
+	}
+
+	// Soft-deleted nodes do not count as activity.
+	if err := nodes.SoftDelete(ctx, newer.ID); err != nil {
+		t.Fatalf("SoftDelete(newest node): %v", err)
+	}
+	latest, err = trees.LastActivityByTreeIDs(ctx, []uuid.UUID{tree.ID})
+	if err != nil {
+		t.Fatalf("LastActivityByTreeIDs(after soft delete): %v", err)
+	}
+	if got := latest[tree.ID]; !got.Equal(newer.CreatedAt.Add(-time.Hour)) {
+		t.Errorf("LastActivityByTreeIDs after soft-deleting the newest node = %v, want the backdated survivor %v", got, newer.CreatedAt.Add(-time.Hour))
+	}
+}
