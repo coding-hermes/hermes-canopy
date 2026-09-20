@@ -2093,3 +2093,104 @@ a ~2000-node chain) and DF-HERMES-CANOPY-34 (make the resolved database explicit
 GAP-095 (dogfood round 2) and GAP-096 (audit-gate UI) remain decision-bound. Watch: CI on
 `2cf72a9b` + `b51ebf7e`; DF-24/25 flakes under load; the QA-HERMES-CANOPY-* cluster stays
 fleet-infra owned.
+
+## Tick 524 — 2026-09-20 ~11:30Z (WORK)
+
+**Verdict:** board read live (384 lines / 343 `complete` / 15 `duplicate` / 26 `pending`) before
+picking. Pick = **DF-HERMES-CANOPY-34** (P2, freshest row, filed by tick 523's own verification, and
+the only pending row that is both bounded and testable). Rejected picks, with reasons: GAP-096
+(blocked on Bane's block-always vs over-budget-only product ruling — the row exists only to bound
+that decision), GAP-095 (dogfood round 2 needs a human acceptance pass), GAP-080/081 (open-ended
+compiler-smarts / scope-honesty epics), PL-02..PL-06 + FTR-06 (multi-thousand-word feature specs,
+`depends_on` frontend/GAP-004/GAP-001/PL-01 unmet), QA-HERMES-CANOPY-* (all 12 are the QA lane's own
+harness bugs in `~/.hermes/scripts/bunker-qa.sh` — fleet-infra owned, not this repo's code).
+
+**Premise verified live before dispatch (not taken from the row's prose):** `ss -ltnp` shows
+`127.0.0.1:5432` = native system Postgres (51358 nodes / 830 trees in `canopy`) and `0.0.0.0:5437` =
+docker-proxy → the compose `canopy-pg` (70 nodes / 45 trees). `internal/config/config.go:149`
+`Default().DBPort = 5432`; `Makefile:24 DB_PORT ?= 5437`; `docker-compose.yml:16 5437:5432`;
+`scripts/deploy-canopyd.sh`, `scripts/check-deploy-staleness.sh`, `scripts/scratch-instance.sh` all
+:5437. The row is TRUE — the built-in default is the anomaly, not the target.
+
+**Wave decision:** no wave. The dispatch rule needs ≥2 MUTUALLY INDEPENDENT eligible rows; this board
+has exactly ONE (DF-34). The remaining 15 pending rows are either decision-blocked, unmet-dependency,
+or fleet-infra, and the QA cluster shares one owner (the QA harness) so they are not mutually
+independent. Serial path taken. WAVE_BUDGET 12 unused.
+
+**Dispatch/Worker:** `gpt-5.6-luna @ openai-codex` (sub before PAYG — the lane that carried GAP-098 on
+this repo), brief `/tmp/brief-df34.md`, dispatched via `/tmp/dispatch-df34.sh` (background process).
+`-Q` log stayed 0 bytes for the whole first pass as this lane does; liveness was proven from
+`state.db` `messages` for session `20260920_055124_777dc4` (26 msgs in the first ~3 min, tool calls
+naming `internal/config` + `cmd/canopyd`), then from the tree
+(`internal/config/dbtarget.go` + `dbtarget_test.go` appearing, +173 lines). First pass commit
+**`31e6a8e2`**.
+
+**REJECT → rework (the load-bearing part of this tick):** foreman re-ran every acceptance criterion
+itself. A1-A9 all reproduced green (build / gofmt / vet / `go test ./internal/config/... ./cmd/canopyd/...`),
+but criterion A5/A6 exposed a real defect the brief had specified wrongly: in `cmd/canopyd/db_cmd.go`
+the `target.Describe()` print sat **after** `sqlitestore.ExportPostgres` returned nil, so the target
+line appeared only on SUCCESS. The row's own words are "the read-only case is quieter but still
+misleading; the **write case is the dangerous one**" — so a failed `db export-sqlite` (or one pointed
+at the wrong instance, the exact hazard the row was filed for) printed `Error: ...` with no indication
+of which database it touched. Re-dispatched the SAME lane with the defect folded in
+(`/tmp/brief-df34-rework.md`, explicit "fix the listed issues in the existing working tree — some work
+may already be present, verify before editing; do not restart from scratch"). Rework commit
+**`7b8c71f1`**: the print moved before the export attempt, plus
+`TestExportSQLitePrintsTargetBeforeFailure` in `cmd/canopyd/db_cmd_test.go` (dead-port DSN,
+`t.TempDir()` destination, asserts `DB target:` index < `Error:` index and printed exactly once).
+
+**Judge the judge (anti-phantom check):** the new ordering test was proven load-bearing by REVERTING
+change 1 by hand in the working tree and re-running it:
+`--- FAIL: TestExportSQLitePrintsTargetBeforeFailure ... output must contain target and error lines:
+"Error: sqlite export: ping PostgreSQL: ... connection refused\n"` → `FAIL`. Restored from
+`/tmp/db_cmd.go.head`, re-ran green. A test that cannot fail is not a gate.
+
+**Gates (fresh, foreman-run, real numbers):**
+
+| Gate | Command | Result |
+|---|---|---|
+| Build | `go build ./...` | ok |
+| Format | `gofmt -l <5 touched files>` | empty |
+| Vet | `go vet ./...` | ok |
+| Lint (CI parity) | `~/go/bin/golangci-lint run ./...` v2.12.2 = workflow pin | **0 issues** |
+| Tests (CI shape) | `go test ./... -short -count=1 -timeout=300s` | **31 pkgs ok**, 0 FAIL |
+| Tests (touched) | `go test -count=1 ./internal/config/... ./cmd/canopyd/...` | ok / ok (34.9s) |
+| Secrets | `gitleaks detect --no-git -c .gitleaks.toml` | no leaks (~30s, 350 MB) |
+
+The guard's own PASS was NOT used as evidence: the diff is Go source so the guard did run, but this
+repo's history (CI-005) shows the diff-scoped guard and `golangci-lint` disagree — the pin-matched
+full-repo lint above is the load-bearing gate.
+
+**Live proof (isolated, real binary `/tmp/canopyd`):**
+- default env: `DB target: postgres host=localhost port=5432 database=canopy (built-in default; no DB_PORT / CANOPY_DB_URL set)` + the `:5437` WARNING, then `SELECTION_ACCURACY=4.44%` — i.e. a bare run now says out loud that it measured the 51358-node instance.
+- `DB_PORT=5437`: `DB target: postgres host=localhost port=5437 database=canopy (from DB_* / CANOPY_DB_URL)`, no warning, `SELECTION_ACCURACY=100.00%`.
+- `--json`: stdout stayed pure JSON (description diverted to stderr).
+- failure path `DB_PORT=5499 db export-sqlite` → target line **then** `Error: ... connection refused`, exit 1.
+- success path `DB_PORT=5437 db export-sqlite` → target line once, then `SQLite export complete: /tmp/y.sqlite`, exit 0.
+
+**GitReins:** task `DF-HERMES-CANOPY-34` created + started BEFORE dispatch, completed AFTER both
+commits — **Tier 1 PASS**, **Tier 2 PASS**, verdict **`466fe59c`** (the judge reproduced the criteria
+from the diff and the live runs itself). Task left in place for audit per fleet default.
+
+**Job closed without inventing a gap:** DF-34's stated ambiguity ("decide which instance is
+authoritative") is resolved by evidence rather than by a new decision row — :5437 is the documented
+dev/production-compose port across five repo surfaces, so the :5432 default is the bug and making it
+loud is the fix. No fresh follow-up row was needed; the write path (`db export-sqlite`) is now
+self-identifying on both outcomes.
+
+**CI:** no red runs inherited — the four most recent completed `master` runs are all
+`conclusion=success` (`1d0762d4`, `a7e23f75`, `b51ebf7e`, `2cf72a9b`). Runs for THIS tick's commits
+`31e6a8e2` / `7b8c71f1` are triggered by the push below and are recorded honestly as **in-flight**,
+never as green.
+
+**Bookkeeping:** `tasks.jsonl` — line 385 (DF-34) rewritten `pending` → `complete` with
+`commit_hash`/`worker_commit`/`judge_verdict`/`worker_summary`/`reasoning`/`tick`; **untouched lines
+byte-identical** (`git diff --numstat` = `1 1`). Status counts 342/15/27 → 343/15/26. `events.jsonl`
+appended ids **692** (`task_completed`) and **693** (`ci_health`). `board.jsonl` header: `ticks_total`
+522 → **524**, `last_commit` `7b8c71f1`, `last_tick`/`updated_at` stamped.
+
+**Next tick:** GAP-098's own named residual is the cheapest in-repo pick — cap the unbounded
+per-entry MISS output (`--max-miss-detail`; a 5-entry run emitted ~150 KB because one tree carries a
+~2000-node chain, reproduced this tick at 409 missing ids on a single `--sample 1` run). GAP-095/GAP-096
+stay decision-bound; DF-24/25 are load-flakes to watch; the QA-HERMES-CANOPY-* cluster stays
+fleet-infra owned.

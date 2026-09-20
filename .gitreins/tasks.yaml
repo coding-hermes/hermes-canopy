@@ -3028,3 +3028,49 @@ tasks:
   status: complete
   created_at: '2026-09-20T03:02:25.689549+00:00'
   completed_at: '2026-09-20T04:18:09.106673+00:00'
+- id: GAP-092
+  title: 'LOAD-HYGIENE: bound test-suite host load (audit + fix worst offender)'
+  criteria:
+  - Shared plugin integration fixture replaces per-test migrated DB build in internal/plugin/repo_test.go;
+    full-suite coverage kept (no skip-gates); TestPGRepo wall-clock measurably reduced
+    (72.3s -> 40.8s); no production-code changes
+  status: complete
+  created_at: '2026-09-20T07:47:28.471145+00:00'
+  completed_at: '2026-09-20T08:08:17.908705+00:00'
+- id: GAP-097
+  title: 'SQLite runtime cutover wave 1: CANOPY_DB_DRIVER flag + boot parity self-check
+    + PG->SQLite migration tool'
+  criteria:
+  - CANOPY_DB_DRIVER=postgres|sqlite flag selects the boot path with postgres as default;
+    startup parity self-check reports tables/columns/drift/orphans; canopyd db export-sqlite
+    performs an atomic PG->SQLite export with row-count verification; tests cover
+    the flag, the parity check and the exporter
+  status: complete
+  created_at: '2026-09-20T07:47:29.053189+00:00'
+  completed_at: '2026-09-20T08:08:18.605195+00:00'
+- id: GAP-098
+  title: Accuracy harness for the >90% context-selection vision metric
+  criteria:
+  - 'A scoring harness exists that measures compiled-manifest selection accuracy against
+    an independently-derived golden set: (1) a golden-set generator that derives expected
+    ancestry/topic membership from the GRAPH (SQL walk), NOT from the compiler output,
+    and can run against a live canopy DB; (2) a scoring runner that compiles for each
+    golden entry and reports an accuracy percentage plus per-miss detail; (3) unit
+    tests covering the scorer with a deterministic fixture, including a negative case
+    where a deliberately-dropped ancestry node lowers the score; (4) a CI job in .github/workflows/build.yml
+    that runs the scorer and prints the percentage; (5) no behaviour change to internal/context
+    compiler output (existing golden byte-parity tests still pass).'
+  status: complete
+  created_at: '2026-09-20T09:06:22.611403+00:00'
+  completed_at: '2026-09-20T09:35:39.654885+00:00'
+- id: DF-HERMES-CANOPY-34
+  title: Make the CLI's resolved Postgres target explicit (canopyd context-accuracy
+    + db export-sqlite)
+  criteria:
+  - Running canopyd context-accuracy or canopyd db export-sqlite with no DB_PORT/CANOPY_DB_URL
+    prints the resolved host/port/database and whether it came from env or the built-in
+    default, and warns loudly that :5432 is not the documented dev port (:5437). Unit
+    tests cover the pure description helper; existing suites stay green.
+  status: complete
+  created_at: '2026-09-20T10:49:47.236931+00:00'
+  completed_at: '2026-09-20T11:24:38.375916+00:00'
