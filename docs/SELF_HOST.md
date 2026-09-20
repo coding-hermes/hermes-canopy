@@ -149,6 +149,8 @@ canopyd -version
 
 ### Option 2: Docker Compose
 
+> **Rootless / per-user Docker:** If `docker info` or `docker compose` fails with `permission denied ... /var/run/docker.sock`, the host may expose Docker through a per-user socket such as `/run/bunker/<agent>/docker.sock`. Point the Docker CLI at that socket with `export DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock` (replace `<agent>` with your agent name).
+
 The repository includes a `docker-compose.yml` that runs `canopyd` + PostgreSQL together:
 
 ```bash

@@ -27,7 +27,6 @@ Every Card is a graph node with structured data.
 
 ```bash
 # Prerequisites
-go 1.25+
 PostgreSQL 16+
 Node.js 22+ (for frontend development)
 
@@ -592,6 +591,8 @@ Full reference (exit codes, thresholds, systemd units): see
 
 ### Docker (Recommended)
 
+> **Rootless / per-user Docker:** If `docker info` or `docker compose` fails with `permission denied ... /var/run/docker.sock`, the host may expose Docker through a per-user socket such as `/run/bunker/<agent>/docker.sock`. Point the Docker CLI at that socket with `export DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock` (replace `<agent>` with your agent name).
+
 ```bash
 # Optional but recommended: copy the env template (API_SERVER_KEY etc.)
 cp .env.example .env
@@ -726,7 +727,7 @@ METRICS_ENABLED=true \
 
 ### Prerequisites
 
-- Go 1.25+
+- go 1.25+ (required for build-from-source)
 - PostgreSQL 16+ (Docker recommended)
 - Node.js 22+ (for frontend development)
 - Make
