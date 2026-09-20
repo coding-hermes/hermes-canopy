@@ -39,7 +39,9 @@ func (h *ExportHandler) ExportTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the requesting user owns this tree.
+	// Authorization is enforced by TreeMembershipMiddleware at the route
+	// (server.go: membershipMW on /trees/{tree_id}/export). This handler only
+	// requires an authenticated caller; ownership/membership is the gate above.
 	userID := UserIDFromContext(r.Context())
 	if userID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")

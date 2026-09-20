@@ -151,21 +151,30 @@ type TreeMemberChecker interface {
 //
 //	/api/v1/nodes/{tree_id}/nodes/{node_id}   → tree_id at segment 3
 //	/api/v1/trees/{id}/...                     → tree_id at segment 3
+//	/api/v1/graph/trees/{id}/...               → tree_id at segment 4
 //
 // Routes without a tree ID segment (e.g., /api/v1/trees for listing) return empty.
 func treeIDFromPath(path string) string {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	// Expected: ["api", "v1", "nodes|trees", "{id}", ...]
+	// Expected: ["api", "v1", "nodes|trees|graph", ...]
 	if len(parts) < 4 {
 		return ""
 	}
 	if parts[0] != "api" || parts[1] != "v1" {
 		return ""
 	}
-	if parts[2] != "nodes" && parts[2] != "trees" {
+	switch parts[2] {
+	case "nodes", "trees":
+		return parts[3]
+	case "graph":
+		// Mounted under /graph: /graph/trees/{tree_id}/...
+		if len(parts) >= 5 && parts[3] == "trees" {
+			return parts[4]
+		}
+		return ""
+	default:
 		return ""
 	}
-	return parts[3]
 }
 
 // TreeMembershipMiddleware returns middleware that verifies the authenticated

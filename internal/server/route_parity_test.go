@@ -663,3 +663,72 @@ func TestRouteParityDocumentedReviewRoutes(t *testing.T) {
 		t.Fatal("extractor accepted a foreign route line — § Reviews could document a non-review route silently")
 	}
 }
+
+// TestRouteParityTreeScopedReadsAreMembershipGated pins the DF-HERMES-CANOPY-36
+// follow-up discovered by the Tier 2 judge: two tree-scoped READ surfaces were
+// mounted WITHOUT the membership gate that every sibling tree route carries.
+// ExportTree's auth check only tested userID != Nil (any authenticated caller
+// could export any tree — IDOR); GET /graph/trees/{id}/stats had no per-tree
+// authorization at all.
+//
+// Proof is middleware-chain comparison on the REAL router (the GAP-078 pattern):
+// chi.Walk reports each route's inline middleware chain, so a tree-scoped read
+// that lost (or never had) its gate shows a SHORTER chain than its gated
+// siblings. Status probes cannot see this — the auth middleware runs before
+// chi's NotFound, so an ungated matched route and a missing route can look alike.
+func TestRouteParityTreeScopedReadsAreMembershipGated(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".hermes", "canopy", "gateway"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := &routeDeps{
+		jwtSecret: "route-parity-test-secret",
+		connMgr:   transport.NewConnectionManager(nil),
+		cfg:       &config.Config{},
+	}
+	router := newRouter(deps)
+
+	type route struct{ method, pattern string }
+	mwCount := map[route]int{}
+	err := chi.Walk(router, func(method, pattern string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		if method == "" {
+			method = http.MethodGet
+		}
+		mwCount[route{method, normalizeChiPattern(pattern)}] = len(middlewares)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("chi.Walk failed: %v", err)
+	}
+
+	// Control: a tree-scoped route that has always carried the gate, mounted
+	// under a DIFFERENT mount than the surfaces under test (using a /graph
+	// sibling as control would be circular — the whole /graph mount was the
+	// defect).
+	control := route{http.MethodGet, "/api/v1/trees/{}/events"}
+	if _, ok := mwCount[control]; !ok {
+		t.Fatalf("control route %s %s is not mounted — cannot compare middleware classes",
+			control.method, control.pattern)
+	}
+
+	// The two surfaces the judge flagged, plus the remaining graph siblings.
+	gated := []route{
+		{http.MethodGet, "/api/v1/trees/{}/export"},
+		{http.MethodGet, "/api/v1/graph/trees/{}/stats"},
+		{http.MethodGet, "/api/v1/graph/trees/{}/subtree/{}"},
+		{http.MethodGet, "/api/v1/graph/trees/{}/ancestors/{}"},
+	}
+	for _, r := range gated {
+		n, ok := mwCount[r]
+		if !ok {
+			t.Errorf("tree-scoped read %s %s is NOT mounted on the real router", r.method, r.pattern)
+			continue
+		}
+		if n != mwCount[control] {
+			t.Errorf("tree-scoped read %s %s has %d inline middleware, want %d (same class as %s) — its membership gate is missing",
+				r.method, r.pattern, n, mwCount[control], control.pattern)
+		}
+	}
+}

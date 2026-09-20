@@ -445,7 +445,9 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		}
 
 		// Graph endpoints (BE-16 — real CRUD). Spec: ARCHITECTURE.md §3.
-		r.Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
+		// Tree-scoped reads — membership-gated (DF-HERMES-CANOPY-36 follow-up:
+		// GetGraphStats had no per-tree authorization at all).
+		r.With(membershipMW).Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 
 		// Workspace channels (SPEC-023 §5) — channel list, message POST,
 		// per-channel SSE event stream. In-memory registry; no DB for MVP.
@@ -465,7 +467,10 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// Registered directly (not via Mount) because /trees is already
 		// occupied by the TreeHandler router above.
 		exportHandler := handler.NewExportHandler(exportSvc)
-		r.Get("/trees/{tree_id}/export", exportHandler.ExportTree)
+		// Tree-scoped read — membership-gated (DF-HERMES-CANOPY-36 follow-up:
+		// ExportTree's auth check only tested userID != Nil, so any authenticated
+		// user could export any tree).
+		r.With(membershipMW).Get("/trees/{tree_id}/export", exportHandler.ExportTree)
 		r.Post("/trees/import", exportHandler.ImportTree)
 
 		// MCP endpoint — programmatic agent access.

@@ -113,7 +113,10 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 
 		// Graph endpoints.
 		graphHandler := NewGraphHandler(graphSvc)
-		r.Mount("/graph", graphHandler.Routes())
+		// Mirrors server.New: tree-scoped graph reads are membership-gated
+		// (DF-HERMES-CANOPY-36 follow-up — GetGraphStats had no per-tree
+		// authorization at all).
+		r.With(membershipMW).Mount("/graph", graphHandler.Routes())
 
 		// Approval endpoints.
 		r.Mount("/approvals", NewApprovalHandler(approvalSvc).Routes())
@@ -130,6 +133,11 @@ func newTestServerWithFullAPI(t *testing.T, pool *pgxpool.Pool) *approvalTestSer
 		// SSE endpoint (tree-scoped).
 		sseHandler := sse.NewHandler(sseHub)
 		r.Get("/sse/{tree_id}", sseHandler.HandleTreeEvents)
+
+		// Export endpoint — mirrors server.New (membership-gated tree-scoped read).
+		exportSvc := service.NewExportService(treeRepo, nodeRepo, edgeRepo, pool)
+		exportHandler := NewExportHandler(exportSvc)
+		r.With(membershipMW).Get("/trees/{tree_id}/export", exportHandler.ExportTree)
 	})
 
 	srv := httptest.NewServer(r)
