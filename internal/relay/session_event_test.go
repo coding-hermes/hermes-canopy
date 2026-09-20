@@ -25,6 +25,7 @@ func (h *captureSSEHub) Broadcast(_ uuid.UUID, event sse.SSEEvent) sse.SSEEvent 
 	h.mu.Unlock()
 	return event
 }
+func (*captureSSEHub) ReplayRecent(context.Context, uuid.UUID, string, int) error   { return nil }
 func (*captureSSEHub) ReplaySince(context.Context, uuid.UUID, string, string) error { return nil }
 func (*captureSSEHub) SubscriberCount(uuid.UUID) int                                { return 0 }
 func (*captureSSEHub) TotalConnections() int                                        { return 0 }

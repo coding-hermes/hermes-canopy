@@ -32,17 +32,50 @@ const DefaultApprovalTTL = int64(300)
 // collaborationServiceImpl is the real implementation of
 // collaboration.CollaborationService.
 type collaborationServiceImpl struct {
-	repo db.WorkspaceRepo
-	now  func() time.Time
+	repo       db.WorkspaceRepo
+	now        func() time.Time
+	userReader UserReader
+}
+
+// UserReader is the identity lookup seam used to resolve member handles.
+type UserReader interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*db.User, error)
+}
+
+// CollaborationServiceOption customizes collaboration service dependencies.
+type CollaborationServiceOption func(*collaborationServiceImpl)
+
+// WithUserReader enables display-name-backed member handles. A nil reader
+// deliberately preserves the UUID fallback for callers without identity data.
+func WithUserReader(reader UserReader) CollaborationServiceOption {
+	return func(s *collaborationServiceImpl) { s.userReader = reader }
 }
 
 // NewCollaborationService creates a CollaborationService backed by the
 // given WorkspaceRepo.
-func NewCollaborationService(repo db.WorkspaceRepo) collaboration.CollaborationService {
-	return &collaborationServiceImpl{
+func NewCollaborationService(repo db.WorkspaceRepo, opts ...CollaborationServiceOption) collaboration.CollaborationService {
+	s := &collaborationServiceImpl{
 		repo: repo,
 		now:  time.Now,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
+}
+
+// AuthorizeWorkspaceAccess reports whether userID may act inside workspaceID.
+// The handler deliberately collapses both errors into WORKSPACE_NOT_FOUND.
+func (s *collaborationServiceImpl) AuthorizeWorkspaceAccess(ctx context.Context, userID, workspaceID uuid.UUID) error {
+	if _, err := s.repo.GetWorkspaceByID(ctx, workspaceID); err != nil {
+		return collaboration.ErrNotFound
+	}
+	if _, err := s.repo.GetMember(ctx, workspaceID, userID); err != nil {
+		return collaboration.ErrNotWorkspaceMember
+	}
+	return nil
 }
 
 // CreateWorkspace creates a new workspace with the caller as admin.
@@ -380,9 +413,15 @@ func (s *collaborationServiceImpl) membersWithHandles(ctx context.Context, works
 
 	members := make([]collaboration.Member, 0, len(rows))
 	for _, m := range rows {
+		handle := m.UserID.String()
+		if s.userReader != nil {
+			if user, err := s.userReader.GetByID(ctx, m.UserID); err == nil && user != nil && strings.TrimSpace(user.DisplayName) != "" {
+				handle = user.DisplayName
+			}
+		}
 		members = append(members, collaboration.Member{
 			UserID:   m.UserID,
-			Handle:   m.UserID.String(),
+			Handle:   handle,
 			Role:     collaboration.Role(m.Role),
 			JoinedAt: m.JoinedAt,
 		})

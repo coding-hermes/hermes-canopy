@@ -16,6 +16,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
@@ -590,5 +592,284 @@ func TestAPI_WorkspaceChannels_PostAndFeedViaFullAPI(t *testing.T) {
 		}
 		t.Logf("full-API feed received channel_message: id=%s", data.MessageID)
 		return
+	}
+}
+
+type productionWiringWorkspaceRepo struct {
+	workspace db.WorkspaceRow
+	member    db.WorkspaceMemberRow
+}
+
+func (r *productionWiringWorkspaceRepo) CreateWorkspace(context.Context, *db.WorkspaceRow) (*db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetWorkspaceByID(_ context.Context, id uuid.UUID) (*db.WorkspaceRow, error) {
+	if id != r.workspace.ID {
+		return nil, db.ErrNotFound
+	}
+	row := r.workspace
+	return &row, nil
+}
+func (r *productionWiringWorkspaceRepo) UpdateWorkspace(context.Context, uuid.UUID, string, string, *uuid.UUID, int64) (*db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) DeleteWorkspace(context.Context, uuid.UUID) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) ListWorkspacesForUser(context.Context, uuid.UUID) ([]db.WorkspaceRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) AddMember(context.Context, uuid.UUID, uuid.UUID, int) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetMember(_ context.Context, workspaceID, userID uuid.UUID) (*db.WorkspaceMemberRow, error) {
+	if workspaceID != r.member.WorkspaceID || userID != r.member.UserID {
+		return nil, db.ErrNotFound
+	}
+	member := r.member
+	return &member, nil
+}
+func (r *productionWiringWorkspaceRepo) ListMembers(context.Context, uuid.UUID) ([]db.WorkspaceMemberRow, error) {
+	return []db.WorkspaceMemberRow{r.member}, nil
+}
+func (r *productionWiringWorkspaceRepo) UpdateMemberRole(context.Context, uuid.UUID, uuid.UUID, int) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) RemoveMember(context.Context, uuid.UUID, uuid.UUID) error {
+	return fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) CreateInvitation(context.Context, *db.InvitationRow) (*db.InvitationRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) GetInvitationByHash(context.Context, string) (*db.InvitationRow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (r *productionWiringWorkspaceRepo) ConsumeInvitation(context.Context, uuid.UUID) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func TestWorkspace_ChannelWorkspaceScopeProductionWiring(t *testing.T) {
+	workspaceID := uuid.New()
+	memberID := uuid.New()
+	nonMemberID := uuid.New()
+	repo := &productionWiringWorkspaceRepo{
+		workspace: db.WorkspaceRow{ID: workspaceID},
+		member:    db.WorkspaceMemberRow{WorkspaceID: workspaceID, UserID: memberID},
+	}
+	collabSvc := service.NewCollaborationService(repo)
+
+	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
+	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
+	h := NewWorkspaceHandler(hub, WithWorkspaceAccessChecker(collabSvc.AuthorizeWorkspaceAccess))
+	r := chi.NewRouter()
+	r.Use(AuthMiddleware("canopy-dev-secret"))
+	r.Mount("/api/v1/workspace/channels", h.Routes())
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	cases := []struct {
+		name       string
+		workspace  string
+		userID     uuid.UUID
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "member", workspace: workspaceID.String(), userID: memberID, wantStatus: http.StatusOK},
+		{name: "non-member", workspace: workspaceID.String(), userID: nonMemberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
+		{name: "unknown workspace", workspace: uuid.New().String(), userID: memberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
+		{name: "invalid workspace", workspace: "not-a-uuid", userID: memberID, wantStatus: http.StatusBadRequest, wantCode: "INVALID_WORKSPACE_ID"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := wsGet(t, srv, "/api/v1/workspace/channels?workspace_id="+tc.workspace, wsBearer(t, tc.userID))
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
+			}
+			if tc.wantCode == "" {
+				return
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Code != tc.wantCode {
+				t.Fatalf("error code = %q, want %q", body.Error.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func newScopedWorkspaceTestServer(t *testing.T, checker WorkspaceAccessChecker) (*httptest.Server, sse.SSEHub, uuid.UUID) {
+	t.Helper()
+	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
+	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
+	h := NewWorkspaceHandler(hub, WithWorkspaceAccessChecker(checker))
+	r := chi.NewRouter()
+	r.Mount("/api/v1/workspace/channels", h.Routes())
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	return srv, hub, uuid.NewSHA1(channelNamespace, []byte("general"))
+}
+
+func TestWorkspace_ChannelWorkspaceScopeGate(t *testing.T) {
+	workspaceID := uuid.New()
+	generalID := uuid.NewSHA1(channelNamespace, []byte("general"))
+	routes := []struct {
+		name   string
+		method string
+		path   string
+		body   any
+		want   int
+	}{
+		{"list member", http.MethodGet, "/api/v1/workspace/channels?workspace_id=" + workspaceID.String(), nil, http.StatusOK},
+		{"post member", http.MethodPost, "/api/v1/workspace/channels/" + generalID.String() + "/message?workspace_id=" + workspaceID.String(), map[string]any{"content": "scoped"}, http.StatusAccepted},
+		{"feed member", http.MethodGet, "/api/v1/workspace/channels/" + generalID.String() + "/feed?workspace_id=" + workspaceID.String() + "&include_heartbeat=false", nil, http.StatusOK},
+	}
+	for _, tc := range routes {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error { return nil })
+			var resp *http.Response
+			if tc.method == http.MethodPost {
+				resp = wsPost(t, srv, tc.path, "", tc.body)
+			} else {
+				resp = wsGet(t, srv, tc.path, "")
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status = %d, want %d; body=%s", resp.StatusCode, tc.want, body)
+			}
+		})
+	}
+
+	for _, tc := range routes {
+		t.Run(tc.name+" non-member", func(t *testing.T) {
+			srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error {
+				return fmt.Errorf("not a member")
+			})
+			var resp *http.Response
+			if tc.method == http.MethodPost {
+				resp = wsPost(t, srv, tc.path, "", tc.body)
+			} else {
+				resp = wsGet(t, srv, tc.path, "")
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403", resp.StatusCode)
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Code != "WORKSPACE_NOT_FOUND" {
+				t.Fatalf("error code = %q, want WORKSPACE_NOT_FOUND", body.Error.Code)
+			}
+		})
+	}
+
+	var calls int
+	srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error {
+		calls++
+		return nil
+	})
+	resp := wsGet(t, srv, "/api/v1/workspace/channels", "")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unscoped status = %d, want 200", resp.StatusCode)
+	}
+	if calls != 0 {
+		t.Fatalf("unscoped request invoked workspace checker %d times", calls)
+	}
+
+	for _, tc := range routes {
+		t.Run(tc.name+" invalid workspace id", func(t *testing.T) {
+			srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error {
+				t.Fatal("checker called for invalid UUID")
+				return nil
+			})
+			path := strings.Replace(tc.path, workspaceID.String(), "not-a-uuid", 1)
+			var resp *http.Response
+			if tc.method == http.MethodPost {
+				resp = wsPost(t, srv, path, "", tc.body)
+			} else {
+				resp = wsGet(t, srv, path, "")
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Code != "INVALID_WORKSPACE_ID" {
+				t.Fatalf("error code = %q, want INVALID_WORKSPACE_ID", body.Error.Code)
+			}
+		})
+	}
+}
+
+func readNextChannelMessage(t *testing.T, br *bufio.Reader) channelMessageData {
+	t.Helper()
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read SSE line: %v", err)
+		}
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		var env struct {
+			EventType string          `json:"event_type"`
+			Data      json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &env) != nil || env.EventType != "channel_message" {
+			continue
+		}
+		var data channelMessageData
+		if err := json.Unmarshal(env.Data, &data); err != nil {
+			t.Fatalf("decode channel_message: %v", err)
+		}
+		return data
+	}
+}
+
+func TestWorkspace_ChannelEvents_ReplayRecentOnFreshConnect(t *testing.T) {
+	srv, _, generalID := newWorkspaceTestServer(t, 0)
+	post := func(content string) sendMessageResponse {
+		resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message", "", map[string]any{"content": content})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("POST status = %d", resp.StatusCode)
+		}
+		var body sendMessageResponse
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode POST: %v", err)
+		}
+		return body
+	}
+
+	before := post("before-connect")
+	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed?include_heartbeat=false"
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(feedURL)
+	if err != nil {
+		t.Fatalf("GET feed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("feed status = %d, want 200", resp.StatusCode)
+	}
+	br := bufio.NewReader(resp.Body)
+	gotBefore := readNextChannelMessage(t, br)
+	if gotBefore.MessageID != before.MessageID || gotBefore.Content != "before-connect" {
+		t.Fatalf("replayed message = %#v, want id=%s content=before-connect", gotBefore, before.MessageID)
+	}
+
+	after := post("after-connect")
+	gotAfter := readNextChannelMessage(t, br)
+	if gotAfter.MessageID != after.MessageID || gotAfter.Content != "after-connect" {
+		t.Fatalf("live message = %#v, want id=%s content=after-connect", gotAfter, after.MessageID)
 	}
 }

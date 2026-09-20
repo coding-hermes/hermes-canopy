@@ -134,6 +134,7 @@ type SSEHub interface {
 	Unsubscribe(treeID uuid.UUID, clientID string)
 	Broadcast(treeID uuid.UUID, event SSEEvent) SSEEvent
 	ReplaySince(ctx context.Context, treeID uuid.UUID, clientID string, sinceEventID string) error
+	ReplayRecent(ctx context.Context, treeID uuid.UUID, clientID string, max int) error
 	SubscriberCount(treeID uuid.UUID) int
 	TotalConnections() int
 	Shutdown(ctx context.Context) error
@@ -392,6 +393,33 @@ func (h *hub) ReplaySince(_ context.Context, treeID uuid.UUID, clientID string, 
 			"event buffer overflow — some events may be missing"))
 	}
 
+	for _, ev := range events {
+		if err := client.Send(ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReplayRecent sends the retained events for a tree to one subscribed client.
+// The caller supplies the cap so route-specific replay remains bounded.
+func (h *hub) ReplayRecent(_ context.Context, treeID uuid.UUID, clientID string, max int) error {
+	client := h.clientByID(clientID)
+	if client == nil {
+		return ErrClientNotFound
+	}
+	if max <= 0 {
+		max = DefaultLogSize
+	}
+
+	events, truncated, err := h.log.Since(treeID, 0, max)
+	if err != nil {
+		return err
+	}
+	if truncated {
+		_ = client.SendRaw(formatErrorEvent(treeID, "EVENT_BUFFER_OVERFLOW",
+			"event buffer overflow — some events may be missing"))
+	}
 	for _, ev := range events {
 		if err := client.Send(ev); err != nil {
 			return err

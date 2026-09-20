@@ -450,8 +450,14 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.With(membershipMW).Mount("/graph", handler.NewGraphHandler(graphSvc).Routes())
 
 		// Workspace channels (SPEC-023 §5) — channel list, message POST,
-		// per-channel SSE event stream. In-memory registry; no DB for MVP.
-		r.Mount("/workspace/channels", handler.NewWorkspaceHandler(sseHub).Routes())
+		// per-channel SSE event stream. In-memory registry; workspace access
+		// is authorized by the collaboration service when available.
+		workspaceHandler := handler.NewWorkspaceHandler(sseHub)
+		if collabSvc != nil {
+			workspaceHandler = handler.NewWorkspaceHandler(sseHub,
+				handler.WithWorkspaceAccessChecker(collabSvc.AuthorizeWorkspaceAccess))
+		}
+		r.Mount("/workspace/channels", workspaceHandler.Routes())
 
 		// Agent roster (SPEC-023 §5 + §7) — list + detail with trust
 		// history timeline. In-memory registry; no DB for MVP.

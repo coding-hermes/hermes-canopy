@@ -103,6 +103,7 @@ func (h *sseHubStub) Broadcast(treeID uuid.UUID, event sse.SSEEvent) sse.SSEEven
 	h.count++
 	return event
 }
+func (*sseHubStub) ReplayRecent(context.Context, uuid.UUID, string, int) error   { return nil }
 func (*sseHubStub) ReplaySince(context.Context, uuid.UUID, string, string) error { return nil }
 func (*sseHubStub) SubscriberCount(uuid.UUID) int                                { return 0 }
 func (*sseHubStub) TotalConnections() int                                        { return 0 }

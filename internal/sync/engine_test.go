@@ -98,12 +98,16 @@ func (h *fakeSSEHub) Subscribe(ctx context.Context, treeID uuid.UUID, client sse
 	return nil
 }
 func (h *fakeSSEHub) Unsubscribe(treeID uuid.UUID, clientID string) {}
+func (h *fakeSSEHub) ReplayRecent(context.Context, uuid.UUID, string, int) error {
+	return nil
+}
+
 func (h *fakeSSEHub) ReplaySince(ctx context.Context, treeID uuid.UUID, clientID string, sinceEventID string) error {
 	return nil
 }
 func (h *fakeSSEHub) SubscriberCount(treeID uuid.UUID) int { return 0 }
-func (h *fakeSSEHub) TotalConnections() int                 { return 0 }
-func (h *fakeSSEHub) Shutdown(ctx context.Context) error    { return nil }
+func (h *fakeSSEHub) TotalConnections() int                { return 0 }
+func (h *fakeSSEHub) Shutdown(ctx context.Context) error   { return nil }
 
 func TestOnNodeMutation_BroadcastsNodeAdded(t *testing.T) {
 	treeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
