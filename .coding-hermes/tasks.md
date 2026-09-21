@@ -2996,3 +2996,20 @@ Pre-write: /ticks contiguous through tick542 (543 wrote none — gap in the narr
 
 ### Next tick
 Pending 23: DF-43 (P3 API.md multi-reference preflight contract — dogfood-2026-09-21, tractable docs+test row), DF-44 (P3 authorDisplayName fallback — needs owner call on populate-vs-render), DF-23 (P3 internal/hermes envelope), DF-25 (P4 handler timeout watch). Decision-bound: GAP-080 phase 3, GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Watch: DuckBrain /ticks gap at tick543 (unwritten narration); next E2E window per cadence; post-release, FTR-06 (Wails packaging) is the first big buildable feature row if the owner unparks it.
+
+## Tick 545 — 2026-09-21 ~08:04–08:25Z (WORK — DF-HERMES-CANOPY-43 CLOSED)
+
+**Verdict: WORK/OK.** Board at pick: 368 rows / 345 complete / 23 pending; tree clean, both remotes at parity, CI green on entry (tick 544 closed v0.1.0). **Picked DF-HERMES-CANOPY-43** (P3, dogfood-2026-09-21-human-path) — the freshest tractable row: the multi-reference preflight request contract missing from docs/API.md, forcing source inspection before a successful call. DF-44 (the sibling dogfood row) was deliberately NOT taken in the same tick: its fix needs an owner call (populate dev identity display name vs render a fallback).
+
+**Contract verified from source before dispatch** (brief pinned it, worker only documented): request `referenceSelectionRequest` (multi_reference_handler.go:54) source_node_ids/primary_source_id/profile_context_budget; response `ReferenceSelectionResult`/`ReferenceContextPreview`/`ReferenceParent` (multi_reference.go:304-348); token prefix mrs.v1, 5-minute expiry; errors REFERENCE_SOURCE_INVALID 400 / REFERENCE_SELECTION_TOKEN_INVALID 400 / _EXPIRED 410; §9.2 create consumes selection_token and answers 201 with node + N reference edges + context summary.
+
+**Dispatch:** ONE worker, gpt-5.6-luna @ openai-codex (the lane recent ticks used), brief /tmp/df43_brief.md, background -Q. Liveness judged via state.db messages (session 20260921_080407_56f238, 14 messages by +45s; -Q log stayed 0 bytes as expected). Worker exited at ~315s with commit 097e7942.
+
+**Verify:** diff scope docs/API.md only (+126/-0); placement §9.1 section directly before the existing §9.3 (line 638); all 3 added json blocks parse; 24 contract fields present and error codes correct; zero live-token-shaped strings. Guard tier-1 PASS (secrets/go_build/go_lint/go_tests — real full-mode run on the commit content). Tier-2 verdict 842ade06 PASS/COMPLETE — the judge independently matched every documented field to the Go wire shapes and ran the docs-consistency tests (route parity + documented-contract) green. CI run 35604607986 SUCCESS on 097e7942 (master). No red runs → no INT-CI row.
+
+**Land:** gitreins task complete (verdict folded in foreman_note; kept for audit). Board: DF-43 row → complete (surgical, untouched lines byte-identical; filing-era row got commit_hash/guard_result/ci_result appended per recipe); events +746 task_completed, +747 audit/tick_summary (max was 745); header last_tick/ticks_total 544→545/last_commit 19036154→097e7942 (4+/4-). Staged set: 3 board files + tasks.md + tracked .gitreins/tasks.yaml (lifecycle receipts).
+
+**Push:** origin + gitlab, rev-list 0/0.
+
+### Next tick
+Pending 22: DF-44 (P3 authorDisplayName fallback — needs owner call), DF-23 (P3 internal/hermes envelope), DF-25 (P4 handler timeout watch). Decision-bound: GAP-080 phase 3 (summarizer), GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Post-release: FTR-06 (Wails packaging) remains the first big buildable feature row if the owner unparks it.

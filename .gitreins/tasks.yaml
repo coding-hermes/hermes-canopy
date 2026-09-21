@@ -3307,3 +3307,12 @@ tasks:
   status: complete
   created_at: '2026-09-21T12:21:40.806541+00:00'
   completed_at: '2026-09-21T12:51:50.281024+00:00'
+- id: DF-HERMES-CANOPY-43
+  title: Multi-reference preflight request contract missing from docs/API.md
+  criteria:
+  - docs/API.md documents the reference-selections preflight request body, response
+    fields, and selection-token handoff exactly matching internal/service/multi_reference.go
+    wire shapes; no live token values; md/w of docs still consistent
+  status: complete
+  created_at: '2026-09-21T13:02:44.347006+00:00'
+  completed_at: '2026-09-21T13:12:45.558275+00:00'
