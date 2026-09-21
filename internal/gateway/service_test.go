@@ -491,8 +491,8 @@ func TestServiceStopRunNonTerminalStillCallsGateway(t *testing.T) {
 
 // ─── lifecycle: Close stops background writes (CI-006) ───────────────────
 //
-// The flake this guards: a state-file test ends, its deferred stub.Close()
-// wakes observe's error path, and persist() drops a .runs-*.jsonl.tmp into the
+// The flake this guards: a state-file test ends, its bounded stub cleanup
+// closes the SSE connection, and persist() used to drop a .runs-*.jsonl.tmp into the
 // test's t.TempDir() exactly while t.TempDir()'s cleanup os.RemoveAll is
 // between "remove children" and "unlinkat(dir)" — "directory not empty". The
 // tests below make that window deterministic instead of timing-dependent.
@@ -505,11 +505,21 @@ func TestServiceStopRunNonTerminalStillCallsGateway(t *testing.T) {
 type liveGatewayStub struct {
 	*httptest.Server
 
-	stopped atomic.Int64
+	stopped          atomic.Int64
+	firstEventDelay  time.Duration
+	eventStarted     chan struct{}
+	eventStartedOnce sync.Once
 }
 
 func newLiveGatewayStub(firstEvent string) *liveGatewayStub {
-	g := &liveGatewayStub{}
+	return newLiveGatewayStubWithDelay(firstEvent, 0)
+}
+
+func newLiveGatewayStubWithDelay(firstEvent string, delay time.Duration) *liveGatewayStub {
+	g := &liveGatewayStub{
+		firstEventDelay: delay,
+		eventStarted:    make(chan struct{}),
+	}
 	g.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -517,9 +527,25 @@ func newLiveGatewayStub(firstEvent string) *liveGatewayStub {
 			w.WriteHeader(http.StatusAccepted)
 			fmt.Fprint(w, `{"run_id":"run_test","status":"started"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/runs/run_test/events":
+			g.eventStartedOnce.Do(func() { close(g.eventStarted) })
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "data: %s\n\n", firstEvent)
+			if g.firstEventDelay > 0 {
+				timer := time.NewTimer(g.firstEventDelay)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			// A test stub must not let a full socket buffer turn cleanup into
+			// an unbounded wait. The request context covers the delay and the
+			// response deadline covers the write itself.
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", firstEvent); err != nil {
+				return
+			}
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
@@ -537,6 +563,26 @@ func newLiveGatewayStub(firstEvent string) *liveGatewayStub {
 		}
 	}))
 	return g
+}
+
+const liveGatewayStubCloseTimeout = time.Second
+
+func closeLiveGatewayStub(t *testing.T, stub *liveGatewayStub) {
+	t.Helper()
+	// Force active connections closed before waiting for httptest.Server.Close;
+	// this makes the handler's request context observable even if the client
+	// transport has not closed its side yet.
+	stub.CloseClientConnections()
+	done := make(chan struct{})
+	go func() {
+		stub.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(liveGatewayStubCloseTimeout):
+		t.Errorf("live gateway stub did not close within %s", liveGatewayStubCloseTimeout)
+	}
 }
 
 // dirEntry is one entry of a temp dir, captured so a test can prove that
@@ -611,7 +657,7 @@ func TestServiceCloseStopsWritesAfterTeardown(t *testing.T) {
 	stateFile := filepath.Join(dir, "runs.jsonl")
 
 	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
-	defer stub.Close()
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
 	// LIFO: this runs BEFORE t.TempDir's RemoveAll, which is exactly the
@@ -640,15 +686,41 @@ func TestServiceCloseStopsWritesAfterTeardown(t *testing.T) {
 	// Close must be idempotent: the second call returns without panicking.
 	svc.Close()
 
-	time.Sleep(250 * time.Millisecond)
 	settled := snapshotDir(t, dir)
 
 	assertSameDir(t, "as Close returned", before, afterClose)
-	assertSameDir(t, "250ms after Close returned", before, settled)
+	assertSameDir(t, "after the second Close returned", before, settled)
 	for _, e := range settled {
 		if strings.Contains(e.name, ".tmp") {
 			t.Fatalf("temp state file left behind after Close: %s", e.String())
 		}
+	}
+}
+
+// TestServiceCloseCancelsSlowSSEHandler is the short stress variant for
+// CI-006. The stub holds the first event before its write for five seconds;
+// Close must cancel that request instead of waiting for the client transport's
+// 30-second timeout or for the delayed handler to finish.
+func TestServiceCloseCancelsSlowSSEHandler(t *testing.T) {
+	stub := newLiveGatewayStubWithDelay(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`, 5*time.Second)
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
+	c, _ := NewClient(stub.URL, "k")
+	svc := NewService(c)
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-stub.eventStarted:
+	case <-time.After(time.Second):
+		t.Fatal("SSE handler did not start within 1s")
+	}
+
+	started := time.Now()
+	svc.Close()
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("Close waited %s for a cancelled slow SSE handler", elapsed)
 	}
 }
 
@@ -657,7 +729,7 @@ func TestServiceCloseStopsWritesAfterTeardown(t *testing.T) {
 // called more than once (including on a service that never started a run).
 func TestServiceCloseIdempotentWithoutStatePath(t *testing.T) {
 	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
-	defer stub.Close()
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
 	c, _ := NewClient(stub.URL, "k")
 
 	svc := NewService(c) // no state path at all
@@ -688,7 +760,7 @@ func TestServicePersistAfterCloseIsNoOp(t *testing.T) {
 	stateFile := filepath.Join(dir, "runs.jsonl")
 
 	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
-	defer stub.Close()
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
 	t.Cleanup(svc.Close)
@@ -719,7 +791,6 @@ func TestServicePersistAfterCloseIsNoOp(t *testing.T) {
 		t.Fatalf("premise broken: noteEvent did not update the record (status=%q)", rec.Status)
 	}
 
-	time.Sleep(100 * time.Millisecond)
 	assertSameDir(t, "after post-Close persist attempts", before, snapshotDir(t, dir))
 }
 
@@ -735,7 +806,7 @@ func TestServiceCloseConcurrentWithPersistIsRaceFree(t *testing.T) {
 	stateFile := filepath.Join(dir, "runs.jsonl")
 
 	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hi"}`)
-	defer stub.Close()
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewServiceWithState(c, stateFile)
 	t.Cleanup(svc.Close)
