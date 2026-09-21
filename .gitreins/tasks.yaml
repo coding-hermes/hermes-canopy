@@ -3281,3 +3281,19 @@ tasks:
   status: complete
   created_at: '2026-09-21T08:54:46.687352+00:00'
   completed_at: '2026-09-21T10:04:50.571618+00:00'
+- id: GAP-095
+  title: 'Usability dogfood round 2: human-path acceptance pass over the full core
+    loop'
+  criteria:
+  - A dogfood round-2 report exists at docs/dogfood/2026-09-21-integration.md covering
+    the full core loop (install, onboard, tree create, branch, synthesis/multi-reference,
+    agent-run surface, resume-next-day) executed as a real user would against the
+    deployed HEAD binary at :8091 and/or an isolated scratch instance from HEAD; every
+    friction observed is either filed as a DF-HERMES-CANOPY board row (next free id,
+    compact style) or explicitly recorded as no-friction; .coding-hermes/dogfood-log.md
+    carries a new 2026-09-21 line with an explicit verdict; the work is committed
+    with the repo co-author trailer and pushed to BOTH origin and gitlab with 0 unpushed
+    commits.
+  status: complete
+  created_at: '2026-09-21T10:29:48.234165+00:00'
+  completed_at: '2026-09-21T10:50:54.828550+00:00'
