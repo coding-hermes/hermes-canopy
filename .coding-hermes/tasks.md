@@ -2943,7 +2943,7 @@ Worker: gpt-5.6-luna @ openai-codex (default lane; glm demoted after 3 dead disp
 Worker used the DF-8 scratch recipe (isolated DB canopy_scratch_095_48df872f, port 8094, own HOME/file root, env -i): install→healthy 3.707s; tree/reply/fork 201s; multi-reference preflight 200 + reply 201 (source_count=2); cards 201; 7 viewers; markdown dispatch 200. ONE real gateway run on live :8091 (dev JWT, 20-token prompt): 202 → completed, 11 SSE events incl run.completed, manifest hash present. Resume-next-day: restart same DB+HOME → first useful page 510ms (< 30s promise). Live DB untouched (read-only probes only).
 
 ### CI
-gh run list at tick start: 5/5 success (latest 35586666903-era tick 541 closeout, master). No failures to flag. Closeout CI: pending → GREEN (run for the board closeout commit, verified before final push).
+gh run list at tick start: 5/5 success (latest 35586666903-era tick 541 closeout, master). No failures to flag. Closeout CI: run 35591423089 success on 6d24b8ae (single run covers the board-closeout + gitreins commits); worker commits a1884c2f/3998b01c green on their own push.
 
 ### GitReins
 task create + start GAP-095 (criterion written by foreman per canopy-ops recipe); after commits: `gitreins task complete GAP-095` → tier1 PASS (full test mode) + tier2 PASS **COMPLETE**, verdict **331922b1** (~9 min wall). tasks.yaml: 229 complete.
