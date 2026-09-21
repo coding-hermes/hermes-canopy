@@ -463,6 +463,14 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		edgeDetail = edgeToDetail(createdEdge)
 	}
 
+	// Resolve the author's display label inside the transaction (DF-44) so the
+	// response carries it. An unknown author id is NOT an error — the label is
+	// simply empty (nodes.author_id has no FK).
+	authorName, err := resolveAuthorDisplayName(ctx, tx, created.AuthorID)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("%w: commit: %v", ErrDatabaseUnavailable, err)
 	}
@@ -477,6 +485,7 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 
 	// Build NodeDetail. Depth = parentDepth + 1 (root parentDepth = 0).
 	detail := nodeToDetail(created)
+	detail.AuthorDisplayName = authorName
 	detail.Depth = parentDepth + 1
 	detail.ChildCount = 0 // brand new node has no children yet
 
@@ -515,6 +524,14 @@ func (s *NodeServiceImpl) GetByID(ctx context.Context, nodeID uuid.UUID) (*NodeD
 	}
 
 	detail := nodeToDetail(*node)
+	// DF-44: the author label lives on users, not nodes.
+	if s.pool != nil {
+		name, nameErr := resolveAuthorDisplayName(ctx, s.pool, node.AuthorID)
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		detail.AuthorDisplayName = name
+	}
 	detail.Depth = s.computeDepth(ctx, nodeID, node.ParentID)
 	detail.ChildCount = s.computeChildCount(ctx, nodeID)
 	return detail, nil
@@ -541,6 +558,23 @@ func (s *NodeServiceImpl) ListByTree(ctx context.Context, treeID uuid.UUID) ([]N
 		detail.Depth = s.computeDepth(ctx, nodes[i].ID, nodes[i].ParentID)
 		detail.ChildCount = s.computeChildCount(ctx, nodes[i].ID)
 		details = append(details, *detail)
+	}
+
+	// DF-44: fill every author label in ONE batched lookup (no N+1 on top of
+	// the per-node depth/child-count queries above). Authors with no users row
+	// stay absent from the map and therefore render "".
+	if s.pool != nil && len(details) > 0 {
+		authorIDs := make([]uuid.UUID, 0, len(details))
+		for i := range details {
+			authorIDs = append(authorIDs, details[i].AuthorID)
+		}
+		names, nameErr := resolveAuthorDisplayNames(ctx, s.pool, authorIDs)
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		for i := range details {
+			details[i].AuthorDisplayName = names[details[i].AuthorID]
+		}
 	}
 	return details, nil
 }
@@ -601,6 +635,14 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 	}
 
 	detail := nodeToDetail(*updated)
+	// DF-44: an update response carries the author label too.
+	if s.pool != nil {
+		name, nameErr := resolveAuthorDisplayName(ctx, s.pool, updated.AuthorID)
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		detail.AuthorDisplayName = name
+	}
 	detail.Depth = s.computeDepth(ctx, nodeID, updated.ParentID)
 	detail.ChildCount = s.computeChildCount(ctx, nodeID)
 
@@ -966,6 +1008,93 @@ func (s *NodeServiceImpl) computeChildCount(ctx context.Context, nodeID uuid.UUI
 }
 
 // --- Mapping helpers --------------------------------------------------------
+
+// --- Author display-name resolution (DF-HERMES-CANOPY-44) -------------------
+//
+// NodeDetail carries the author's display label on every node surface. The
+// column is NOT on nodes (db.Node has no display-name field) and
+// nodes.author_id has no FK to users, so the label is resolved from
+// users.display_name in the SERVICE layer — the same contract the merge path
+// already implements (merge_service.go authorDisplayName).
+//
+// The lookup runs through displayNameQuerier so ONE helper serves both the
+// Create/Reply/Fork transaction (pgx.Tx) and the read paths (GetByID /
+// ListByTree / Update) on the pool.
+
+// displayNameQuerier is the narrow slice of pgx satisfied by both pgx.Tx and
+// *pgxpool.Pool, so the display-name lookup compiles against either.
+type displayNameQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// Compile-time proof that both connection shapes satisfy the seam.
+var (
+	_ displayNameQuerier = (*pgxpool.Pool)(nil)
+	_ displayNameQuerier = (pgx.Tx)(nil)
+)
+
+// resolveAuthorDisplayName returns users.display_name for authorID.
+//
+// Contract, shared with the merge path: an UNKNOWN author id answers "" with
+// NO error — nodes.author_id has no FK, so a stale or removed user must not
+// turn a node read into a 5xx. A genuine query failure wraps
+// ErrDatabaseUnavailable.
+func resolveAuthorDisplayName(ctx context.Context, q displayNameQuerier, authorID uuid.UUID) (string, error) {
+	var name string
+	err := q.QueryRow(ctx, `SELECT display_name FROM users WHERE id = $1`, authorID).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%w: author display name: %v", ErrDatabaseUnavailable, err)
+	}
+	return name, nil
+}
+
+// resolveAuthorDisplayNames resolves a batch of author ids in ONE query so
+// ListByTree does not add an N+1 round trip to a loop that already runs a
+// depth CTE and a child-count query per node. Ids with no users row are simply
+// absent from the returned map — callers render "" for them, matching
+// resolveAuthorDisplayName's unknown-author contract. Empty input performs no
+// query at all.
+func resolveAuthorDisplayNames(ctx context.Context, q displayNameQuerier, authorIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	names := make(map[uuid.UUID]string, len(authorIDs))
+	if len(authorIDs) == 0 {
+		return names, nil
+	}
+
+	unique := make([]uuid.UUID, 0, len(authorIDs))
+	seen := make(map[uuid.UUID]struct{}, len(authorIDs))
+	for _, id := range authorIDs {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	rows, err := q.Query(ctx, `SELECT id, display_name FROM users WHERE id = ANY($1)`, unique)
+	if err != nil {
+		return nil, fmt.Errorf("%w: author display names: %v", ErrDatabaseUnavailable, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id   uuid.UUID
+			name string
+		)
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, fmt.Errorf("%w: scan author display name: %v", ErrDatabaseUnavailable, err)
+		}
+		names[id] = name
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: iterate author display names: %v", ErrDatabaseUnavailable, err)
+	}
+	return names, nil
+}
 
 func nodeToDetail(n db.Node) *NodeDetail {
 	return &NodeDetail{

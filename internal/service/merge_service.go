@@ -641,16 +641,14 @@ func insertMergeEdge(ctx context.Context, tx pgx.Tx, treeID, sourceID, targetID 
 // authorDisplayName resolves §3.7's cached display name. nodes.author_id has
 // no FK, so an unknown author is answered with an empty name rather than an
 // error.
+//
+// DF-HERMES-CANOPY-44: the node surfaces (Create/Reply/Fork/GetByID/
+// ListByTree/Update) resolve the same label through
+// resolveAuthorDisplayName/resolveAuthorDisplayNames in node_service.go, so
+// the merge path and the node path share ONE contract. The signature here is
+// unchanged (pgx.Tx) and this wrapper is kept for the merge call site.
 func authorDisplayName(ctx context.Context, tx pgx.Tx, authorID uuid.UUID) (string, error) {
-	var name string
-	err := tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id = $1`, authorID).Scan(&name)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("%w: author display name: %v", ErrDatabaseUnavailable, err)
-	}
-	return name, nil
+	return resolveAuthorDisplayName(ctx, tx, authorID)
 }
 
 // normalizeMergeMetadata canonicalises the optional §3.2 metadata object: an
