@@ -3251,3 +3251,14 @@ tasks:
   status: complete
   created_at: '2026-09-21T05:43:48.078518+00:00'
   completed_at: '2026-09-21T05:57:14.770558+00:00'
+- id: QA-HERMES-CANOPY-9
+  title: ui-probe never exercises the canopy frontend (root package.json assumption)
+  criteria:
+  - A regression test proves a repo with only frontend/package.json (no root package.json)
+    gets a vite dev-server ui-probe attempt instead of a false N/A 'no web UI detected';
+    the harness patch adds a frontend/-aware arm to ~/.hermes/scripts/bunker-qa.sh;
+    the new test red-fails against the pre-fix harness extraction and passes on the
+    fixed one; existing harness regression tests still pass
+  status: complete
+  created_at: '2026-09-21T06:37:13.926357+00:00'
+  completed_at: '2026-09-21T07:19:36.246724+00:00'
