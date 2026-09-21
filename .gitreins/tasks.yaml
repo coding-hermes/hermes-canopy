@@ -3216,3 +3216,38 @@ tasks:
   status: complete
   created_at: '2026-09-21T02:20:54.629784+00:00'
   completed_at: '2026-09-21T02:46:54.027541+00:00'
+- id: QA-HERMES-CANOPY-17
+  title: QA sync ships tracked files only + size guard (bunker-qa.sh sync_repo)
+  criteria:
+  - 'Regression test scripts/test-bunker-qa-sync-tracked.sh in this repo drives the
+    extracted sync_repo from ~/.hermes/scripts/bunker-qa.sh: against a fixture repo
+    containing tracked files plus gitignored/untracked junk (a .worktrees/ dir, an
+    untracked state file), the synced payload must contain every tracked file and
+    NONE of the untracked/gitignored junk; the same test must FAIL against the saved
+    pre-fix sync_repo (red-proof saved at edit time); a size guard emits a visible
+    measurement/fail signal; bash -n passes on the edited script; SYNC-OK/SYNC_ERR
+    contract preserved'
+  status: complete
+  created_at: '2026-09-21T04:59:17.484040+00:00'
+  completed_at: '2026-09-21T05:12:09.510786+00:00'
+- id: QA-HERMES-CANOPY-23
+  title: QA harness chaos cells grade false greens (QA-23 + QA-29)
+  criteria:
+  - 'scripts/test-bunker-qa-chaos-cells.sh drives the chaos-corruption and chaos-errorpath
+    cell logic extracted from the GENERATED remote script (~/.hermes/scripts/bunker-qa.sh
+    __gen-remote <proj>): (1) chaos-corruption must NOT grade OK ''next start unaffected/unverified-but-fine''
+    when the truncated candidate is neither git-tracked nor referenced by any project
+    source file - the pick must be rejected and the cell graded UNVERIFIED with an
+    explicit reason, proven by a fixture repo carrying only an untracked unreferenced
+    stray.db (RED: pre-fix logic grades OK); (2) chaos-corruption must still grade
+    a genuine tracked+referenced state store honestly (truncation handled = OK, app
+    crash = FAIL); (3) chaos-errorpath must NOT grade OK when the start probe never
+    ran the application (toolchain refusal such as ''go.mod file not found in current
+    directory'' or ''no Go files'') - it must grade INFO/UNVERIFIED naming the refusal,
+    proven by a Go cmd/-layout fixture where the pre-fix probe runs the entrypoint
+    from an empty cwd and grades OK; (4) bash -n passes on the edited script and the
+    existing regression tests scripts/test-bunker-qa-spawn-cleanup.sh and scripts/test-bunker-qa-sync-tracked.sh
+    still pass; red-proof saved at edit time for both cells.'
+  status: complete
+  created_at: '2026-09-21T05:43:48.078518+00:00'
+  completed_at: '2026-09-21T05:57:14.770558+00:00'

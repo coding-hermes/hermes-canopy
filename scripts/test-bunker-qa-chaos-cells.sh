@@ -4,8 +4,9 @@
 # Extracts corr_grade() and ep_grade() from the GENERATED remote script emitted
 # by the host QA harness, then drives both pure classifiers against fixtures.
 # The old classifiers are preserved in /tmp/qa23-old-corr.txt and
-# /tmp/qa23-old-ep.txt; the second run splices them into a generated-script
-# copy and must fail the same assertions.
+# /tmp/qa23-old-ep.txt, and the pre-fix empty-cwd probe is preserved in
+# /tmp/qa23-old-probe.txt; the second run splices the classifiers into a
+# generated-script copy and must fail the same assertions.
 #
 # Run from the repo root:
 #   bash scripts/test-bunker-qa-chaos-cells.sh
@@ -14,9 +15,12 @@ set -u
 SOURCE="${BUNKER_QA_SCRIPT:-$HOME/.hermes/scripts/bunker-qa.sh}"
 OLD_CORR=/tmp/qa23-old-corr.txt
 OLD_EP=/tmp/qa23-old-ep.txt
+OLD_PROBE=/tmp/qa23-old-probe.txt
 [ -f "$SOURCE" ] || { echo "FAIL: source script not found: $SOURCE" >&2; exit 1; }
 [ -s "$OLD_CORR" ] || { echo "FAIL: saved old corr_grade is missing: $OLD_CORR" >&2; exit 1; }
 [ -s "$OLD_EP" ] || { echo "FAIL: saved old ep_grade is missing: $OLD_EP" >&2; exit 1; }
+[ -s "$OLD_PROBE" ] || { echo "FAIL: saved old ep_probe is missing: $OLD_PROBE" >&2; exit 1; }
+command -v go >/dev/null 2>&1 || { echo "FAIL: go is required for the real Go fixture proof" >&2; exit 1; }
 
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
@@ -32,8 +36,10 @@ fi
 
 CORR_FUNC=$(awk '/^corr_grade\(\) \{/{f=1} f{print} f&&/^\}$/{exit}' "$GEN")
 EP_FUNC=$(awk '/^ep_grade\(\) \{/{f=1} f{print} f&&/^\}$/{exit}' "$GEN")
+EP_PROBE_FUNC=$(awk '/^ep_probe\(\) \{/{f=1} f{print} f&&/^\}$/{exit}' "$GEN")
 [ -n "$CORR_FUNC" ] || { echo "FAIL: could not extract corr_grade from $GEN" >&2; exit 1; }
 [ -n "$EP_FUNC" ] || { echo "FAIL: could not extract ep_grade from $GEN" >&2; exit 1; }
+[ -n "$EP_PROBE_FUNC" ] || { echo "FAIL: could not extract ep_probe from $GEN" >&2; exit 1; }
 
 passed=0
 failed=0
@@ -56,6 +62,21 @@ run_ep() { # rc, log, probe started yes/no
   local rc="$1" logfile="$2" started="$3"
   (
     eval "$EP_FUNC"
+    ep_grade "$rc" "$logfile" "$started"
+  )
+}
+run_ep_probe() { # repo, bin, empty cwd, logdir
+  local repo="$1" bin="$2" ep_dir="$3" logdir="$4"
+  (
+    cd "$repo" || exit 1
+    eval "$EP_PROBE_FUNC"
+    ep_probe "$bin" "$ep_dir" "$logdir"
+  )
+}
+run_old_ep() { # rc, log, probe started yes/no
+  local rc="$1" logfile="$2" started="$3"
+  (
+    eval "$(cat "$OLD_EP")"
     ep_grade "$rc" "$logfile" "$started"
   )
 }
@@ -144,6 +165,7 @@ run_suite() {
   result=$(run_ep 1 "$ROOT/no-command.log" na)
   check "no start command remains N/A" "$(result_status "$result")" N/A
 
+  run_real_fixture
   echo
   if [ "$failed" -eq 0 ]; then
     echo "PASS: $passed assertions"
@@ -151,6 +173,87 @@ run_suite() {
   fi
   echo "FAIL: $failed of $((passed+failed)) assertions failed." >&2
   return 1
+}
+
+# [4] real Go cmd/-layout fixture proves the extracted errorpath probe starts the app
+run_real_fixture() {
+  echo "[4] real Go fixture: extracted ep_probe build plus empty-cwd pre-fix proof"
+FIXTURE="$ROOT/ep-repo"
+mkdir -p "$FIXTURE/cmd/app"
+printf '%s\n' 'module qa23/fixture' 'go 1.26' > "$FIXTURE/go.mod"
+printf '%s\n' \
+  'package main' \
+  '' \
+  'import (' \
+  '    "fmt"' \
+  '    "os"' \
+  ')' \
+  '' \
+  'func main() {' \
+  '    config := os.Getenv("QA23_CONFIG_PATH")' \
+  '    if config == "" {' \
+  '        fmt.Fprintln(os.Stderr, "missing config path")' \
+  '        os.Exit(2)' \
+  '    }' \
+  '    if _, err := os.Stat(config); err != nil {' \
+  '        fmt.Fprintf(os.Stderr, "config missing: %s: %v\n", config, err)' \
+  '        os.Exit(2)' \
+  '    }' \
+  '    fmt.Println("config loaded")' \
+  '}' > "$FIXTURE/cmd/app/main.go"
+MISSING_CONFIG="$FIXTURE/config-that-does-not-exist.json"
+export QA23_CONFIG_PATH="$MISSING_CONFIG"
+EP_EMPTY="$ROOT/ep-empty"
+EP_LOGD="$ROOT/ep-log"
+mkdir -p "$EP_LOGD"
+ep_out=$(run_ep_probe "$FIXTURE" 'go run ./cmd/app' "$EP_EMPTY" "$EP_LOGD")
+ep_started=$(printf '%s' "$ep_out" | cut -f1)
+ep_rc=$(printf '%s' "$ep_out" | cut -f2)
+echo "  ep_probe output: $ep_out"
+echo "  ep.log (real app output):"
+cat "$EP_LOGD/ep.log"
+check "extracted ep_probe reports the app started" "$ep_started" yes
+if [ -x "$EP_EMPTY/app" ]; then ok "extracted ep_probe built the cmd/app executable"; else bad "extracted ep_probe did not build $EP_EMPTY/app"; fi
+if [ "$ep_rc" -gt 0 ] 2>/dev/null; then ok "real app exits non-zero for missing config (rc=$ep_rc)"; else bad "real app did not exit non-zero (rc=$ep_rc)"; fi
+contains "$(cat "$EP_LOGD/ep.log")" "config missing: $MISSING_CONFIG" \
+  && ok "real ep.log names the missing config" \
+  || bad "real ep.log does not name the missing config"
+real_result=$(run_ep "$ep_rc" "$EP_LOGD/ep.log" "$ep_started")
+check "ep_grade accepts the real started-app errorpath" "$(result_status "$real_result")" OK
+
+PRE_EMPTY="$ROOT/pre-fix-empty"
+PRE_LOGD="$ROOT/pre-fix-log"
+PRE_RC_FILE="$ROOT/pre-fix-rc"
+mkdir -p "$PRE_LOGD"
+contains "$(cat "$OLD_PROBE")" 'mkdir -p "$EP_DIR" && cd "$EP_DIR" && ( timeout 15 $BIN ) >"$LOGD/ep.log" 2>&1' \
+  && ok "saved pre-fix probe is the empty-cwd go-run body" \
+  || bad "saved pre-fix probe is not the required verbatim body"
+(
+  cd "$FIXTURE" || exit 1
+  EP_DIR="$PRE_EMPTY" LOGD="$PRE_LOGD" BIN='go run ./cmd/app'
+  eval "$(cat "$OLD_PROBE")"
+  printf '%s\n' "$ep_rc" > "$PRE_RC_FILE"
+)
+[ -s "$PRE_RC_FILE" ] || { echo "FAIL: saved pre-fix probe did not produce an rc" >&2; exit 1; }
+pre_rc=$(cat "$PRE_RC_FILE")
+pre_log=$(cat "$PRE_LOGD/ep.log")
+echo "  pre-fix probe command: $(tr '\n' ' ' < "$OLD_PROBE")"
+echo "  pre-fix rc: $pre_rc"
+echo "  pre-fix ep.log (toolchain refusal, not app output):"
+printf '%s\n' "$pre_log"
+if printf '%s' "$pre_log" | grep -qiE 'go[.]mod file not found|cannot find main module|no Go files'; then
+  ok "pre-fix empty-cwd probe produced a real Go toolchain refusal"
+else
+  bad "pre-fix empty-cwd probe did not produce a Go toolchain refusal"
+fi
+if ! contains "$pre_log" "config missing: $MISSING_CONFIG"; then
+  ok "pre-fix refusal log proves the application never ran"
+else
+  bad "pre-fix refusal log unexpectedly contains the application message"
+fi
+pre_old_result=$(run_old_ep "$pre_rc" "$PRE_LOGD/ep.log" no)
+echo "  pre-fix classifier result: $pre_old_result"
+check "pre-fix classifier reproduces the false green" "$(result_status "$pre_old_result")" OK
 }
 
 if [ -n "${QA23_RED_PROOF_RUN:-}" ]; then
@@ -166,7 +269,7 @@ fi
 
 run_suite || exit 1
 
-echo "[4] pre-fix classifier red proof"
+echo "[5] pre-fix classifier red proof"
 OLD_GEN="$ROOT/generated-old-remote.sh"
 awk -v old_corr="$OLD_CORR" -v old_ep="$OLD_EP" '
   BEGIN {
