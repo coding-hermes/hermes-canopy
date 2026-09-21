@@ -9,6 +9,8 @@ import (
 )
 
 // MigrateUp runs all pending migrations against the given database URL.
+// Recovers from a dirty migration state (dirty=true left by a hard kill
+// mid-migration) via the shared repair helper, mirroring MigrateWith.
 func MigrateUp(dbURL string) error {
 	src, err := iofs.New(canopy.MigrationFiles, "migrations")
 	if err != nil {
@@ -22,7 +24,7 @@ func MigrateUp(dbURL string) error {
 	}
 	defer func() { _, _ = m.Close() }()
 
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := runMigrateWithRepair(m); err != nil {
 		return err
 	}
 	return nil

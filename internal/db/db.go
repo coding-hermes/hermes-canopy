@@ -169,8 +169,8 @@ func (db *DB) MigrateWith(ctx context.Context, src fs.FS, dir string) error {
 	if err != nil {
 		return fmt.Errorf("db: migrate: %w", err)
 	}
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("db: migrate up: %w", err)
+	if err := runMigrateWithRepair(m); err != nil {
+		return err
 	}
 	db.migrated = true
 	return nil
