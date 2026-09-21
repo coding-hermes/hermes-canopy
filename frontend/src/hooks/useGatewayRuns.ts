@@ -38,7 +38,12 @@ export interface UseGatewayRunsReturn {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  startRun: (message: string, sessionId?: string, nodeId?: string) => Promise<string>;
+  startRun: (
+    message: string,
+    sessionId?: string,
+    nodeId?: string,
+    tokenBudget?: number,
+  ) => Promise<string>;
   stopRun: (runId: string) => Promise<void>;
   respondApproval: (
     runId: string,
@@ -80,12 +85,25 @@ export function useGatewayRuns(): UseGatewayRunsReturn {
    * gateway receives the node's COMPILED context and canopyd records the
    * compiler manifest on the run. Omitted (undefined) the call is exactly
    * the raw-text start it has always been.
+   *
+   * GAP-096: `tokenBudget` rides along when the caller previewed the
+   * compile first (audit-before-send) — the run is then computed with the
+   * same budget the manifest was previewed at. Omitted, the request body
+   * is byte-identical to the pre-GAP-096 shape.
    */
-  const startRun = useCallback(async (message: string, sessionId?: string, nodeId?: string) => {
-    const resp = await startGatewayRun(message, sessionId, nodeId);
-    await refresh();
-    return resp.run_id;
-  }, [refresh]);
+  const startRun = useCallback(
+    async (
+      message: string,
+      sessionId?: string,
+      nodeId?: string,
+      tokenBudget?: number,
+    ) => {
+      const resp = await startGatewayRun(message, sessionId, nodeId, tokenBudget);
+      await refresh();
+      return resp.run_id;
+    },
+    [refresh],
+  );
 
   const stopRun = useCallback(
     async (runId: string) => {

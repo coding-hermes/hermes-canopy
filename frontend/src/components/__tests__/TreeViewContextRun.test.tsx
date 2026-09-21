@@ -177,6 +177,11 @@ function routeFetch(url: string, init?: RequestInit): Response {
     return jsonResponse({ runs: contextRunStarted ? [CONTEXT_RUN] : [] });
   }
 
+  if (url.startsWith('/api/v1/context/')) {
+    // GAP-096: the audit dialog previews the compile before Send.
+    return jsonResponse({ content: 'Welcome to Hermes Canopy', manifest: CONTEXT_RUN.manifest });
+  }
+
   if (url === `/api/v1/trees/${TREE_ID}`) {
     return jsonResponse({ title: 'GAP-084 Tree' });
   }
@@ -293,12 +298,31 @@ describe('TreeView — node-scoped gateway runs (GAP-084)', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await flushPromises();
 
-    // The criterion: the request that leaves the UI carries node_id.
+    // GAP-096: the click opens the audit dialog (a preview GET, no POST
+    // yet). Confirming Send is what issues the context-aware start-run.
+    const send = container.querySelector(
+      '[data-testid="context-audit-send"]',
+    ) as HTMLButtonElement;
+    expect(send).not.toBeNull();
+    expect(startRunPosts).toHaveLength(0);
+
+    await act(async () => {
+      send.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushPromises();
+
+    // The criterion: the request that leaves the UI carries node_id —
+    // now alongside the budget the previewed manifest was computed with.
     expect(startRunPosts).toHaveLength(1);
     expect(startRunPosts[0]).toEqual({
       message: 'summarise this thread',
       node_id: NODE_A,
+      token_budget: 8000,
     });
 
     const url = String(fetchMock.mock.calls[0][0]);
@@ -355,6 +379,20 @@ describe('TreeView — node-scoped gateway runs (GAP-084)', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await flushPromises();
+
+    // GAP-096: confirm Send in the audit dialog before the run exists.
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="context-audit-send"]',
+        ) as HTMLButtonElement
+      ).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushPromises();
 
     const indicator = container.querySelector(
       '[data-testid="context-run-indicator"]',

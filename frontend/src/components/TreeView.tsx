@@ -24,6 +24,7 @@ import CollaborativeCursors from '../components/CollaborativeCursors.tsx';
 import ShareDialog from '../components/ShareDialog.tsx';
 import ContextManifestPanel from '../components/ContextManifestPanel.tsx';
 import ContextRunIndicator from '../components/ContextRunIndicator.tsx';
+import ContextAuditDialog from '../components/ContextAuditDialog.tsx';
 import { useGatewayRuns } from '../hooks/useGatewayRuns.ts';
 import {
   createTreeDoc,
@@ -60,6 +61,7 @@ import type {
 import { getColorForUser } from '../types/multiUser.ts';
 import { token, palette, alpha } from '../theme.ts';
 import { apiGet, apiPost } from '../lib/api.ts';
+import { getContextPreview } from '../lib/contextApi.ts';
 import {
   buildCreateNodeBody,
   buildSendMetadata,
@@ -418,28 +420,103 @@ export default function TreeView() {
     return gatewayRuns.find((run) => run.run_id === contextRunId) ?? null;
   }, [gatewayRuns, contextRunId]);
 
-  /**
-   * Start a run against the selected node's compiled context.
+  /*
+   * GAP-096: audit-before-send gate (GAP-080 phase 5b).
    *
-   * Throws on failure so `MessageComposer` keeps the user's text and
-   * renders the server's message in its existing inline error row — the
-   * same contract `onSend` has.
+   * `pendingRun` is armed the moment the user hits "Run with context".
+   * While it is non-null NO run request has been made — the POST only
+   * ever happens from the audit dialog's Send. The dialog itself previews
+   * the compile (GET /context/{node_id}) and requires an explicit
+   * Send / Adjust / Cancel before anything is sent.
+   */
+  const [pendingRun, setPendingRun] = useState<{ message: string } | null>(
+    null,
+  );
+
+  /**
+   * Start a run against the selected node's compiled context — THROUGH
+   * the audit gate (GAP-096).
+   *
+   * With a node selected this no longer POSTs immediately: it arms the
+   * pending run and opens the audit dialog. The composer's promise
+   * contract is preserved — the returned promise resolves only when the
+   * user confirms Send (so the textarea clears then), and rejects on
+   * Cancel or failure (so the user's text is kept). The actual POST and
+   * its error handling live in `confirmPendingRun`.
+   *
+   * With NO node selected the pre-GAP-096 behaviour is byte-identical:
+   * reject with the same message, make no request of any kind.
    */
   const handleRunWithContext = useCallback(
-    async (message: string) => {
+    (message: string) => {
       if (!selectedNodeId) {
-        throw new Error('Select a node to run with its compiled context.');
+        return Promise.reject(
+          new Error('Select a node to run with its compiled context.'),
+        );
       }
       setContextRunError(null);
+      setPendingRun({ message });
+      // Resolve only after Send completes; see `confirmPendingRun`.
+      return new Promise<void>((resolve, reject) => {
+        pendingRunResolveRef.current = { resolve, reject };
+      });
+    },
+    [selectedNodeId],
+  );
+
+  /** Resolve/reject handles for the promise `handleRunWithContext` returned. */
+  const pendingRunResolveRef = useRef<{
+    resolve: () => void;
+    reject: (reason?: unknown) => void;
+  } | null>(null);
+
+  /**
+   * The dialog's Send: proceed with `token_budget` = the budget the
+   * previewed manifest was actually computed with. Server errors keep
+   * the composer's text (reject) and surface in the existing inline row.
+   */
+  const confirmPendingRun = useCallback(
+    async (message: string, tokenBudget?: number) => {
+      const nodeId = selectedNodeId;
+      if (!nodeId) {
+        // Safety net: the dialog only opens with a selection.
+        pendingRunResolveRef.current?.reject(
+          new Error('Select a node to run with its compiled context.'),
+        );
+        pendingRunResolveRef.current = null;
+        setPendingRun(null);
+        return;
+      }
       try {
-        const runId = await startRun(message, undefined, selectedNodeId);
+        const runId = await startRun(message, undefined, nodeId, tokenBudget);
         setContextRunId(runId);
+        pendingRunResolveRef.current?.resolve();
+        pendingRunResolveRef.current = null;
+        setPendingRun(null);
       } catch (err) {
         setContextRunError(err instanceof Error ? err.message : String(err));
+        pendingRunResolveRef.current?.reject(err);
+        pendingRunResolveRef.current = null;
+        setPendingRun(null);
         throw err;
       }
     },
     [selectedNodeId, startRun],
+  );
+
+  /** The dialog's Cancel / dismissal: close with NO request of any kind. */
+  const cancelPendingRun = useCallback(() => {
+    pendingRunResolveRef.current?.reject(
+      new Error('Context run cancelled before send.'),
+    );
+    pendingRunResolveRef.current = null;
+    setPendingRun(null);
+  }, []);
+
+  /** Stable transport for the audit dialog's preview fetch. */
+  const fetchContextPreview = useCallback(
+    (budget: number | null) => getContextPreview(selectedNodeId ?? '', budget),
+    [selectedNodeId],
   );
 
   /**
@@ -733,6 +810,25 @@ export default function TreeView() {
         >
           Context run failed: {contextRunError}
         </p>
+      )}
+
+      {/*
+        GAP-096 audit-before-send gate — the pending run's audit moment.
+        While open, NO POST /gateway/runs has happened: the dialog previews
+        the compile and requires an explicit Send (which proceeds with the
+        budget the manifest was computed with), Adjust (re-preview with a
+        new ?budget=), or Cancel (no request at all).
+      */}
+      {pendingRun && selectedNodeId && (
+        <ContextAuditDialog
+          nodeId={selectedNodeId}
+          message={pendingRun.message}
+          getPreview={fetchContextPreview}
+          onConfirm={(tokenBudget) => {
+            void confirmPendingRun(pendingRun.message, tokenBudget);
+          }}
+          onClose={cancelPendingRun}
+        />
       )}
 
       {/* Message composer — bottom-docked, disabled for viewers */}
