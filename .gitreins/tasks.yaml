@@ -3190,3 +3190,29 @@ tasks:
   status: complete
   created_at: '2026-09-20T21:19:37.439805+00:00'
   completed_at: '2026-09-20T22:10:42.117112+00:00'
+- id: DF-HERMES-CANOPY-24
+  title: Harden gateway CI-006 teardown flake (TestServiceCloseStopsWritesAfterTeardown)
+  criteria:
+  - 'Internal/gateway hardened against the CI 30.03s teardown shape: stub SSE handler
+    cannot stall the test path (exits on request-context cancellation, no unbounded
+    waits), a stress repro or precise mechanism analysis pins the 30s source, go test
+    ./internal/gateway/ -count=50 exits 0, go vet + gofmt clean, diff scoped to internal/gateway/
+    or production change justified in writing.'
+  status: complete
+  created_at: '2026-09-21T01:16:55.434955+00:00'
+  completed_at: '2026-09-21T01:35:44.477767+00:00'
+- id: QA-HERMES-CANOPY-16
+  title: 'QA harness: spawn_agent retry ladder leaks spawned-but-unusable bunker agents
+    (QA-16) + chaos-disconnect 120s window shorter than the suite''s natural offline
+    duration (QA-22)'
+  criteria:
+  - 1) spawn_agent in ~/.hermes/scripts/bunker-qa.sh destroys any agent it spawned
+    but cannot use, before retrying or failing; 2) a new TRACKED regression test hermes-canopy/scripts/test-bunker-qa-spawn-cleanup.sh
+    proves it via a PATH-shimmed fake bunker CLI and FAILS against the old spawn_agent
+    (red proof recorded); 3) chaos-disconnect default window raised above the ~2.5min
+    natural offline suite duration (>=240s) with rationale in the cell message; 4)
+    bash -n clean on bunker-qa.sh and the existing test_bunker_qa_classifier.sh suite
+    still passes
+  status: complete
+  created_at: '2026-09-21T02:20:54.629784+00:00'
+  completed_at: '2026-09-21T02:46:54.027541+00:00'
