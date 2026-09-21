@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.0] - 2026-09-21
 
 ### App Card stream — client half (SPEC-PL-03 §5, §5.3, §6.1, §9)
 - The card SSE backend (`GET /api/v1/cards/{card_id}/events`, commit 628dce6) now has a consumer. New `frontend/src/types/card.ts` carries zod schemas for the three REAL wire shapes — `service.CardSummary` (the `card_snapshot` body, whose card type is tagged `type`, not `card_type`), the stored snake_case event row (`event_id`/`actor_kind`/`payload`/`created_at`) and the SSE envelope (`card_type` is `omitempty`, `sequence` is absent-or-0 on a heartbeat) — plus the §5.1 canonical camelCase types and pure wire→canonical adapters. Schemas constrain only what the server actually guarantees (no UUIDv7 regex, no `.strict()`, no `revision`/`dismissedAt`/`archivedAt` demands); every parse returns `{ok:true, value}` or `{ok:false, issues, sequence, eventId}` and never throws at the UI.
