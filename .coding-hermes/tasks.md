@@ -2701,3 +2701,80 @@ or **QA-HERMES-CANOPY-15/16/17/20** (P1 harness rows: these name `qa_discover.py
 **host scripts, not files in this repo** — a worker cannot land them here; they need the fleet-infra owner).
 Parked: GAP-076 (owner ruling, blocks GAP-077), GAP-080 phases 3/5b, GAP-096 (owner decision), DF-42* candidates from
 the 09-20 dogfood. Reap the two worktrees; verify CI on the board-closeout commit.
+
+## Tick 533 — 2026-09-20 ~22:45-23:55Z (WAVE RECOVERY + worker dispatch)
+
+### Verdict
+Recovery FIRST (mandated): the wave `hermes-canopy-2026-09-20-21-05-05` was already merged by tick 532 — recovery was
+pure bookkeeping, verified from evidence, not from the dead tick's `merge=pending` fields. Then ONE worker:
+**QA-HERMES-CANOPY-20** (P1) — the QA lane grades CLEAN one minute into a 7-15 min battery.
+Board: 360 rows / QA-20 → complete; pending 29 → 28.
+
+### Wave recovery (hermes-canopy-2026-09-20-21-05-05)
+| Worker | Branch | Merge sha | Ancestor of master | Board | Judge |
+|---|---|---|---|---|---|
+| DF-HERMES-CANOPY-40 | wt/DF-HERMES-CANOPY-40 | 790dad3d | yes (`merge-base --is-ancestor`) | complete | 2a8e4207 tier2 PASS/COMPLETE |
+| DF-HERMES-CANOPY-41 | wt/DF-HERMES-CANOPY-41 | 539e436f | yes | complete | 255f758b tier2 PASS/COMPLETE |
+
+Worktrees + branches were already reaped (empty `git worktree list`; both branch refs gone); remote parity was already 0.
+The ONLY open item was the manifest: `finished_at` set + recovery note, commit `545b8c38`, pushed, CI run 35541500449 GREEN.
+No re-dispatch, no hand-resolution. `events.jsonl` id 717 records the closeout.
+
+### Pick + rationale
+Pending set is decision-bound (GAP-076/078/080-3/080-5b/GAP-096 await owner rulings; GAP-095 waits on a DF-32 redeploy)
+or harness-owned. **Correction to tick 532's entry:** it wrote that QA-15/16/17/20 "name host scripts, not files in this
+repo — a worker cannot land them here". That is true for `qa_discover.py`/`bunker-qa.sh` edits, but **QA-20's fix direction
+lives in the DAG that DRIVES the script**: `~/hermes-dagger/examples/coding-hermes/qa.ts` (tracked, corsa-gated by
+`TestDemoPipelinesCheckAndTranspile`) — exactly the QA-HERMES-CANOPY-8 precedent, whose fix landed there in commit 4f18e70.
+P1, zero attempts, bounded scope → dispatched.
+
+### Dispatch / worker (hermes-dagger, master)
+- Model/provider: `gpt-5.6-luna` @ `openai-codex` (the repo's recent worker lane). Brief `/tmp/brief-qa20.md`;
+  log `/tmp/worker-qa20.log`; tool-tracked background process (NOT a nohup wrapper — tick-491 lesson).
+- **Attempt 1** — commit `07b532e`: bounded 15-min collect poll, `UNVERIFIED` marker cell, interpret guard.
+  **REJECTED by the Tier-2 judge** (verdict `116624b5`, tier1 FAIL / tier2 INCOMPLETE): the guard also keyed on
+  `p.cell_count === 0 || cellsArr.length === 0`, which overrides 4 pre-existing `TestQaInterpretDegradation*` tests whose
+  fixture is `mode:"bunker", cells:[], cell_count:0`. The judge proved the regression BOTH directions (parent `07b532e~1`
+  → those tests pass). I reproduced it independently before re-dispatching (4 FAILs, 9.7s).
+- **Attempt 2** (rework, SAME worker, feedback folded in) — commit `28c94f4`: guard narrowed to
+  `p.mode === "bunker" && collectUnverifiedCells.length > 0`. Positive evidence of an unfinished collect is the marker
+  cell parse_cells itself appends — never an empty cell array, which degraded-interpreter fixtures share.
+- Pushed: `07b532e`, then `28c94f4`; `git rev-list --count gitlab/master..HEAD` = 0.
+
+### Gates (fresh, on 28c94f4)
+| Gate | Result |
+|---|---|
+| `go build -o /dev/null ./cmd/dagger` | exit 0 |
+| `go vet ./...` | exit 0 |
+| `go test -count=1 -timeout 25m ./src/typescript/...` | **ok 189.766s** (the gate attempt 1 failed) |
+| `go test -count=1 ./src/typescript/ -run TestQaInterpretDegradation` | **ok 12.690s** (4/4, were 4 FAILs) |
+| `TestDemoPipelinesCheckAndTranspile` (corsa transpile incl. qa.ts, line 46) | ok 6.960s |
+
+### GitReins
+`task create QA-HERMES-CANOPY-20` (criterion written from title+detail) → `task start` → `task complete` on attempt 1 →
+**FAIL 116624b5** → rework → `task complete` again → **PASS 3406b06e** (tier1 PASS, tier2 COMPLETE, `Overall: PASS ✓`).
+Judge ran backgrounded, never foreground (180s foreground cap here).
+
+### CI
+- hermes-canopy: latest 3 runs all `success` (35541500449 closeout / 35540840546 merge / 35537215323).
+- hermes-dagger: pushed to GitLab (no GitHub Actions on this remote).
+
+### Off-by-one
+`POST /api/v1/problems/discover {"problem_class":"go-test-fixed-sleep-ci-flake-teardown"}` → **not_found** (no cached
+answer; the call was actually run, not copied). Nothing new debugged → no submission. `/health` ok, uptime 8h57m.
+
+### Bookkeeping
+- `tasks.jsonl`: QA-20 row pending→complete (1 line changed, `--stat` 2 +-), commit_hash `28c94f4`, judge id, worker_summary.
+  Compact style preserved; no unrelated line churn.
+- `events.jsonl`: ids **716** (task_completed QA-20) and **717** (recovery verification).
+- `board.jsonl`: `ticks_total` 532 → **533**, `last_tick` 2026-09-20 23:55:00.
+- `.coding-hermes/waves/hermes-canopy-2026-09-20-21-05-05.json`: `finished_at` + recovery note (545b8c38).
+
+### Next tick
+Highest-value remaining: **GAP-095** (usability dogfood round 2 — needs the DF-32 redeploy first; load
+`canopy-e2e-testing` on the first tick of the E2E window). Next in the QA harness family, same repo/pattern as QA-20:
+**QA-21** (harness reporting recurrences: ci-pass labelled 'act' with no workflow, ui-probe misses the Go dashboard),
+**QA-22** (120s chaos-disconnect window < suite duration — harness half only), **QA-23** (BIN detection `go run .` for
+cmd/ layouts → false green; appears ALREADY FIXED in bunker-qa.sh as of 2026-09-20 07:47 — re-verify against the live
+script before dispatching), **QA-9** (ui-probe looks for a root package.json; frontend lives in `frontend/`).
+Parked: GAP-076/078/080-3/080-5b/GAP-096 (owner rulings), GAP-081 (scope decision).
