@@ -2923,3 +2923,39 @@ Pre-write: see below. Written: /ticks/541 (event) — ids recorded post-write.
 
 ### Next tick
 22 pending: QA-HERMES-CANOPY-19 (P2 bunker substrate — verify bunker health before spending), GAP-095 (P2 dogfood round 2 — needs deploy-fresh binary + live probes; deploy is STALE per releng P0 audit: /home/kara/bin/canopyd exits 2), GAP-080 phase 3 (P3 compiler smarts), QA-19/21/24/25/26/28/31/32/33 (P3 harness cells — QA-31 probe-polling is the natural next pick), releng's RELENG-CANOPY-2026-09-21 (P0 version-prep proposal v0.1.0 — owner call). Watch: releng sibling commits mid-tick (swept my dispatch event into 3c26fb34 — harmless, verified).
+
+## Tick 542 — 2026-09-21 ~06:40Z (WORK)
+
+### Verdict
+Board: 368 rows / 313 unique ids / parse-clean; pending after this tick: 22 - GAP-095 + DF-42..44 filed = net 24 (GAP-095 closed, 3 new). Only project-owned pending P1/P2 before pick: GAP-095 (the single actionable row). Pick = GAP-095: P2 owner-alignment row, preconditions verifiable, exactly one tick of scope. Parked/other-owner: GAP-080 (P3, phase 3 needs retention decision + §8 amendment), GAP-081/DF-20 (decisions), QA-19 (bunker substrate), QA-24/25/26/28/31/32/33 (harness-owned), FTR-06/PL-03..06 (post-MVP specs).
+
+### Dispatch/Worker
+Precondition first (foreman-direct): DF-32 redeploy rerun at HEAD 6dc47e63 — `bash scripts/deploy-canopyd.sh` → DEPLOY OK (schema gate 48>=48, installed 43.4MB binary, restart, /health 200 schema_version=48, gateway smoke PASSED; active since 05:26:38 -05). Live :8091 now matches HEAD; GAP-095's stated precondition satisfied.
+Worker: gpt-5.6-luna @ openai-codex (default lane; glm demoted after 3 dead dispatches), brief /tmp/brief-gap095.md via /tmp/dispatch-gap095.sh tool-tracked background process. Liveness: state.db session 20260921_053135_0ccdce (0-byte -Q log, normal for luna; 126 messages), commit landed at ~06:05Z, process exited cleanly. 1 attempt, no rework.
+
+### Gates (foreman-run verification)
+- git diff HEAD~2..HEAD: 3 files +88 (docs/dogfood/2026-09-21-integration.md 84, dogfood-log 1, tasks.jsonl 3 rows) — co-author trailers verified.
+- Adversarial spot-checks: DF-42 grep `reference-selections` frontend/src = 0 (claim TRUE); DF-43 grep `profile_context_budget` docs/API.md = 0 — the `source_node_ids` hits at API.md:547 are the MERGE endpoint (different surface; the section header says "Merge Tree"); DF-44 authorDisplayName="" on fresh nodes consistent with bootstrap dev user (no display-name source).
+- Worker-run gates: go build exit 0; gitleaks 368MB scanned 0 leaks; BOARD_OK/EVENTS_OK jq parse.
+- Scratch cleanup: no canopy_scratch_% DBs remain, ports 8094/8099 free.
+
+### Live proof
+Worker used the DF-8 scratch recipe (isolated DB canopy_scratch_095_48df872f, port 8094, own HOME/file root, env -i): install→healthy 3.707s; tree/reply/fork 201s; multi-reference preflight 200 + reply 201 (source_count=2); cards 201; 7 viewers; markdown dispatch 200. ONE real gateway run on live :8091 (dev JWT, 20-token prompt): 202 → completed, 11 SSE events incl run.completed, manifest hash present. Resume-next-day: restart same DB+HOME → first useful page 510ms (< 30s promise). Live DB untouched (read-only probes only).
+
+### CI
+gh run list at tick start: 5/5 success (latest 35586666903-era tick 541 closeout, master). No failures to flag. Closeout CI: pending → GREEN (run for the board closeout commit, verified before final push).
+
+### GitReins
+task create + start GAP-095 (criterion written by foreman per canopy-ops recipe); after commits: `gitreins task complete GAP-095` → tier1 PASS (full test mode) + tier2 PASS **COMPLETE**, verdict **331922b1** (~9 min wall). tasks.yaml: 229 complete.
+
+### Off-by-one
+Health ok (uptime 9h12m). Discover `canopy-usability-dogfood-human-path` → not_found (no cached answer). Submitted `doc-grep-hit-different-endpoint-body` (sub_3ef582, post-debug): a grep hit for a request-field literal can belong to a DIFFERENT endpoint sharing field names — read the section header/route line before concluding a doc omits a contract.
+
+### Push health
+Worker pushed BOTH remotes itself: origin/master = gitlab/master = HEAD 3998b01c, rev-list count 0/0. Board closeout commit pushed to both remotes below.
+
+### Bookkeeping
+tasks.jsonl: GAP-095 → complete (1+/1- surgical, compact style preserved, PARSE_OK). events.jsonl: +739 task_completed (GAP-095), +740 audit/tick_summary. board.jsonl header: last_tick 06:40Z, ticks_total 542, last_commit a1884c2f (4+/4-). DuckBrain: pre-write ticks contiguous through tick541 (last key /ticks/tick541-qa30-dirty-migration-recovery); wrote /ticks/tick542-gap095-dogfood-round2 + /project/hermes-canopy/status/2026-09-21.
+
+### Next tick
+Pending 24: DF-42 (P2, NEW — multi-reference PWA affordance; tractable, scope frontend/src only), DF-43 (P3 API.md preflight contract), DF-44 (P3 authorDisplayName), DF-23 (P3 internal/hermes envelope), DF-25 (P3 handler timeout watch). Decision-bound: GAP-080 phase 3 (retention policy + §8 amendment), GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Watch: boardctl validate baseline ~40 errors/185 warnings (unchanged signature expected); next E2E window per tasks.md tail cadence.
