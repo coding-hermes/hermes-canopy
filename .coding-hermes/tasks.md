@@ -2778,3 +2778,52 @@ Highest-value remaining: **GAP-095** (usability dogfood round 2 — needs the DF
 cmd/ layouts → false green; appears ALREADY FIXED in bunker-qa.sh as of 2026-09-20 07:47 — re-verify against the live
 script before dispatching), **QA-9** (ui-probe looks for a root package.json; frontend lives in `frontend/`).
 Parked: GAP-076/078/080-3/080-5b/GAP-096 (owner rulings), GAP-081 (scope decision).
+
+## Tick 534 — 2026-09-21 ~00:17-01:37Z (worker dispatch — DF-HERMES-CANOPY-24)
+
+Verdict: WORK. 360 rows / 335 unique ids / 332 complete / 28 pending / 0 parse failures. Picked
+DF-HERMES-CANOPY-24 (P3, CI-only flake, ops-skill tractable list) — CI health on origin was green
+(3 latest runs success), so the P1 QA rows were the alternative; ALL of QA-HERMES-CANOPY-15/16/22/23
+target harness scripts that live OUTSIDE this repo (~/.hermes/scripts/bunker-qa.sh, qa_discover.py —
+untracked under /home/kara, no git repo to commit in; /home/kara/.hermes is NOT a git repo, the
+scripts have never been tracked). Rationale recorded: not landable from an in-repo tick; they need a
+harness-repo home (git init + remote) or a foreman-direct cross-tick. No depends_on among the 28
+pending rows is a wave of real code work this size — serial per project instruction (max ONE worker).
+
+Dispatch/Worker: gpt-5.6-luna @ openai-codex (repo's proven lane), brief /tmp/brief-df24.md,
+tool-tracked background `bash /tmp/dispatch-df24.sh` (no shell-wrapper nohup — ops lesson held),
+log /tmp/worker-df24.log (0 bytes until exit, luna -Q signature; liveness via tree: service_test.go
+dirty at ~4min, commit at ~15min). One attempt, 0 rework. Commit 9c938b39 (+83/−12, 1 file).
+
+Mechanism (pinned, worker + foreman verified): the CI 30.03s shape is the default gateway client
+HTTP timeout — `Timeout: 30 * time.Second` at internal/gateway/client.go:65 — covering the SSE body
+read; b336911b's deterministic rewrite fixed the write race but the OLD deferred stub.Close() ran
+BEFORE t.Cleanup(svc.Close), so teardown could wait on the in-flight SSE handler up to that 30s
+timeout under CI load. Fix is test-only: stub SSE handler exits on request-context cancellation,
+100ms write deadline, bounded (1s) CloseClientConnections teardown, sleeps removed, new stress test
+TestServiceCloseCancelsSlowSSEHandler (5s-delayed handler must teardown <1s; negative control
+demonstrated by the worker: removal of the ctx branch fails it at 1.00s).
+
+Gates (fresh, foreman-run): go test ./internal/gateway/ -count=25 → ok 10.13s (worker: count=50 ok
+16.5s); go vet OK; gofmt -l clean; golangci-lint run ./internal/gateway/ → 0 issues (CI-parity
+binary v2.12.2). Diff is test-only — no PG-gated packages touched.
+
+GitReins: task DF-HERMES-CANOPY-24 created + started + completed, tier2 PASS, verdict 0c3605f3
+(verdict text cites file:line evidence independently).
+
+Off-by-one: health not probed this tick beyond discovery calls — nothing non-trivial debugged
+(the mechanism was pinned by reading code, not debugging). No submit needed.
+
+CI: origin (github.com/coding-hermes/hermes-canopy) 3/3 success pre-tick (latest 2026-09-21T00:06:40Z,
+board tick-533 closeout). Post-push runs to be verified for both content 9c938b39 and board closeout.
+Push health: origin + gitlab both pushed this tick (gitlab was 2 behind; closed).
+
+Bookkeeping: tasks.jsonl line 308 status→complete (+commit_hash/worker_summary/judge_verdict,
+spaced style preserved), events.jsonl id 718 task_completed, board.jsonl ticks_total 534 +
+last_commit 9c938b39, tasks.md this entry. DuckBrain /ticks/534 + status key written (see below).
+
+Next tick: pending backlog unchanged except DF-24. Watch: (a) the four QA P1/P2 rows need a harness
+repo decision before any tick can land them; (b) GAP-080 phase 2b (UI slider) + GAP-096 (audit-gate
+UI) still waiting on the Bane product ruling recorded on GAP-096; (c) DF-25 (handler timeouts under
+PG load) is the next tractable in-repo row; (d) verify the two post-push CI runs before trusting
+green (content commit + board closeout both trigger CI).
