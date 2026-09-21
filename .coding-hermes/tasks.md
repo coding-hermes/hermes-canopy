@@ -2959,3 +2959,40 @@ tasks.jsonl: GAP-095 → complete (1+/1- surgical, compact style preserved, PARS
 
 ### Next tick
 Pending 24: DF-42 (P2, NEW — multi-reference PWA affordance; tractable, scope frontend/src only), DF-43 (P3 API.md preflight contract), DF-44 (P3 authorDisplayName), DF-23 (P3 internal/hermes envelope), DF-25 (P3 handler timeout watch). Decision-bound: GAP-080 phase 3 (retention policy + §8 amendment), GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Watch: boardctl validate baseline ~40 errors/185 warnings (unchanged signature expected); next E2E window per tasks.md tail cadence.
+
+## Tick 544 — 2026-09-21 ~07:45Z (WORK — RELEASE: v0.1.0 cut and published)
+
+### Verdict
+Board: 368 rows / 313 unique ids / parse-clean; pending after this tick: 23 (RELENG-CANOPY-2026-09-21 closed). PICK = the P0 open RELEASE-audit row (release engineering satellite injection, due today). All other pending rows: FTR-06/PL-03..06 post-MVP deps, decision-bound rows (GAP-080 phase 3, GAP-076/078/081, DF-20), bunker/harness QA rows (other-owner), DF-43/44/23/25 (P3, smaller than the P0). No wave: one release row, foreman-direct (non-source diff), zero dispatchable independent code tasks.
+
+### Stale premises corrected (row reasoning vs live state)
+- "VERSION ?= dev in Makefile (line 18)" — FALSE at HEAD: line 18 is `VERSION ?= $(shell git describe --tags --always --dirty ...)`, `-ldflags -X main.version=$(VERSION)` on line 19. An annotated v0.1.0 tag stamps the binary v0.1.0 with no code change; the "version prep bump commit" reduces to the CHANGELOG promotion.
+- "1 P1 open (QA-HERMES-CANOPY-30)" — STALE: QA-30 is `complete` on the board; the P1 blocker was already cleared before this tick.
+- "installed /home/kara/bin/canopyd exits 2 on version" — the flag is `-version` (Go flag package rejects bare `version` with usage + exit 2); the audit probed the wrong surface. Not a release blocker either way.
+
+### Release execution (foreman-direct; no worker — CHANGELOG + tag + artifacts, no source diff)
+1. CHANGELOG `## [Unreleased]` → `## [v0.1.0] - 2026-09-21` (1+/1-; verified honest: all post-rc1 sections present — cards client half fadd3c4f, retrieved tier bc473eed/bd381d1d, session snapshots 45c038db — nothing dropped vs rc1's Unreleased). Commit **19036154**, pushed origin, CI **success on that exact sha**.
+2. Artifacts: 5 platforms (linux/darwin/windows × amd64/arm64, CGO_ENABLED=0, `-ldflags -X main.version=v0.1.0`) + sha256sums.txt in dist/. `file` arch-verified (ELF x86-64 / ELF aarch64 / Mach-O arm64); linux_amd64 `-version` → v0.1.0. NOTE: Makefile has no `release:`/per-platform dist target — builds ran the existing build-embed-* recipes' flag set manually.
+3. Annotated tag v0.1.0 → 19036154, pushed origin (peeled sha verified) + gitlab.
+4. `gh release create v0.1.0` (notes /tmp/canopy-v010-notes.md, categorized, cites SHAs): published (NOT draft) 2026-09-21T12:37:02Z, 6 assets, sizes match dist/. **Published-bytes proof:** downloaded canopyd_linux_amd64 + sha256sums.txt from the release → `sha256sum -c` OK for that asset → binary `-version` prints v0.1.0.
+
+### Gates (foreman-run, fresh at HEAD 19036154)
+- go build + `go vet ./...` PASS; `CANOPY_TEST_ALLOW_SHARED_DB=1` 24-pkg sweep (`-p 1`, count=1) ALL ok + full `internal/handler` suite ok (351s) — no PG-cycle flakes, no CANOPY_TEST_DB_URL override.
+- Frontend: vitest 80 files / **1394/1394** green; oxlint 0 errors (pre-existing warnings only; zero frontend diff this tick).
+- gitleaks 369.8MB: 0 leaks. golangci-lint: green via CI on the exact commit (no Go diff; CI is the pinned-version authority). Pre-commit hook tier-1 PASS on the CHANGELOG commit.
+- CI health at tick start AND close: all runs success (board closeout run 35591423089-era and the release-prep run); no red runs to flag, no INT-CI row needed.
+
+### GitReins
+task create + start RELENG-CANOPY-2026-09-21 (criterion written by foreman per canopy-ops recipe). `task complete` #1 → tier2 verdict **4675d953 FAIL** — correctly: it graded MID-closeout (row still open, gitlab 1 behind, tag unpushed at grade time). Re-`task complete` AFTER closeout (expected PASS; verdict recorded here). Lesson submitted to off-by-one: `gitreins-judge-mid-closeout-fail-recomplete-after-closeout` (sub_7c3535, queued — ordering-mirror of class 2104's false-criterion case).
+
+### Board bookkeeping
+tasks.jsonl: RELENG row → complete with worker_summary/commit_hash=19036154/guard_result/ci_result/foreman_note (1+/1- surgical, parse-clean, untouched lines byte-identical). events.jsonl: +**744** task_completed, +**745** audit/tick_summary tick 544 (max was 743). board.jsonl header: last_tick 07:45 local, ticks_total 543→**544**, last_commit 85050e82→**19036154** (4+/4-). tasks.md: this entry. Staged-set check: only the 4 intended files.
+
+### Push health
+origin/master = gitlab/master = HEAD **19036154**, rev-list count 0/0; tag v0.1.0 on both remotes. Board closeout commit (below) pushed to both.
+
+### DuckBrain
+Pre-write: /ticks contiguous through tick542 (543 wrote none — gap in the narration chain, noted). Wrote /ticks/tick544-v010-release + /project/hermes-canopy/status/2026-09-21 (UUIDs recorded in tick key content; disk-verified).
+
+### Next tick
+Pending 23: DF-43 (P3 API.md multi-reference preflight contract — dogfood-2026-09-21, tractable docs+test row), DF-44 (P3 authorDisplayName fallback — needs owner call on populate-vs-render), DF-23 (P3 internal/hermes envelope), DF-25 (P4 handler timeout watch). Decision-bound: GAP-080 phase 3, GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Watch: DuckBrain /ticks gap at tick543 (unwritten narration); next E2E window per cadence; post-release, FTR-06 (Wails packaging) is the first big buildable feature row if the owner unparks it.
