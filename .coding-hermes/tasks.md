@@ -2827,3 +2827,61 @@ repo decision before any tick can land them; (b) GAP-080 phase 2b (UI slider) + 
 UI) still waiting on the Bane product ruling recorded on GAP-096; (c) DF-25 (handler timeouts under
 PG load) is the next tractable in-repo row; (d) verify the two post-push CI runs before trusting
 green (content commit + board closeout both trigger CI).
+
+## Tick 537 — 2026-09-21 ~04:40-05:40Z (worker dispatch — QA-HERMES-CANOPY-17; parallel-tick collision disclosed)
+
+Verdict: WORK. Pending set 25 → 23. Pick: QA-HERMES-CANOPY-17 (P1, attempts=0) — highest-value
+tractable row after the tick-534 "not landable" blocker evaporated: the QA harness scripts gained a
+git home (bunker-qa.sh tracked in the /home/kara dotfiles repo since 877a6f0), so QA-17/23 are now
+landable foreman-direct + worker. Wave not composed: the other P1/P2 rows share bunker-qa.sh
+(QA-23 is the same script's chaos cell) or are decision-bound (GAP-096).
+
+PARALLEL-TICK COLLISION (stewarded, no stomping): a sibling foreman tick wrote events 722-723 as
+"tick 536" at 05:15Z mid-window, closing QA-HERMES-CANOPY-15 via hermes-dagger 35a7b19 (judge
+9c4c4c66 tier2 cap-starred INCOMPLETE + foreman-measured full suite 172.6s EXIT 0; verdict artifact
+1e105c9d verified on disk). Its uncommitted board closeout (tasks.jsonl QA-15 flip, spaced style)
+was carried into my closeout commit as-is; my row edits are single-line surgical. My lane: QA-17
+(closed, below) + two foreman-direct host-script fixes whose pre-written work was sitting untracked/
+uncommitted in the scripts dir at tick start (mtime 22:29-23:23 previous night): qa_discover.py -qa
+exclusion (QA-15 discover half — live-verified: picks only real repos, qa-audit excluded
+workdir-not-git) → 47c5d00; buildx plugin bootstrap (QA-25/QA-CHIMERA-V2-32 — mirrors FIX 1
+compose pattern; closes the "buildx <0.17" environment gap QA-25 filed) → 1d8639c.
+
+Dispatch/Worker: gpt-5.6-luna @ openai-codex (repo's proven lane), brief /tmp/brief-qa17.md,
+tool-tracked background dispatch /tmp/dispatch-qa17.sh, liveness via state.db session
+20260921_000050_a78dee (started 05:00:53Z; -Q log 0 bytes = known signature). Worker edited host
+sync_repo + committed ONLY scripts/test-bunker-qa-sync-tracked.sh (9bd0f398, 185 lines, trailer).
+One attempt, 0 rework. Host sync_repo fix committed foreman-direct: f897d52 (dotfiles repo).
+
+Verify (foreman adversarial, all first-hand): test 16/16 green vs new sync_repo; RED-proof re-run
+by foreman: 6/16 fail vs saved pre-fix function (/tmp/qa17-old-sync_repo.txt) — junk shipped
+(.worktrees/, foo.db), size guard absent, AND old hardcoded dist/ exclude dropped a TRACKED file
+(bonus defect surfaced by the test). bash -n clean on edited script; host diff confined to
+sync_repo region; worker commit = single file with co-author trailer; SYNC-OK/SYNC_ERR contract +
+BUNKER_QA_SYNC_EXCLUDES preserved (--verbatim-files-from added for filename safety).
+
+Gates: gitreins task complete → tier1 PASS (full) + tier2 PASS COMPLETE, verdict 9fd23a0c, artifact
+.gitreins/history/2026-09-21/3fd66cd6/verdict.json. (First complete attempt fired from the session
+base dir — /home/kara has its own untracked .gitreins → "Task not found"; re-fired with explicit
+workdir. Submitting as off-by-one problem class: gitreins-task-complete-wrong-workdir-base.)
+CI: run 35563534050 success on 9bd0f398 (05:09:27Z). No Go/PG packages touched — full Go sweep
+skipped deliberately (shell + shell-test only); gitleaks inside tier1 PASS.
+
+GitReins: QA-HERMES-CANOPY-17 create→start→complete, verdict 9fd23a0c (tiers 1+2 PASS).
+Off-by-one: health ok (uptime 3h50m); discover canopy-maintenance-tick +
+gitreins-task-complete-wrong-workdir-base → not_found ×2 (honest); nothing debugged, no submit.
+
+Push health: canopy 9bd0f398 on origin + gitlab, rev-list 0/0. Dotfiles repo has no remote (local
+home repo — landing = commit, consistent with 877a6f0 precedent).
+
+Bookkeeping: tasks.jsonl QA-17 flip (line-level, others byte-identical; sibling's QA-15 flip
+carried); events.jsonl 724-725 (mine, tick 537); board.jsonl header ticks_total 537 + last_commit
+9bd0f398 (pretty-printed, written via json round-trip preserving shape); tasks.md this entry.
+DuckBrain /ticks/537 + status key written (ids in events below).
+
+Next tick: pending 23. Watch: (a) QA-23 residue — sync half fixed, verify the chaos cell's
+state-file pick against a synced tree on the next QA battery; (b) QA-26/28 (upgrade cell, tar-sync
+excludes .git) may be RE-EXAMINED: sync_repo now ships tracked files only, and .git stays excluded
+by design — likely still harness-design UNVERIFIED, decide keep-vs-close with the new context;
+(c) QA-12/13/21/29 harness reporting rows remain open; (d) GAP-095/096 still owner-decision-gated;
+(e) DF-25 handler PG-load timeout is the next tractable in-repo row.
