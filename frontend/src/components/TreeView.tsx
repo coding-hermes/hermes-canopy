@@ -63,10 +63,28 @@ import { token, palette, alpha } from '../theme.ts';
 import { apiGet, apiPost } from '../lib/api.ts';
 import { getContextPreview } from '../lib/contextApi.ts';
 import {
+  referencePreflight,
+  createMultiReferenceReply,
+} from '../lib/referenceApi.ts';
+import {
   buildCreateNodeBody,
   buildSendMetadata,
   composerPlaceholder,
 } from '../lib/composer.ts';
+import { GitMerge } from 'lucide-react';
+
+/**
+ * Minimum sources a multi-reference selection needs (§5.1). The backend
+ * rejects below this (REFERENCE_SOURCE_COUNT_TOO_LOW); the affordance
+ * stays disabled here so that rejection is unreachable from the UI.
+ */
+const MIN_SYNTHESIS_SOURCES = 2;
+/**
+ * Profile context budget sent with the §9.1 preflight. 16384 is the value
+ * the recorded contract exercises; the server quotes the actual allocation
+ * in the envelope's `context_budget` (§9.1).
+ */
+const SYNTHESIS_PROFILE_BUDGET = 16384;
 // ─── Mock membership ───────────────────────────────────────────────────
 
 interface Member {
@@ -386,6 +404,148 @@ export default function TreeView() {
   /** Whether the source-list inspector below the canvas is expanded. */
   const [referencePanelOpen, setReferencePanelOpen] = useState(false);
 
+  // ── DF-HERMES-CANOPY-42: synthesize from selected nodes ─────────────
+  //
+  // The two-step write path (§9.1 preflight → §9.2 create) had zero PWA
+  // callers. This is the human-reachable flow: pick ≥2 nodes, mint the
+  // signed selection token, write the synthesis. The canvas stays
+  // single-select (its click contract drives the inspector); the multi-
+  // select lives here as an explicit checklist in the header bar, the
+  // same place the page already puts page-level actions.
+
+  /** Explicit multi-select for the synthesis flow (selection order kept). */
+  const [synthesisSelection, setSynthesisSelection] = useState<string[]>([]);
+  /**
+   * Flow phase: `idle` shows the affordance; `previewing` holds a live
+   * selection token with the composer open; `submitting` is the in-flight
+   * create. The token only ever travels preflight → create — it is never
+   * parsed or persisted client-side.
+   */
+  const [synthesisPhase, setSynthesisPhase] = useState<
+    'idle' | 'previewing' | 'submitting'
+  >('idle');
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
+  const [synthesisContent, setSynthesisContent] = useState('');
+
+  /** Toggle one node in the synthesis selection (insertion order = §5.1 R#). */
+  const toggleSynthesisSelection = useCallback((nodeId: string) => {
+    setSynthesisError(null);
+    setSynthesisSelection((prev) =>
+      prev.includes(nodeId)
+        ? prev.filter((id) => id !== nodeId)
+        : [...prev, nodeId],
+    );
+  }, []);
+
+  /**
+   * The signed selection token from the last successful preflight (§9.1).
+   * Held in a ref rather than state: it is a write-path credential, not
+   * something any render consumes, and it must be readable from
+   * `submitSynthesis` without joining a callback dependency chain.
+   */
+  const synthesisTokenRef = useRef<string | null>(null);
+
+  /** Step 1 — preflight the selection; on 200 open the composer (§9.1). */
+  const startSynthesis = useCallback(async () => {
+    if (!treeId) return;
+    if (synthesisSelection.length < MIN_SYNTHESIS_SOURCES) return;
+    setSynthesisError(null);
+    try {
+      const envelope = await referencePreflight(treeId, synthesisSelection, {
+        profileContextBudget: SYNTHESIS_PROFILE_BUDGET,
+      });
+      // Opaque token handoff (§9.2): stored verbatim, spent once in step 2.
+      synthesisTokenRef.current = envelope.selection_token;
+      setSynthesisContent('');
+      setSynthesisPhase('previewing');
+    } catch (err) {
+      synthesisTokenRef.current = null;
+      setSynthesisError(
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }, [treeId, synthesisSelection]);
+
+  /** Step 2 — spend the token, then mirror the 201 node into the replica. */
+  const submitSynthesis = useCallback(async () => {
+    if (!treeId || synthesisPhase !== 'previewing') return;
+    const content = synthesisContent.trim();
+    if (!content) return;
+    setSynthesisError(null);
+    setSynthesisPhase('submitting');
+    try {
+      const created = await createMultiReferenceReply(treeId, {
+        selection_token: synthesisTokenRef.current ?? '',
+        content,
+        content_format: 'markdown',
+      });
+      // BUG-032 pattern: the canvas renders from the Yjs doc, not the REST
+      // response — merge the created node + its PERSISTED reference edges
+      // (§7.1: never inferred from parent_id) so it appears immediately and
+      // the inspector badge/edge styling work like any hydrated reply.
+      if (docRef.current) {
+        const createdNode = created?.node;
+        const createdEdges = created?.edges ?? [];
+        if (createdNode?.id) {
+          mergeBackendEdges(docRef.current, [
+            ...toEdgePayloads(
+              createdEdges.map((e) => ({
+                id: e.id,
+                source_id: e.source_node_id,
+                target_id: e.target_node_id,
+                edge_type: e.edge_type,
+                metadata: e.metadata ?? {},
+              })),
+            ),
+            // §7.1 display anchor: the created node's parent_id is the
+            // PRIMARY SOURCE, and one of the reference edges already
+            // carries that pair — without this guard the replica would
+            // double-wire R1. addEdges dedupes by (source, target, type),
+            // so the guard only fires when the anchor is edge-less.
+            ...(createdNode.parent_id &&
+            !createdEdges.some((e) => e.source_node_id === createdNode.parent_id)
+              ? [
+                  {
+                    id: `${createdNode.parent_id}->${createdNode.id}:anchor`,
+                    sourceId: createdNode.parent_id,
+                    targetId: createdNode.id,
+                    edgeType: 'reply',
+                    metadata: {},
+                  },
+                ]
+              : []),
+          ]);
+          mergeBackendNodes(docRef.current, [
+            {
+              id: createdNode.id,
+              parentId: createdNode.parent_id,
+              content: createdNode.content,
+              contentFormat: createdNode.content_format,
+              nodeType: createdNode.node_type,
+              authorId: createdNode.author_id,
+              metadata: createdNode.metadata,
+              createdAt: createdNode.created_at,
+            },
+          ]);
+        }
+      }
+      setSynthesisPhase('idle');
+      setSynthesisContent('');
+      setSynthesisSelection([]);
+    } catch (err) {
+      setSynthesisError(err instanceof Error ? err.message : String(err));
+      setSynthesisPhase('idle');
+    }
+  }, [treeId, synthesisPhase, synthesisContent]);
+
+  /** Cancel / dismiss: drop the composer and any error, keep the selection. */
+  const cancelSynthesis = useCallback(() => {
+    setSynthesisPhase('idle');
+    setSynthesisContent('');
+    setSynthesisError(null);
+  }, []);
+
+
   // ── GAP-084: node-scoped gateway runs ───────────────────────────────
 
   /**
@@ -702,6 +862,90 @@ export default function TreeView() {
           </span>
         )}
 
+        {/*
+          DF-HERMES-CANOPY-42 — synthesize from selected nodes. The
+          two-step multi-reference flow (§9.1 preflight → §9.2 create):
+          check ≥2 nodes here, hit "Synthesize", write the synthesis. The
+          checklist doubles as the discoverability hint when nothing is
+          selected; the canvas click remains single-select (it drives the
+          node inspector).
+        */}
+        <div
+          data-testid="multi-reference-bar"
+          className={`flex items-center gap-2 px-2 py-0.5 rounded-lg text-xs ${
+            synthesisSelection.length > 0 ? 'ml-auto' : ''
+          }`}
+          style={{
+            backgroundColor: alpha(palette.accent3, 0.08),
+            border: `1px solid ${alpha(palette.accent3, 0.2)}`,
+          }}
+        >
+          {tree.isReady && tree.nodes.length >= MIN_SYNTHESIS_SOURCES ? (
+            <details
+              className="relative"
+              onSubmit={(e) => e.preventDefault()}
+            >
+              <summary
+                className="cursor-pointer list-none select-none whitespace-nowrap"
+                aria-label="Select nodes to synthesize from"
+              >
+                Select {synthesisSelection.length > 0 ? `(${synthesisSelection.length})` : 'nodes'} ▾
+              </summary>
+              <div
+                className="absolute right-0 mt-1 max-h-64 overflow-y-auto rounded-lg shadow-lg p-1 z-50 w-64"
+                style={{
+                  backgroundColor: token.surfacePanel,
+                  border: `1px solid ${alpha(palette.accent3, 0.25)}`,
+                }}
+              >
+                {tree.nodes.map((n) => (
+                  <label
+                    key={n.id}
+                    className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-white/5"
+                  >
+                    <input
+                      type="checkbox"
+                      value={n.id}
+                      checked={synthesisSelection.includes(n.id)}
+                      onChange={() => toggleSynthesisSelection(n.id)}
+                    />
+                    <span className="truncate text-content-primary">
+                      {String(n.data?.label ?? n.data?.content ?? n.id).slice(0, 80)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </details>
+          ) : (
+            <span className="text-content-muted whitespace-nowrap">
+              Select nodes above to synthesize from them
+            </span>
+          )}
+          <button
+            data-testid="multi-reference-synthesize"
+            onClick={() => {
+              void startSynthesis();
+            }}
+            disabled={
+              tree.isReady === false ||
+              isViewer ||
+              synthesisPhase !== 'idle' ||
+              synthesisSelection.length < MIN_SYNTHESIS_SOURCES
+            }
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: alpha(palette.accent3, synthesisSelection.length >= MIN_SYNTHESIS_SOURCES ? 0.18 : 0.1),
+              color: token.accent3,
+              border: `1px solid ${alpha(palette.accent3, 0.24)}`,
+            }}
+            title={`Synthesize one reply from the selected nodes (pick at least ${MIN_SYNTHESIS_SOURCES}, up to 20)`}
+            aria-label="Synthesize from selected nodes"
+          >
+            <GitMerge className="w-3.5 h-3.5" />
+            Synthesize{synthesisSelection.length >= MIN_SYNTHESIS_SOURCES ? ` (${synthesisSelection.length})` : ''}
+          </button>
+        </div>
+
         {/* Share button (non-viewers only) */}
         {!isViewer && (
           <button
@@ -809,6 +1053,63 @@ export default function TreeView() {
           className="shrink-0 px-3 py-1 text-[11px] text-status-danger"
         >
           Context run failed: {contextRunError}
+        </p>
+      )}
+
+      {/*
+        DF-HERMES-CANOPY-42 step 2 — the synthesis composer. Rendered only
+        while a preflight selection token is live (`previewing` /
+        `submitting`); Send spends the token (§9.2) and merges the created
+        node into the replica, Cancel just drops it.
+      */}
+      {(synthesisPhase === 'previewing' || synthesisPhase === 'submitting') && (
+        <div
+          data-testid="multi-reference-composer"
+          className="shrink-0 border-t border-line-subtle bg-surface-panel px-3 py-2"
+        >
+          <textarea
+            data-testid="multi-reference-content"
+            value={synthesisContent}
+            onChange={(e) => setSynthesisContent(e.target.value)}
+            placeholder={`Synthesize a reply from ${synthesisSelection.length} selected nodes…`}
+            rows={3}
+            disabled={synthesisPhase === 'submitting'}
+            className="w-full rounded-lg bg-surface-base text-content-primary text-sm p-2 border border-line-subtle focus:outline-none focus:border-accent3"
+            aria-label="Synthesis content"
+          />
+          <div className="flex items-center gap-2 mt-1.5">
+            <button
+              data-testid="multi-reference-send"
+              onClick={() => {
+                void submitSynthesis();
+              }}
+              disabled={synthesisPhase === 'submitting' || !synthesisContent.trim()}
+              className="px-2.5 py-1 rounded-lg text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backgroundColor: token.accent3 }}
+            >
+              {synthesisPhase === 'submitting' ? 'Synthesizing…' : 'Create synthesis'}
+            </button>
+            <button
+              onClick={cancelSynthesis}
+              disabled={synthesisPhase === 'submitting'}
+              className="px-2.5 py-1 rounded-lg text-xs text-content-muted border border-line-subtle disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <span className="text-[11px] text-content-muted">
+              {synthesisSelection.length} sources · reply lands under the first selected node
+            </span>
+          </div>
+        </div>
+      )}
+
+      {synthesisError && (
+        <p
+          data-testid="multi-reference-error"
+          className="shrink-0 px-3 py-1 text-[11px] text-status-danger"
+          role="alert"
+        >
+          Synthesis failed: {synthesisError}
         </p>
       )}
 
