@@ -61,6 +61,47 @@ This starts two services:
 > default 5432. `make run` already defaults to `DB_PORT=5437`; if you run the raw
 > binary outside Docker (see §4), set `DB_PORT=5437` or adjust the compose file.
 
+### 2.1 Reboot durability (GAP-099)
+
+Both compose services declare `restart: unless-stopped` (postgres: GAP-099;
+canopyd already had it), and the host systemd user unit
+`canopy-canopyd.service` carries the same net for the case where the container is
+stopped for some other reason. Why this is written down: two host reboots on
+2026-09-21 left the live stack down 6h+ in a crash loop. The docker daemon came
+back — it IS enabled at boot — but `canopy-pg` did not, because the postgres
+service had no restart policy (container exited 255, `RestartPolicy=no`), and
+`canopy-canopyd.service` had `Restart=always` / `RestartSec=5` with no database
+dependency gate, so it crash-looped at ~690 exits/hour against a database that was
+not running yet.
+
+The split as it now stands:
+
+| Layer | Mechanism | What it covers |
+|-------|-----------|----------------|
+| compose `postgres` | `restart: unless-stopped` | the container comes back with the daemon at boot |
+| systemd user unit | `ExecStartPre=` → `docker start canopy-pg` (idempotent) | the container is stopped: manual stop, daemon restart race, a host where the compose stack was never brought up |
+| systemd user unit | `ExecStartPre=` → `pg_isready -U canopy` poll (30 tries, 1s apart) | a postgres that is still booting — canopyd is never exec'd against a dead DB |
+| systemd user unit | `Restart=always` / `RestartSec=5` | last resort only, no longer the primary recovery path |
+
+The tracked unit is the source of truth for what systemd runs:
+`deploy/systemd/canopy-canopyd.service`. `scripts/deploy-canopyd.sh` compares it
+with `~/.config/systemd/user/canopy-canopyd.service`, installs the repo copy
+atomically when they differ (or when the live copy is missing), and runs
+`systemctl --user daemon-reload` **before** restarting the service — the reboot
+fix is worth nothing if the running unit is still the old one.
+
+Manual recovery, if a reboot ever leaves the graph DB down again:
+
+```bash
+docker start canopy-pg                              # bring the graph DB back
+docker update --restart unless-stopped canopy-pg    # persist it across reboots
+systemctl --user restart canopy-canopyd             # restart the API on top of it
+```
+
+Regression coverage for all of the above (compose render, unit contents, the
+readiness poll's real exit codes, and the deploy-time unit sync) lives in
+`scripts/test-reboot-durability.sh`.
+
 ## 3. Database Migrations
 
 Migrations are **embedded in the canopyd binary** at compile time. The SQL files

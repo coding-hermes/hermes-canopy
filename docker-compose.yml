@@ -23,6 +23,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - canopy-net
+    # GAP-099: without a restart policy the daemon came back at boot but this
+    # container did NOT (exited 255, RestartPolicy=no) — the 2026-09-21 reboots
+    # left the graph DB dead and canopy-canopyd crash-looping against it for
+    # 6h+. The host systemd unit carries the same net (ExecStartPre).
+    restart: unless-stopped
 
   canopyd:
     build:

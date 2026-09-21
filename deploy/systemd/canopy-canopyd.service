@@ -1,0 +1,62 @@
+# Hermes Canopy — canopyd API server (host binary, gateway-linked).
+#
+# TRACKED SOURCE OF TRUTH for the systemd USER unit. The installed copy lives at
+# ~/.config/systemd/user/canopy-canopyd.service and is refreshed from this file
+# by scripts/deploy-canopyd.sh (step 3), which installs it atomically and runs
+# `systemctl --user daemon-reload` whenever the two differ. Edit this file, not
+# the live copy.
+#
+# GAP-099 — reboot durability (2026-09-21). Two host reboots left the live stack
+# down 6h+ in a crash loop, for two independent reasons:
+#
+#   1. docker-compose.yml's `postgres` service (container canopy-pg) carried NO
+#      restart policy. The docker daemon IS enabled at boot, so it came back —
+#      and canopy-pg stayed dead (exited 255, RestartPolicy=no). The compose
+#      side is fixed with `restart: unless-stopped`; the ExecStartPre= lines
+#      below are the second net for any other "the container is stopped" case
+#      (manual stop, daemon restart race, host with no compose up).
+#
+#   2. This unit had Restart=always/RestartSec=5 and no database dependency
+#      gate, so it re-exec'd against a database that was not running yet and
+#      crash-looped ~690 exits/hour ("PostgreSQL required/unreachable") for the
+#      whole outage. ExecStartPre= now starts canopy-pg and waits (max 30s) for
+#      pg_isready before canopyd is ever exec'd — a booting postgres is waited
+#      for, never raced. Restart=always/RestartSec=5 remain as the last resort.
+#
+# Manual recovery, if you ever need it by hand (see docs/INTEGRATION.md §2.1):
+#   docker start canopy-pg
+#   docker update --restart unless-stopped canopy-pg
+#   systemctl --user restart canopy-canopyd
+#
+# Detection is unchanged and independent (GAP-069/070 deploy_crashloop_alert,
+# hourly): this file is about recovery, that checker is about noticing.
+
+[Unit]
+Description=Hermes Canopy canopyd API server (host binary, gateway-linked)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# GAP-099: bring the database up before canopyd is exec'd. `docker start` on an
+# already-running container prints its name and exits 0 (idempotent), so this is
+# a no-op in the common case. If the docker daemon is not up yet the whole start
+# fails and systemd retries it after RestartSec=5 — canopyd is never exec'd
+# against a database that is not there.
+ExecStartPre=/home/kara/bin/docker start canopy-pg
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do /home/kara/bin/docker exec canopy-pg pg_isready -U canopy >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+
+WorkingDirectory=/home/kara/hermes-canopy
+EnvironmentFile=/home/kara/.hermes/.env
+Environment=HTTP_ADDR=:8091
+Environment=CANOPY_DEV=false
+Environment=METRICS_ENABLED=true
+Environment=CANOPY_DB_URL=postgres://canopy:canopy@127.0.0.1:5437/canopy?sslmode=disable
+Environment=HERMES_WEBUI_GATEWAY_BASE_URL=http://127.0.0.1:8642
+ExecStart=/home/kara/bin/canopyd serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
