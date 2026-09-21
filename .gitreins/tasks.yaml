@@ -3297,3 +3297,13 @@ tasks:
   status: complete
   created_at: '2026-09-21T10:29:48.234165+00:00'
   completed_at: '2026-09-21T10:50:54.828550+00:00'
+- id: RELENG-CANOPY-2026-09-21
+  title: "Release readiness audit \u2014 hermes-canopy rc1 \u2192 v0.1.0"
+  criteria:
+  - v0.1.0 annotated tag pushed to origin pointing at a CI-green master commit; CHANGELOG
+    promotes [Unreleased] to [v0.1.0]; gh release v0.1.0 published (not draft) with
+    version-stamped artifacts whose  output equals v0.1.0; board row closed with commit
+    hash; remote parity 0 unpushed
+  status: complete
+  created_at: '2026-09-21T12:21:40.806541+00:00'
+  completed_at: '2026-09-21T12:51:50.281024+00:00'
