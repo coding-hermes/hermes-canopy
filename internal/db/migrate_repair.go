@@ -27,6 +27,7 @@
 //     be forced beyond the embedded max version: main()'s stale-build
 //     guard treats a schema version greater than EmbeddedMaxVersion()
 //     as "binary predates schema" and refuses to start.
+
 package db
 
 import (
