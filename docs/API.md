@@ -635,6 +635,132 @@ unchanged.)
 A rejected merge writes nothing: node, parent edge and synthesis edges are
 committed together or not at all.
 
+### Reference Selection Preflight (SPEC-PL-06 §9.1)
+
+```
+POST /api/v1/trees/{tree_id}/reference-selections
+```
+
+Tree-scoped and membership-gated like the other tree-scoped write routes. This
+stateless preflight validates the ordered source selection, writes no graph rows,
+and returns a signed selection token valid for five minutes plus a preview
+manifest. Treat the selection token as opaque: do not parse or log it.
+
+**Request body:**
+
+```json
+{
+  "source_node_ids": [
+    "0191a8b2-7fff-7000-9000-000000000101",
+    "0191a8b2-7fff-7000-9000-000000000102"
+  ],
+  "primary_source_id": "0191a8b2-7fff-7000-9000-000000000101",
+  "profile_context_budget": 2048
+}
+```
+
+- `source_node_ids` — required array of UUID strings, 1..N entries, in
+  selection order; order is preserved and matters.
+- `primary_source_id` — optional UUID string; when present, it must be one of
+  `source_node_ids`.
+- `profile_context_budget` — optional integer token budget for the preview.
+
+Source IDs are decoded as strings server-side. A malformed ID returns the
+catalog error `REFERENCE_SOURCE_INVALID` (400), rather than a generic body
+error.
+
+**Response (200):**
+
+```json
+{
+  "selection_token": "mrs.v1.<opaque-payload>.<opaque-mac>",
+  "expires_at": "2026-09-21T13:07:00Z",
+  "tree_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "canonical_source_ids": [
+    "0191a8b2-7fff-7000-9000-000000000101",
+    "0191a8b2-7fff-7000-9000-000000000102"
+  ],
+  "primary_source_id": "0191a8b2-7fff-7000-9000-000000000101",
+  "is_synthetic_merge_point": true,
+  "branch_span": {
+    "common_ancestor_id": "0191a8b2-7fff-7000-9000-000000000001",
+    "source_branches": [
+      {
+        "source_id": "0191a8b2-7fff-7000-9000-000000000101",
+        "branch_root_id": "0191a8b2-7fff-7000-9000-000000000011",
+        "distance_from_root": 4
+      },
+      {
+        "source_id": "0191a8b2-7fff-7000-9000-000000000102",
+        "branch_root_id": "0191a8b2-7fff-7000-9000-000000000012",
+        "distance_from_root": 3
+      }
+    ]
+  },
+  "context_budget": {
+    "available_tokens": 2048,
+    "minimum_required_tokens": 512,
+    "estimated_tokens": 480,
+    "fits": true
+  },
+  "sources": [
+    {
+      "node_id": "0191a8b2-7fff-7000-9000-000000000101",
+      "source_label": "R1",
+      "color_key": "blue",
+      "branch_root_id": "0191a8b2-7fff-7000-9000-000000000011",
+      "content_hash": "91a2e5d22c17e5870f61ea6e9d501da80c2ac2735d15d5f3b6efb87c8c92856f",
+      "sequence_num": 101,
+      "content_preview": "First selected source preview..."
+    },
+    {
+      "node_id": "0191a8b2-7fff-7000-9000-000000000102",
+      "source_label": "R2",
+      "color_key": "green",
+      "branch_root_id": "0191a8b2-7fff-7000-9000-000000000012",
+      "content_hash": "a2b3c4d5e6f7890123456789abcdef0123456789abcdef0123456789abcdef01",
+      "sequence_num": 102,
+      "content_preview": "Second selected source preview..."
+    }
+  ]
+}
+```
+
+`canonical_source_ids` is deduplicated and returned in canonical order.
+`primary_source_id` identifies the selected primary source. `branch_span` is
+present only when `is_synthetic_merge_point` is `true`. `sources` contains one
+entry per selected source in selection order.
+
+**Error codes:** `REFERENCE_SOURCE_COUNT_TOO_LOW` (400),
+`REFERENCE_SOURCE_COUNT_TOO_HIGH` (400), `REFERENCE_SOURCE_DUPLICATE` (400),
+`REFERENCE_SOURCE_INVALID` (400), `REFERENCE_SOURCE_NOT_FOUND` (404),
+`REFERENCE_SOURCE_DELETED` (410), `REFERENCE_SOURCE_SYSTEM_FORBIDDEN` (400),
+`REFERENCE_TREE_MISMATCH` (400), `REFERENCE_PRIMARY_NOT_SELECTED` (400),
+`REFERENCE_CONTEXT_BUDGET_EXCEEDED` (422), `NOT_TREE_MEMBER` (403),
+`TREE_DELETED` (410), `TREE_NOT_FOUND` (404), `TOKEN_MISSING` (401),
+`SERVICE_UNAVAILABLE` (503).
+
+#### Handoff to §9.2
+
+Pass the opaque `selection_token` from this response to the create route within
+its five-minute lifetime. The token is consumed by
+`POST /api/v1/trees/{tree_id}/multi-reference-replies`:
+
+```json
+{
+  "selection_token": "mrs.v1.<opaque-payload>.<opaque-mac>",
+  "content": "The reply content...",
+  "content_format": "markdown",
+  "metadata": {},
+  "request_id": "0191a8b2-7fff-7000-9000-000000000901"
+}
+```
+
+The create route answers `201` with the node, the N reference edges, and the
+reference-context summary. An invalid token returns
+`REFERENCE_SELECTION_TOKEN_INVALID` (400); an expired token returns
+`REFERENCE_SELECTION_TOKEN_EXPIRED` (410).
+
 ### Get Reference Context (SPEC-PL-06 §9.3)
 
 ```
