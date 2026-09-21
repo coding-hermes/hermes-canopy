@@ -2885,3 +2885,41 @@ excludes .git) may be RE-EXAMINED: sync_repo now ships tracked files only, and .
 by design — likely still harness-design UNVERIFIED, decide keep-vs-close with the new context;
 (c) QA-12/13/21/29 harness reporting rows remain open; (d) GAP-095/096 still owner-decision-gated;
 (e) DF-25 handler PG-load timeout is the next tractable in-repo row.
+
+## Tick 541 — 2026-09-21 ~04:40-05:20Z (worker dispatch — QA-HERMES-CANOPY-30)
+
+### Verdict
+Board: 341 complete / 23 pending→22 (365 rows). CI 3/3 green pre-tick (incl. releng sibling 35584380523). Pick: **QA-HERMES-CANOPY-30 (P1, fresh QA finding 08:26Z, repro ×2 on bunker-las-02)** — canopyd crash-loops FOREVER on a compose volume left dirty by a hard kill mid-migration (`FTL ... Dirty database version 4`, no recovery path). P1 outranked the P2/P3 harness rows; wave skipped (no 2+ independent non-P3 rows — serial tick).
+
+### Dispatch / Worker
+glm-5.3-flash @ zai-glm-default — lane probed genuine (probe session `20260921_035447_dfdb30`: `API call #1 model=glm-5.3-flash provider=custom`, no fallback line; per doctrine the LANE_OK reply alone is not proof). Brief `/tmp/qac30-prompt.txt` (design pre-approved: probe re-run, accept already-applied via duplicate-object signatures, walk forward bounded, fail loud with manual recipe). Worker session `20260921_035559_447e6b`, background pid 1460636, ~57 min to commit. One commit `64658230` (+425/−3, 5 files): shared `runMigrateWithRepair`/`repairDirty` helper wired into BOTH `MigrateWith` (boot path, db.go:172) and `MigrateUp` (testutil path), tests in external package + internal unit file. Worker self-deviations (all library-verified via go doc/mod cache): ErrDirty has only `Version int`; poisoning is a single-row UPDATE (no WHERE version=N); reset primitive is `Force(database.NilVersion)` NOT `Force(0)`; `Force(N)+Up()` applies N+1 onward; row left AT max on final accept (never max+1 — stale-build guard); failure injection via MigrateWith fs.FS seam (test PG role is superuser).
+
+### Foreman verify (fresh runs, not worker claims)
+- **RED-proof**: reverted call sites to pre-fix (`git checkout 64658230~1 --`), ran the new regression tests → FAILED with the exact production signature (`db: migrate up: Dirty database version 4. Fix and force version.`), fail-loud test also failed pre-fix. Call sites restored; live-repair tests then PASS (6.9s).
+- Gates: `go build ./...` + `go vet ./...` OK; `CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -p 1 ./internal/db/...` → ok 112.6s (+ sqlite ok 19.5s); `go test ./internal/testutil/` → ok.
+- Lint parity: worker commit passed the hook's `go_lint` but golangci-lint v2.12.2 full-repo flagged ST1000 on the new file's package comment (the documented hook-vs-CI gap) → foreman fixed (blank line detach, `40f02464`), re-run = **0 issues**, committed + pushed.
+- Guard: `gitreins guard --staged-only` PASS (secrets/go_build/go_lint/go_tests); commit hook full-guard PASS also.
+
+### Live proof
+N/A this tick — no HTTP surface change; behavior proven at the migration layer against real PostgreSQL :5437 (recovery mid/latest-1/outofrange/MigrateUp/fail-loud all PASS post-fix).
+
+### CI
+Run **35586666903** (head 40f02464, covers 64658230+40f02464 in one push event): **success** — verified at 05:16Z before board close finalized. Pre-existing runs green.
+
+### GitReins
+Task QA-HERMES-CANOPY-30 create→start→complete (pre-commit); tier1 PASS, **tier2 `ba20f6a3` PASS COMPLETE** (verdict cites mechanism + test evidence; kept in tasks.yaml per fleet default). Optional delete skipped (audit trail).
+
+### Off-by-one
+Health: `{"status":"ok","uptime":"7h22m0s"}`. Discover pre-design: `golang-migrate-dirty-database-version-recovery` + `go-pg-migrate-dirty-schema-recovery` → both `not_found` (honest misses, fix designed from library verification). Submitted post-debug: `golang-migrate-dirty-migration-force-nilversion-recovery` (sub_0f6d4c, queued position 4).
+
+### Push health
+`git push origin master` 3c26fb34..40f02464; `git rev-list --count origin/master..HEAD` = 0. gitlab remote pushed (2cc8290a..40f02464); `gitlab/master..HEAD` = 0. NOTE: worker commit was NOT pushed by the worker (per brief) — foreman pushed after gates.
+
+### Bookkeeping
+tasks.jsonl: QA-HERMES-CANOPY-30 pending→in_progress (dispatch) →complete (closure: worker_status/completed_at/commit_hash 64658230/guard PASS/ci GREEN/worker_summary/foreman_note); row style preserved (spaced-separator QA-cron row normalized to compact on closure). events.jsonl: +736 dispatch (committed by sibling releng tick 3c26fb34 — content verified identical), +737 task_completed, +738 tick_summary. board.jsonl: ticks_total 537→538, last_commit 9bd0f398→40f02464, timestamps→05:10Z. tasks.md remains the only other file updated this tick.
+
+### DuckBrain
+Pre-write: see below. Written: /ticks/541 (event) — ids recorded post-write.
+
+### Next tick
+22 pending: QA-HERMES-CANOPY-19 (P2 bunker substrate — verify bunker health before spending), GAP-095 (P2 dogfood round 2 — needs deploy-fresh binary + live probes; deploy is STALE per releng P0 audit: /home/kara/bin/canopyd exits 2), GAP-080 phase 3 (P3 compiler smarts), QA-19/21/24/25/26/28/31/32/33 (P3 harness cells — QA-31 probe-polling is the natural next pick), releng's RELENG-CANOPY-2026-09-21 (P0 version-prep proposal v0.1.0 — owner call). Watch: releng sibling commits mid-tick (swept my dispatch event into 3c26fb34 — harmless, verified).
