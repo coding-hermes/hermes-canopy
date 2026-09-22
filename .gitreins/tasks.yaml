@@ -3338,3 +3338,15 @@ tasks:
   status: complete
   created_at: '2026-09-21T22:19:31.941925+00:00'
   completed_at: '2026-09-21T22:28:22.779659+00:00'
+- id: QA-HERMES-CANOPY-19
+  title: Bunker substrate degradation claim re-probe (tick 547)
+  criteria:
+  - 'Board row QA-HERMES-CANOPY-19 is closed as evidence work: the 2026-09-17 substrate-degradation
+    premise (bunker-las-03 wedged 8/8 users, las-02/las-04 refusing spawns, every
+    spawn deadline_exceeded) is re-probed LIVE with one spawn+exec+destroy cycle per
+    named server, per-server results recorded in the row closure, and the row''s remaining
+    asks (reaper command, authoritative server list, doctrine drift in bunker-qa.sh/dogfood
+    skill) are dispositioned in the close note.'
+  status: complete
+  created_at: '2026-09-22T11:31:25.845031+00:00'
+  completed_at: '2026-09-22T11:35:59.932926+00:00'

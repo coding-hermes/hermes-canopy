@@ -3047,3 +3047,35 @@ Pre-write: /ticks contiguous through tick545 (tick543 gap is historical, noted i
 
 ### Next tick
 Pending **21**: DF-23 (P3 internal/hermes envelope) and DF-25 (P4 handler timeout watch) are the remaining tractable rows. Decision-bound (owner): GAP-080 phase 3, GAP-076 (blocks GAP-077), GAP-078, GAP-081, DF-20. Post-MVP feature specs (FTR-06 Wails, PL-03..06) parked unless the owner unparks. Bunker/harness QA rows stay parked (bunker-infra owned). **P1/P2 now empty** — the crash-loop era is closed. Watch: backlog is draining into decision-bound rows; if the owner doesn't file new work, next ticks should run the idle-audit ladder rather than force picks.
+## Tick 547 — 2026-09-22 ~06:45 local (~11:45Z) (WORK — substrate claim re-probe, evidence close)
+
+**Verdict: WORK/OK, zero new implementation.** Board at pick: 370 rows / 21 pending / CI 4/4 green (latest runs all success through tick-546 closeout) / tree clean at ed3b9827 / remotes 0-0. Pick: **QA-HERMES-CANOPY-19 (P2, 0 attempts)** — the pick-hygiene sanctioned landable class: a routed external DEGRADATION CLAIM re-probed live, then closed or amended on fresh evidence. GAP-080's only remaining phase (3, summarization) stays owner-decision-bound; FTR/PL rows are compound post-MVP specs; QA-2x siblings are harness-side. No worker dispatched (evidence work, foreman IS the worker per the shortened loop). Worker model/provider fields blank this tick.
+
+### Re-probe (bunker-agent-operations §8 recipe, tick-local artifacts)
+`bunker spawn <probe> --ttl 30m --cpu 1.0 --memory 2GiB` → `exec sh -c 'echo OK; id -un; hostname'` → `destroy`, one cycle per server named by the row, all rc=0:
+- **bunker-las-02** canopy-probe-t547a — spawn 0 / exec 0 (OK, bunker-canopy-probe-t547a, bunker-las-02) / destroy 0
+- **bunker-las-03** canopy-probe-t547b — spawn 0 / exec 0 (OK, …t547b, bunker-las-03) / destroy 0
+- **bunker-las-04** canopy-probe-t547c — spawn 0 / exec 0 (OK, …t547c, bunker-las-04) / destroy 0
+Probe logs: `/tmp/canopy-t547-probe-run.log`, `/tmp/t547_spawn_*.log`, `/tmp/t547_exec_*.log`. Post-probe homes census (local host): 1 stale (pre-existing bunker-media-hermes), pruned.
+
+**Claim falsified:** every daemon has restarted since the 2026-09-17 observation (uptimes: las-02 2d14h, las-03 1d7h, las-04 7h49m); las-03 is no longer wedged (0/8 users, registry 0 — the 8/8 state is gone). Capacity numbers were not treated as spawn-health evidence; the live cycles are.
+
+### Findings + dispositions
+1. **Residue on las-03** (0.1.4 daemon reports: 0 orphan users, 0 orphan homes, **140 orphan keys, 586 stale linger entries**, 0 registered agents) — filed forward as **QA-HERMES-CANOPY-34 (P2)**; also carries the row's forward asks: a `bunker reap --orphans`/reaper command and one authoritative live-server list for bunker-qa.sh + the dogfood skill.
+2. **Doctrine drift**: `~/.hermes/scripts/bunker-qa.sh:39` "las-03 was REMOVED" comment corrected locally (surface is untracked — no commit possible); dogfood skill las-bunker-03 pointer = owner-level skill edit, queued with Bane.
+3. Off-by-one discover `bunker-substrate-spawn-degradation` → not_found (honest probe; no debug occurred, no submission owed).
+
+### Gates + GitReins
+Guard=SKIP/ci=SKIP on the close (no staged code diff — evidence-work row; master CI green 4/4 at tick start). gitreins lifecycle run in full: task create + start + complete → **verdict 05251870, tier1 PASS + tier2 PASS COMPLETE, Overall PASS** — the judge independently verified the probe artifacts and the dispositions. Receipt = `.gitreins/tasks.yaml` (tracked); verdict dirs host-local (history gitignored).
+
+### Board bookkeeping
+tasks.jsonl: QA-19 pending→complete (worker_summary/foreman_note/completed_at set; boardctl path, numstat 1 changed + 1 appended), + QA-34 pending row. events.jsonl: +759 task_created QA-34, +760 task_completed QA-19 (boardctl receipts), +761 rich task_completed (judge+evidence+forward), +762 audit tick_summary (max id was 758; append-only byte-prefix verified). board.jsonl header: last_tick → 2026-09-22 11:45:00, ticks_total 546→**547**, last_commit → ed3b9827 (pre-tick HEAD; in-place multi-line edit). All lines re-parsed post-write.
+
+### CI + push health
+`gh run list` at tick start: 4/4 success (through tick 546's closeout commits). No red runs → no INT-CI rows. Bookkeeping commit pushed origin + gitlab; rev-list counts 0/0 at close.
+
+### DuckBrain
+Pre-write: /ticks contiguous through tick546 (verified live). Wrote /ticks/tick547-substrate-reprobe (db4b740b-e71b-4b14-9d48-ce243a3ededc, event/2026-09/current.jsonl) + /project/hermes-canopy/status/2026-09-22-t547 (9ff752a7-9d27-4f11-9be3-915a6abb430c, config/2026-09/current.jsonl); both UUIDs disk-verified in namespace JSONL partitions.
+
+### Next tick
+Pending **21+1=22**: new P2 QA-34 (las-03 residue prune + reaper ask) is the top tractable row; DF-23/DF-25 remain; decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). FTR/PL parked unless owner unparks. Watch: P1/P2 class now non-empty again (QA-34) — next picker should verify QA-34's premise is still live before its prune cycle.
