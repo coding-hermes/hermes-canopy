@@ -104,6 +104,31 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// mcpCallToolResult is the MCP CallToolResult envelope. The text content keeps
+// the existing domain payload available to clients that only implement the
+// required content field; the domain object itself is not returned as the raw
+// JSON-RPC result.
+type mcpCallToolResult struct {
+	Content []mcpTextContent `json:"content"`
+	IsError bool             `json:"isError"`
+}
+
+type mcpTextContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func newMCPCallToolResult(result any) (mcpCallToolResult, error) {
+	text, err := json.Marshal(result)
+	if err != nil {
+		return mcpCallToolResult{}, fmt.Errorf("marshal tool result: %w", err)
+	}
+	return mcpCallToolResult{
+		Content: []mcpTextContent{{Type: "text", Text: string(text)}},
+		IsError: false,
+	}, nil
+}
+
 // ── MCP lifecycle types ────────────────────────────────────────────
 
 // initializeResult is the `initialize` response (MCP 2025-06-18
@@ -312,7 +337,12 @@ func (h *MCPHandler) handleToolsCall(w http.ResponseWriter, r *http.Request, req
 		writeRPCError(w, req.ID, -32000, err.Error())
 		return
 	}
-	writeRPCResult(w, req.ID, result)
+	callResult, err := newMCPCallToolResult(result)
+	if err != nil {
+		writeRPCError(w, req.ID, -32000, err.Error())
+		return
+	}
+	writeRPCResult(w, req.ID, callResult)
 }
 
 // ── Tool dispatch ──────────────────────────────────────────────────

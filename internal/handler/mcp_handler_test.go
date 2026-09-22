@@ -8,6 +8,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
 
 // newMCPTestRouter mounts the MCP handler exactly as production does
@@ -384,5 +389,94 @@ func TestMCPRoutesOnlyAcceptsPOST(t *testing.T) {
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET status = %d, want 405", rr.Code)
+	}
+}
+
+func TestMCPCallToolResultEnvelope(t *testing.T) {
+	result, err := newMCPCallToolResult(map[string]any{})
+	if err != nil {
+		t.Fatalf("newMCPCallToolResult: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("successful tool result has isError=true")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("content length = %d, want 1", len(result.Content))
+	}
+	if result.Content[0].Type != "text" {
+		t.Errorf("content[0].type = %q, want text", result.Content[0].Type)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
+		t.Fatalf("content[0].text is not JSON: %v", err)
+	}
+	if payload == nil {
+		t.Fatal("content[0].text decoded to nil, want an empty JSON object")
+	}
+}
+
+func newMCPDBTestRouter(t *testing.T, pool *pgxpool.Pool) *chi.Mux {
+	t.Helper()
+	treeSvc := service.NewTreeService(
+		db.NewPGTreeRepo(pool),
+		db.NewPGNodeRepo(pool),
+		db.NewPGEdgeRepo(pool),
+		pool,
+	)
+	h := NewMCPHandler(treeSvc, nil, nil, nil, nil, nil)
+	r := chi.NewRouter()
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Mount("/mcp", h.Routes())
+	})
+	return r
+}
+
+func TestMCPToolsCallListTreesUsesCallToolResultEnvelope(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	router := newMCPDBTestRouter(t, pool)
+
+	rr := postMCP(t, router, "/api/v1/mcp", `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"list_trees","arguments":{}}}`)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+
+	raw := decodeRPCBody(t, rr)
+	var result mcpCallToolResult
+	if err := json.Unmarshal(raw["result"], &result); err != nil {
+		t.Fatalf("decode CallToolResult: %v (body=%s)", err, rr.Body.String())
+	}
+	if result.IsError {
+		t.Fatal("list_trees success has isError=true")
+	}
+	if len(result.Content) < 1 {
+		t.Fatalf("content = %#v, want at least one item", result.Content)
+	}
+	if result.Content[0].Type != "text" {
+		t.Errorf("content[0].type = %q, want text", result.Content[0].Type)
+	}
+	var payload struct {
+		Trees []json.RawMessage `json:"trees"`
+	}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
+		t.Fatalf("content[0].text is not the marshaled tool payload: %v", err)
+	}
+	if payload.Trees == nil {
+		t.Fatalf("content[0].text = %q, want a trees array", result.Content[0].Text)
+	}
+}
+
+func TestMCPToolsCallExecutionErrorRemainsJSONRPCError(t *testing.T) {
+	rr := postMCP(t, newMCPTestRouter(), "/api/v1/mcp", `{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`)
+	raw := decodeRPCBody(t, rr)
+	if _, ok := raw["result"]; ok {
+		t.Fatalf("execution error unexpectedly returned a result: %s", rr.Body.String())
+	}
+	var rpcErr rpcError
+	if err := json.Unmarshal(raw["error"], &rpcErr); err != nil {
+		t.Fatalf("decode error member: %v", err)
+	}
+	if rpcErr.Code != -32000 {
+		t.Errorf("error code = %d, want existing -32000", rpcErr.Code)
 	}
 }

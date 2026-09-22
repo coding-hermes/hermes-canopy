@@ -75,6 +75,26 @@ jobs:
           CANOPY_TEST_DB_URL: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
           CANOPY_REQUIRE_DB: "1"
 
+      - name: MCP SDK canary
+        run: |
+          python3 -m venv /tmp/mcp45-venv
+          /tmp/mcp45-venv/bin/pip install mcp
+          go build -o /tmp/canopyd-mcp-sdk ./cmd/canopyd
+          /tmp/mcp45-venv/bin/python scripts/mcp_sdk_canary.py
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5437"
+          DB_USER: canopy
+          DB_PASSWORD: canopy
+          DB_NAME: canopy
+          DB_SSLMODE: disable
+          JWT_SECRET: dev-secret-change-me
+          HTTP_ADDR: 127.0.0.1:8106
+          CANOPY_FILE_ROOT: /tmp/canopy-mcp-files
+          HOME: /tmp/canopy-mcp-home
+          CANOPY_MCP_URL: http://127.0.0.1:8106/api/v1/mcp
+          CANOPY_SDK_CANARY_BINARY: /tmp/canopyd-mcp-sdk
+
       - name: PG-backed federation + transport tests
         run: |
           go test ./internal/federation/... ./internal/transport/... -count=1 -timeout=300s

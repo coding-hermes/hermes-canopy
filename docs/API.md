@@ -2486,7 +2486,7 @@ the response is the standard envelope, `401 {"error":{"code":"TOKEN_MISSING",
 | `notifications/initialized` (and any `notifications/…`) | `202` — **empty body** (a notification is never answered with a JSON-RPC object) |
 | `ping` | `200` — `"result":{}` |
 | `tools/list` | `200` — `{"tools":[…7 tools…]}` |
-| `tools/call` | `200` — the tool result, or a JSON-RPC error object |
+| `tools/call` | `200` — a successful call returns an MCP `CallToolResult` envelope; tool execution failures remain JSON-RPC error objects |
 | any other method (e.g. `resources/list`) | `200` — `-32601 Method not found: <method>` |
 
 `initialize` params: `protocolVersion` (string), `clientInfo` (object),
@@ -2501,6 +2501,17 @@ newest supported revision, and the client decides whether to continue.
 Error codes: `-32700` parse error (`400`), `-32600` invalid request (jsonrpc
 must be `"2.0"`), `-32602` invalid params (e.g. a non-object `params`),
 `-32601` method not found, `-32000` tool execution failure.
+
+**CallToolResult envelope (2026-09-22).** A successful `tools/call` always wraps
+its existing domain payload in the MCP result shape. The payload is compact JSON
+inside a required text content item, and `isError` is `false`:
+
+```json
+{"result":{"content":[{"type":"text","text":"{\"trees\":[]}"}],"isError":false}}
+```
+
+Protocol-level request errors and tool execution failures keep their JSON-RPC
+`error` object; they are not converted into a `CallToolResult`.
 
 `notifications/…` requests are answered `202` with an empty body **before** any
 version or method validation, because JSON-RPC forbids replying to a
