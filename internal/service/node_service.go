@@ -617,6 +617,11 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 		if len(*input.Metadata) > maxMetadataBytes {
 			return nil, ErrMetadataTooLarge
 		}
+		// Metadata shape: the optional §6.4 card attachment is validated
+		// structurally (SPEC-PL-03). Absent card_ref is a no-op.
+		if err := ValidateNodeMetadataCardRef(*input.Metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	// MVP: author check is skipped — uuid.Nil is the sentinel for
@@ -944,6 +949,12 @@ func validateCreateInput(input CreateNodeInput) error {
 	// Metadata size.
 	if len(input.Metadata) > maxMetadataBytes {
 		return ErrMetadataTooLarge
+	}
+
+	// Metadata shape: the optional §6.4 card attachment is validated
+	// structurally (SPEC-PL-03). Absent card_ref is a no-op.
+	if err := ValidateNodeMetadataCardRef(input.Metadata); err != nil {
+		return err
 	}
 
 	return nil

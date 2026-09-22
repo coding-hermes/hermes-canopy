@@ -105,6 +105,7 @@ var mergeErrorCatalog = map[error]mergeErrorSpec{
 	ErrContentTooLong:            {"CONTENT_TOO_LONG", 400, "content must not exceed 65536 characters"},
 	ErrInvalidContentFormat:      {"INVALID_CONTENT_FORMAT", 400, "content_format must be one of: markdown, plain, rich"},
 	ErrMetadataTooLarge:          {"METADATA_TOO_LARGE", 400, "metadata must not exceed 16KB"},
+	ErrInvalidCardRef:            {"INVALID_CARD_REF", 400, "metadata card_ref must be an object with id, card_type and app_id and an optional 64-hex context_hash"},
 	ErrTreeNotFound:              {"TREE_NOT_FOUND", 404, "tree not found"},
 	ErrTreeDeleted:               {"TREE_DELETED", 410, "tree has been deleted"},
 	ErrNotTreeMember:             {"NOT_TREE_MEMBER", 403, "you are not a member of this tree"},
@@ -676,6 +677,11 @@ func normalizeMergeMetadata(raw json.RawMessage) ([]byte, error) {
 	if len(compact) > maxMetadataBytes {
 		return nil, newMergeAPIError(ErrMetadataTooLarge,
 			"metadata must not exceed %d bytes (received %d)", maxMetadataBytes, len(compact))
+	}
+	// The same §6.4 structural rule the node create/update paths apply: a
+	// synthesis node is a node, so its metadata.card_ref is validated too.
+	if err := ValidateNodeMetadataCardRef(compact); err != nil {
+		return nil, newMergeAPIError(ErrInvalidCardRef, "%v", err)
 	}
 	return compact, nil
 }

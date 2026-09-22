@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/reference"
 )
 
 // --- Compiler implementation -------------------------------------------------
@@ -28,6 +29,10 @@ type compilerImpl struct {
 	// pre-4a compiler.
 	retrieval    RetrievalReader
 	retrievalMax int
+
+	// Card references (SPEC-PL-03 §6.4). cardRefs == nil means the step is
+	// disabled and Compile is byte-identical to the pre-§6.4 compiler.
+	cardRefs CardRefReader
 }
 
 // isPinned reports whether a node's metadata JSON marks the node pinned: an
@@ -75,6 +80,22 @@ func WithRetrieval(reader RetrievalReader, max int) Option {
 		}
 		c.retrieval = reader
 		c.retrievalMax = max
+	}
+}
+
+// WithCardReferences enables the card-reference step (SPEC-PL-03 §6.4): #card
+// references written in the current node's content are resolved through the
+// card service and folded into the payload as labeled <canopy_card> blocks,
+// each accounted for in the manifest as its own Kind "card" entry.
+//
+// A nil reader is a no-op — the step stays disabled and Compile is
+// byte-identical to the pre-§6.4 compiler, exactly like the retrieved tier.
+func WithCardReferences(reader CardRefReader) Option {
+	return func(c *compilerImpl) {
+		if reader == nil {
+			return
+		}
+		c.cardRefs = reader
 	}
 }
 
@@ -336,9 +357,21 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		remainingBudget -= item.TokenCount
 	}
 
+	// ── Step 5d: Card references (SPEC-PL-03 §6.4) ──────────────────────
+	// #card references written in the current node's content resolve to the
+	// compact card envelope and are folded in as labeled blocks before the
+	// context-hash cards of step 6. Disabled entirely unless the compiler was
+	// built WithCardReferences, so an unwired compiler is byte-identical.
+	cardRefContent, cardRefItems, cardRefWarnings := c.compileCardReferences(ctx, req, currentNode.Content, remainingBudget)
+	manifest.Cards = append(manifest.Cards, cardRefItems...)
+	manifest.Warnings = append(manifest.Warnings, cardRefWarnings...)
+	for _, item := range cardRefItems {
+		remainingBudget -= item.TokenCount
+	}
+
 	// ── Step 6: Cards ───────────────────────────────────────────────────
 	cardContent, cardItems, cardWarnings := c.compileCards(ctx, req, currentNode.Content, remainingBudget)
-	manifest.Cards = cardItems
+	manifest.Cards = append(manifest.Cards, cardItems...)
 	manifest.Warnings = append(manifest.Warnings, cardWarnings...)
 
 	// ── Step 7: Assemble ────────────────────────────────────────────────
@@ -349,6 +382,9 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	}
 	if len(retContent) > 0 {
 		finalContent += "\n\n" + joinSections(retContent)
+	}
+	if len(cardRefContent) > 0 {
+		finalContent += "\n\n" + joinSections(cardRefContent)
 	}
 	if len(cardContent) > 0 {
 		finalContent += "\n\n" + joinSections(cardContent)
@@ -533,6 +569,91 @@ func (c *compilerImpl) compileCards(
 		} else {
 			break
 		}
+	}
+
+	return sections, items, warnings
+}
+
+// compileCardReferences resolves the #card references written in the current
+// node's content into labeled blocks, budget-gated, and reports one manifest
+// entry per reference (SPEC-PL-03 §6.4).
+//
+// Rules:
+//   - The step is inert unless the compiler was built WithCardReferences, so an
+//     unwired compiler behaves exactly as before.
+//   - Card references are references, so the request's ResolveRefs switch
+//     governs them the same way it governs topic references.
+//   - A MALFORMED reference never resolves: it is reported as a warning. This is
+//     the only failure mode §6.4 allows — a missing, dismissed or archived card
+//     resolves with its status (see ResolveCardReference).
+//   - Duplicate references to the same card are compiled once, at the offset of
+//     first appearance.
+//   - A block that does not fit the remaining budget is elided, accounted for as
+//     a truncated manifest entry and reported as a warning; the walk continues
+//     to the next reference so one oversized card cannot hide the rest.
+func (c *compilerImpl) compileCardReferences(
+	ctx context.Context,
+	req CompileRequest,
+	nodeContent string,
+	budget int,
+) (sections []string, items []ManifestItem, warnings []string) {
+	if c.cardRefs == nil || !req.ResolveRefs || nodeContent == "" {
+		return nil, nil, nil
+	}
+
+	parsed := reference.ParseCardReferences(nodeContent)
+	if len(parsed) == 0 {
+		return nil, nil, nil
+	}
+
+	remainingBudget := budget
+	seen := make(map[uuid.UUID]bool, len(parsed))
+
+	for _, ref := range parsed {
+		if ref.Invalid {
+			warnings = append(warnings, fmt.Sprintf(
+				"card reference %s is malformed (%s); not resolved", ref.Raw, ref.Reason))
+			continue
+		}
+		if seen[ref.CardID] {
+			continue
+		}
+		seen[ref.CardID] = true
+
+		env, refWarnings := ResolveCardReference(ctx, c.cardRefs, ref)
+		warnings = append(warnings, refWarnings...)
+		if env == nil {
+			continue
+		}
+
+		block, escaped := renderCardReferenceBlock(env)
+		if escaped {
+			warnings = append(warnings, fmt.Sprintf(
+				"card reference %s contained the block terminator; escaped", ref.Raw))
+		}
+
+		tokens := c.est.Estimate(block)
+		if remainingBudget < tokens {
+			warnings = append(warnings, fmt.Sprintf(
+				"card reference %s omitted: %d tokens exceed the remaining budget of %d",
+				ref.Raw, tokens, remainingBudget))
+			items = append(items, ManifestItem{
+				ID:        env.ID,
+				Kind:      "card",
+				Title:     env.CardType,
+				Truncated: true,
+			})
+			continue
+		}
+
+		remainingBudget -= tokens
+		sections = append(sections, block)
+		items = append(items, ManifestItem{
+			ID:         env.ID,
+			Kind:       "card",
+			Title:      env.CardType,
+			TokenCount: tokens,
+		})
 	}
 
 	return sections, items, warnings

@@ -479,6 +479,7 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 		errors.Is(err, service.ErrSystemNodeForbidden),
 		errors.Is(err, service.ErrInvalidEdgeType),
 		errors.Is(err, service.ErrMetadataTooLarge),
+		errors.Is(err, service.ErrInvalidCardRef),
 		errors.Is(err, service.ErrForkRequiresChildren),
 		errors.Is(err, service.ErrNoUpdateFields):
 		writeError(w, 400, "VALIDATION_ERROR", err.Error())

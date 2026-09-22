@@ -33,6 +33,14 @@ func ValidSlug(s string) bool {
 // The regex uses a non-capturing prefix '(?:^|[^a-zA-Z0-9#])' that consumes
 // the boundary character. We track the offset of the '#' within the full match
 // so callers get the true position of the reference start.
+//
+// SPEC-PL-03 §6.4: a '#' immediately followed by 'card:' is a CARD reference
+// attempt, never a topic slug. The topic regex would otherwise match the
+// 'card' prefix of '#card:<id>' and yield slug "card", which is exactly the
+// ambiguity the card syntax exists to remove (SPEC-PL-03 §5 —
+// "disambiguating cards from topic slugs"). Every span a card reference
+// attempt occupies is therefore skipped here; ParseCardReferences reports the
+// same spans, malformed ones included.
 func ParseReferences(content string) []ParsedReference {
 	if content == "" {
 		return nil
@@ -43,6 +51,8 @@ func ParseReferences(content string) []ParsedReference {
 		return nil
 	}
 
+	cardSpans := cardRefSpans(content)
+
 	refs := make([]ParsedReference, 0, len(matches))
 	for _, m := range matches {
 		// m[0]: start of full match (includes boundary char), m[1]: end
@@ -52,6 +62,11 @@ func ParseReferences(content string) []ParsedReference {
 
 		// The '#' is at slugStart-1 within the content.
 		hashIdx := slugStart - 1
+
+		if withinCardRefSpan(cardSpans, hashIdx) {
+			continue
+		}
+
 		raw := content[hashIdx:slugEnd]
 		slug := content[slugStart:slugEnd]
 
@@ -64,6 +79,17 @@ func ParseReferences(content string) []ParsedReference {
 	}
 
 	return refs
+}
+
+// withinCardRefSpan reports whether the '#' at offset belongs to a '#card:'
+// reference attempt located by cardRefSpans.
+func withinCardRefSpan(spans []cardRefSpan, offset int) bool {
+	for _, span := range spans {
+		if offset >= span.start && offset < span.end {
+			return true
+		}
+	}
+	return false
 }
 
 // DedupeBySlug returns the first ParsedReference for each unique slug,

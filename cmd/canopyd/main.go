@@ -501,6 +501,13 @@ func main() {
 	if cfg.ContextRetrievalMax > 0 {
 		ctxOpts = append(ctxOpts, ctxpkg.WithRetrieval(retrieval.NewTopicRetriever(topicSearchSvc), cfg.ContextRetrievalMax))
 	}
+	// SPEC-PL-03 §6.4 card references: a `#card:<id>` reference written in a
+	// node's content resolves through the card service into the compiled
+	// context's card envelope. Unconditional and inert — content without a
+	// card reference compiles exactly as before.
+	if cardSvc != nil {
+		ctxOpts = append(ctxOpts, ctxpkg.WithCardReferences(cardSvc))
+	}
 	ctxCompiler := ctxpkg.NewCompiler(
 		database.Nodes,
 		database.Topics,
