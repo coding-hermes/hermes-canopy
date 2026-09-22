@@ -3013,3 +3013,37 @@ Pending 23: DF-43 (P3 API.md multi-reference preflight contract — dogfood-2026
 
 ### Next tick
 Pending 22: DF-44 (P3 authorDisplayName fallback — needs owner call), DF-23 (P3 internal/hermes envelope), DF-25 (P4 handler timeout watch). Decision-bound: GAP-080 phase 3 (summarizer), GAP-076 (owner, blocks GAP-077), GAP-078, GAP-081, DF-20. Bunker/harness QA rows stay parked. Post-release: FTR-06 (Wails packaging) remains the first big buildable feature row if the owner unparks it.
+
+## Tick 546 — 2026-09-21 ~19:45 local (~00:45Z 09-22) (WORK — stranded-closeout recovery ×2)
+
+**Verdict: WORK/OK, zero new implementation.** Board at pick: 369 rows / 23 pending / CI 5/5 green / tree clean. Two dead-tick closeouts detected before any picking and taken as THE pick (worker-commit-recovery: the next tick treats the inherited mess as its pick, no re-dispatch). No wave: nothing to dispatch. Worker model/provider fields were blank this tick — no dispatch needed.
+
+### Layer 1 — DF-HERMES-CANOPY-44 (worker committed, foreman died before closeout)
+Worker 29f416d3 (09:12 local) landed the authorDisplayName fix (+509: resolveAuthorDisplayName/…Names in node_service.go, merge_service.go delegation, 373-line TestDF44 suite) but the dispatching tick died with the gitreins task sitting `in_progress`, the board row `pending`, no tasks.md entry, and NO judge. Recovery (no re-dispatch — work was verifiably landed): fresh 7/7 gate battery at HEAD (below), then `gitreins task complete` on the existing task → **tier2 verdict cb23f9bf PASS COMPLETE** — the judge independently ran a live E2E on a fresh scratch DB (create/reply/get/list all "Dev User", unknown author → "" with HTTP 200, TestDF44 5/5, full gates re-run inside the judge). CI honesty: **no CI run exists for sha 29f416d3** (push predates the run-UUID era); recorded CI health = master tip run **35663078495 success** on d5436936. Row closed with commit_hash/guard_result/ci_result/worker_summary/foreman_note (backfill provenance + do-not-re-pick).
+
+### Layer 2 — GAP-099 (judged-but-unbookkept + live rollout verified)
+The 22:05–22:31Z tick filed the P1, landed reboot durability **d5436936** (compose postgres `restart: unless-stopped` + systemd user unit ExecStartPre `docker start canopy-pg` + 30s pg_isready poll + deploy step-3 unit sync/daemon-reload + scripts/test-reboot-durability.sh), completed the gitreins task, and died before closing the row. Verdict **da3b87fb tier1+tier2 PASS COMPLETE** already on disk. Tick 546 verified the fix is LIVE, not just committed: installed **user** unit matches deploy/systemd/canopy-canopyd.service (only diff = install-provenance header line; earlier "unit differs" was a system-vs-user unit comparison error), ExecStartPre both ran SUCCESS at the 17:28:49 boot, canopy-pg HostConfig.RestartPolicy=unless-stopped, canopyd NRestarts=0 (deploy-check-state 23:30:34Z), /health ok schema 48/48. Next host reboot is protected; GAP-069 detector unchanged and independent. Row closed with recovery foreman_note.
+
+### Gates (fresh, foreman-run at HEAD d5436936, 19:07–19:19 local)
+go build PASS · go vet PASS · CANOPY_TEST_ALLOW_SHARED_DB=1 sweep `-p 1` **30/30 pkgs ok** 0 FAIL (incl. internal/service 24.2s) · handler pkg ok **350.7s** · vitest **80 files / 1394/1394** · gitleaks 0 leaks (372.5MB) · golangci-lint **0 issues**.
+
+### GitReins
+DF-HERMES-CANOPY-44: existing in_progress task completed (no create/start — inherited) → verdict **cb23f9bf**. GAP-099: lifecycle already complete (da3b87fb) — read, not re-run. Verdict dirs are host-local (`.gitreins/history` is gitignored); receipt = `.gitreins/tasks.yaml` (tracked).
+
+### Board bookkeeping
+tasks.jsonl: 2 rows flipped pending→complete — 367/369 lines byte-identical (per-line round-trip; GAP-099 row needs ensure_ascii=False or the em-dash churns), 369 unique ids, compact style preserved. events.jsonl: +756 task_completed DF-44, +757 task_completed GAP-099, +758 audit/tick_summary tick 546 (max was 755; dup ids 332/333 pre-existed this append — proven against backup). board.jsonl header: last_tick 19:39:57, ticks_total 545→**546**, last_commit 097e7942→**d5436936** (4-field diff only — header is pretty-printed multi-line JSON, json.loads(line[0]) fails; edit fields in place).
+
+### CI health
+All recent runs success (6 checked). Run on master tip 35663078495 success. No red runs → no INT-CI rows.
+
+### Push health
+Bookkeeping commit pushed origin + gitlab; rev-list counts 0/0 at close (see commit). Content commits d5436936/29f416d3 were already on both remotes (0/0 at tick start).
+
+### Off-by-one
+/health ok (uptime 6h45m). **No discover/submission this tick: nothing was debugged** — both layers were verification + bookkeeping recoveries, no non-trivial debugging occurred (lab entry honesty rule, T419).
+
+### DuckBrain
+Pre-write: /ticks contiguous through tick545 (tick543 gap is historical, noted in tick 544 entry). Wrote /ticks/tick546-stranded-closeout-recovery (23d3a061-b121-4e74-a08e-20076dfeb85d) + /project/hermes-canopy/status/2026-09-21-t546 (f8ac6b2b-078a-4d61-920d-34ac806290f5); both UUID disk-verified in namespace JSONL partitions.
+
+### Next tick
+Pending **21**: DF-23 (P3 internal/hermes envelope) and DF-25 (P4 handler timeout watch) are the remaining tractable rows. Decision-bound (owner): GAP-080 phase 3, GAP-076 (blocks GAP-077), GAP-078, GAP-081, DF-20. Post-MVP feature specs (FTR-06 Wails, PL-03..06) parked unless the owner unparks. Bunker/harness QA rows stay parked (bunker-infra owned). **P1/P2 now empty** — the crash-loop era is closed. Watch: backlog is draining into decision-bound rows; if the owner doesn't file new work, next ticks should run the idle-audit ladder rather than force picks.

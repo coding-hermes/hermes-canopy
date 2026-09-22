@@ -3316,3 +3316,25 @@ tasks:
   status: complete
   created_at: '2026-09-21T13:02:44.347006+00:00'
   completed_at: '2026-09-21T13:12:45.558275+00:00'
+- id: DF-HERMES-CANOPY-44
+  title: Fresh dev-created nodes return a blank author display name
+  criteria:
+  - Node responses (POST /api/v1/trees/{id}/nodes, reply, GET node, GET tree nodes)
+    carry a non-empty authorDisplayName resolved from users.display_name for node.AuthorID;
+    a fresh dev database shows the provisioned dev identity name and an unknown author
+    id yields an empty string without error; service-level PG tests cover the populated
+    and unknown-author cases; go build/vet, the non-handler sweep, the handler package
+    tests, and frontend vitest pass.
+  status: complete
+  created_at: '2026-09-21T13:48:33.932429+00:00'
+  completed_at: '2026-09-22T00:20:15.292237+00:00'
+- id: GAP-099
+  title: "canopy stack reboot durability \u2014 compose postgres restart policy +\
+    \ systemd ExecStartPre DB bring-up + deploy unit sync"
+  criteria:
+  - docker-compose postgres carries restart unless-stopped; repo unit deploy/systemd/canopy-canopyd.service
+    has ExecStartPre canopy-pg start + pg_isready readiness poll; deploy-canopyd.sh
+    syncs the unit and daemon-reloads on drift; new harness tests prove all three
+  status: complete
+  created_at: '2026-09-21T22:19:31.941925+00:00'
+  completed_at: '2026-09-21T22:28:22.779659+00:00'
