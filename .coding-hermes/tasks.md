@@ -3079,3 +3079,40 @@ Pre-write: /ticks contiguous through tick546 (verified live). Wrote /ticks/tick5
 
 ### Next tick
 Pending **21+1=22**: new P2 QA-34 (las-03 residue prune + reaper ask) is the top tractable row; DF-23/DF-25 remain; decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). FTR/PL parked unless owner unparks. Watch: P1/P2 class now non-empty again (QA-34) — next picker should verify QA-34's premise is still live before its prune cycle.
+
+## Tick 548 — 2026-09-22 ~12:18Z (WORK — QA-HERMES-CANOPY-34 closed foreman-direct)
+
+**Verdict: OK, evidence/ops work, zero code diff.** Board at pick: 370 rows / 21 pending / CI 4/4 green / tree clean at c730a952 / remotes 0-0. Pick: **QA-HERMES-CANOPY-34 (P2, filed by tick 547 itself ~40 min earlier)** — top tractable row; premise re-anchored live at tick start before the prune cycle (pick-hygiene satisfied on both counts). FTR/PL compound specs parked; QA-2x siblings harness-side; decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). No worker dispatched (evidence/ops work — foreman is the worker, QA-19 precedent). Worker model/provider fields blank this tick.
+
+### Prune cycle (bunker-agent-operations §8-9; las-03 = bunker3/bunker3-root ssh aliases, 100.69.3.13)
+CLI 0.1.4 shipped to the host (agent hosts do not carry the CLI; scp → ~/, not /tmp — /tmp not kara-writable there):
+- **Re-anchor:** `bunker status --server bunker-las-03`: daemon 0.1.4, uptime 1d8h, 1/8 agents, residue **140 orphan keys + 586 stale linger**, 0 orphan users/homes, 1 registered agent (e990b54e, running). Matches tick-547's reading → premise live.
+- **Dry-runs first:** linger prune --dry-run → 588 scanned / **586 would remove** / 2 live; homes prune --dry-run → 0 stale.
+- **linger prune:** removed 586, kept 2 → post-census total 2 / stale **0**. **homes prune:** 0 removed (clean no-op).
+- **Orphan keys:** `/etc/bunkerd/ssh` holds one 411-byte public-key **FILE** per agent id (NOT dirs — dir-globs match nothing; silent literal fall-through; see Off-by-one). Registry (agents.jsonl + rotations) spans only 09-20 07:18 onward (reinstall era) while keys date to Aug 30+ → old ids have NO registry provenance. Tick-local GC script (file-based, conservative, fully backed up): keep only live agent's key; every other id tar-czf'd individually to `bunker3:/home/kara/bunker-keys-backup-548/` then removed. Result: **140 removed / 140 backups** (integrity spot-checked `tar -tzf`) / class split **0 destroy-attested + 0 spawn-failure + 140 unattested-pre-reinstall** / remaining entries: exactly 1 (e990b54e).
+- **Re-census:** daemon residue now **0 orphan users / 0 orphan homes / 0 orphan keys / 0 stale linger (1 registered agent)**.
+- **Recurrence proof:** fresh spawn/exec/destroy cycle `canopy-probe-t548a` (spawn rc=0 → exec OK/bunker-canopy-probe-t548a/bunker-las-03 → destroy clean) → post-destroy residue still **0/0/0/0**, key dir still exactly 1. Live agent e990b54e exec green before AND after the GC.
+- Artifacts: GC script /tmp/canopy-t548-keys-gc.sh (local) — host copies removed post-run; backups intentionally retained on-host (reversibility, ~57KB total). Host-side cleanup verified on both kara + root $HOMEs.
+
+### Findings + forward asks
+1. **0.1.4 CLI has no keys-prune surface** (only homes/linger prune) and destroy performs plain `os.Remove` of the agent key (destroy.go:147 per judge) — the 140-key residue class had NO supported surface this tick could use; the GC was tick-local. Forward: a `bunker keys prune` command + registry-attested orphan classification for pre-registry ids (owner-level, upstream repo).
+2. Registry cannot attest pre-reinstall orphans — any future keys-prune needs an age-based or list-attested rule, not registry truth alone.
+3. First gitreins `task complete` (12:13) ran BEFORE this closeout landed and **FAILed grading the unlanded tree** (verdict de17a07f: tier1 PASS / tier2 INCOMPLETE — "no prune cycle was ever run", board row still pending, no tick entry). Sequencing error (GAP-074 restated: the re-run grades the fixed tree). Async re-run fired at closeout HEAD; verdict id folded via board event when it lands.
+
+### Gates + GitReins
+Guard=SKIP / ci=SKIP on the close (no staged code diff — evidence-work row; master CI green 4/4 at tick start). gitreins lifecycle: task create + start + complete run (first verdict **de17a07f** FAIL on unlanded tree — foreman sequencing error, not work failure; async re-run **in flight** at closeout HEAD, id `T-<job>` in /tmp/t548-judge-async.log; fold on landing).
+
+### Board bookkeeping
+tasks.jsonl: QA-34 pending→complete (worker_summary/foreman_note/completed_at set; commit_hash "n/a" — untracked-surface evidence work; guard/ci SKIP; numstat 1/1). events.jsonl: +763 task_completed QA-34, +764 audit tick_summary (max id was 762; append-only byte-prefix verified; both re-parsed). board.jsonl header: last_tick → 2026-09-22 12:18:44, ticks_total 547→**548**, last_commit → c730a952 (pre-tick HEAD; in-place pretty edit 4/4). All lines re-parsed post-write; snapshots in /tmp/t548-*.bak.
+
+### Off-by-one
+Health up. Discover `bunker-ssh-dir-entries-are-key-files-not-dirs` → not_found (honest probe). Submitted `sub_4345e4` (cadence post-debug): bunkerd ssh_dir entries are per-id public-key FILES; dir-glob `*/` matches nothing and falls through to a literal while plain `ls` works — iterate ls/basename, not dir-globs; parent link count stays 2 (a file-count tell for entries-without-subdirs).
+
+### CI + push health
+`gh run list` at tick start: 4/4 success through tick 547. No red runs → no INT-CI rows. Bookkeeping commit pushed origin + gitlab after closeout; rev-list counts verified 0/0 at close. CI on the bookkeeping commit: recorded in-flight at close (board-only commit; content tree byte-identical to c730a952 which was green) — final green verified in the tick close message before sign-off.
+
+### DuckBrain
+Pre-write: /ticks contiguous through tick547. Wrote /ticks/tick548-las03-residue-prune + /project/hermes-canopy/status/2026-09-22-t548 (UUIDs recorded in the close message; disk-verified in namespace partitions).
+
+### Next tick
+Pending **21→20**: DF-23/DF-25 remain the top unparked rows; decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). Watch: (a) fold the async QA-34 re-verdict when it lands (first commit of next tick, before pick); (b) keys-backup retention on bunker3 — reclaim after the next clean daemon cycle if desired; (c) upstream `bunker keys prune` ask now lives in this entry + the QA-34 close note.

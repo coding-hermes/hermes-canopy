@@ -3350,3 +3350,14 @@ tasks:
   status: complete
   created_at: '2026-09-22T11:31:25.845031+00:00'
   completed_at: '2026-09-22T11:35:59.932926+00:00'
+- id: QA-HERMES-CANOPY-34
+  title: "bunker-las-03 residue: 140 orphan keys + 586 stale linger entries \u2014\
+    \ prune cycle + re-census"
+  criteria:
+  - After the prune cycle, bunker status --server bunker-las-03 reports 0 orphan users,
+    0 orphan homes, 0 orphan keys, 0 stale linger entries; a fresh spawn/exec/destroy
+    cycle leaves 0 residue; removed key files are backed up reversibly; the live agent
+    is unaffected.
+  status: complete
+  created_at: '2026-09-22T12:13:31.554328+00:00'
+  completed_at: '2026-09-22T12:13:41.959784+00:00'
