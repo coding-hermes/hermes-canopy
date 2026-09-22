@@ -173,8 +173,8 @@ describe('CardActivityPanel — §6.1 default frame', () => {
       (button) => button.textContent === 'Run',
     );
     expect(action).toBeDefined();
-    // No backend call in this task: the button must be honestly disabled.
-    expect(action?.disabled).toBe(true);
+    // The action is wired through the card-action client and remains enabled.
+    expect(action?.disabled).toBe(false);
   });
 
   it('renders the live event list', async () => {

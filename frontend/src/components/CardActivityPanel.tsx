@@ -13,29 +13,19 @@
  * and this file uses no raw-HTML injection API at all (the panel test asserts
  * that from the source).
  *
- * Actions are rendered but NOT submitted: this task ships the read/live half of
- * SPEC-PL-03 only (`POST /cards/{card_id}/actions` already exists server-side,
- * but wiring `invokeAction` is a later task). A button that silently did
- * nothing would be worse than a disabled one, so they are `disabled` and say so
- * in their `title`.
+ * Actions are submitted through the shared card-action client and show their
+ * outcome in the safe frame.
  *
  * §5.3: a payload that fails validation never clears the panel — the rejected
  * payload is filed by the store and shown in a banner while the last good card
  * state stays on screen.
  */
 
-import { useState } from 'react';
-import { AlertCircle, Activity, Clock, Hash, X } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { useCardStream, type CardConnectionState } from '../hooks/useCardStream.ts';
+import { invokeCardAction } from '../lib/cardActions.ts';
 import type { CardStoreError } from '../lib/cardStore.ts';
-import { cardStatusLabel, cardTypeLabel } from '../types/card.ts';
-
-/** Card status → badge classes. Mirrors the Cards list badges. */
-const STATUS_BADGE: Record<string, string> = {
-  active: 'text-status-success',
-  dismissed: 'text-content-muted',
-  archived: 'text-content-muted',
-};
+import CardFrame from './CardFrame.tsx';
 
 const CONNECTION_LABEL: Record<CardConnectionState, string> = {
   idle: 'Idle',
@@ -66,10 +56,6 @@ function formatTimeAgo(iso: string): string {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
   return `${Math.floor(hr / 24)}d ago`;
-}
-
-function shortenHash(hash: string): string {
-  return hash.length > 16 ? `${hash.slice(0, 12)}…` : hash;
 }
 
 function RejectionBanner({ errors }: { errors: CardStoreError[] }) {
@@ -109,8 +95,6 @@ export default function CardActivityPanel({
 }) {
   const { card, events, lastSequence, errors, rejected, replay, connection, isLive } =
     useCardStream(cardId);
-  const [hashExpanded, setHashExpanded] = useState(false);
-
   return (
     <aside
       aria-label="Card activity"
@@ -153,90 +137,13 @@ export default function CardActivityPanel({
           </p>
         ) : (
           <>
-            {/* §6.1 default frame */}
-            <div className="rounded-lg border border-line-subtle bg-surface-panel p-3 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-content-primary">
-                  {cardTypeLabel(card.cardType)} Card
-                </span>
-                <span
-                  className={`text-[10px] uppercase tracking-wide rounded-xs px-1.5 py-0.5 bg-surface-input ring-1 ring-inset ring-line-subtle ${
-                    STATUS_BADGE[card.status] ?? 'text-content-secondary'
-                  }`}
-                >
-                  {cardStatusLabel(card.status)}
-                </span>
-              </div>
-
-              <dl className="text-[11px] text-content-muted space-y-1">
-                <div className="flex gap-2">
-                  <dt className="text-content-faint">app</dt>
-                  <dd className="font-mono text-content-secondary break-all">{card.appId}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="text-content-faint">created</dt>
-                  <dd className="flex items-center gap-1 text-content-secondary">
-                    <Clock className="w-3 h-3" aria-hidden="true" />
-                    {formatTimeAgo(card.createdAt)}
-                  </dd>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <dt className="text-content-faint">context</dt>
-                  <dd className="min-w-0">
-                    {/* Context-hash affordance: toggles truncated ⇄ full digest. */}
-                    <button
-                      type="button"
-                      onClick={() => setHashExpanded((prev) => !prev)}
-                      title={card.contextHash}
-                      aria-expanded={hashExpanded}
-                      className="flex items-center gap-1 font-mono text-content-secondary hover:text-content-primary transition-colors max-w-full"
-                    >
-                      <Hash className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
-                      <span className="truncate">
-                        {card.contextHash === ''
-                          ? '(none)'
-                          : hashExpanded
-                            ? card.contextHash
-                            : shortenHash(card.contextHash)}
-                      </span>
-                    </button>
-                  </dd>
-                </div>
-              </dl>
-
-              {/* Activity indicator: event count + whether the stream is heartbeating. */}
-              <div
-                className="flex items-center gap-2 text-[11px] text-content-muted pt-1 border-t border-line-subtle"
-                role="status"
-                aria-live="polite"
-              >
-                <Activity
-                  className={`w-3.5 h-3.5 ${isLive ? 'text-status-success' : 'text-content-faint'}`}
-                  aria-hidden="true"
-                />
-                <span>
-                  {events.length} {events.length === 1 ? 'event' : 'events'} · last #{lastSequence}
-                </span>
-                <span className="text-content-faint">{isLive ? '(live)' : '(idle)'}</span>
-              </div>
-
-              {/* Declared actions — rendered, not submitted (see the file header). */}
-              {card.actions.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  {card.actions.map((action) => (
-                    <button
-                      key={action.handler}
-                      type="button"
-                      disabled
-                      title={`${action.label} — action submission is not wired yet`}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-medium text-content-muted bg-surface-input ring-1 ring-inset ring-line-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <CardFrame
+              card={card}
+              events={events}
+              lastSequence={lastSequence}
+              isLive={isLive}
+              invokeAction={(handler, payload) => invokeCardAction(card.id, handler, payload)}
+            />
 
             {/* Live events */}
             <div>
@@ -283,15 +190,6 @@ export default function CardActivityPanel({
               )}
             </div>
 
-            {/* Card data — text only (§6.1). */}
-            {Object.keys(card.data).length > 0 && (
-              <div>
-                <h3 className="text-xs font-medium text-content-secondary mb-2">Data</h3>
-                <pre className="text-[10px] text-content-muted font-mono bg-surface-input/60 ring-1 ring-inset ring-line-subtle rounded-sm p-2 overflow-x-auto whitespace-pre-wrap break-words">
-                  {JSON.stringify(card.data, null, 2)}
-                </pre>
-              </div>
-            )}
           </>
         )}
       </div>

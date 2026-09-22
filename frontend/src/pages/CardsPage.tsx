@@ -10,36 +10,28 @@ import {
   Plus,
   Trash2,
   RefreshCw,
-  Clock,
   AlertCircle,
   Inbox,
   ChevronDown,
   ChevronRight,
   Search,
   X,
-  FileText,
-  Layout,
-  RotateCw,
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import { invokeCardAction } from '../lib/cardActions';
+import { resolveCardRenderer } from '../lib/cardRenderers';
+import {
+  cardFromSummaryWire,
+  cardTypeLabel,
+  type Card,
+  type CardSummaryWire,
+} from '../types/card';
 import { Link } from 'react-router-dom';
 import CardActivityPanel from '../components/CardActivityPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
-interface CardSummary {
-  id: string;
-  tree_id: string;
-  node_id: string;
-  app_id: string;
-  type: string;
-  status: string;
-  context_hash: string;
-  data: unknown;
-  actions: unknown[];
-  last_event_seq: number;
-  created_at: string;
-}
+type CardSummary = CardSummaryWire;
 
 interface ListCardsResponse {
   cards: CardSummary[];
@@ -57,46 +49,6 @@ interface ListTreesResponse {
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-function formatTimeAgo(iso: string): string {
-  try {
-    const ms = Date.now() - new Date(iso).getTime();
-    const sec = Math.floor(ms / 1000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
-    return `${Math.floor(hr / 24)}d ago`;
-  } catch { return iso; }
-}
-
-function cardTypeIcon(t: string) {
-  switch (t) {
-    case 'compact':
-      return <FileText className="w-3.5 h-3.5 text-blue-400" />;
-    case 'expanded':
-      return <Layout className="w-3.5 h-3.5 text-purple-400" />;
-    case 'iteration':
-      return <RotateCw className="w-3.5 h-3.5 text-amber-400" />;
-    default:
-      return <FileText className="w-3.5 h-3.5 text-content-muted" />;
-  }
-}
-
-function cardTypeLabel(t: string): string {
-  switch (t) {
-    case 'compact': return 'Compact';
-    case 'expanded': return 'Expanded';
-    case 'iteration': return 'Iteration';
-    default: return t;
-  }
-}
-
-const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-400',
-  dismissed: 'bg-content-faint',
-  archived: 'bg-content-muted',
-};
 
 const CARD_TYPES = ['compact', 'expanded', 'iteration'] as const;
 
@@ -260,7 +212,17 @@ function CardRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const dotColor = STATUS_STYLES[card.status] ?? 'bg-content-muted';
+  const parsed = cardFromSummaryWire(card);
+  if (!parsed.ok) {
+    return (
+      <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-status-danger">
+        Card payload rejected: {parsed.issues.join('; ')}
+      </div>
+    );
+  }
+
+  const canonical: Card = parsed.value;
+  const Renderer = resolveCardRenderer(canonical.appId, canonical.cardType);
 
   return (
     <div
@@ -275,54 +237,34 @@ function CardRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-            {cardTypeIcon(card.type)}
-            <h3 className="text-sm font-medium text-content-primary">
-              {cardTypeLabel(card.type)} Card
-            </h3>
-            <span className="text-[10px] text-content-secondary uppercase tracking-wide bg-surface-input ring-1 ring-inset ring-line-subtle rounded-xs px-1.5 py-0.5">
-              {card.status}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-[11px] text-content-faint">
-            <span className="font-mono text-[10px]">
-              node: {card.node_id.slice(0, 8)}...
-            </span>
-            <span className="text-content-faint/50">|</span>
-            <span>{card.app_id}</span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formatTimeAgo(card.created_at)}
-            </span>
-          </div>
-          {card.data != null ? (
-            <pre className="mt-2 text-[10px] text-content-muted font-mono bg-surface-input/60 ring-1 ring-inset ring-line-subtle rounded-sm p-2 overflow-x-auto line-clamp-3">
-              {String(JSON.stringify(card.data, null, 2))}
-            </pre>
-          ) : null}
+          <Renderer
+            card={canonical}
+            events={[]}
+            isLive={false}
+            invokeAction={(handler, payload) => invokeCardAction(canonical.id, handler, payload)}
+          />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onOpen();
             }}
             className="p-1.5 rounded-md text-content-faint hover:text-content-primary hover:bg-surface-hover transition-colors"
             title="Card activity"
-            aria-label={`Card activity for ${cardTypeLabel(card.type)} card`}
+            aria-label={`Card activity for ${cardTypeLabel(canonical.cardType)} card`}
             aria-expanded={isSelected}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onDelete();
             }}
             className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10 transition-colors"
             title="Archive card"
-            aria-label={`Archive card`}
+            aria-label="Archive card"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -628,7 +570,7 @@ export default function CardsPage() {
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-content-secondary">
-                Archive this {cardTypeLabel(deleteTarget.type)} card?
+                Archive this {deleteTarget.type} card?
                 This will soft-delete the card.
               </p>
             </div>
