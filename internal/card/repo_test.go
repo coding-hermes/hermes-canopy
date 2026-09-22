@@ -2,10 +2,14 @@ package card
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 func testDBManager(t *testing.T) *CardDBManager {
@@ -251,4 +255,141 @@ func TestServiceCreateCard(t *testing.T) {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func TestRepoPatchDistinguishesRevisionConflictFromNotFound(t *testing.T) {
+	mgr := testDBManager(t)
+	defer mgr.Close()
+	repo, err := mgr.Repository(CardTypeCompact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := repo.Create(context.Background(), CreateCardInput{
+		ID: uuid.New(), TreeID: uuid.New(), NodeID: uuid.New(), AppID: "revision-test", CardType: CardTypeCompact,
+		Data: json.RawMessage(`{"title":"before"}`), ContextHash: "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := json.RawMessage(`{"title":"after"}`)
+	_, err = repo.Patch(context.Background(), created.ID, created.Revision+1, PatchCardInput{Data: &data})
+	if !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("stale patch error = %v, want ErrRevisionConflict", err)
+	}
+
+	_, err = repo.Patch(context.Background(), uuid.New(), 1, PatchCardInput{Data: &data})
+	if errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("missing card error = %v, must not be ErrRevisionConflict", err)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("missing card error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestRepoPatchRestoreClearsDismissedAt(t *testing.T) {
+	mgr := testDBManager(t)
+	defer mgr.Close()
+	repo, err := mgr.Repository(CardTypeCompact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := repo.Create(context.Background(), CreateCardInput{
+		ID: uuid.New(), TreeID: uuid.New(), NodeID: uuid.New(), AppID: "lifecycle-test", CardType: CardTypeCompact,
+		Data: json.RawMessage(`{}`), ContextHash: "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dismissed := CardStatusDismissed
+	card, err := repo.Patch(context.Background(), created.ID, 1, PatchCardInput{Status: &dismissed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.DismissedAt == nil {
+		t.Fatal("dismissed patch did not set dismissed_at")
+	}
+
+	active := CardStatusActive
+	card, err = repo.Patch(context.Background(), created.ID, 2, PatchCardInput{Status: &active})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.DismissedAt != nil {
+		t.Fatalf("restore dismissed_at = %v, want nil", card.DismissedAt)
+	}
+}
+
+func TestServiceCardLifecycleTransitionsAndGuards(t *testing.T) {
+	mgr := testDBManager(t)
+	defer mgr.Close()
+	svc := NewCardServiceImpl(mgr)
+	ctx := context.Background()
+
+	created, err := svc.CreateCard(ctx, uuid.New(), uuid.New(), "lifecycle-service", service.CardTypeCompact, map[string]any{"title": "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := mgr.Repository(CardTypeCompact)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dismissed := string(CardStatusDismissed)
+	got, err := svc.PatchCard(ctx, created.ID, 1, service.CardPatchInput{Status: &dismissed})
+	if err != nil || got.Status != string(CardStatusDismissed) || got.Revision != 2 {
+		t.Fatalf("active->dismissed = (%+v, %v)", got, err)
+	}
+	stored, _ := repo.Get(ctx, created.ID)
+	if stored.DismissedAt == nil {
+		t.Fatal("service dismiss did not set dismissed_at")
+	}
+	if _, err := svc.UpdateCardData(ctx, created.ID, map[string]any{"blocked": true}); !errors.Is(err, ErrStatusDismissed) {
+		t.Fatalf("dismissed data update error = %v, want ErrStatusDismissed", err)
+	}
+
+	active := string(CardStatusActive)
+	got, err = svc.PatchCard(ctx, created.ID, 2, service.CardPatchInput{Status: &active})
+	if err != nil || got.Status != string(CardStatusActive) || got.Revision != 3 {
+		t.Fatalf("dismissed->active = (%+v, %v)", got, err)
+	}
+	stored, _ = repo.Get(ctx, created.ID)
+	if stored.DismissedAt != nil {
+		t.Fatal("service restore did not clear dismissed_at")
+	}
+
+	if _, err := svc.PatchCard(ctx, created.ID, 3, service.CardPatchInput{Status: &active}); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("active->active error = %v, want ErrInvalidTransition", err)
+	}
+
+	archived := string(CardStatusArchived)
+	got, err = svc.PatchCard(ctx, created.ID, 3, service.CardPatchInput{Status: &archived})
+	if err != nil || got.Status != string(CardStatusArchived) {
+		t.Fatalf("active->archived = (%+v, %v)", got, err)
+	}
+	if _, err := svc.PatchCard(ctx, created.ID, got.Revision, service.CardPatchInput{Status: &active}); !errors.Is(err, ErrStatusArchived) {
+		t.Fatalf("archived->active error = %v, want ErrStatusArchived", err)
+	}
+	if _, err := svc.UpdateCardData(ctx, created.ID, map[string]any{"blocked": true}); !errors.Is(err, ErrStatusArchived) {
+		t.Fatalf("archived data update error = %v, want ErrStatusArchived", err)
+	}
+
+	second, err := svc.CreateCard(ctx, uuid.New(), uuid.New(), "lifecycle-service", service.CardTypeCompact, map[string]any{"title": "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PatchCard(ctx, second.ID, 1, service.CardPatchInput{Status: &dismissed}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PatchCard(ctx, second.ID, 2, service.CardPatchInput{Status: &archived}); err != nil {
+		t.Fatalf("dismissed->archived: %v", err)
+	}
+	secondEvents, err := repo.ListEvents(ctx, second.ID, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(secondEvents); len(got) != 3 || got[1] != EventCardDismissed || got[2] != EventCardArchived {
+		t.Fatalf("dismissed archive events = %v", got)
+	}
 }

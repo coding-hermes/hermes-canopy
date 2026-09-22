@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
@@ -88,7 +90,17 @@ type cardCreateRequest struct {
 
 // cardUpdateRequest is the JSON body for updating a card.
 type cardUpdateRequest struct {
-	Data any `json:"data"`
+	Data        *json.RawMessage           `json:"data,omitempty"`
+	Actions     *[]service.CardActionInput `json:"actions,omitempty"`
+	Status      *string                    `json:"status,omitempty"`
+	ContextHash *string                    `json:"context_hash,omitempty"`
+}
+
+// cardRevisionConflictBody keeps the normal error envelope and includes the
+// current card snapshot needed by a client to retry safely.
+type cardRevisionConflictBody struct {
+	Error apiError             `json:"error"`
+	Card  *service.CardSummary `json:"card,omitempty"`
 }
 
 // cardActionRequest is the JSON body for POST /{card_id}/actions.
@@ -197,9 +209,13 @@ func (h *CardHandler) GetCard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, card)
 }
 
-// UpdateCard updates a card's data payload.
+// UpdateCard applies a data, action, context, or lifecycle patch.
 func (h *CardHandler) UpdateCard(w http.ResponseWriter, r *http.Request) {
 	cardID, ok := parseCardID(w, r)
+	if !ok {
+		return
+	}
+	expectedRevision, ok := parseIfMatch(w, r)
 	if !ok {
 		return
 	}
@@ -209,31 +225,35 @@ func (h *CardHandler) UpdateCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
 		return
 	}
-	if req.Data == nil {
-		writeError(w, http.StatusBadRequest, "MISSING_DATA", "data field is required")
+	if req.Data == nil && req.Actions == nil && req.Status == nil && req.ContextHash == nil {
+		writeError(w, http.StatusBadRequest, "CARD_PATCH_EMPTY", "patch must include at least one mutable field")
 		return
 	}
 
-	card, err := h.svc.UpdateCardData(r.Context(), cardID, req.Data)
+	updated, err := h.svc.PatchCard(r.Context(), cardID, expectedRevision, service.CardPatchInput{
+		Data: req.Data, Actions: req.Actions, Status: req.Status, ContextHash: req.ContextHash,
+	})
 	if err != nil {
-		log.Ctx(r.Context()).Error().Err(err).Msg("card update failed")
-		writeError(w, http.StatusInternalServerError, "CARD_UPDATE_ERROR", "internal server error")
+		h.writeCardMutationError(w, r, err, "card update failed")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, card)
+	writeJSON(w, http.StatusOK, updated)
 }
 
-// ArchiveCard dismisses or archives a card.
+// ArchiveCard archives an active or dismissed card using DELETE semantics.
 func (h *CardHandler) ArchiveCard(w http.ResponseWriter, r *http.Request) {
 	cardID, ok := parseCardID(w, r)
 	if !ok {
 		return
 	}
+	expectedRevision, ok := parseIfMatch(w, r)
+	if !ok {
+		return
+	}
 
-	if err := h.svc.ArchiveCard(r.Context(), cardID); err != nil {
-		log.Ctx(r.Context()).Error().Err(err).Msg("card archive failed")
-		writeError(w, http.StatusInternalServerError, "CARD_ARCHIVE_ERROR", "internal server error")
+	if err := h.svc.ArchiveCard(r.Context(), cardID, expectedRevision); err != nil {
+		h.writeCardMutationError(w, r, err, "card archive failed")
 		return
 	}
 
@@ -307,6 +327,57 @@ func (h *CardHandler) SubmitCardAction(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
+
+// parseIfMatch validates the optimistic-concurrency precondition required by
+// PATCH and DELETE card mutations.
+func parseIfMatch(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := strings.TrimSpace(r.Header.Get("If-Match"))
+	if raw == "" {
+		writeError(w, http.StatusPreconditionRequired, "CARD_REVISION_REQUIRED", "If-Match header is required")
+		return 0, false
+	}
+	revision, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || revision < 0 {
+		writeError(w, http.StatusBadRequest, "CARD_REVISION_INVALID", "If-Match must be a non-negative integer revision")
+		return 0, false
+	}
+	return revision, true
+}
+
+func (h *CardHandler) writeCardMutationError(w http.ResponseWriter, r *http.Request, err error, operation string) {
+	switch {
+	case errors.Is(err, card.ErrRevisionConflict):
+		cardID, parseErr := uuid.Parse(chi.URLParam(r, "card_id"))
+		if parseErr != nil {
+			writeError(w, http.StatusPreconditionFailed, "CARD_REVISION_CONFLICT", "If-Match revision does not match the current card revision")
+			return
+		}
+		current, getErr := h.svc.GetCard(r.Context(), cardID)
+		if getErr != nil {
+			writeError(w, http.StatusPreconditionFailed, "CARD_REVISION_CONFLICT", "If-Match revision does not match the current card revision")
+			return
+		}
+		writeJSON(w, http.StatusPreconditionFailed, cardRevisionConflictBody{
+			Error: apiError{Code: "CARD_REVISION_CONFLICT", Message: "If-Match revision does not match the current card revision"},
+			Card:  current,
+		})
+	case errors.Is(err, card.ErrStatusArchived):
+		writeError(w, http.StatusConflict, "CARD_STATUS_ARCHIVED", "archived cards are terminal and cannot be mutated")
+	case errors.Is(err, card.ErrStatusDismissed):
+		writeError(w, http.StatusConflict, "CARD_STATUS_DISMISSED", "dismissed cards do not accept app-data mutations")
+	case errors.Is(err, card.ErrInvalidTransition):
+		writeError(w, http.StatusConflict, "CARD_INVALID_TRANSITION", "card status transition is not allowed")
+	case errors.Is(err, service.ErrCardNotFound):
+		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", "card not found")
+	default:
+		log.Ctx(r.Context()).Error().Err(err).Msg(operation)
+		code := "CARD_UPDATE_ERROR"
+		if strings.Contains(operation, "archive") {
+			code = "CARD_ARCHIVE_ERROR"
+		}
+		writeError(w, http.StatusInternalServerError, code, "internal server error")
+	}
+}
 
 // parseCardID reads and validates the {card_id} chi URL parameter.
 func parseCardID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

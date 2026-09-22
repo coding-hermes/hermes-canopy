@@ -195,6 +195,9 @@ func (r *SQLiteCardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevisi
 			query += ", dismissed_at = ?"
 			args = append(args, nowStr)
 		}
+		if *input.Status == CardStatusActive {
+			query += ", dismissed_at = NULL"
+		}
 		if *input.Status == CardStatusArchived {
 			query += ", archived_at = ?"
 			args = append(args, nowStr)
@@ -214,7 +217,11 @@ func (r *SQLiteCardRepo) Patch(ctx context.Context, id uuid.UUID, expectedRevisi
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return nil, fmt.Errorf("card: patch %s: revision mismatch or not found", id)
+		current, getErr := r.Get(ctx, id)
+		if getErr != nil {
+			return nil, fmt.Errorf("card: patch %s: %w", id, getErr)
+		}
+		return nil, fmt.Errorf("card: patch %s at revision %d (current %d): %w", id, expectedRevision, current.Revision, ErrRevisionConflict)
 	}
 
 	return r.Get(ctx, id)

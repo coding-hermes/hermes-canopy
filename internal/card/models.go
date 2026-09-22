@@ -5,6 +5,7 @@ package card
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +38,15 @@ const (
 	CardStatusActive    CardStatus = "active"
 	CardStatusDismissed CardStatus = "dismissed"
 	CardStatusArchived  CardStatus = "archived"
+)
+
+// Sentinel errors returned by the card repository and service for lifecycle
+// and optimistic-concurrency failures.
+var (
+	ErrRevisionConflict  = errors.New("card: revision conflict")
+	ErrStatusArchived    = errors.New("card: card is archived")
+	ErrStatusDismissed   = errors.New("card: card is dismissed")
+	ErrInvalidTransition = errors.New("card: invalid status transition")
 )
 
 // CardEventType enumerates the kinds of events that can be recorded against a card.
@@ -166,6 +176,7 @@ func CardToSummary(c *Card) *service.CardSummary {
 		AppID:       c.AppID,
 		Type:        service.CardType(c.CardType),
 		Status:      string(c.Status),
+		Revision:    c.Revision,
 		ContextHash: c.ContextHash,
 		Data:        data,
 		Actions:     actions,

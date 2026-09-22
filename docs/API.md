@@ -1054,14 +1054,38 @@ GET /api/v1/cards/{card_id}
 
 ```
 PATCH /api/v1/cards/{card_id}
+If-Match: {revision}
 ```
 
-**Request body:**
+`If-Match` is required on every PATCH. A missing or blank header returns `428
+CARD_REVISION_REQUIRED`; a non-negative integer that differs from the current
+revision returns `412 CARD_REVISION_CONFLICT` and includes the current card
+snapshot in the JSON response. A non-integer header returns `400
+CARD_REVISION_INVALID`.
+
+**Request body:** a non-empty object containing one or more mutable fields:
 ```json
 {
-  "data": "object (required)"
+  "data": "object (optional)",
+  "actions": "array (optional)",
+  "context_hash": "string (optional)",
+  "status": "active | dismissed | archived (optional)"
 }
 ```
+
+An empty object returns `400 CARD_PATCH_EMPTY`. Status transitions follow the
+lifecycle state machine:
+
+| Current status | PATCH `status` | Event | Result |
+|---|---|---|---|
+| `active` | `dismissed` | `card_dismissed` | sets `dismissed_at` |
+| `dismissed` | `active` | `card_restored` | clears `dismissed_at` |
+| `active` or `dismissed` | `archived` | `card_archived` | sets `archived_at` |
+| `archived` | any | none | `409 CARD_STATUS_ARCHIVED` |
+
+Data/action/context mutations on a dismissed card return `409
+CARD_STATUS_DISMISSED`. Invalid status transitions return `409
+CARD_INVALID_TRANSITION`.
 
 **Response (200):** Updated card.
 
@@ -1069,9 +1093,15 @@ PATCH /api/v1/cards/{card_id}
 
 ```
 DELETE /api/v1/cards/{card_id}
+If-Match: {revision}
 ```
 
-**Response (200):** Archived card detail.
+`If-Match` is required with the same `428 CARD_REVISION_REQUIRED` and `412
+CARD_REVISION_CONFLICT` semantics as PATCH. DELETE archives an active or
+dismissed card and records `card_archived`; an archived card is terminal and
+returns `409 CARD_STATUS_ARCHIVED`.
+
+**Response (204):** No content.
 
 ### Submit Card Action
 

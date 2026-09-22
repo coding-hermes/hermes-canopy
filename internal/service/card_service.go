@@ -29,11 +29,26 @@ type CardSummary struct {
 	AppID        string    `json:"app_id"`
 	Type         CardType  `json:"type"`
 	Status       string    `json:"status"` // active | dismissed | archived
+	Revision     int64     `json:"revision"`
 	ContextHash  string    `json:"context_hash"`
 	Data         any       `json:"data"`    // type-specific JSON payload
 	Actions      []any     `json:"actions"` // declared action descriptors
 	LastEventSeq int64     `json:"last_event_seq"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// CardActionInput is the service-layer representation of a declared card action.
+type CardActionInput struct {
+	Label   string `json:"label"`
+	Handler string `json:"handler"`
+}
+
+// CardPatchInput carries the mutable card fields accepted by PATCH.
+type CardPatchInput struct {
+	Data        *json.RawMessage
+	Actions     *[]CardActionInput
+	Status      *string
+	ContextHash *string
 }
 
 // Card action outcome statuses reported by SubmitCardAction.
@@ -111,11 +126,15 @@ type CardService interface {
 	// ListCards lists cards for a tree or node.
 	ListCards(ctx context.Context, treeID, nodeID *uuid.UUID, cardType *CardType, limit, offset int) ([]CardSummary, error)
 
-	// UpdateCardData updates the card's JSON data payload.
+	// UpdateCardData updates the card's JSON data payload using the current revision.
 	UpdateCardData(ctx context.Context, cardID uuid.UUID, data any) (*CardSummary, error)
 
-	// ArchiveCard dismisses/archives a card.
-	ArchiveCard(ctx context.Context, cardID uuid.UUID) error
+	// PatchCard applies a compare-and-swap patch at expectedRevision.
+	PatchCard(ctx context.Context, cardID uuid.UUID, expectedRevision int64, input CardPatchInput) (*CardSummary, error)
+
+	// ArchiveCard archives a card. An omitted expected revision preserves the
+	// legacy service-call behavior; HTTP callers must provide one.
+	ArchiveCard(ctx context.Context, cardID uuid.UUID, expectedRevision ...int64) error
 
 	// SubmitCardAction submits a declared action on a card: it validates the
 	// handler against the card's declared actions, appends action_requested,

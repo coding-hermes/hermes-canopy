@@ -162,8 +162,10 @@ func (s *CardServiceImpl) ListCards(
 }
 
 // UpdateCardData patches a card's data payload and appends a card_updated event.
+// It is retained for internal callers that do not have an HTTP If-Match header;
+// the HTTP path uses PatchCard with the caller's expected revision.
 func (s *CardServiceImpl) UpdateCardData(ctx context.Context, cardID uuid.UUID, data any) (*service.CardSummary, error) {
-	card, repo, err := s.findCardAndRepo(ctx, cardID)
+	card, _, err := s.findCardAndRepo(ctx, cardID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,27 +174,96 @@ func (s *CardServiceImpl) UpdateCardData(ctx context.Context, cardID uuid.UUID, 
 	if err != nil {
 		return nil, fmt.Errorf("card: marshal data: %w", err)
 	}
-
 	raw := json.RawMessage(dataJSON)
-	updated, err := repo.Patch(ctx, cardID, card.Revision, PatchCardInput{
-		Data: &raw,
-	})
+	return s.PatchCard(ctx, cardID, card.Revision, service.CardPatchInput{Data: &raw})
+}
+
+// PatchCard applies a compare-and-swap patch and records either the lifecycle
+// event for a status transition or card_updated for ordinary data changes.
+func (s *CardServiceImpl) PatchCard(ctx context.Context, cardID uuid.UUID, expectedRevision int64, input service.CardPatchInput) (*service.CardSummary, error) {
+	card, repo, err := s.findCardAndRepo(ctx, cardID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", service.ErrCardNotFound, cardID)
+	}
+
+	if card.Revision != expectedRevision {
+		return nil, fmt.Errorf("card: patch %s at revision %d (current %d): %w", cardID, expectedRevision, card.Revision, ErrRevisionConflict)
+	}
+	hasDataMutation := input.Data != nil || input.Actions != nil || input.ContextHash != nil
+	if card.Status == CardStatusArchived {
+		return nil, fmt.Errorf("%w: %s", ErrStatusArchived, cardID)
+	}
+	if card.Status == CardStatusDismissed && hasDataMutation {
+		return nil, fmt.Errorf("%w: %s", ErrStatusDismissed, cardID)
+	}
+	if input.Status == nil && !hasDataMutation {
+		return nil, fmt.Errorf("%w: patch has no mutable fields", ErrInvalidTransition)
+	}
+
+	var (
+		repoInput = PatchCardInput{Data: input.Data, ContextHash: input.ContextHash}
+		lifecycle CardEventType
+		status    *CardStatus
+	)
+	if input.Actions != nil {
+		actions := make([]CardAction, len(*input.Actions))
+		for i, action := range *input.Actions {
+			actions[i] = CardAction{Label: action.Label, Handler: action.Handler}
+		}
+		repoInput.Actions = &actions
+	}
+	if input.Status != nil {
+		target := CardStatus(*input.Status)
+		status = &target
+		repoInput.Status = status
+		var valid bool
+		switch {
+		case card.Status == CardStatusActive && target == CardStatusDismissed:
+			lifecycle, valid = EventCardDismissed, true
+		case card.Status == CardStatusDismissed && target == CardStatusActive:
+			lifecycle, valid = EventCardRestored, true
+		case (card.Status == CardStatusActive || card.Status == CardStatusDismissed) && target == CardStatusArchived:
+			lifecycle, valid = EventCardArchived, true
+		}
+		if !valid {
+			if card.Status == CardStatusArchived {
+				return nil, fmt.Errorf("%w: %s", ErrStatusArchived, cardID)
+			}
+			return nil, fmt.Errorf("%w: %s to %s", ErrInvalidTransition, card.Status, target)
+		}
+		if target == CardStatusArchived && hasDataMutation {
+			return nil, fmt.Errorf("%w: %s", ErrStatusArchived, cardID)
+		}
+	}
+
+	updated, err := repo.Patch(ctx, cardID, expectedRevision, repoInput)
 	if err != nil {
 		return nil, fmt.Errorf("card: patch: %w", err)
 	}
 
-	// Append card_updated event.
-	updatedEvent, err := repo.AppendEvent(ctx, cardID, AppendEventInput{
-		EventID:   uuid.New(),
-		EventType: EventCardUpdated,
-		ActorKind: ActorUser,
-		ActorID:   "user",
-		Payload:   json.RawMessage(dataJSON),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("card: append update event: %w", err)
+	if lifecycle != "" {
+		payload, _ := json.Marshal(map[string]string{"status": string(*status)})
+		event, appendErr := repo.AppendEvent(ctx, cardID, AppendEventInput{
+			EventID: uuid.New(), EventType: lifecycle, ActorKind: ActorUser, ActorID: "user", Payload: payload,
+		})
+		if appendErr != nil {
+			return nil, fmt.Errorf("card: append lifecycle event: %w", appendErr)
+		}
+		s.publishEvent(event)
 	}
-	s.publishEvent(updatedEvent)
+	if hasDataMutation {
+		payload := json.RawMessage(`{}`)
+		if input.Data != nil {
+			payload = *input.Data
+		}
+		event, appendErr := repo.AppendEvent(ctx, cardID, AppendEventInput{
+			EventID: uuid.New(), EventType: EventCardUpdated, ActorKind: ActorUser, ActorID: "user", Payload: payload,
+		})
+		if appendErr != nil {
+			return nil, fmt.Errorf("card: append update event: %w", appendErr)
+		}
+		s.publishEvent(event)
+	}
 
 	summary := CardToSummary(updated)
 	seq, _ := repo.MaxSequence(ctx, cardID)
@@ -200,34 +271,21 @@ func (s *CardServiceImpl) UpdateCardData(ctx context.Context, cardID uuid.UUID, 
 	return summary, nil
 }
 
-// ArchiveCard sets the card status to archived and appends a card_archived event.
-func (s *CardServiceImpl) ArchiveCard(ctx context.Context, cardID uuid.UUID) error {
-	card, repo, err := s.findCardAndRepo(ctx, cardID)
+// ArchiveCard keeps DELETE semantics while accepting an optional revision for
+// legacy internal callers. HTTP callers always supply If-Match via this value.
+func (s *CardServiceImpl) ArchiveCard(ctx context.Context, cardID uuid.UUID, expectedRevision ...int64) error {
+	card, _, err := s.findCardAndRepo(ctx, cardID)
 	if err != nil {
 		return err
 	}
-
-	status := CardStatusArchived
-	_, err = repo.Patch(ctx, cardID, card.Revision, PatchCardInput{
-		Status: &status,
-	})
-	if err != nil {
+	expected := card.Revision
+	if len(expectedRevision) > 0 {
+		expected = expectedRevision[0]
+	}
+	status := string(CardStatusArchived)
+	if _, err := s.PatchCard(ctx, cardID, expected, service.CardPatchInput{Status: &status}); err != nil {
 		return fmt.Errorf("card: archive: %w", err)
 	}
-
-	// Append card_archived event.
-	archivedEvent, err := repo.AppendEvent(ctx, cardID, AppendEventInput{
-		EventID:   uuid.New(),
-		EventType: EventCardArchived,
-		ActorKind: ActorUser,
-		ActorID:   "user",
-		Payload:   json.RawMessage("{}"),
-	})
-	if err != nil {
-		return fmt.Errorf("card: append archive event: %w", err)
-	}
-	s.publishEvent(archivedEvent)
-
 	return nil
 }
 
