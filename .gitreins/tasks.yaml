@@ -3367,18 +3367,3 @@ tasks:
   status: complete
   created_at: '2026-09-22T14:50:27.401020+00:00'
   completed_at: '2026-09-22T15:25:27.968002+00:00'
-- id: PL-03-S64
-  title: "SPEC-PL-03 \xA76.4 graph attachment: #card reference parsing + card_ref\
-    \ metadata + context-compiler card envelope (backend)"
-  criteria:
-  - 'Parser accepts #card:<uuid> and #card:<type>/<uuid> producing ref://card/<id>;
-    malformed card refs fail parsing, missing/dismissed/archived cards still resolve
-    with status; node metadata card_ref {id,card_type,app_id,context_hash} validated
-    on node write; the context compiler resolves ref://card/<id> through CardService.GetCard
-    into a compact envelope (id, app_id, status, context_hash, last 20 events) rendered
-    as a labeled budget-accounted block with manifest entries; tests at parser+resolution+compiler
-    layers are mutation-sensitive; go build/vet green; touched-package tests green
-    with CANOPY_TEST_ALLOW_SHARED_DB=1 where DB-backed (bare green = phantom); no
-    existing route or wire shape changed'
-  status: in_progress
-  created_at: '2026-09-22T16:00:30.027531+00:00'
