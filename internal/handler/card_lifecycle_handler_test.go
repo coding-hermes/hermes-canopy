@@ -129,6 +129,24 @@ func TestCardLifecycleAndIfMatchHTTP(t *testing.T) {
 		t.Fatalf("restored row = %+v, want active with nil dismissed_at", stored)
 	}
 
+	// The restore transition emits card_restored, observable on the same
+	// stream clients use — every lifecycle event type must be wire-asserted.
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	req2 := httptest.NewRequest(http.MethodGet, "/cards/"+cardID.String()+"/events", nil).WithContext(ctx2)
+	stream2 := newStreamRecorder()
+	done2 := make(chan struct{})
+	go func() {
+		h.ServeHTTP(stream2, req2)
+		close(done2)
+	}()
+	stream2.waitFor(t, `"event_type":"card_restored"`)
+	cancel2()
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		t.Fatal("card events GET did not stop after request cancellation")
+	}
+
 	archived := cardDeleteRequest(t, h, cardID.String(), "3")
 	if archived.Code != http.StatusNoContent {
 		t.Fatalf("archive DELETE status = %d, want 204; body=%s", archived.Code, archived.Body.String())
@@ -145,6 +163,13 @@ func TestCardLifecycleAndIfMatchHTTP(t *testing.T) {
 	if terminal.Code != http.StatusConflict || cardErrorCode(t, terminal) != "CARD_STATUS_ARCHIVED" {
 		t.Fatalf("archived PATCH = %d %s", terminal.Code, terminal.Body.String())
 	}
+
+	// DELETE is terminal too: an already-archived card cannot be re-archived.
+	redelete := cardDeleteRequest(t, h, cardID.String(), "4")
+	if redelete.Code != http.StatusConflict || cardErrorCode(t, redelete) != "CARD_STATUS_ARCHIVED" {
+		t.Fatalf("archived DELETE = %d %s", redelete.Code, redelete.Body.String())
+	}
+
 	archivedData := cardPatchRequest(t, h, cardID.String(), `{"data":{"blocked":true}}`, "4")
 	if archivedData.Code != http.StatusConflict || cardErrorCode(t, archivedData) != "CARD_STATUS_ARCHIVED" {
 		t.Fatalf("archived data PATCH = %d %s", archivedData.Code, archivedData.Body.String())

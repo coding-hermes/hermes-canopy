@@ -358,6 +358,13 @@ func TestServiceCardLifecycleTransitionsAndGuards(t *testing.T) {
 	if stored.DismissedAt != nil {
 		t.Fatal("service restore did not clear dismissed_at")
 	}
+	events, err := repo.ListEvents(ctx, created.ID, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(events); len(got) != 3 || got[0] != EventCardCreated || got[1] != EventCardDismissed || got[2] != EventCardRestored {
+		t.Fatalf("restore lifecycle events = %v, want [created dismissed restored]", got)
+	}
 
 	if _, err := svc.PatchCard(ctx, created.ID, 3, service.CardPatchInput{Status: &active}); !errors.Is(err, ErrInvalidTransition) {
 		t.Fatalf("active->active error = %v, want ErrInvalidTransition", err)
