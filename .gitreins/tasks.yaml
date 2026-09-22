@@ -2858,17 +2858,18 @@ tasks:
   created_at: '2026-09-18T20:39:12.951463+00:00'
   completed_at: '2026-09-18T20:49:52.522068+00:00'
 - id: PL-03
-  title: Implement card action HTTP path
+  title: "SPEC-PL-03 \xA76.1 renderer dispatch by (appId, cardType) + card-action\
+    \ invoke path (frontend)"
   criteria:
-  - 'Add the card action endpoint described by the PL-03 premise-corrected scope:
-    validate the requested action against the card''s declared actions, append action_requested
-    and action_completed or agent_error events through the existing SQLite card service,
-    expose a documented/tested HTTP route, and include regression tests. Do not alter
-    the SQLite card storage or revive internal/card/duckdb. Preserve existing CRUD
-    behavior and run the relevant Go tests.'
+  - CardsPage resolves a renderer per (appId, cardType) with a default frame fallback;
+    the default frame renders app identifier, type, status, creation time, context-hash
+    affordance, activity indicator and declared actions as text-only (no raw HTML
+    from data); clicking a declared action POSTs /api/v1/cards/{id}/actions with {handler,
+    payload} and surfaces the outcome; vitest coverage for dispatch, frame elements,
+    invoke happy/422 paths, and text-escaping of data; tsc/vitest/oxlint/build green
   status: complete
-  created_at: '2026-09-18T21:48:53.497831+00:00'
-  completed_at: '2026-09-18T22:03:39.506560+00:00'
+  created_at: '2026-09-22T13:38:30.934270+00:00'
+  completed_at: '2026-09-22T14:23:03.941071+00:00'
 - id: PL-03-SSE
   title: "Card SSE event stream (SPEC-PL-03 \xA79)"
   criteria:
