@@ -3367,3 +3367,24 @@ tasks:
   status: complete
   created_at: '2026-09-22T14:50:27.401020+00:00'
   completed_at: '2026-09-22T15:25:27.968002+00:00'
+- id: REVIEW-CANOPY-001
+  title: 'Board fails validation with 5 errors: out-of-vocab duplicate status, 3 descending
+    event ids, board.jsonl EOF'
+  criteria:
+  - 'boardctl validate returns RESULT: OK with zero errors; no tasks.jsonl row carries
+    a status outside the vocabulary; the QA-HERMES-CANOPY-26/-28 pair resolves to
+    one live pending row (-26 closed as superseded); events.jsonl ids ascend; board.jsonl
+    parses as a single valid JSON line'
+  status: complete
+  created_at: '2026-09-22T22:33:53.608877+00:00'
+  completed_at: '2026-09-22T22:36:53.213826+00:00'
+- id: REVIEW-CANOPY-002
+  title: 48 depends_on references point at task ids that do not exist
+  criteria:
+  - boardctl validate reports zero 'depends_on references nonexistent task id' warnings
+    (199 -> ~151 total warnings, zero in that class); every edited tasks.jsonl line
+    still parses as JSON; all untouched lines byte-identical; dependency walk over
+    the board completes without dangling edges
+  status: complete
+  created_at: '2026-09-22T23:09:45.217479+00:00'
+  completed_at: '2026-09-22T23:19:35.239967+00:00'
