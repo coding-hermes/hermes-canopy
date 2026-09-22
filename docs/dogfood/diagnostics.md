@@ -320,3 +320,76 @@ live cross-user channel delivery over SSE (event `channel_message` with full
 payload within one second); tree share → grantee node writes visible to the
 owner; MLS group create/join/leave/epoch mechanics and the
 `mls:welcome_message` SSE broadcast.
+
+## 2026-09-22 — MCP endpoint + production proxy (why they break, and the right way)
+
+**How the MCP endpoint is built.** `internal/handler/mcp_handler.go` is a
+single-file JSON-RPC 2.0 dispatcher over plain HTTP POST: `handleJSONRPC`
+checks notifications FIRST (they must never get a JSON-RPC body — they get
+202), then version, then a method switch (`initialize` / `ping` /
+`tools/list` / `tools/call`). Seven `toolDef`s carry JSON-Schema-ish
+`inputSchema` blocks, and `dispatchTool` maps names to thin service calls.
+Stateless by design: no session, no `notifications/initialized` tracking, so
+any request stands alone. That design is why hand-rolled curl testing feels
+flawless — every call is independent and returns HTTP 200 with plausible JSON.
+
+**The error this run hit.** The official `modelcontextprotocol` Python SDK
+(2.2.0, streamable-HTTP client) rejects every `tools/call` RESULT with
+`CallToolResult: content Field required`. The spec's result envelope is
+`{"content":[{"type":"text","text":"..."}], "isError":false}`; canopyd's
+handlers return the bare domain object (`{"trees":[...]}`). Nothing in the Go
+tree can see this: the server-side unit tests assert the shapes canopyd
+itself chose. Lesson: an MCP server is only "working" if a reference client
+accepts it — the interop canary belongs in CI, not in human curiosity
+(DF-45). The right way to test any MCP endpoint: wire the official SDK in a
+throwaway venv (`uv pip install mcp`), `streamable_http_client` +
+`ClientSession.initialize()` + one `call_tool` per tool.
+
+**Auth subtlety hit on the way:** the SDK's streamable client takes no
+`headers=` argument in 2.2.0 — pass an auth-aware `httpx.AsyncClient` as
+`http_client=`. The unpack is 2 values (read, write), not 3 like SSE.
+
+**How the proxy auth is built.** `deploy/reference-proxy.py` threads every
+request through `_handle`: Basic gate (`_authorized`, constant-time compare)
+→ `/api`+`/health` go to `_proxy`, everything else gets the SPA fallback.
+`_proxy` copies client headers minus hop-by-hop, then injects
+`Authorization: Bearer <jwt>` ONLY if the client sent none. The flaw: the
+Basic gate VALIDATES the credential but leaves it in the header set, so the
+injection check sees "client sent Authorization" and skips. Documented recipe
+(README production auth) + implementation = guaranteed 401. Lesson: a gate
+that CONSUMES a header must then REMOVE it before the downstream sees it —
+and the combination test (gate+token) is the one that matters, because each
+behaviour works alone (DF-46). Proven by isolation: gate-less proxy injects
+fine; Basic without gate passes through and blocks injection identically.
+
+**Debug technique that paid twice:** run one arm with each factor removed.
+Arm A (no gate, token, no client auth) → injection works. Arm B (client Basic,
+no gate) → blocked. That 2×2 localised the defect to the gate/passthrough
+interaction in minutes without touching a debugger.
+
+**MCP-vs-REST asymmetry (DF-48).** REST `create_node` runs a membership
+precheck (403 `NOT_TREE_MEMBER`); the MCP dispatch calls the service directly,
+so a bogus tree reaches Postgres and comes back as FK 23503, which the service
+maps to `database unavailable`. Two layers drifted: the handler-level gate is
+not part of the service contract. Lesson: when a resource has TWO entry
+points, the error contract has to live in the service layer, or each entry
+point teaches clients a different truth.
+
+**Install leg (source path, what held up).** `make build` on a bare Debian 13
+agent: 152 s from empty module cache (pure-Go deps only — no cgo), binary
+42 MB, runs, migrates a virgin Postgres 16 to schema 48, serves MCP + CLI
+writes. The gap is not the build, it's the bootstrap: docs assume `go 1.25+`
+on PATH, a root-owned docker.sock, and a fast clone. A frustrated user's
+reality: `--depth 1` (408 s vs >15 min abandoned), userland Go tarball into
+`$HOME`, rootless dockerd reachable only via `~/bin` + `XDG_RUNTIME_DIR`
+(the unit exists but `systemctl --user` may fail to see it; `dockerd-rootless.sh`
+needs `/usr/sbin` on PATH for `sysctl`). Also: `/tmp` on shared hosts carries
+other users' residue — redirect logs to `$HOME` (hit "Permission denied" on a
+pre-existing `/tmp/build.log`). None of this is code; it's a
+"non-Docker install" doc section waiting to be written.
+
+**Numbers worth keeping:** shallow clone 408 s; build 152 s; PG ready 2 s;
+canopyd healthy 3 s; CLI create+list on the fresh box pass. Warm ops: MCP
+read 12.7 ms, REST read 12.3 ms, MCP write 19.8 ms (hyperfine, 30 runs).
+Cold restart to healthy 0.160 s — the sub-30s resume promise is not even
+close to binding.

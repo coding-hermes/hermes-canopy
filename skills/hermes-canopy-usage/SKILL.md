@@ -6,9 +6,9 @@ description: >-
   gateway surface (GAP-050), and the pitfalls that waste time (stale deployed
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
-  Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16 and 09-20 deep
-  dogfood runs.
-version: 2.3.0
+  Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21 and
+  09-22 deep dogfood runs.
+version: 2.4.0
 category: software-development
 ---
 
@@ -27,8 +27,55 @@ approvals resolve — with the gateway API key held server-side. Go backend
 | PWA | `cd frontend && npm run dev` → http://localhost:5173 | Vite proxy → `:8091`, auto-injects dev JWT — zero auth |
 | API | `curl :8091/api/v1/...` with `Authorization: Bearer <dev-jwt>` | JWT: HS256, secret `dev-secret-change-me`, sub `00000000-0000-0000-0000-000000000001` (README one-liner) |
 | CLI | `CANOPY_SERVER_URL=http://localhost:8091 CANOPY_TOKEN=<jwt> ./bin/canopyd tree list` | server default :8080 — set the env vars! |
-| MCP | `POST /api/v1/mcp` JSON-RPC 2.0 | `tools/list` → list_trees, get_tree, create_node, list_topics |
+| MCP | `POST /api/v1/mcp` JSON-RPC 2.0 | `tools/list` → list_trees, get_tree, create_node, list_topics, get_graph_stats, list_approvals, list_cards — **see the MCP section below before wiring a real client** |
 | Gateway | `GET /api/v1/gateway/status` etc. | canopyd proxies the live Hermes gateway; key held server-side |
+
+## MCP surface (verified 2026-09-22, HEAD 027f3b1b)
+
+- Transport is plain JSON-RPC 2.0 over HTTP POST (stateless): every call is
+  independent, `initialize` negotiates 2025-06-18 (also echoes legacy
+  2024-11-05), notifications get `202 Accepted` + empty body.
+- 7 tools: `list_trees`, `get_tree`, `create_node`, `list_topics`,
+  `get_graph_stats`, `list_approvals`, `list_cards`. There is NO
+  create_tree/card-write via MCP — seed those over REST first.
+- **KNOWN BREAK (DF-45, open at time of writing): `tools/call` results omit
+  the spec-mandated `content` array, so the OFFICIAL MCP SDK (python `mcp`
+  2.2.0 streamable-HTTP client) rejects every call client-side with
+  `CallToolResult: content Field required`.** Raw curl works and writes land.
+  Check the board row before wiring a real SDK client; use raw JSON-RPC if the
+  row is still open.
+- MCP has no membership precheck on `create_node`: a bogus `tree_id` returns
+  `-32000 "database unavailable: … fk_nodes_tree"` (DF-48) — read it as
+  "tree not found / not a member", NOT as a server outage.
+- Real-client snippet that WORKS once DF-45 is fixed (streamable HTTP, auth
+  via an auth-aware httpx client — the SDK client does not take headers
+  directly):
+  ```python
+  import httpx
+  from mcp import ClientSession
+  from mcp.client.streamable_http import streamable_http_client
+  client = httpx.AsyncClient(headers={'Authorization': 'Bearer <jwt>'}, timeout=30)
+  async with streamable_http_client(url, http_client=client) as streams:
+      read, write = streams
+      async with ClientSession(read, write) as s:
+          await s.initialize()
+          tools = await s.list_tools()
+  ```
+
+## Production deploy path (verified 2026-09-22)
+
+- `cd frontend && npm run build` → `frontend/dist/` (build exit 0, ~1 min);
+  `deploy/reference-proxy.py --dist frontend/dist --port 3000 --api
+  http://127.0.0.1:8096` serves the SPA + same-origin API + streaming SSE
+  (verified `node_added` events through it). No-creds → 401 with Basic gate.
+- **KNOWN BREAK (DF-46, open at time of writing): the documented
+  `--token` + `--require-auth-user/password` combo never injects** — the
+  validated Basic header counts as "client sent Authorization", so canopyd
+  401s every API call. Until fixed: put the token in the CLIENT (localStorage
+  or build-time), or run the proxy gate-less on loopback.
+- Node `metadata` in API responses is a BASE64 STRING (`"e30="` = `{}`) even
+  though the docs' node examples show an object (DF-47). Decode before use —
+  the frontend does this in `frontend/src/lib/nodeMeta.ts`.
 
 ## Live Hermes gateway surface (verified 2026-08-27)
 
