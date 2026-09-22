@@ -3118,3 +3118,19 @@ Pre-write: /ticks contiguous through tick547. Wrote /ticks/tick548-las03-residue
 Pending **21→20**: DF-23/DF-25 remain the top unparked rows; decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). Watch: (a) fold the async QA-34 re-verdict when it lands (first commit of next tick, before pick); (b) keys-backup retention on bunker3 — reclaim after the next clean daemon cycle if desired; (c) upstream `bunker keys prune` ask now lives in this entry + the QA-34 close note.
 
 > **Tick 548 postscript (same tick, 12:27Z):** the async QA-34 re-verdict landed **PASS / tier2 COMPLETE** at closeout HEAD 3ab56897 (job job-c3c8ca5e0637447389a41b51e216748d, artifact `.gitreins/history/2026-09-22/d846f82f/verdict.json`, host-local per gitignore). Folded into the QA-34 foreman_note + verdict-fold event 765, commit **004036f3** (pushed, parity 0/0). The judge independently re-verified: live residue 0/0/0/0 re-census, its OWN fresh spawn/exec/destroy cycle (qa34-cycle-test), all 140 backup archives tar-validated (140/140 valid, sample extract shows a real OpenSSH key block), live agent e990b54e exec green. **Next-tick watch (a) is RESOLVED — no fold owed.** Correction folded into the record: `/etc/bunkerd/ssh` entries are OpenSSH **PRIVATE** key files (not public keys as first narrated); file-not-dir learning unchanged. Watch item (b) unchanged; watch item (c) unchanged.
+
+## Tick 551 (2026-09-22 22:52Z) — hermes-canopy-2026-09-22-22-21-23
+
+**Verdict: OK — 1 task landed (foreman-direct board surgery).**
+
+- Picked **REVIEW-CANOPY-001** (P2, fleet review #14) after live re-verification: `boardctl validate` at HEAD = FAIL, exactly the 5 errors the row names. The row's "empty board.jsonl (zero bytes)" claim was FALSE — the file was the pretty-printed 16-line header that boardctl can't parse (known "line 1: EOF" cosmetic class); fix direction unchanged.
+- Fixes, byte-preserving untouched lines (git-tracked-jsonl-editing rules):
+  1. `QA-HERMES-CANOPY-26` status `duplicate` (out of vocabulary) → `complete`, dedup resolved with a close_note naming the live claim (`QA-HERMES-CANOPY-28`, still pending).
+  2-4. `events.jsonl` lines 325-337 (the tangled 09-01 FTR-02/FTR-04 block) re-ordered ascending — ids PRESERVED, lines byte-identical, purely reordered. Lesson: the first attempt RENUMBERED the three descending ids to 771-773 and cascaded to 436 errors (validator compares against a running high-water mark, so injecting high ids mid-file is the wrong form); reverted with `git restore --source=HEAD` and reordered instead.
+  5. `board.jsonl` compacted 16 lines → 1 valid JSON line; `ticks_total` 550→551, `last_commit`/`last_tick` refreshed.
+- Acceptance verified: `boardctl validate` → **RESULT: OK (0 errors, 199 warnings)** — same warning signature as the tick-494 baseline (inherited recycled-ID duplicates + depends_on warnings, untouched; those are REVIEW-CANOPY-002/004's rows).
+- GitReins: task REVIEW-CANOPY-001 created + started + completed (tier-1 short-circuits on a board-only diff — the load-bearing evidence is the validator flip + the byte-level diff, both run by the foreman).
+- Board files updated: tasks.jsonl (2 rows: -26 close + REVIEW-001 close), events.jsonl (reorder + event 771), board.jsonl (single-line header). tasks.md remains the only other board file updated this tick.
+
+### Next tick
+Pending **22→21**: REVIEW-CANOPY-002 (48 dangling depends_on — needs id-history archaeology, worker-sized), REVIEW-CANOPY-003 (version stamping via -ldflags — tractable Go), REVIEW-CANOPY-004 (shared result normaliser), DF-23/DF-25, decision-bound set unchanged (GAP-080 phase 3, GAP-076, GAP-078, GAP-081, DF-20). Watch: none new.
