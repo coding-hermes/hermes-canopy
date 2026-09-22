@@ -2857,19 +2857,6 @@ tasks:
   status: complete
   created_at: '2026-09-18T20:39:12.951463+00:00'
   completed_at: '2026-09-18T20:49:52.522068+00:00'
-- id: PL-03
-  title: "SPEC-PL-03 \xA76.1 renderer dispatch by (appId, cardType) + card-action\
-    \ invoke path (frontend)"
-  criteria:
-  - CardsPage resolves a renderer per (appId, cardType) with a default frame fallback;
-    the default frame renders app identifier, type, status, creation time, context-hash
-    affordance, activity indicator and declared actions as text-only (no raw HTML
-    from data); clicking a declared action POSTs /api/v1/cards/{id}/actions with {handler,
-    payload} and surfaces the outcome; vitest coverage for dispatch, frame elements,
-    invoke happy/422 paths, and text-escaping of data; tsc/vitest/oxlint/build green
-  status: complete
-  created_at: '2026-09-22T13:38:30.934270+00:00'
-  completed_at: '2026-09-22T14:23:03.941071+00:00'
 - id: PL-03-SSE
   title: "Card SSE event stream (SPEC-PL-03 \xA79)"
   criteria:
@@ -3362,3 +3349,36 @@ tasks:
   status: complete
   created_at: '2026-09-22T12:13:31.554328+00:00'
   completed_at: '2026-09-22T12:13:41.959784+00:00'
+- id: PL-03
+  title: "SPEC-PL-03 \xA76.2/6.3 lifecycle state machine + If-Match optimistic concurrency\
+    \ (backend)"
+  criteria:
+  - "PATCH/DELETE card mutations require If-Match: missing=428 CARD_REVISION_REQUIRED,\
+    \ stale=412 CARD_REVISION_CONFLICT with current snapshot in body; PATCH gains\
+    \ optional status driving the \xA76.2 machine (active->dismissed card_dismissed,\
+    \ dismissed->active card_restored clearing dismissed_at, active|dismissed->archived\
+    \ card_archived, archived terminal=409 CARD_STATUS_ARCHIVED, app-data patch on\
+    \ dismissed=409 CARD_STATUS_DISMISSED, empty patch=400 CARD_PATCH_EMPTY); repo\
+    \ distinguishes revision-conflict from not-found; handler maps sentinels to spec\
+    \ codes; tests at repo+service+handler layers prove every transition, event type,\
+    \ and error; docs/API.md Cards section documents If-Match, status patch, transitions,\
+    \ error codes; go build/vet, card suites (also -race), handler card tests, golangci-lint\
+    \ on touched packages all green"
+  status: complete
+  created_at: '2026-09-22T14:50:27.401020+00:00'
+  completed_at: '2026-09-22T15:25:27.968002+00:00'
+- id: PL-03-S64
+  title: "SPEC-PL-03 \xA76.4 graph attachment: #card reference parsing + card_ref\
+    \ metadata + context-compiler card envelope (backend)"
+  criteria:
+  - 'Parser accepts #card:<uuid> and #card:<type>/<uuid> producing ref://card/<id>;
+    malformed card refs fail parsing, missing/dismissed/archived cards still resolve
+    with status; node metadata card_ref {id,card_type,app_id,context_hash} validated
+    on node write; the context compiler resolves ref://card/<id> through CardService.GetCard
+    into a compact envelope (id, app_id, status, context_hash, last 20 events) rendered
+    as a labeled budget-accounted block with manifest entries; tests at parser+resolution+compiler
+    layers are mutation-sensitive; go build/vet green; touched-package tests green
+    with CANOPY_TEST_ALLOW_SHARED_DB=1 where DB-backed (bare green = phantom); no
+    existing route or wire shape changed'
+  status: in_progress
+  created_at: '2026-09-22T16:00:30.027531+00:00'
