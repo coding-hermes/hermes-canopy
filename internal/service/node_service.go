@@ -348,6 +348,22 @@ type DeleteNodeResult struct {
 
 // --- Service interface + implementation ------------------------------------
 
+// NodeListPage is the paginated tree-node response used by the HTTP layer.
+type NodeListPage struct {
+	Nodes      []NodeDetail
+	NextCursor *uuid.UUID
+	HasMore    bool
+	Total      int
+	Limit      int
+}
+
+// NodeListPager is an optional extension implemented by the production node
+// service. Keeping it separate preserves compatibility with lightweight
+// NodeService stubs used by existing handler tests.
+type NodeListPager interface {
+	ListByTreePage(ctx context.Context, treeID uuid.UUID, cursor *uuid.UUID, limit int) (*NodeListPage, error)
+}
+
 // NodeService is the business logic layer for node CRUD. All methods
 // operate within a transaction context passed via ctx.
 type NodeService interface {
@@ -712,6 +728,76 @@ func (s *NodeServiceImpl) ListByTree(ctx context.Context, treeID uuid.UUID) ([]N
 		}
 	}
 	return details, nil
+}
+
+// ListByTreePage returns a keyset-paginated page of active nodes. The cursor
+// is the last node ID from the previous page; ordering is sequence_num ASC
+// with node ID as a deterministic tiebreaker.
+func (s *NodeServiceImpl) ListByTreePage(ctx context.Context, treeID uuid.UUID, cursor *uuid.UUID, limit int) (*NodeListPage, error) {
+	const (
+		defaultNodeListLimit = 100
+		maxNodeListLimit     = 500
+	)
+	if limit <= 0 {
+		limit = defaultNodeListLimit
+	}
+	if limit > maxNodeListLimit {
+		limit = maxNodeListLimit
+	}
+	if treeID == uuid.Nil {
+		return &NodeListPage{Nodes: []NodeDetail{}, Limit: limit}, nil
+	}
+
+	pager, ok := s.nodeRepo.(interface {
+		ListKeyset(context.Context, uuid.UUID, *uuid.UUID, int) ([]db.Node, error)
+		CountByTree(context.Context, uuid.UUID) (int, error)
+	})
+	if !ok {
+		return nil, ErrDatabaseUnavailable
+	}
+	nodes, err := pager.ListKeyset(ctx, treeID, cursor, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("%w: list nodes keyset: %v", ErrDatabaseUnavailable, err)
+	}
+	total, err := pager.CountByTree(ctx, treeID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: count nodes: %v", ErrDatabaseUnavailable, err)
+	}
+
+	hasMore := len(nodes) > limit
+	if hasMore {
+		nodes = nodes[:limit]
+	}
+	details := make([]NodeDetail, 0, len(nodes))
+	for i := range nodes {
+		detail := nodeToDetail(nodes[i])
+		detail.Depth = s.computeDepth(ctx, nodes[i].ID, nodes[i].ParentID)
+		detail.ChildCount = s.computeChildCount(ctx, nodes[i].ID)
+		details = append(details, *detail)
+	}
+	if s.pool != nil && len(details) > 0 {
+		authorIDs := make([]uuid.UUID, 0, len(details))
+		for i := range details {
+			authorIDs = append(authorIDs, details[i].AuthorID)
+		}
+		names, nameErr := resolveAuthorDisplayNames(ctx, s.pool, authorIDs)
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		for i := range details {
+			details[i].AuthorDisplayName = names[details[i].AuthorID]
+		}
+	}
+
+	var next *uuid.UUID
+	if hasMore && len(nodes) > 0 {
+		id := nodes[len(nodes)-1].ID
+		next = &id
+	}
+	return &NodeListPage{
+		Nodes: details, NextCursor: next, HasMore: hasMore,
+		Total: total, Limit: limit,
+	}, nil
 }
 
 // --- Update ----------------------------------------------------------------

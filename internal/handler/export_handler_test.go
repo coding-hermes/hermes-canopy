@@ -228,8 +228,16 @@ func TestExportTreeRoundtrip(t *testing.T) {
 	if data.Nodes[0].Content != "Hello" {
 		t.Errorf("expected content 'Hello', got %q", data.Nodes[0].Content)
 	}
-	if data.Version != 1 {
-		t.Errorf("expected version 1, got %d", data.Version)
+	if data.Version != 2 {
+		t.Errorf("expected version 2, got %d", data.Version)
+	}
+	// A service WITHOUT WithTopicReferences stays additive: no topic/ref
+	// fields appear (omitempty) and the tree/node/edge payload is unchanged.
+	if data.Topics != nil {
+		t.Errorf("expected nil topics without WithTopicReferences, got %d", len(data.Topics))
+	}
+	if data.ResolvedRefs != nil {
+		t.Errorf("expected nil resolved refs without WithTopicReferences, got %d", len(data.ResolvedRefs))
 	}
 }
 

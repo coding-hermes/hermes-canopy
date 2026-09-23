@@ -188,3 +188,114 @@ func TestExportImportRoundTripWithEdges(t *testing.T) {
 	).Scan(&edgeCount))
 	require.Equal(t, 1, edgeCount, "reply edge must survive the round trip")
 }
+
+// DF-HERMES-CANOPY-54a: a version-2 export carries topics + resolved refs,
+// and importing that payload reproduces them under NEW ids (topic parent
+// order-independent, resolved_by falls back to the importer's profile).
+func TestExportImportRoundTripTopicsAndResolvedRefs(t *testing.T) {
+	pool := testutil.NewIntegrationPool(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO users (id, hermes_user_id, display_name) VALUES ($1, $2, 'Topics Export Owner')`,
+		userID, "topics-export-"+userID.String())
+	require.NoError(t, err, "insert owner user")
+	ownerID := uuid.New()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO profiles (id, owner_id, name, display_name) VALUES ($1, $2, 'Topics Export Owner', 'Topics Export Owner')`,
+		ownerID, userID)
+	require.NoError(t, err, "insert owner profile")
+
+	topicRepo := db.NewPGTopicRepo(pool)
+	refRepo := db.NewPGReferenceRepo(pool)
+	svc := NewExportService(
+		db.NewPGTreeRepo(pool),
+		db.NewPGNodeRepo(pool),
+		db.NewPGEdgeRepo(pool),
+		pool,
+	).WithTopicReferences(topicRepo, refRepo)
+
+	treeSvc := NewTreeService(db.NewPGTreeRepo(pool), db.NewPGNodeRepo(pool), db.NewPGEdgeRepo(pool), pool)
+	created, err := treeSvc.CreateTree(ctx, CreateTreeParams{
+		OwnerID:       userID,
+		Title:         "DF-54 topics roundtrip tree",
+		RootContent:   "root",
+		ContentFormat: FormatPlain,
+		NodeType:      NodeTypeMessage,
+	})
+	require.NoError(t, err, "create tree")
+	treeID := created.ID
+	rootNodeID := created.RootNodeID
+
+	// Two topics on the tree: one parent, one archived child, so the
+	// parent_topic_id second pass and the archived-status inclusion are
+	// both exercised.
+	var parentTopicID, childTopicID uuid.UUID
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO topics (tree_id, root_node_id, title, description, slug, status, topic_tags, node_count)
+		 VALUES ($1, $2, 'Parent Topic', 'parent', 'parent-topic', 'active', ARRAY['alpha'], 3) RETURNING id`,
+		treeID, rootNodeID).Scan(&parentTopicID))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO topics (tree_id, root_node_id, title, description, slug, parent_topic_id, status, node_count, archived_at)
+		 VALUES ($1, $2, 'Child Topic', '', 'child-topic', $3, 'archived', 2, now()) RETURNING id`,
+		treeID, rootNodeID, parentTopicID).Scan(&childTopicID))
+
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO node_resolved_refs (node_id, tree_id, topic_id, raw_ref, slug, resolved_by, context_hash)
+		 VALUES ($1, $2, $3, '#parent-topic', 'parent-topic', $4, 'h1') RETURNING id`,
+		rootNodeID, treeID, parentTopicID, ownerID).Scan(new(uuid.UUID)))
+
+	exported, err := svc.ExportTree(ctx, treeID)
+	require.NoError(t, err, "export")
+	require.Len(t, exported.Topics, 2, "both active and archived topics exported")
+	require.Len(t, exported.ResolvedRefs, 1, "resolved ref exported")
+	require.Equal(t, 2, exported.Version)
+	parentExported := false
+	childExported := false
+	for _, tp := range exported.Topics {
+		if tp.ID == parentTopicID {
+			parentExported = true
+		}
+		if tp.ID == childTopicID {
+			childExported = true
+		}
+	}
+	require.True(t, parentExported, "parent topic exported")
+	require.True(t, childExported, "archived child topic exported")
+
+	wire, err := json.Marshal(exported)
+	require.NoError(t, err, "marshal wire payload")
+	var decoded ExportData
+	require.NoError(t, json.Unmarshal(wire, &decoded), "decode wire payload")
+
+	result, err := svc.ImportTree(ctx, &decoded, userID)
+	require.NoError(t, err, "import")
+	require.Equal(t, 2, result.TopicCount)
+	require.Equal(t, 1, result.ResolvedRefCount)
+
+	// The imported tree carries BOTH topics with a remapped parent edge and
+	// the resolved reference pointing at the remapped topic + node.
+	var gotTopics int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM topics WHERE tree_id = $1`, result.TreeID).Scan(&gotTopics))
+	require.Equal(t, 2, gotTopics)
+	var parentRemapped, childParent uuid.UUID
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT id FROM topics WHERE tree_id = $1 AND slug = 'parent-topic'`, result.TreeID).Scan(&parentRemapped))
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT parent_topic_id FROM topics WHERE tree_id = $1 AND slug = 'child-topic'`, result.TreeID).Scan(&childParent))
+	require.Equal(t, parentRemapped, childParent, "child topic parent remapped to the imported parent id")
+	var refCount, refByProfile int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COUNT(*), COUNT(*) FILTER (WHERE resolved_by = $2) FROM node_resolved_refs WHERE tree_id = $1`,
+		result.TreeID, ownerID).Scan(&refCount, &refByProfile))
+	require.Equal(t, 1, refCount)
+	require.Equal(t, 1, refByProfile, "resolved_by remapped to the importer's profile")
+
+	// A second round trip is id-shaped, not name-shaped: importing again
+	// must not collide on the (tree_id, slug) unique index.
+	result2, err := svc.ImportTree(ctx, &decoded, userID)
+	require.NoError(t, err, "second import")
+	require.Equal(t, 2, result2.TopicCount)
+}

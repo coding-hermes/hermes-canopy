@@ -94,7 +94,10 @@ func (h *ExportHandler) writeServiceError(w http.ResponseWriter, r *http.Request
 		errors.Is(err, service.ErrExportMissingTree),
 		errors.Is(err, service.ErrExportMissingRootNode),
 		errors.Is(err, service.ErrExportInvalidRootNode),
-		errors.Is(err, service.ErrExportEdgeNodeNotFound):
+		errors.Is(err, service.ErrExportEdgeNodeNotFound),
+		errors.Is(err, service.ErrExportTopicNodeNotFound),
+		errors.Is(err, service.ErrExportTopicNotFound),
+		errors.Is(err, service.ErrExportRefNodeNotFound):
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	case errors.Is(err, service.ErrDatabaseUnavailable):
 		log.Ctx(r.Context()).Error().Err(err).Str("path", r.URL.Path).Msg("export db error")

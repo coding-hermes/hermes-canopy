@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,8 +110,16 @@ func (h *NodeHandler) FlatRoutes() chi.Router {
 
 // --- Handlers ---------------------------------------------------------------
 
-// handleListByTree returns all active nodes in the tree as NodeDetails,
+// handleListByTree returns the active nodes in the tree as NodeDetails,
 // ordered by sequence_num.
+//
+// Pagination (DF-HERMES-CANOPY-54b): with no query parameters the response
+// is the legacy all-nodes envelope {"nodes":[...]} exactly as older clients
+// expect. With `limit` (positive int, service default 100 / max 500) or
+// `cursor` (a previous page's next_cursor node ID) the handler pages
+// keyset-style over (sequence_num, id) and answers the extended envelope
+// {"nodes","total","limit","has_more","next_cursor"} — 400 INVALID_LIMIT /
+// INVALID_CURSOR on malformed values, never a silent ignore.
 func (h *NodeHandler) handleListByTree(w http.ResponseWriter, r *http.Request) {
 	treeID, err := uuid.Parse(chi.URLParam(r, "tree_id"))
 	if err != nil {
@@ -118,12 +127,56 @@ func (h *NodeHandler) handleListByTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nodes, err := h.svc.ListByTree(r.Context(), treeID)
+	pager, ok := h.svc.(service.NodeListPager)
+	if !ok {
+		nodes, err := h.svc.ListByTree(r.Context(), treeID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "NODES_LIST_ERROR", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
+		return
+	}
+
+	q := r.URL.Query()
+	limitParam := q.Get("limit")
+	cursorParam := q.Get("cursor")
+	if limitParam == "" && cursorParam == "" {
+		nodes, err := h.svc.ListByTree(r.Context(), treeID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "NODES_LIST_ERROR", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
+		return
+	}
+
+	limit, err := strconv.Atoi(limitParam)
+	if err != nil || limit <= 0 {
+		writeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit must be a positive integer")
+		return
+	}
+	var cursor *uuid.UUID
+	if cursorParam != "" {
+		id, err := uuid.Parse(cursorParam)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_CURSOR", "cursor must be a valid node UUID")
+			return
+		}
+		cursor = &id
+	}
+	page, err := pager.ListByTreePage(r.Context(), treeID, cursor, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "NODES_LIST_ERROR", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"nodes":       page.Nodes,
+		"total":       page.Total,
+		"limit":       page.Limit,
+		"has_more":    page.HasMore,
+		"next_cursor": page.NextCursor,
+	})
 }
 
 func (h *NodeHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
