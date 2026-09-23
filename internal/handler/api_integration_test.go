@@ -762,6 +762,16 @@ func TestAPI_CardCRUD(t *testing.T) {
 	if len(cardList.Cards) < 1 {
 		t.Fatal("cards list is empty")
 	}
+	var listedCard *service.CardSummary
+	for i := range cardList.Cards {
+		if cardList.Cards[i].ID == card.ID {
+			listedCard = &cardList.Cards[i]
+			break
+		}
+	}
+	if listedCard == nil {
+		t.Fatalf("cards list does not contain created card %s", card.ID)
+	}
 
 	// 4. PATCH /api/v1/cards/{card_id} — update card data.
 	updateBody := map[string]any{
@@ -773,6 +783,7 @@ func TestAPI_CardCRUD(t *testing.T) {
 	}
 	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
 		"/api/v1/cards/"+card.ID.String(), ownerID, updateBody)
+	req.Header.Set("If-Match", fmt.Sprintf("%d", listedCard.Revision))
 	resp, err = srv.Server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("PATCH card: %v", err)
@@ -792,6 +803,7 @@ func TestAPI_CardCRUD(t *testing.T) {
 	// 5. DELETE /api/v1/cards/{card_id} — archive card.
 	req = apiRequest(t, srv.Server.URL, http.MethodDelete,
 		"/api/v1/cards/"+card.ID.String(), ownerID, nil)
+	req.Header.Set("If-Match", fmt.Sprintf("%d", updatedCard.Revision))
 	resp, err = srv.Server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("DELETE card: %v", err)
