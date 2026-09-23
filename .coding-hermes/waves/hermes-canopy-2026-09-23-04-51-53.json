@@ -1,0 +1,48 @@
+{
+  "tick_id": "hermes-canopy-2026-09-23-04-51-53",
+  "project": "hermes-canopy",
+  "base_sha": "64ab9bdd",
+  "created_at": "2026-09-23T00:11:00-05:00",
+  "merge_order": ["DF-HERMES-CANOPY-50", "DF-HERMES-CANOPY-51", "DF-HERMES-CANOPY-52"],
+  "workers": [
+    {
+      "task_id": "DF-HERMES-CANOPY-50",
+      "title": "Send-time #reference resolution silently loses every link (FK profiles vs users id; reply/fork never resolve)",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-50",
+      "branch": "wt/DF-HERMES-CANOPY-50",
+      "base_sha": "64ab9bdd",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-DF-50.md",
+      "log": "/tmp/worker-DF-50.log",
+      "scope": "internal/handler/node_handler.go, internal/reference/impl.go or internal/db/reference_repo.go (user->profile mapping), integration tests; no migrations, no frontend"
+    },
+    {
+      "task_id": "DF-HERMES-CANOPY-51",
+      "title": "Tree IMPORT 503 'database unavailable' on edged trees (edges.sequence_num NOT NULL never set)",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-51",
+      "branch": "wt/DF-HERMES-CANOPY-51",
+      "base_sha": "64ab9bdd",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-DF-51.md",
+      "log": "/tmp/worker-DF-51.log",
+      "scope": "internal/service/export_service.go import path + integration test; no migrations"
+    },
+    {
+      "task_id": "DF-HERMES-CANOPY-52",
+      "title": "Document 6 live topic/reference routes in docs/API.md + fix DELETE-topics 200-vs-204 doc contradiction",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-52",
+      "branch": "wt/DF-HERMES-CANOPY-52",
+      "base_sha": "64ab9bdd",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-DF-52.md",
+      "log": "/tmp/worker-DF-52.log",
+      "scope": "docs/API.md only"
+    }
+  ],
+  "status": "merged",
+  "finished_at": "2026-09-23T06:55:00-05:00",
+  "merge_note": "all 3 merged: DF-50 as 2bec8be6 (judge b9e00931 PASS/COMPLETE), DF-51 as 53a89454 (+foreman round-trip test 207a8e20, judge 6a9dc8d9 PASS/COMPLETE), DF-52 as a110c9d5 (judge 231c7e99 PASS/COMPLETE); merged-tree sweep SWEEP_EXIT=0; CI GREEN on a110c9d5"
+}
