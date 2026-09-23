@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -87,9 +89,38 @@ func TestNodeResponseMetadataEmptyIsObject(t *testing.T) {
 	}
 }
 
-func TestNodeResponseMetadataInvalidJSONFailsMarshal(t *testing.T) {
-	_, err := json.Marshal(service.NodeDetail{Metadata: []byte(`{"not-json"`)})
-	if err == nil {
-		t.Fatal("invalid stored metadata marshaled successfully")
+type invalidMetadataNodeService struct {
+	service.NodeService
+	node *service.NodeDetail
+}
+
+func (s *invalidMetadataNodeService) GetByID(context.Context, uuid.UUID) (*service.NodeDetail, error) {
+	return s.node, nil
+}
+
+func TestNodeResponseMetadataInvalidJSONKeepsHTTPResponseValid(t *testing.T) {
+	treeID := uuid.New()
+	nodeID := uuid.New()
+	router := gap072Router(NewNodeHandler(&invalidMetadataNodeService{
+		node: &service.NodeDetail{
+			ID:       nodeID,
+			TreeID:   treeID,
+			Metadata: []byte(`{"not-json"`),
+		},
+	}, nil))
+
+	req := httptest.NewRequest(http.MethodGet, "/trees/"+treeID.String()+"/nodes/"+nodeID.String(), nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.Bytes())
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode node response: %v; body=%s", err, rr.Body.Bytes())
+	}
+	if got := string(body["metadata"]); got != `{}` {
+		t.Fatalf("metadata = %s, want {}", got)
 	}
 }

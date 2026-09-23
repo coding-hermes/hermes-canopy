@@ -202,14 +202,14 @@ type NodeDetail struct {
 
 // MarshalJSON keeps database metadata as JSON at the public node wire
 // boundary. db.Node and NodeDetail retain []byte storage so repository and
-// service consumers continue to receive the persisted JSONB bytes.
+// service consumers continue to receive the persisted JSONB bytes. Invalid
+// metadata is replaced with an empty object so corrupted or fake storage
+// cannot make an HTTP response malformed; Postgres JSONB prevents this in
+// production.
 func (n NodeDetail) MarshalJSON() ([]byte, error) {
 	metadata := bytes.TrimSpace(n.Metadata)
-	if len(metadata) == 0 {
+	if len(metadata) == 0 || !json.Valid(metadata) {
 		metadata = []byte(`{}`)
-	}
-	if !json.Valid(metadata) {
-		return nil, fmt.Errorf("node metadata is invalid JSON")
 	}
 
 	type nodeDetailJSON struct {
