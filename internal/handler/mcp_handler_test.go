@@ -1,13 +1,16 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
@@ -21,7 +24,7 @@ import (
 // hand-written path. Services are nil: initialize/ping/tools/list are
 // DB-free and never dereference them.
 func newMCPTestRouter() *chi.Mux {
-	h := NewMCPHandler(nil, nil, nil, nil, nil, nil)
+	h := NewMCPHandler(nil, nil, nil, nil, nil, nil, nil)
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/mcp", h.Routes())
@@ -415,6 +418,122 @@ func TestMCPCallToolResultEnvelope(t *testing.T) {
 	}
 }
 
+type mcpCheckerStub struct {
+	member       bool
+	deleted      bool
+	memberErr    error
+	deletedErr   error
+	memberCalls  int
+	deletedCalls int
+}
+
+func (s *mcpCheckerStub) IsMember(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	s.memberCalls++
+	return s.member, s.memberErr
+}
+
+func (s *mcpCheckerStub) IsTreeDeleted(context.Context, uuid.UUID) (bool, error) {
+	s.deletedCalls++
+	return s.deleted, s.deletedErr
+}
+
+type mcpNodeServiceStub struct {
+	service.NodeService
+	calls int
+}
+
+func (s *mcpNodeServiceStub) Create(context.Context, uuid.UUID, service.CreateNodeInput) (*service.CreateNodeResult, error) {
+	s.calls++
+	return &service.CreateNodeResult{Node: &service.NodeDetail{ID: uuid.New()}}, nil
+}
+
+func postMCPAsUser(t *testing.T, router http.Handler, userID uuid.UUID, raw string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/mcp", strings.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey{}, userID))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestMCPCreateNodeMembershipGate(t *testing.T) {
+	const createNodeRequest = `{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"create_node","arguments":{"tree_id":"00000000-0000-0000-0000-000000000001","content":"hello"}}}`
+	checkerErr := errors.New("membership backend unavailable")
+	for _, tt := range []struct {
+		name             string
+		member           bool
+		deleted          bool
+		memberErr        error
+		wantMessage      string
+		wantNodeCalls    int
+		wantDeletedCalls int
+	}{
+		{name: "nonexistent tree", wantMessage: "tree not found or you are not a member"},
+		{name: "valid non-member tree", wantMessage: "tree not found or you are not a member"},
+		{name: "soft-deleted member tree", member: true, deleted: true, wantMessage: "tree has been deleted", wantDeletedCalls: 1},
+		{name: "live member tree", member: true, wantNodeCalls: 1, wantDeletedCalls: 1},
+		{name: "membership checker error", memberErr: checkerErr, wantMessage: "could not verify membership"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := &mcpCheckerStub{member: tt.member, deleted: tt.deleted, memberErr: tt.memberErr}
+			nodes := &mcpNodeServiceStub{}
+			h := NewMCPHandler(nil, nodes, nil, nil, nil, nil, checker)
+			router := chi.NewRouter()
+			router.Route("/api/v1", func(r chi.Router) { r.Mount("/mcp", h.Routes()) })
+
+			rr := postMCPAsUser(t, router, uuid.New(), createNodeRequest)
+			raw := decodeRPCBody(t, rr)
+			var rpcErr rpcError
+			if tt.wantMessage == "" {
+				if err := json.Unmarshal(raw["result"], &map[string]any{}); err != nil {
+					t.Fatalf("success response result: %v (body=%s)", err, rr.Body.String())
+				}
+				if _, ok := raw["error"]; ok {
+					t.Fatalf("live member rejected: %s", rr.Body.String())
+				}
+			} else {
+				if err := json.Unmarshal(raw["error"], &rpcErr); err != nil {
+					t.Fatalf("decode error: %v (body=%s)", err, rr.Body.String())
+				}
+				if rpcErr.Code != -32000 || !strings.Contains(rpcErr.Message, tt.wantMessage) {
+					t.Fatalf("error = %#v, want -32000 containing %q", rpcErr, tt.wantMessage)
+				}
+				for _, banned := range []string{"database unavailable", "SQLSTATE", "ERROR:", "fk_"} {
+					if strings.Contains(rpcErr.Message, banned) && strings.Contains(tt.wantMessage, "tree not found") {
+						t.Fatalf("error message contains banned %q: %q", banned, rpcErr.Message)
+					}
+				}
+			}
+			if nodes.calls != tt.wantNodeCalls {
+				t.Errorf("node service calls = %d, want %d", nodes.calls, tt.wantNodeCalls)
+			}
+			if checker.memberCalls != 1 {
+				t.Errorf("membership checks = %d, want 1", checker.memberCalls)
+			}
+			if checker.deletedCalls != tt.wantDeletedCalls {
+				t.Errorf("deleted checks = %d, want %d", checker.deletedCalls, tt.wantDeletedCalls)
+			}
+		})
+	}
+}
+
+func TestMCPCreateNodeCheckerDeletedErrorIsInternal(t *testing.T) {
+	checker := &mcpCheckerStub{member: true, deletedErr: errors.New("tree state backend failed")}
+	nodes := &mcpNodeServiceStub{}
+	h := NewMCPHandler(nil, nodes, nil, nil, nil, nil, checker)
+	router := chi.NewRouter()
+	router.Route("/api/v1", func(r chi.Router) { r.Mount("/mcp", h.Routes()) })
+	rr := postMCPAsUser(t, router, uuid.New(), `{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"create_node","arguments":{"tree_id":"00000000-0000-0000-0000-000000000001","content":"hello"}}}`)
+	var rpcErr rpcError
+	if err := json.Unmarshal(decodeRPCBody(t, rr)["error"], &rpcErr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rpcErr.Message, "could not verify tree state") || strings.Contains(rpcErr.Message, "database unavailable") {
+		t.Fatalf("checker error = %q, want internal tree-state wording", rpcErr.Message)
+	}
+}
+
 func newMCPDBTestRouter(t *testing.T, pool *pgxpool.Pool) *chi.Mux {
 	t.Helper()
 	treeSvc := service.NewTreeService(
@@ -423,7 +542,7 @@ func newMCPDBTestRouter(t *testing.T, pool *pgxpool.Pool) *chi.Mux {
 		db.NewPGEdgeRepo(pool),
 		pool,
 	)
-	h := NewMCPHandler(treeSvc, nil, nil, nil, nil, nil)
+	h := NewMCPHandler(treeSvc, nil, nil, nil, nil, nil, nil)
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/mcp", h.Routes())

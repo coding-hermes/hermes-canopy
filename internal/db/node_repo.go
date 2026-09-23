@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,6 +19,11 @@ import (
 // operation has been soft-deleted. Distinct from ErrNotFound so callers
 // can react differently if needed.
 var ErrNoActiveNode = errors.New("db: node is soft-deleted")
+
+// ErrTreeNotFound is returned when a node insert references a tree that does
+// not exist. It is distinct from infrastructure failures so service layers can
+// expose a request error instead of reporting the database as unavailable.
+var ErrTreeNotFound = errors.New("db: tree not found")
 
 // NodeRepo defines node-scoped persistence operations.
 type NodeRepo interface {
@@ -57,6 +63,14 @@ func scanNode(row pgx.Row, n *Node) error {
 	)
 }
 
+func classifyNodeInsertError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "fk_nodes_tree" {
+		return ErrTreeNotFound
+	}
+	return fmt.Errorf("db: insert node: %w", err)
+}
+
 // Create inserts a new node. If the caller pre-assigns SequenceNum to
 // 0 the trigger computes one; non-zero values are honored (caller's
 // choice for bulk imports).
@@ -77,7 +91,7 @@ func (r *PGNodeRepo) Create(ctx context.Context, node *Node) (*Node, error) {
 	)
 	var out Node
 	if err := scanNode(row, &out); err != nil {
-		return nil, fmt.Errorf("db: insert node: %w", err)
+		return nil, classifyNodeInsertError(err)
 	}
 	return &out, nil
 }

@@ -3,15 +3,53 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Stubs for node/edge repos are defined in tree_service_test.go (shared).
 // We reuse nodeRepoStub and edgeRepoStub from that file.
+
+func TestClassifyNodeInsertError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantTree bool
+		wantDB   bool
+	}{
+		{
+			name:     "tree foreign key",
+			err:      &pgconn.PgError{Code: "23503", ConstraintName: "fk_nodes_tree"},
+			wantTree: true,
+		},
+		{
+			name:   "connection failure",
+			err:    errors.New("dial tcp: connection refused"),
+			wantDB: true,
+		},
+		{
+			name:   "other foreign key",
+			err:    &pgconn.PgError{Code: "23503", ConstraintName: "fk_nodes_author"},
+			wantDB: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyNodeInsertError(tt.err)
+			if errors.Is(got, ErrTreeNotFound) != tt.wantTree {
+				t.Errorf("errors.Is(ErrTreeNotFound) = %v, want %v (err=%v)", errors.Is(got, ErrTreeNotFound), tt.wantTree, got)
+			}
+			if errors.Is(got, ErrDatabaseUnavailable) != tt.wantDB {
+				t.Errorf("errors.Is(ErrDatabaseUnavailable) = %v, want %v (err=%v)", errors.Is(got, ErrDatabaseUnavailable), tt.wantDB, got)
+			}
+		})
+	}
+}
 
 func newNodeService() *NodeServiceImpl {
 	return &NodeServiceImpl{

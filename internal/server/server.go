@@ -480,7 +480,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Post("/trees/import", exportHandler.ImportTree)
 
 		// MCP endpoint — programmatic agent access.
-		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc)
+		mcpHandler := handler.NewMCPHandler(treeSvc, nodeSvc, topicSvc, cardSvc, graphSvc, approvalSvc, membersRepo)
 		r.Mount("/mcp", mcpHandler.Routes())
 
 		// Live Hermes gateway (GAP-050) — canopyd is a CLIENT of the Hermes
