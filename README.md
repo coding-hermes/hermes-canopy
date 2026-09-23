@@ -29,6 +29,7 @@ Every Card is a graph node with structured data.
 # Prerequisites
 PostgreSQL 16+
 Node.js 22+ (for frontend development)
+Go 1.25+ (for build-from-source)
 
 # Clone and build
 git clone https://github.com/coding-hermes/hermes-canopy.git

@@ -141,13 +141,15 @@ Download the binary for your platform from the releases page, make it executable
 # Example — adjust arch/os as needed
 curl -L -o canopyd https://github.com/coding-hermes/hermes-canopy/releases/latest/download/canopyd_linux_amd64
 chmod +x canopyd
-sudo mv canopyd /usr/local/bin/
-
-# Verify
-canopyd -version
+mkdir -p ~/bin && mv canopyd ~/bin/
+# On most distros, ~/bin is added to $PATH once it exists; re-login or run
+# `source ~/.profile` if needed. Verify the per-user installation:
+~/bin/canopyd -version
 ```
 
 ### Option 2: Docker Compose
+
+> This option requires the Docker Compose v2 plugin. Check it with `docker compose version`; on Debian/Ubuntu, the common package name is `docker-compose-plugin`.
 
 > **Rootless / per-user Docker:** If `docker info` or `docker compose` fails with `permission denied ... /var/run/docker.sock`, the host may expose Docker through a per-user socket such as `/run/bunker/<agent>/docker.sock`. Point the Docker CLI at that socket with `export DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock` (replace `<agent>` with your agent name).
 
