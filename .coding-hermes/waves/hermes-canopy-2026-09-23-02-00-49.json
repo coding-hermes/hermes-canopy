@@ -20,5 +20,7 @@
       "scope": "two handler test files + .github/workflows/build.yml; no production code"
     }
   ],
-  "status": "in_flight"
+  "status": "merged",
+  "finished_at": "2026-09-23T02:52:00Z",
+  "merge_note": "a12878e6 merged as 3e910605; foreman-direct leg fixes ff3c43d8 + 1fe262c5; judge da5dfd88 PASS; CI 35810977638 green on 1fe262c5; worktree+branch reaped"
 }
