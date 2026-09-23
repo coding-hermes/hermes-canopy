@@ -19,9 +19,12 @@ and never the PWA — so a built `frontend/dist` needs a server in front of it.
 
 WHAT IT DOES. Serves `--dist` with an app-routes-only SPA fallback; streams `/api/`
 and `/health` to `--api` chunk-by-chunk (no body buffering, so SSE arrives
-incrementally); passes the client's `Authorization` through untouched and injects
+incrementally); consumes a client `Authorization: Basic ...` header for the
+proxy gate and never forwards it upstream; passes client-supplied non-Basic
+`Authorization` headers (including Bearer) through untouched; and injects
 `Authorization: Bearer <jwt>` from `--token`/`CANOPY_PROXY_TOKEN` ONLY when the
-client sent none. It REFUSES to inject a token while bound to a non-loopback
+client sent no Authorization that can be forwarded. It REFUSES to inject a token
+while bound to a non-loopback
 address unless HTTP Basic (`--require-auth-user`/`--require-auth-password`) gates
 the proxy, and refuses to start when `--port` is already bound.
 
@@ -132,10 +135,14 @@ class CanopyProxyHandler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else None
         headers = {k: v for k, v in self.headers.items()
-                   if k.lower() not in HOP_BY_HOP and k.lower() not in ("host", "content-length")}
+                   if k.lower() not in HOP_BY_HOP and k.lower() not in ("host", "content-length")
+                   and not (k.lower() == "authorization" and v.lower().startswith("basic "))}
         headers["Host"] = f"{self.api_host}:{self.api_port}"
-        # Client Authorization passes through untouched; inject only when absent.
-        if self.inject_token and not self.headers.get("Authorization"):
+        # Basic authenticates only to this proxy; forward non-Basic credentials,
+        # and inject only when no upstream Authorization remains.
+        if self.inject_token and not any(
+            key.lower() == "authorization" and value for key, value in headers.items()
+        ):
             headers["Authorization"] = f"Bearer {self.inject_token}"
         cls = http.client.HTTPSConnection if self.api_tls else http.client.HTTPConnection
         conn = cls(self.api_host, self.api_port, timeout=600)
