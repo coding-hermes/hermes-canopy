@@ -3493,3 +3493,38 @@ tasks:
   status: complete
   created_at: '2026-09-23T08:51:41.527153+00:00'
   completed_at: '2026-09-23T09:38:19.747124+00:00'
+- id: DF-HERMES-CANOPY-53
+  title: 'Topic preview strips inline #reference tags'
+  criteria:
+  - 'plain-text rendering preserves inline #reference tags (hash followed by a word
+    char) while still stripping ATX heading markers; tests prove both'
+  status: complete
+  created_at: '2026-09-23T10:24:19.607316+00:00'
+  completed_at: '2026-09-23T10:31:22.691393+00:00'
+- id: DF-HERMES-CANOPY-54
+  title: Tree export omits topics/resolved-refs and List Nodes silently ignores limit/cursor
+  criteria:
+  - GET /trees/{id}/export carries the tree's topics (active AND archived) and node_resolved_refs
+    as snake_case fields with Version 2, and importing that payload recreates them
+    under NEW ids (topic parents remapped order-independently, resolved_by falling
+    back to the importing user's profile) while a version-1 payload imports unchanged;
+    GET /trees/{id}/nodes honours limit (positive int, default 100, max 500) and cursor
+    (previous next_cursor UUID) with a keyset page envelope {nodes,total,limit,has_more,next_cursor},
+    answers 400 INVALID_LIMIT / 400 INVALID_CURSOR on malformed values instead of
+    silently ignoring them, and keeps the legacy {nodes:[...]} envelope when no paging
+    parameter is present; DB-backed export/import roundtrip test + handler paging
+    tests PASS with CANOPY_TEST_ALLOW_SHARED_DB=1, go build/vet/golangci-lint clean
+  status: complete
+  created_at: '2026-09-23T13:06:39.739151+00:00'
+  completed_at: '2026-09-23T14:06:28.381632+00:00'
+- id: GAP-080-4B-RUNIND
+  title: ContextRunIndicator renders the retrieved tier (GAP-080 phase 4b residual)
+  criteria:
+  - The context run indicator renders a Retrieved section listing the manifest's retrieved
+    items with their per-item relevance percentages and token counts plus the tier's
+    recorded token allocation, renders NO Retrieved section when the manifest carries
+    no retrieved tier or an empty one, and keeps the assembled empty-state message
+    when every tier is empty; frontend vitest full suite, tsc -b and oxlint are clean
+    and the new tests fail against the pre-fix component (falsification).
+  status: in_progress
+  created_at: '2026-09-23T13:51:34.023557+00:00'

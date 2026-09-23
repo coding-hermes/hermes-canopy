@@ -1,0 +1,37 @@
+{
+  "scheduler_tick_id": "hermes-canopy-2026-09-23-10-43-27",
+  "created_at": "2026-09-23T10:55:00-05:00",
+  "wave_budget": 3,
+  "tasks": [
+    {
+      "task_id": "DF-HERMES-CANOPY-54",
+      "row_scope": "part (a) + part (b): export topics/resolved-refs + List Nodes limit/cursor honesty",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-54",
+      "branch": "wt/DF-HERMES-CANOPY-54",
+      "base_sha": "c0a5cb6f",
+      "status": "harvested+completed (dead worker, uncommitted tree finished foreman-direct)",
+      "worker_commit": "a7b170f4",
+      "merge_commit": "ff5c46f0"
+    },
+    {
+      "task_id": "GAP-080",
+      "row_scope": "phase 4b residual: ContextRunIndicator renders the retrieved tier",
+      "worktree": "/home/kara/worktrees/hermes-canopy-GAP-080-4B-RUNIND",
+      "branch": "wt/GAP-080-4B-RUNIND",
+      "base_sha": "c0a5cb6f",
+      "status": "harvested (dead worker with its commit on the branch)",
+      "worker_commit": "939216ed",
+      "merge_commit": "591da2c5"
+    }
+  ],
+  "dispatch_order": [
+    "DF-HERMES-CANOPY-54",
+    "GAP-080-4B"
+  ],
+  "worker_model": "gpt-5.6-luna",
+  "worker_provider": "openai-codex",
+  "note": "Middle-out verified disjoint: one Go backend (internal/service + internal/handler + docs), one frontend component (frontend/src/components). No shared files.",
+  "finished_at": "2026-09-23T09:05:57-05:00",
+  "recovery_tick": "hermes-canopy-2026-09-23-12-18-46",
+  "outcome": "Both workers were DEAD (no live pid, no dispatch event). DF-54 had a coherent uncommitted tree: foreman harvested it, wired the nodes-list pagination at the handler, added tests + docs, committed a7b170f4. GAP-080-4B had already committed 939216ed. Both merged serially after fresh gates; pushed origin+gitlab at ff5c46f0. No re-dispatch was needed."
+}
