@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
@@ -117,24 +118,61 @@ func TestExportImportRoundTripWithEdges(t *testing.T) {
 
 	var replyTargetID, replyID uuid.UUID
 	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO nodes (tree_id, parent_id, author_id, content, content_format, node_type)
-		 VALUES ($1, $2, $3, 'reply', 'plain', 'message') RETURNING id`,
+		`INSERT INTO nodes (tree_id, parent_id, author_id, content, content_format, node_type, metadata)
+		 VALUES ($1, $2, $3, 'reply', 'plain', 'message', '{"reviewed":true,"score":4}'::jsonb) RETURNING id`,
 		treeID, rootNodeID, ownerID).Scan(&replyTargetID))
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO edges (tree_id, source_id, target_id, edge_type, sequence_num)
 		 VALUES ($1, $2, $3, 'reply', 4) RETURNING id`,
 		treeID, rootNodeID, replyTargetID).Scan(&replyID))
 
-	// Export the real tree, then import the payload as a fresh copy.
+	require.NoError(t, pool.QueryRow(ctx,
+		`UPDATE nodes SET metadata = '{"pinned":true,"labels":["root"]}'::jsonb WHERE id = $1 RETURNING id`,
+		rootNodeID).Scan(new(uuid.UUID)))
+
+	// Export the real tree, encode it on the public wire, then decode the
+	// payload before importing so both native metadata and import compatibility
+	// are exercised at the actual export/import boundary.
 	exported, err := svc.ExportTree(ctx, treeID)
 	require.NoError(t, err, "export")
 	require.NotEmpty(t, exported.Edges, "export must carry edges")
 
-	imported, err := svc.ImportTree(ctx, exported, userID)
+	wire, err := json.Marshal(exported)
+	require.NoError(t, err, "marshal export")
+	var wireEnvelope struct {
+		Nodes []struct {
+			Content  string          `json:"content"`
+			Metadata json.RawMessage `json:"metadata"`
+		} `json:"nodes"`
+	}
+	require.NoError(t, json.Unmarshal(wire, &wireEnvelope), "inspect export wire")
+	require.Len(t, wireEnvelope.Nodes, 2)
+	for _, node := range wireEnvelope.Nodes {
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(node.Metadata, &metadata),
+			"exported %q metadata must be native JSON", node.Content)
+	}
+
+	var decoded ExportData
+	require.NoError(t, json.Unmarshal(wire, &decoded), "unmarshal export")
+	imported, err := svc.ImportTree(ctx, &decoded, userID)
 	require.NoError(t, err, "import of an edged export must not fail")
 	require.NotNil(t, imported)
 	require.Equal(t, len(exported.Nodes), imported.NodeCount, "node count must match")
 	require.Equal(t, len(exported.Edges), imported.EdgeCount, "edge count must match")
+
+	var importedRootMetadata []byte
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT metadata FROM nodes WHERE tree_id = $1 AND content = 'root'`, imported.TreeID,
+	).Scan(&importedRootMetadata))
+	require.JSONEq(t, `{"pinned":true,"labels":["root"]}`, string(importedRootMetadata),
+		"root metadata must survive export -> wire decode -> import")
+	var importedReplyMetadata []byte
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT metadata FROM nodes WHERE tree_id = $1 AND content = 'reply'`, imported.TreeID,
+	).Scan(&importedReplyMetadata))
+	require.JSONEq(t, `{"reviewed":true,"score":4}`, string(importedReplyMetadata),
+		"reply metadata must survive export -> wire decode -> import")
 
 	// Every imported edge keeps a non-null sequence_num.
 	var nullSequences int

@@ -9,7 +9,10 @@
 package db
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,6 +78,102 @@ type Node struct {
 	CreatedAt     time.Time  `db:"created_at"     json:"createdAt"`
 	EditedAt      *time.Time `db:"edited_at"      json:"editedAt"`
 	DeletedAt     *time.Time `db:"deleted_at"     json:"deletedAt"`
+}
+
+// MarshalJSON keeps persisted JSONB metadata as native JSON on every public
+// response that serialises a db.Node. Storage and repository callers retain
+// []byte; only the wire representation changes. Empty or invalid metadata is
+// represented as an empty object, matching NodeDetail's public contract.
+func (n Node) MarshalJSON() ([]byte, error) {
+	metadata := bytes.TrimSpace(n.Metadata)
+	if len(metadata) == 0 || !json.Valid(metadata) {
+		metadata = []byte(`{}`)
+	}
+
+	type nodeJSON struct {
+		ID            uuid.UUID       `json:"id"`
+		TreeID        uuid.UUID       `json:"treeId"`
+		ParentID      *uuid.UUID      `json:"parentId"`
+		ParentMode    ParentMode      `json:"parentMode"`
+		AuthorID      uuid.UUID       `json:"authorId"`
+		Content       string          `json:"content"`
+		ContentFormat string          `json:"contentFormat"`
+		NodeType      string          `json:"nodeType"`
+		SequenceNum   int64           `json:"sequenceNum"`
+		Metadata      json.RawMessage `json:"metadata"`
+		CreatedAt     time.Time       `json:"createdAt"`
+		EditedAt      *time.Time      `json:"editedAt"`
+		DeletedAt     *time.Time      `json:"deletedAt"`
+	}
+	return json.Marshal(nodeJSON{
+		ID:            n.ID,
+		TreeID:        n.TreeID,
+		ParentID:      n.ParentID,
+		ParentMode:    n.ParentMode,
+		AuthorID:      n.AuthorID,
+		Content:       n.Content,
+		ContentFormat: n.ContentFormat,
+		NodeType:      n.NodeType,
+		SequenceNum:   n.SequenceNum,
+		Metadata:      json.RawMessage(metadata),
+		CreatedAt:     n.CreatedAt,
+		EditedAt:      n.EditedAt,
+		DeletedAt:     n.DeletedAt,
+	})
+}
+
+// UnmarshalJSON accepts the native JSON metadata emitted by MarshalJSON and
+// the legacy base64 string emitted by encoding/json for []byte metadata. The
+// latter keeps older export files importable while new exports remain native.
+func (n *Node) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		ID            uuid.UUID       `json:"id"`
+		TreeID        uuid.UUID       `json:"treeId"`
+		ParentID      *uuid.UUID      `json:"parentId"`
+		ParentMode    ParentMode      `json:"parentMode"`
+		AuthorID      uuid.UUID       `json:"authorId"`
+		Content       string          `json:"content"`
+		ContentFormat string          `json:"contentFormat"`
+		NodeType      string          `json:"nodeType"`
+		SequenceNum   int64           `json:"sequenceNum"`
+		Metadata      json.RawMessage `json:"metadata"`
+		CreatedAt     time.Time       `json:"createdAt"`
+		EditedAt      *time.Time      `json:"editedAt"`
+		DeletedAt     *time.Time      `json:"deletedAt"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	metadata := bytes.TrimSpace(wire.Metadata)
+	if len(metadata) > 0 && metadata[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(metadata, &encoded); err == nil {
+			if decoded, err := base64.StdEncoding.DecodeString(encoded); err == nil && json.Valid(decoded) {
+				metadata = decoded
+			}
+		}
+	}
+	if len(metadata) > 0 && !json.Valid(metadata) {
+		return fmt.Errorf("node metadata is invalid JSON")
+	}
+
+	*n = Node{
+		ID:            wire.ID,
+		TreeID:        wire.TreeID,
+		ParentID:      wire.ParentID,
+		ParentMode:    wire.ParentMode,
+		AuthorID:      wire.AuthorID,
+		Content:       wire.Content,
+		ContentFormat: wire.ContentFormat,
+		NodeType:      wire.NodeType,
+		SequenceNum:   wire.SequenceNum,
+		Metadata:      append([]byte(nil), metadata...),
+		CreatedAt:     wire.CreatedAt,
+		EditedAt:      wire.EditedAt,
+		DeletedAt:     wire.DeletedAt,
+	}
+	return nil
 }
 
 // MultiReferenceMetadata is the reserved `metadata.multi_reference`

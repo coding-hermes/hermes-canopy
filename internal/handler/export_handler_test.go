@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,60 @@ func TestExportHandlerSuccess(t *testing.T) {
 	}
 	if data.Tree.Title != "Test Tree" {
 		t.Errorf("title = %q, want 'Test Tree'", data.Tree.Title)
+	}
+}
+
+// TestExportHandlerNodeMetadataIsNativeJSON guards the public export boundary,
+// which returns persistence-shaped db.Node values rather than NodeDetail values.
+func TestExportHandlerNodeMetadataIsNativeJSON(t *testing.T) {
+	treeRepo := newStubExportTreeRepo()
+	nodeRepo := newStubExportNodeRepo()
+	edgeRepo := newStubExportEdgeRepo()
+	treeID, ownerID, rootNodeID := seedExportTree(treeRepo, nodeRepo, edgeRepo)
+	nodeRepo.nodesByTree[treeID][0].Metadata = []byte(`{"pinned":true,"labels":["important"]}`)
+
+	handler := NewExportHandler(service.NewExportService(treeRepo, nodeRepo, edgeRepo, nil))
+	req := httptest.NewRequest(http.MethodGet, "/trees/"+treeID.String()+"/export", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tree_id", treeID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, userIDContextKey{}, ownerID)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	handler.ExportTree(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var envelope struct {
+		Nodes []json.RawMessage `json:"nodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode export response: %v; body=%s", err, rec.Body.Bytes())
+	}
+	if len(envelope.Nodes) != 1 {
+		t.Fatalf("export nodes = %d, want 1", len(envelope.Nodes))
+	}
+	var node struct {
+		ID       uuid.UUID       `json:"id"`
+		Metadata json.RawMessage `json:"metadata"`
+	}
+	if err := json.Unmarshal(envelope.Nodes[0], &node); err != nil {
+		t.Fatalf("decode exported node: %v; node=%s", err, envelope.Nodes[0])
+	}
+	if node.ID != rootNodeID {
+		t.Fatalf("exported node id = %s, want %s", node.ID, rootNodeID)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(node.Metadata, &metadata); err != nil {
+		t.Fatalf("exported metadata is not native JSON: %v; raw=%s; body=%s", err, node.Metadata, rec.Body.Bytes())
+	}
+	if metadata["pinned"] != true {
+		t.Fatalf("exported metadata = %#v, want pinned=true", metadata)
+	}
+	if strings.Contains(rec.Body.String(), `"metadata":"ey`) {
+		t.Fatalf("export encoded metadata as base64: %s", rec.Body.Bytes())
 	}
 }
 
