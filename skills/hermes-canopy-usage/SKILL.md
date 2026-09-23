@@ -6,9 +6,9 @@ description: >-
   gateway surface (GAP-050), and the pitfalls that waste time (stale deployed
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
-  Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21 and
-  09-22 deep dogfood runs.
-version: 2.4.0
+  Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
+  09-22 and 09-23 deep dogfood runs.
+version: 2.5.0
 category: software-development
 ---
 
@@ -19,6 +19,46 @@ GAP-050/051 (2026-08-27) the **live interface of Hermes**: the Dashboard shows r
 gateway runs, the chat composer starts REAL agent runs, SSE streams events, and
 approvals resolve — with the gateway API key held server-side. Go backend
 (`canopyd`) + React/TS PWA + PostgreSQL + live Hermes gateway (:8642).
+
+## Topics & #references surface (verified 2026-09-23, HEAD 1fe262c5)
+
+Six live routes are missing from docs/API.md entirely — recover shapes from
+`internal/handler/reference_handler.go` / `internal/server/server.go:316-328`,
+or use these (all proven against a live server):
+
+- `GET /api/v1/trees/{tid}/references/autocomplete?prefix=q3&include=active|archived|all&limit=10`
+  → `{"results":[{slug,title,match_type,status,node_count}]}`. Param is
+  **`prefix`** (not q); empty prefix → 400 REFERENCE_PREFIX_TOO_SHORT.
+  Archived topics are hidden unless include=archived/all.
+- `POST /api/v1/trees/{tid}/references/resolve` body `{"content":"...#slug...","max_nodes":5,"with_context":true}`
+  → 200 `{node_id,tree_id,references:[{reference:{raw,slug,offset,length},topic:{...}}],not_found:[...],too_many,total_nodes_in_scope}`.
+  Takes RAW CONTENT (not nodeId). Archived topics resolve with `status:"archived"`.
+- `POST /api/v1/trees/{tid}/references/inject` body `{"topic_ids":["uuid"],"references":["#slug"],"max_nodes":10}`
+  → 200 `{context:{topics:[{topic_id,slug,nodes:[...],...}]},event_id}` + SSE
+  `context_injected:<i>` per topic.
+- `GET /api/v1/trees/{tid}/topics/search?q=<term>` → `{results:[{topic_id,slug,snippet:"<mark>x</mark>…",node_count,last_active_at,relevance}],total,query_time_ms}`.
+- `GET /api/v1/trees/{tid}/topics/recent` → relevance-ordered recent topics.
+- `GET /api/v1/trees/{tid}/topics/{topic_id}/preview` → `{snippets:[...],participant_count,node_count,last_active_rel}`.
+  (Snippets strip the leading `#` — DF-53.)
+
+Topic create: `POST /api/v1/topics {treeId,rootNodeId,title,description}`
+(camelCase) → 201 bare object; the server DERIVES `slug` from title. Topic
+archive: `DELETE /api/v1/topics/{id}` → **204 empty** (docs/API.md wrongly
+says 200 + detail).
+
+**⚠️ KNOWN P0 (DF-50): send-time persistence of #references is broken —
+`node_resolved_refs` stays EMPTY because `resolved_by` FKs profiles(id) but
+handlers pass the users.id JWT sub (FK 23503, WARN-only), and reply/fork
+skip resolution entirely. Nodes carrying `#ref` still save fine (201), and
+the compile path (`GET /api/v1/context/{node}`) re-scans content so topic
+injection WORKS — it's only the resolved-link store + reference_* SSE events
+that never fire. Don't build on resolved-refs queries until DF-50 lands.**
+
+**⚠️ KNOWN P1 (DF-51): tree import 503s for any tree WITH edges** —
+`POST /trees/import` of a real export dies on `edges.sequence_num NOT NULL`
+(labelled "database unavailable"). Edgeless trees import fine (201).
+Export/import round-trips are NOT a backup strategy until this lands; export
+also omits topics (DF-54).
 
 ## Entry points
 
@@ -249,6 +289,20 @@ Short version:
     Diagnosis: `systemctl --user status canopy-canopyd` +
     `journalctl --user -u canopy-canopyd -n 20` (STALE BUILD names both
     versions). Fix: clean worktree → `make deploy`. NEVER roll the DB back.
+
+## Install truth (fresh machine, verified 2026-09-23 bunker las-bunker-03)
+
+- Bare Debian + git + Node 22 but NO Go: README Quick Start's `make build`
+  fails with `make: go: No such file or directory` (Go is not a listed
+  prerequisite — DF-55). The path that WORKS with zero toolchain:
+  SELF_HOST Option 1 — download `canopyd_linux_amd64` from releases (5 s),
+  `chmod +x`, run (skip the documented `sudo mv /usr/local/bin/` — a fresh
+  user has no sudo; `~/bin` is fine).
+- Release binary + `docker run postgres:16-alpine` (Quick Start block) +
+  `canopyd serve` → healthy in <1 s, 48 migrations embedded, CLI create/list
+  pass end-to-end.
+- First-boot cosmetic: `/health` reports `schema_version:0` (embedded 48) on
+  a virgin DB; settles to 48/48 on later boots.
 
 ## Stack hygiene (updated 2026-09-14 — the :5437 advice below was REVOKED)
 

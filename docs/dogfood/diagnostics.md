@@ -393,3 +393,63 @@ canopyd healthy 3 s; CLI create+list on the fresh box pass. Warm ops: MCP
 read 12.7 ms, REST read 12.3 ms, MCP write 19.8 ms (hyperfine, 30 runs).
 Cold restart to healthy 0.160 s — the sub-30s resume promise is not even
 close to binding.
+
+## 2026-09-23 — topics, #references, export/import (9th run)
+
+**FK domains differ per table — and one handler passed the wrong one (DF-50).**
+Canopy has two identity domains: `users.id` (auth; the JWT `sub`) and
+`profiles.id` (display identity; e.g. the dev-seeded "Dev Hermes" row carries a
+time-ordered UUID, not `000…001`). `node_resolved_refs.resolved_by` was
+declared `REFERENCES profiles(id)` (migration 000021), while
+`NodeHandler.resolveReferencesAtSend` forwards the JWT sub as `resolvedBy`.
+Postgres rejects the insert (23503), `ResolveAtSend` logs a WARN and returns —
+by design, "non-fatal" — so the feature degrades to a no-op that still
+answers 201. Lesson: when a column FKs a *different* identity table than the
+one the auth layer speaks, the type system won't save you — the names even
+look compatible (`resolved_by uuid NOT NULL`). The cheap gate is an
+integration test asserting `count(node_resolved_refs) == expected` after a
+create with a valid `#ref`; no unit test can see a cross-table FK mismatch.
+
+**Swallow-and-continue turned a P0 into a silent feature death.** The same
+spec says resolution failures must not block the message — correct product
+behavior — but the implementation dropped the second half of the contract:
+nothing surfaces the loss to the user or the operator. The node saves, the
+API returns 201, the WARN is one line in a JSON log, and the resolved-refs
+surface (queries + `reference_resolved`/`reference_not_found` SSE) just
+never has data. The compile path then *re-parses* node content at read time
+and injects topic boundaries anyway, so every demo, test, and the 09-21
+human-path run saw references "working". Two coupled lessons: (1) a
+best-effort path needs an observable degraded signal (SSE, metric, badge —
+anything louder than a log line); (2) when the read path recomputes what the
+write path persists, tests written against the read path can never see the
+write path dying. Probe the destination store, not the echo.
+
+**Edgeless fixtures hid the import break (DF-51).** `ImportTree` inserts
+edges without `sequence_num`; the column is NOT NULL with no default, so any
+tree with ≥1 edge 503s (mislabelled "database unavailable" — the DB is
+healthy, the INSERT is wrong). Every round-trip fixture was a root-only
+tree, which imports 201 perfectly — green suite, dead feature. The 09-20
+boardctl pitfall applies again: an export payload that carries a field
+(`sequenceNum`) the importer never binds is exactly the "struct JSON tags
+are an API nobody tests" class. A round-trip test needs one reply edge in
+the fixture — the most common edge in any real conversation.
+
+**Why the topic/reference run still rates PROMISING-BUT-ROUGH, not worse.**
+The read/compile side is genuinely strong: search with `<mark>` highlighting,
+preview, autocomplete, resolve (with honest `not_found[]` and archived-topic
+reporting), inject, and a compiler that injects referenced topics with
+per-reference token counts, `manifestHash`, and transparent omissions
+(`omittedReason:"depth"`) — all at 1–15 ms. At 201 nodes: create 20 ms/node,
+compile 10–19 ms, cold restart 0.20 s, export 160 KB in ~2 ms. Nothing was
+slow enough to file a PERF row; the value lost is correctness (DF-50/51),
+not speed.
+
+**Install leg, third sampling, second verdict (DF-55).** The 09-22 run
+proved source build works once Go exists (152 s, no cgo). This run proved
+the *undocumented* path is the only one a toolchain-less fresh user has:
+release binary download (5 s) → healthy server (<1 s) → CLI create/list.
+`make build` without Go fails before any project code runs, and SELF_HOST's
+`sudo mv` example fails for the exact user it addresses. Numbers worth
+keeping: clone --depth 1 22 s; binary 5 s; serve→health <1 s; virgin-DB
+`/health` reports `schema_version:0` until a later boot (embedded 48) —
+cosmetic but confusing against the STALE BUILD guard's 48/48 message.
