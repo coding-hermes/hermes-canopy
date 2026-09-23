@@ -3247,3 +3247,14 @@ Pending **24→24**: **DF-HERMES-CANOPY-46 (P1, proxy Bearer-suppression — top
 **Land:** pushed origin `d6f38341..af848183` + gitlab `a0f281dd..af848183` — 0 unpushed both. CI health at tick start: 3/3 recent runs success (no INT-CI filing). Board: task_completed event + audit appended, row flipped complete, header ticks_total 557→558, last_commit→af848183. DuckBrain /ticks/tick558-df55-install-docs-honesty.
 
 **NOT DONE / residual:** DF-47 (P3 metadata base64 round-trip), DF-53/54 (P3 topics/refs gaps), DF-56 (P4 writeServiceError ErrTreeNotFound), GAP-080 phase 2b UI slider, GAP-081 scope honesty, GAP-076/078 owner-ruling parked, FTR-06/PL-04..06 mega-specs (need own design passes), QA-* bunker-infra rows (not project-owned), DF-25 (watch). Off-by-one sub_267264 answer check still owed.
+
+## Tick 559 — hermes-canopy-2026-09-23-08-46-43 (2026-09-23)
+
+**OK — DF-HERMES-CANOPY-47 COMPLETE.** Serial dispatch (max one worker despite WAVE_BUDGET=7): oldest tractable repo-owned P3 after P2 decision-bound and bunker-infra rows were parked. Worker `gpt-5.6-luna@openai-codex`; four focused attempts/sessions; commits `4e74627a`, `91adeaa1`, `b31b36e1`, and `53e9cdd0`.
+
+- Product: node-returning HTTP responses and export payloads emit `metadata` as native JSON instead of Go `[]byte` base64. Invalid metadata is normalized before headers are committed, so the API cannot return 200 with an empty/partial JSON body. Export/import and internal response decoders now accept native JSON while retaining explicitly tested legacy-base64 compatibility.
+- Adversarial rework: attempt 1 missed the HTTP encode-error boundary; attempt 2 missed export `db.Node`; attempt 3 passed the local full guard and Tier-2 but GitHub Actions run `35842942037` exposed asymmetric decoding in `TestAPI_Card*`; attempt 4 fixed it with symmetric `UnmarshalJSON` and compatibility tests.
+- Evidence: exact formerly failing `CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/handler/ -run 'TestAPI_Card' -count=1 -timeout=600s` PASS; focused db/service metadata tests PASS; build + vet PASS; `gitreins guard --full` PASS; Tier-2 `f9d7571f` PASS/COMPLETE; GitHub Actions `35844453170` GREEN including PG card integration, lint, frontend, gitleaks, Docker, and deploy.
+- Land: implementation tip `53e9cdd0` pushed to origin and gitlab with 0 unpushed. Board row closed with full session/commit/guard/CI summary; task-completed event 808. Off-by-One post-debug class `go-custom-json-marshal-breaks-internal-response-decoder` queued as `sub_672962` (pending at closeout).
+
+**NOT DONE / residual:** next tick should re-read the live pending set; decision-bound P2s and bunker-owned QA rows remain parked. Check Off-by-One `sub_672962` by exact queue id before expecting discovery to hit.
