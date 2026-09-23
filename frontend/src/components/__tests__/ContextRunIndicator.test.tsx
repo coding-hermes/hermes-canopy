@@ -222,6 +222,90 @@ describe('ContextRunIndicator — context-bearing run', () => {
   });
 });
 
+// ─── Retrieved tier (GAP-080 phase 4b) ─────────────────────────────────
+
+describe('ContextRunIndicator — retrieved tier', () => {
+  function retrievedRun(): GatewayRun {
+    const base = contextRun();
+    return contextRun({
+      manifest: {
+        ...(base.manifest ?? {}),
+        retrieved: [
+          {
+            id: 'topic-a',
+            kind: 'retrieved_topic',
+            title: 'architecture',
+            tokenCount: 96,
+            truncated: false,
+            relevance: 0.91,
+          },
+          {
+            id: 'topic-b',
+            kind: 'retrieved_topic',
+            title: 'retrieval-design',
+            tokenCount: 140,
+            truncated: false,
+            relevance: 0.74,
+          },
+        ],
+        retrievalBudget: 960,
+      },
+    });
+  }
+
+  it('renders retrieved items, relevance, and a non-zero tier allocation', () => {
+    mount(retrievedRun());
+    act(() => q('[data-testid="context-run-toggle"]')?.click());
+
+    const section = q('[data-testid="context-run-section-retrieved"]');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain('Retrieved · 2');
+    expect(section?.textContent).toContain('960 allocated');
+
+    const items = container.querySelectorAll(
+      '[data-testid="context-run-item"][data-kind="retrieved_topic"]',
+    );
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toContain('architecture');
+    expect(items[0]?.textContent).toContain('91% relevance');
+    expect(items[0]?.textContent).toContain('96');
+    expect(items[1]?.textContent).toContain('74% relevance');
+    expect(items[1]?.textContent).toContain('140');
+  });
+
+  it('renders no Retrieved section for an absent tier', () => {
+    mount(contextRun());
+    act(() => q('[data-testid="context-run-toggle"]')?.click());
+    expect(q('[data-testid="context-run-section-retrieved"]')).toBeNull();
+  });
+
+  it('keeps the empty-state message when the retrieved tier is empty', () => {
+    mount(
+      contextRun({
+        manifest: {
+          requestId: 'req-empty-retrieved',
+          nodeId: NODE_A,
+          compiledAt: '2026-09-17T10:00:00Z',
+          tokenBudget: 8000,
+          tokensUsed: 42,
+          ancestry: null,
+          references: null,
+          cards: null,
+          retrieved: [],
+          retrievalBudget: 0,
+          truncationMarkers: null,
+          warnings: null,
+        },
+      }),
+    );
+    act(() => q('[data-testid="context-run-toggle"]')?.click());
+    expect(q('[data-testid="context-run-section-retrieved"]')).toBeNull();
+    expect(q('[data-testid="context-run-detail"]')?.textContent).toContain(
+      'Nothing compiled into this context',
+    );
+  });
+});
+
 describe('ContextRunIndicator — manifest digest (GAP-080 phase 5a)', () => {
   /** The digest of the payload this run was given. */
   const HASH =
