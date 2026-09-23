@@ -238,13 +238,19 @@ func (s *ExportServiceImpl) ImportTree(ctx context.Context, input *ExportData, o
 	}
 
 	// 6. Insert all edges with remapped source/target.
-	for _, e := range input.Edges {
+	for i, e := range input.Edges {
 		newSourceID := idMap[e.SourceID]
 		newTargetID := idMap[e.TargetID]
+		sequence := e.SequenceNum
+		if sequence == 0 {
+			// Older payloads may omit sequence_num; keep those imports
+			// deterministic while preserving exported values when present.
+			sequence = int64(i + 1)
+		}
 		_, err := tx.Exec(ctx,
-			`INSERT INTO edges (tree_id, source_id, target_id, edge_type, metadata)
-			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::jsonb))`,
-			newTreeID, newSourceID, newTargetID, e.EdgeType, e.Metadata,
+			`INSERT INTO edges (tree_id, source_id, target_id, edge_type, sequence_num, metadata)
+			 VALUES ($1, $2, $3, $4, $5, COALESCE($6, '{}'::jsonb))`,
+			newTreeID, newSourceID, newTargetID, e.EdgeType, sequence, e.Metadata,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("%w: insert edge: %v", ErrDatabaseUnavailable, err)
