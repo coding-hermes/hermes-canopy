@@ -816,6 +816,22 @@ func TestAPI_CardCRUD(t *testing.T) {
 		t.Fatalf("DELETE card: status=%d, error=%+v", resp.StatusCode, errBody)
 	}
 
+	// Contract (SPEC-PL-03, pinned in card_lifecycle_handler_test.go):
+	// DELETE without If-Match → 428 CARD_REVISION_REQUIRED. The precondition
+	// runs before any state lookup, so it fires even on an archived card.
+	req = apiRequest(t, srv.Server.URL, http.MethodDelete,
+		"/api/v1/cards/"+card.ID.String(), ownerID, nil)
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE card without If-Match: %v", err)
+	}
+	defer resp.Body.Close()
+	var missingIfMatch apiErrorBody
+	json.NewDecoder(resp.Body).Decode(&missingIfMatch)
+	if resp.StatusCode != http.StatusPreconditionRequired || missingIfMatch.Error.Code != "CARD_REVISION_REQUIRED" {
+		t.Fatalf("DELETE card without If-Match: status=%d, error=%+v, want 428 CARD_REVISION_REQUIRED", resp.StatusCode, missingIfMatch)
+	}
+
 	// GET archived card → 404.
 	req = apiRequest(t, srv.Server.URL, http.MethodGet,
 		"/api/v1/cards/"+card.ID.String(), ownerID, nil)

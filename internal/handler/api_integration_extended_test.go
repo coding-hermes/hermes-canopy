@@ -365,6 +365,23 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 		t.Fatalf("PATCH card missing data: status=%d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 
+	// Contract (SPEC-PL-03): a PRESENT but malformed If-Match revision →
+	// 400 CARD_REVISION_INVALID (the missing-header class is 428, pinned in
+	// card_lifecycle_handler_test.go).
+	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
+		"/api/v1/cards/"+card.ID.String(), ownerID, map[string]any{"data": map[string]any{"n": 1}})
+	req.Header.Set("If-Match", "not-an-integer")
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("PATCH card invalid If-Match: %v", err)
+	}
+	defer resp.Body.Close()
+	var invalidIfMatch apiErrorBody
+	json.NewDecoder(resp.Body).Decode(&invalidIfMatch)
+	if resp.StatusCode != http.StatusBadRequest || invalidIfMatch.Error.Code != "CARD_REVISION_INVALID" {
+		t.Fatalf("PATCH card invalid If-Match: status=%d, error=%+v, want 400 CARD_REVISION_INVALID", resp.StatusCode, invalidIfMatch)
+	}
+
 	// PATCH with null data → 400.
 	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
 		"/api/v1/cards/"+card.ID.String(), ownerID, map[string]any{"data": nil})
