@@ -385,6 +385,9 @@ func (h *NodeHandler) handleReply(w http.ResponseWriter, r *http.Request) {
 			Timestamp:     time.Now().UTC(),
 		})
 	}
+	if h.refSvc != nil && out != nil && out.Node != nil {
+		h.resolveReferencesAtSend(r, out.Node.TreeID, out.Node.ID, out.Node.Content, authorID)
+	}
 	w.Header().Set("Location", "/trees/"+out.Node.TreeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -455,6 +458,9 @@ func (h *NodeHandler) handleFork(w http.ResponseWriter, r *http.Request) {
 			SequenceNum:   out.Node.SequenceNum,
 			Timestamp:     time.Now().UTC(),
 		})
+	}
+	if h.refSvc != nil && out != nil && out.Node != nil {
+		h.resolveReferencesAtSend(r, out.Node.TreeID, out.Node.ID, out.Node.Content, authorID)
 	}
 	w.Header().Set("Location", "/trees/"+out.Node.TreeID.String()+"/nodes/"+out.Node.ID.String())
 	writeJSON(w, http.StatusCreated, out)

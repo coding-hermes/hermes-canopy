@@ -191,6 +191,25 @@ func (r *PGReferenceRepo) AutocompleteTopics(ctx context.Context, treeID uuid.UU
 
 // ── Topic Lookup ──────────────────────────────────────────────────────────
 
+// ResolveProfileID maps a JWT users.id to that user's newest active profile.
+// A missing profile is a normal degradation case and returns uuid.Nil, nil.
+func (r *PGReferenceRepo) ResolveProfileID(ctx context.Context, requesterID uuid.UUID) (uuid.UUID, error) {
+	var profileID uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+        SELECT id
+        FROM profiles
+        WHERE owner_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1`, requesterID).Scan(&profileID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, nil
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("db: resolve requester profile: %w", err)
+	}
+	return profileID, nil
+}
+
 // GetTopicBySlug returns a topic by tree_id + slug.
 func (r *PGReferenceRepo) GetTopicBySlug(ctx context.Context, treeID uuid.UUID, slug string) (*reference.Topic, error) {
 	var t reference.Topic

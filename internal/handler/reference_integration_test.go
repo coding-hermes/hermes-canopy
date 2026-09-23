@@ -5,6 +5,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
@@ -419,7 +422,7 @@ func TestTM04_ResolveAtSendPersists(t *testing.T) {
 	topicID := tm04CreateTestTopicWithSlug(t, pool, treeID, root, "Database Schema", "database-schema")
 	nodeID := tm04CreateTestNode(t, pool, treeID, profileID, "Message with #database-schema")
 
-	result, err := svc.ResolveAtSend(context.Background(), treeID, nodeID, "Message with #database-schema", profileID)
+	result, err := svc.ResolveAtSend(context.Background(), treeID, nodeID, "Message with #database-schema", testUserID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(result.References))
 	assert.Equal(t, 0, len(result.NotFound))
@@ -452,7 +455,7 @@ func TestTM04_ResolveAtSendDedupes(t *testing.T) {
 	nodeID := tm04CreateTestNode(t, pool, treeID, profileID, "Message")
 
 	content := "#database-schema twice #database-schema"
-	result, err := svc.ResolveAtSend(context.Background(), treeID, nodeID, content, profileID)
+	result, err := svc.ResolveAtSend(context.Background(), treeID, nodeID, content, testUserID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(result.References), "expected 1 deduped reference")
 
@@ -602,4 +605,120 @@ func TestTM04_GetResolvedRefsForNode(t *testing.T) {
 	links, err := refRepo.GetResolvedRefsForNode(context.Background(), nodeID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(links))
+}
+
+// newSendReferenceNodeServer mounts the tree-scoped node endpoints with the
+// real send-time resolver. It intentionally omits membership middleware so the
+// test can exercise the resolver's no-profile degradation independently.
+func newSendReferenceNodeServer(t *testing.T, pool *pgxpool.Pool) *httptest.Server {
+	t.Helper()
+	nodeSvc := service.NewNodeService(
+		db.NewPGNodeRepo(pool),
+		db.NewPGEdgeRepo(pool),
+		pool,
+		sse.NewHub(),
+	)
+	refSvc := reference.NewReferenceService(
+		db.NewPGReferenceRepo(pool),
+		db.NewPGTopicSearchRepo(pool),
+	)
+	nodeHandler := NewNodeHandler(nodeSvc, nil).WithReferences(refSvc, sse.NewHub())
+
+	r := chi.NewRouter()
+	r.Use(AuthMiddleware("canopy-dev-secret"))
+	r.Mount("/api/v1/trees/{tree_id}/nodes", nodeHandler.TreeRoutes())
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func sendReferenceNodeRequest(t *testing.T, srv *httptest.Server, userID uuid.UUID, method, path string, body any) (*http.Response, []byte) {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	require.NoError(t, err)
+	req, err := http.NewRequest(method, srv.URL+path, bytes.NewReader(payload))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	tok := signedToken(t, "canopy-dev-secret", jwt.MapClaims{
+		"sub": userID.String(),
+	})
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	data, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	return resp, data
+}
+
+func assertSendReferenceRow(t *testing.T, pool *pgxpool.Pool, nodeID, topicID, profileID uuid.UUID, wantRows int) {
+	t.Helper()
+	var count int
+	err := pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM node_resolved_refs
+		WHERE node_id = $1 AND topic_id = $2 AND resolved_by = $3`,
+		nodeID, topicID, profileID).Scan(&count)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, wantRows)
+}
+
+// TestDFHermesCanopy50_SendTimeReferencePersistence proves that every node
+// send surface resolves and persists a valid #reference, while a requester
+// without a profile still receives the successful node response and no link.
+func TestDFHermesCanopy50_SendTimeReferencePersistence(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	srv := newSendReferenceNodeServer(t, pool)
+
+	treeID, profileID := tm04CreateTestTree(t, pool)
+	rootID := tm04CreateTestNode(t, pool, treeID, profileID, "Root")
+	topicID := tm04CreateTestTopicWithSlug(t, pool, treeID, rootID, "Database Schema", "database-schema")
+	path := "/api/v1/trees/" + treeID.String() + "/nodes"
+
+	resp, body := sendReferenceNodeRequest(t, srv, testUserID, http.MethodPost, path+"/", map[string]any{
+		"content": "create #database-schema",
+	})
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create body: %s", body)
+	var created service.CreateNodeResult
+	require.NoError(t, json.Unmarshal(body, &created))
+	require.NotNil(t, created.Node)
+	assertSendReferenceRow(t, pool, created.Node.ID, topicID, profileID, 1)
+
+	resp, body = sendReferenceNodeRequest(t, srv, testUserID, http.MethodPost,
+		path+"/"+rootID.String()+"/reply", map[string]any{
+			"content": "reply #database-schema",
+		})
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "reply body: %s", body)
+	var replied service.CreateNodeResult
+	require.NoError(t, json.Unmarshal(body, &replied))
+	require.NotNil(t, replied.Node)
+	assertSendReferenceRow(t, pool, replied.Node.ID, topicID, profileID, 1)
+
+	resp, body = sendReferenceNodeRequest(t, srv, testUserID, http.MethodPost,
+		path+"/"+rootID.String()+"/fork", map[string]any{
+			"content": "fork #database-schema",
+		})
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "fork body: %s", body)
+	var forked service.CreateNodeResult
+	require.NoError(t, json.Unmarshal(body, &forked))
+	require.NotNil(t, forked.Node)
+	assertSendReferenceRow(t, pool, forked.Node.ID, topicID, profileID, 1)
+
+	noProfileID := uuid.New()
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO users (id, hermes_user_id, display_name)
+		VALUES ($1, $2, 'No Profile User')`, noProfileID, noProfileID.String())
+	require.NoError(t, err)
+	resp, body = sendReferenceNodeRequest(t, srv, noProfileID, http.MethodPost, path+"/", map[string]any{
+		"content": "degrade #database-schema",
+	})
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "no-profile body: %s", body)
+	var degraded service.CreateNodeResult
+	require.NoError(t, json.Unmarshal(body, &degraded))
+	require.NotNil(t, degraded.Node)
+	var noProfileRows int
+	err = pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM node_resolved_refs WHERE node_id = $1`, degraded.Node.ID).Scan(&noProfileRows)
+	require.NoError(t, err)
+	assert.Equal(t, 0, noProfileRows, "requester without a profile must not persist a link")
 }
