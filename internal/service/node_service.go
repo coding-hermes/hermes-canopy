@@ -6,6 +6,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -197,6 +198,54 @@ type NodeDetail struct {
 	CreatedAt         time.Time  `json:"createdAt"`
 	EditedAt          *time.Time `json:"editedAt"`
 	DeletedAt         *time.Time `json:"deletedAt"`
+}
+
+// MarshalJSON keeps database metadata as JSON at the public node wire
+// boundary. db.Node and NodeDetail retain []byte storage so repository and
+// service consumers continue to receive the persisted JSONB bytes.
+func (n NodeDetail) MarshalJSON() ([]byte, error) {
+	metadata := bytes.TrimSpace(n.Metadata)
+	if len(metadata) == 0 {
+		metadata = []byte(`{}`)
+	}
+	if !json.Valid(metadata) {
+		return nil, fmt.Errorf("node metadata is invalid JSON")
+	}
+
+	type nodeDetailJSON struct {
+		ID                uuid.UUID       `json:"id"`
+		TreeID            uuid.UUID       `json:"treeId"`
+		ParentID          *uuid.UUID      `json:"parentId"`
+		AuthorID          uuid.UUID       `json:"authorId"`
+		AuthorDisplayName string          `json:"authorDisplayName"`
+		Content           string          `json:"content"`
+		ContentFormat     string          `json:"contentFormat"`
+		NodeType          string          `json:"nodeType"`
+		SequenceNum       int64           `json:"sequenceNum"`
+		Metadata          json.RawMessage `json:"metadata"`
+		Depth             int             `json:"depth"`
+		ChildCount        int             `json:"childCount"`
+		CreatedAt         time.Time       `json:"createdAt"`
+		EditedAt          *time.Time      `json:"editedAt"`
+		DeletedAt         *time.Time      `json:"deletedAt"`
+	}
+	return json.Marshal(nodeDetailJSON{
+		ID:                n.ID,
+		TreeID:            n.TreeID,
+		ParentID:          n.ParentID,
+		AuthorID:          n.AuthorID,
+		AuthorDisplayName: n.AuthorDisplayName,
+		Content:           n.Content,
+		ContentFormat:     n.ContentFormat,
+		NodeType:          n.NodeType,
+		SequenceNum:       n.SequenceNum,
+		Metadata:          json.RawMessage(metadata),
+		Depth:             n.Depth,
+		ChildCount:        n.ChildCount,
+		CreatedAt:         n.CreatedAt,
+		EditedAt:          n.EditedAt,
+		DeletedAt:         n.DeletedAt,
+	})
 }
 
 // EdgeDetail is the edge-side companion of a created node. Field names
