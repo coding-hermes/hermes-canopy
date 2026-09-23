@@ -362,7 +362,27 @@ offending field named in the error message (e.g.
 GET /api/v1/trees/{tree_id}/nodes
 ```
 
-**Response (200):**
+**Pagination (optional).** With no query parameters the response is the
+legacy all-nodes envelope below. With `limit` (positive int; service default
+100, max 500) or `cursor` (a previous page's `next_cursor` node ID) the
+route pages keyset-style over `(sequence_num, id)` and answers the extended
+envelope:
+
+```json
+{
+  "nodes": ["…same node objects as below…"],
+  "total": 201,
+  "limit": 50,
+  "has_more": true,
+  "next_cursor": "uuid-of-last-node-in-page"
+}
+```
+
+Malformed values are rejected with `400 INVALID_LIMIT` (non-numeric or
+non-positive `limit`) or `400 INVALID_CURSOR` (non-UUID `cursor`) — the
+parameters are never silently ignored.
+
+**Response (200, no parameters):**
 ```json
 {
   "nodes": [
@@ -1626,7 +1646,10 @@ Registered directly on the `/api/v1/trees` router (not via Mount).
 GET /api/v1/trees/{tree_id}/export
 ```
 
-**Response (200):** Full tree export as JSON (tree + nodes + edges).
+**Response (200):** Full tree export as JSON. Version 2 adds the tree's
+topics (active AND archived, as `topics`, snake_case) and the resolved
+`#ref` links (`resolved_refs`), so topic structure survives export/import;
+version-1 payloads (tree + nodes + edges) import unchanged.
 
 ### Import Tree
 
@@ -1634,9 +1657,15 @@ GET /api/v1/trees/{tree_id}/export
 POST /api/v1/trees/import
 ```
 
-**Request body:** Full export JSON (from Export Tree).
+**Request body:** Full export JSON (from Export Tree). When the payload
+carries `topics`/`resolved_refs` (version 2) they are recreated with NEW
+ids: topic parents are remapped order-independently, resolved refs point at
+the remapped topic + node, and `resolved_by` falls back to the importing
+user's newest profile when the original profile does not exist. Imports of
+version-1 payloads stay byte-compatible with the old behaviour.
 
-**Response (201):** `{ "tree_id": "uuid" }` with `Location` header.
+**Response (201):** `{ "tree_id": "uuid" }` with `Location` header. The
+result also reports `topic_count` and `resolved_ref_count`.
 
 ---
 

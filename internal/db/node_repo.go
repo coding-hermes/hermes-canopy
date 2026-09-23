@@ -126,6 +126,49 @@ func (r *PGNodeRepo) GetByTree(ctx context.Context, treeID uuid.UUID) ([]Node, e
 	return collectNodes(rows)
 }
 
+// CountByTree returns the number of active nodes in a tree.
+func (r *PGNodeRepo) CountByTree(ctx context.Context, treeID uuid.UUID) (int, error) {
+	var count int
+	if err := r.pool.QueryRow(ctx, `
+        SELECT COUNT(*)::int FROM nodes
+        WHERE tree_id = $1 AND deleted_at IS NULL`, treeID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("db: count nodes by tree: %w", err)
+	}
+	return count, nil
+}
+
+// ListKeyset returns active nodes ordered by sequence_num and id. The cursor
+// is the last node ID from the prior page; the sequence number is read from
+// that row so duplicate sequence numbers remain deterministic.
+func (r *PGNodeRepo) ListKeyset(ctx context.Context, treeID uuid.UUID, cursorID *uuid.UUID, limit int) ([]Node, error) {
+	var rows pgx.Rows
+	var err error
+	if cursorID == nil {
+		rows, err = r.pool.Query(ctx, `
+            SELECT `+nodeColumns+`
+            FROM nodes
+            WHERE tree_id = $1 AND deleted_at IS NULL
+            ORDER BY sequence_num ASC, id ASC
+            LIMIT $2`, treeID, limit)
+	} else {
+		rows, err = r.pool.Query(ctx, `
+            SELECT `+nodeColumns+`
+            FROM nodes
+            WHERE tree_id = $1 AND deleted_at IS NULL
+              AND (sequence_num, id) > (
+                  SELECT sequence_num, id FROM nodes
+                  WHERE id = $2 AND tree_id = $1 AND deleted_at IS NULL
+              )
+            ORDER BY sequence_num ASC, id ASC
+            LIMIT $3`, treeID, *cursorID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: list nodes keyset: %w", err)
+	}
+	defer rows.Close()
+	return collectNodes(rows)
+}
+
 // GetChildren returns the active children of the given parent,
 // ordered by edge.sequence_num then node.sequence_num.
 func (r *PGNodeRepo) GetChildren(ctx context.Context, parentID uuid.UUID) ([]Node, error) {

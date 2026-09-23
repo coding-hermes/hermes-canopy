@@ -101,6 +101,35 @@ func (r *PGReferenceRepo) GetResolvedRefsForNode(ctx context.Context, nodeID uui
 	return links, rows.Err()
 }
 
+// GetResolvedRefsForTree returns all resolved references for the exported
+// nodes in a tree in one query. The node ID filter keeps an export scoped to
+// the active nodes selected by the caller without issuing one query per node.
+func (r *PGReferenceRepo) GetResolvedRefsForTree(ctx context.Context, treeID uuid.UUID, nodeIDs []uuid.UUID) ([]reference.ResolvedReferenceLink, error) {
+	if len(nodeIDs) == 0 {
+		return []reference.ResolvedReferenceLink{}, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+        SELECT id, node_id, tree_id, topic_id, raw_ref, slug, resolved_at, resolved_by, context_hash
+        FROM node_resolved_refs
+        WHERE tree_id = $1 AND node_id = ANY($2)
+        ORDER BY resolved_at ASC, id ASC`, treeID, nodeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("db: get resolved refs for tree: %w", err)
+	}
+	defer rows.Close()
+
+	var links []reference.ResolvedReferenceLink
+	for rows.Next() {
+		var l reference.ResolvedReferenceLink
+		if err := rows.Scan(&l.ID, &l.NodeID, &l.TreeID, &l.TopicID, &l.RawRef,
+			&l.Slug, &l.ResolvedAt, &l.ResolvedBy, &l.ContextHash); err != nil {
+			return nil, fmt.Errorf("db: scan resolved ref: %w", err)
+		}
+		links = append(links, l)
+	}
+	return links, rows.Err()
+}
+
 // DeleteResolvedRefsForNode removes all resolved references for a node.
 func (r *PGReferenceRepo) DeleteResolvedRefsForNode(ctx context.Context, nodeID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM node_resolved_refs WHERE node_id = $1`, nodeID)

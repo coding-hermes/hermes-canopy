@@ -18,30 +18,69 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/reference"
 )
 
 // --- Error sentinels -------------------------------------------------------
 
 var (
-	ErrExportNotFound         = errors.New("export service: tree not found")
-	ErrExportInvalidJSON      = errors.New("export service: invalid import payload")
-	ErrExportMissingTree      = errors.New("export service: import payload missing tree")
-	ErrExportMissingRootNode  = errors.New("export service: import payload missing root node")
-	ErrExportInvalidRootNode  = errors.New("export service: import payload root node not in nodes list")
-	ErrExportEdgeNodeNotFound = errors.New("export service: edge references node not in import payload")
+	ErrExportNotFound          = errors.New("export service: tree not found")
+	ErrExportInvalidJSON       = errors.New("export service: invalid import payload")
+	ErrExportMissingTree       = errors.New("export service: import payload missing tree")
+	ErrExportMissingRootNode   = errors.New("export service: import payload missing root node")
+	ErrExportInvalidRootNode   = errors.New("export service: import payload root node not in nodes list")
+	ErrExportEdgeNodeNotFound  = errors.New("export service: edge references node not in import payload")
+	ErrExportTopicNodeNotFound = errors.New("export service: topic references node not in import payload")
+	ErrExportTopicNotFound     = errors.New("export service: resolved reference topic not in import payload")
+	ErrExportRefNodeNotFound   = errors.New("export service: resolved reference node not in import payload")
 )
 
 // --- Wire types ------------------------------------------------------------
 
 // ExportData is the top-level serialisation envelope for a conversation tree.
-// It holds the tree metadata, all nodes, and all edges so a complete
-// conversation DAG can be reconstructed from a single JSON document.
+// It holds the tree metadata, all nodes, edges, topics, and resolved
+// references so a complete conversation DAG can be reconstructed from a
+// single JSON document. Version 2 adds topics and resolved_refs.
 type ExportData struct {
-	Tree       ExportTree `json:"tree"`
-	Nodes      []db.Node  `json:"nodes"`
-	Edges      []db.Edge  `json:"edges"`
-	Version    int        `json:"version"`
-	ExportedAt time.Time  `json:"exportedAt"`
+	Tree         ExportTree              `json:"tree"`
+	Nodes        []db.Node               `json:"nodes"`
+	Edges        []db.Edge               `json:"edges"`
+	Topics       []TopicWire             `json:"topics,omitempty"`
+	ResolvedRefs []ResolvedReferenceWire `json:"resolved_refs,omitempty"`
+	Version      int                     `json:"version"`
+	ExportedAt   time.Time               `json:"exportedAt"`
+}
+
+// TopicWire is the snake_case export representation of a topic. Deleted
+// topics are not returned by TopicRepo.GetByTree; active and archived topics
+// are both included.
+type TopicWire struct {
+	ID            uuid.UUID  `json:"id"`
+	TreeID        uuid.UUID  `json:"tree_id"`
+	RootNodeID    uuid.UUID  `json:"root_node_id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	Slug          string     `json:"slug"`
+	ParentTopicID *uuid.UUID `json:"parent_topic_id,omitempty"`
+	Status        string     `json:"status"`
+	TopicTags     []string   `json:"topic_tags"`
+	NodeCount     int32      `json:"node_count"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ArchivedAt    *time.Time `json:"archived_at,omitempty"`
+}
+
+// ResolvedReferenceWire is the snake_case export representation of one
+// node_resolved_refs row. NodeID and TopicID are remapped during import.
+type ResolvedReferenceWire struct {
+	ID          uuid.UUID `json:"id"`
+	NodeID      uuid.UUID `json:"node_id"`
+	TreeID      uuid.UUID `json:"tree_id"`
+	TopicID     uuid.UUID `json:"topic_id"`
+	RawRef      string    `json:"raw_ref"`
+	Slug        string    `json:"slug"`
+	ResolvedAt  time.Time `json:"resolved_at"`
+	ResolvedBy  uuid.UUID `json:"resolved_by"`
+	ContextHash string    `json:"context_hash"`
 }
 
 // ExportTree carries the tree-level metadata that is included in the export.
@@ -55,10 +94,12 @@ type ExportTree struct {
 // ExportResult is returned by ImportTree so callers can locate the
 // newly-created tree.
 type ExportResult struct {
-	TreeID     uuid.UUID `json:"treeId"`
-	RootNodeID uuid.UUID `json:"rootNodeId"`
-	NodeCount  int       `json:"nodeCount"`
-	EdgeCount  int       `json:"edgeCount"`
+	TreeID           uuid.UUID `json:"treeId"`
+	RootNodeID       uuid.UUID `json:"rootNodeId"`
+	NodeCount        int       `json:"nodeCount"`
+	EdgeCount        int       `json:"edgeCount"`
+	TopicCount       int       `json:"topicCount"`
+	ResolvedRefCount int       `json:"resolvedRefCount"`
 }
 
 // --- Service interface + implementation ------------------------------------
@@ -71,11 +112,13 @@ type ExportService interface {
 
 // ExportServiceImpl is the pgx-backed implementation of ExportService.
 type ExportServiceImpl struct {
-	treeRepo db.TreeRepo
-	nodeRepo db.NodeRepo
-	edgeRepo db.EdgeRepo
-	pool     *pgxpool.Pool
-	now      func() time.Time
+	treeRepo      db.TreeRepo
+	nodeRepo      db.NodeRepo
+	edgeRepo      db.EdgeRepo
+	topicRepo     db.TopicRepo
+	referenceRepo reference.ReferenceRepo
+	pool          *pgxpool.Pool
+	now           func() time.Time
 }
 
 // NewExportService wires the repositories + pool into an ExportServiceImpl.
@@ -87,6 +130,15 @@ func NewExportService(treeRepo db.TreeRepo, nodeRepo db.NodeRepo, edgeRepo db.Ed
 		pool:     pool,
 		now:      time.Now,
 	}
+}
+
+// WithTopicReferences wires the topic and resolved-reference repositories.
+// It is separate from the legacy constructor so existing callers that do not
+// need the additive export fields remain source-compatible.
+func (s *ExportServiceImpl) WithTopicReferences(topicRepo db.TopicRepo, referenceRepo reference.ReferenceRepo) *ExportServiceImpl {
+	s.topicRepo = topicRepo
+	s.referenceRepo = referenceRepo
+	return s
 }
 
 // --- ExportTree -------------------------------------------------------------
@@ -114,6 +166,34 @@ func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*
 		return nil, fmt.Errorf("%w: fetch edges: %v", ErrDatabaseUnavailable, err)
 	}
 
+	var topics []TopicWire
+	if s.topicRepo != nil {
+		rows, topicErr := s.topicRepo.GetByTree(ctx, treeID, "")
+		if topicErr != nil {
+			return nil, fmt.Errorf("%w: fetch topics: %v", ErrDatabaseUnavailable, topicErr)
+		}
+		topics = make([]TopicWire, 0, len(rows))
+		for _, topic := range rows {
+			topics = append(topics, topicToWire(topic))
+		}
+	}
+
+	var resolvedRefs []ResolvedReferenceWire
+	if s.referenceRepo != nil && len(nodes) > 0 {
+		nodeIDs := make([]uuid.UUID, 0, len(nodes))
+		for _, node := range nodes {
+			nodeIDs = append(nodeIDs, node.ID)
+		}
+		rows, refErr := s.referenceRepo.GetResolvedRefsForTree(ctx, treeID, nodeIDs)
+		if refErr != nil {
+			return nil, fmt.Errorf("%w: fetch resolved references: %v", ErrDatabaseUnavailable, refErr)
+		}
+		resolvedRefs = make([]ResolvedReferenceWire, 0, len(rows))
+		for _, link := range rows {
+			resolvedRefs = append(resolvedRefs, resolvedRefToWire(link))
+		}
+	}
+
 	rootNodeID := uuid.Nil
 	if t.RootNodeID != nil {
 		rootNodeID = *t.RootNodeID
@@ -126,10 +206,12 @@ func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*
 			CreatedAt:   t.CreatedAt,
 			RootNodeID:  rootNodeID,
 		},
-		Nodes:      nodes,
-		Edges:      edges,
-		Version:    1,
-		ExportedAt: s.now().UTC(),
+		Nodes:        nodes,
+		Edges:        edges,
+		Topics:       topics,
+		ResolvedRefs: resolvedRefs,
+		Version:      2,
+		ExportedAt:   s.now().UTC(),
 	}, nil
 }
 
@@ -166,6 +248,29 @@ func (s *ExportServiceImpl) ImportTree(ctx context.Context, input *ExportData, o
 	for _, e := range input.Edges {
 		if !nodeIDSet[e.SourceID] || !nodeIDSet[e.TargetID] {
 			return nil, ErrExportEdgeNodeNotFound
+		}
+	}
+
+	// Validate topic roots/parents and resolved-reference node/topic IDs when
+	// present. Older version-1 payloads leave these additive slices empty.
+	topicIDSet := make(map[uuid.UUID]bool, len(input.Topics))
+	for _, topic := range input.Topics {
+		if !nodeIDSet[topic.RootNodeID] {
+			return nil, ErrExportTopicNodeNotFound
+		}
+		topicIDSet[topic.ID] = true
+	}
+	for _, topic := range input.Topics {
+		if topic.ParentTopicID != nil && !topicIDSet[*topic.ParentTopicID] {
+			return nil, ErrExportTopicNotFound
+		}
+	}
+	for _, ref := range input.ResolvedRefs {
+		if !nodeIDSet[ref.NodeID] {
+			return nil, ErrExportRefNodeNotFound
+		}
+		if !topicIDSet[ref.TopicID] {
+			return nil, ErrExportTopicNotFound
 		}
 	}
 
@@ -257,14 +362,81 @@ func (s *ExportServiceImpl) ImportTree(ctx context.Context, input *ExportData, o
 		}
 	}
 
+	// 7. Insert topics in two passes so parent_topic_id ordering in the
+	// payload does not matter. IDs and root node IDs are remapped.
+	topicIDMap := make(map[uuid.UUID]uuid.UUID, len(input.Topics))
+	for _, topic := range input.Topics {
+		topicIDMap[topic.ID] = uuid.New()
+		_, err := tx.Exec(ctx,
+			`INSERT INTO topics (id, tree_id, root_node_id, title, description,
+			 slug, parent_topic_id, status, topic_tags, node_count, created_at, archived_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11)`,
+			topicIDMap[topic.ID], newTreeID, idMap[topic.RootNodeID], topic.Title,
+			topic.Description, topic.Slug, topic.Status, topic.TopicTags,
+			topic.NodeCount, topic.CreatedAt, topic.ArchivedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%w: insert topic: %v", ErrDatabaseUnavailable, err)
+		}
+	}
+	for _, topic := range input.Topics {
+		if topic.ParentTopicID == nil {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE topics SET parent_topic_id = $2 WHERE id = $1`,
+			topicIDMap[topic.ID], topicIDMap[*topic.ParentTopicID]); err != nil {
+			return nil, fmt.Errorf("%w: set topic parent: %v", ErrDatabaseUnavailable, err)
+		}
+	}
+
+	// 8. Insert resolved references in one transaction. Prefer the original
+	// resolved_by profile when it exists; imports performed by another user
+	// fall back to that user's newest profile.
+	for _, ref := range input.ResolvedRefs {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO node_resolved_refs
+				(node_id, tree_id, topic_id, raw_ref, slug, resolved_at, resolved_by, context_hash)
+			 VALUES ($1, $2, $3, $4, $5, $6,
+				COALESCE((SELECT id FROM profiles WHERE id = $7),
+				         (SELECT id FROM profiles WHERE owner_id = $8 ORDER BY created_at DESC LIMIT 1)),
+				$9)`,
+			idMap[ref.NodeID], newTreeID, topicIDMap[ref.TopicID], ref.RawRef,
+			ref.Slug, ref.ResolvedAt, ref.ResolvedBy, ownerID, ref.ContextHash,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%w: insert resolved reference: %v", ErrDatabaseUnavailable, err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("%w: commit: %v", ErrDatabaseUnavailable, err)
 	}
 
 	return &ExportResult{
-		TreeID:     newTreeID,
-		RootNodeID: newRootNodeID,
-		NodeCount:  len(input.Nodes),
-		EdgeCount:  len(input.Edges),
+		TreeID:           newTreeID,
+		RootNodeID:       newRootNodeID,
+		NodeCount:        len(input.Nodes),
+		EdgeCount:        len(input.Edges),
+		TopicCount:       len(input.Topics),
+		ResolvedRefCount: len(input.ResolvedRefs),
 	}, nil
+}
+
+func topicToWire(topic db.Topic) TopicWire {
+	return TopicWire{
+		ID: topic.ID, TreeID: topic.TreeID, RootNodeID: topic.RootNodeID,
+		Title: topic.Title, Description: topic.Description, Slug: topic.Slug,
+		ParentTopicID: topic.ParentTopicID, Status: topic.Status,
+		TopicTags: topic.TopicTags, NodeCount: topic.NodeCount,
+		CreatedAt: topic.CreatedAt, ArchivedAt: topic.ArchivedAt,
+	}
+}
+
+func resolvedRefToWire(link reference.ResolvedReferenceLink) ResolvedReferenceWire {
+	return ResolvedReferenceWire{
+		ID: link.ID, NodeID: link.NodeID, TreeID: link.TreeID, TopicID: link.TopicID,
+		RawRef: link.RawRef, Slug: link.Slug, ResolvedAt: link.ResolvedAt,
+		ResolvedBy: link.ResolvedBy, ContextHash: link.ContextHash,
+	}
 }

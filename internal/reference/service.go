@@ -26,6 +26,10 @@ type ReferenceRepo interface {
 	// GetResolvedRefsForNode returns all resolved references for a node.
 	GetResolvedRefsForNode(ctx context.Context, nodeID uuid.UUID) ([]ResolvedReferenceLink, error)
 
+	// GetResolvedRefsForTree returns resolved references for the given tree and
+	// exported node IDs in one query.
+	GetResolvedRefsForTree(ctx context.Context, treeID uuid.UUID, nodeIDs []uuid.UUID) ([]ResolvedReferenceLink, error)
+
 	// DeleteResolvedRefsForNode removes all resolved references for a node.
 	DeleteResolvedRefsForNode(ctx context.Context, nodeID uuid.UUID) error
 

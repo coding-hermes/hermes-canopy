@@ -365,13 +365,15 @@ func main() {
 		service.NewReferenceSelectionSigner(selectionSecret, nil),
 		cfg.ContextDefaultBudget,
 	)
-
 	// Export service — GAP-003 import/export (SPEC-API-03).
 	exportService := service.NewExportService(
 		database.Trees,
 		database.Nodes,
 		database.Edges,
 		database.Pool,
+	).WithTopicReferences(
+		db.NewPGTopicRepo(database.Pool),
+		db.NewPGReferenceRepo(database.Pool),
 	)
 	// SSE hub — in-memory ring buffer + per-tree subscriber map per
 	// SPEC-API-01 §9 / §11. Bounded to 10k connections, 1h retention,
