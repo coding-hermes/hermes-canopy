@@ -3167,3 +3167,26 @@ Pending **24→24**: **DF-HERMES-CANOPY-46 (P1, proxy Bearer-suppression — top
 2. **Verdict folded** (event 775): tier1+tier2 **PASS/COMPLETE**, printed id `477a40d4`, artifact `.gitreins/history/2026-09-23/6159ba9a/verdict.json`; the judge re-ran the SDK canary itself. **CI GREEN first attempt** on 8c16e42a (content commit, incl. the NEW MCP SDK canary step) and on 97b4ac27 (board commit).
 3. **Event-id collision caught:** the deploy-staleness timer appended its own event 774 (`deploy_stale_alert` GAP-069, STALE_BLOCKED, deployed binary ~25h stale) mid-tick; my fold event renumbered 774→775. Inherited pre-existing dupes 332/333/347-349 left alone (evidence, not mine to rewrite).
 4. **Live deploy:** the timer's alert was REAL — :8091 ran a pre-fix binary. Ran `scripts/deploy-canopyd.sh` (deploy step [1/5] --check-schema gate, ~90s): **DEPLOY OK**, smoke PASSED, and `MCP_SDK_CANARY_OK` against the **LIVE :8091** — the interop fix is proven in production, not just in CI. Next-tick watch: the deployed binary's staleness state should flip to fresh on the next hourly check.
+
+## Tick 554 (2026-09-23 01:24Z) — hermes-canopy-2026-09-23-00-49-15
+
+**PICK:** DF-HERMES-CANOPY-46 (P1, dogfood-2026-09-22-mcp-deploy) — reference-proxy `--token` + `--require-auth-user/password` (the README-documented secure mode) never injects. Verified at HEAD before picking: `_proxy()` copies the client's gate `Authorization: Basic ...` into the upstream header set and the injection check (`not self.headers.get("Authorization")`) never fires — the Basic credential reaches canopyd and every proxied call 401s TOKEN_MISSING, exactly the dogfood symptom.
+
+**Concurrency note:** review-programme worker (items 75-78, glm-5.3-flash, brief `/tmp/brief_canopy_items_75_78.txt`, board-metadata-only scope) was live in the main tree during this tick; it landed `3c5bb29c` (build identity) mid-tick. My worker therefore ran in an isolated worktree (`wt/DF-HERMES-CANOPY-46`, base 1cf24329) and merged after `3c5bb29c`. No file overlap; merge was clean.
+
+**DISPATCH:** gpt-5.6-luna @ openai-codex, one attempt, ~9 min to commit, clean exit. Commit `d2413c45` (2 files, +63/−7): Basic-scheme Authorization excluded from forwarded headers (case-insensitive), Bearer injection keyed on REMAINING upstream Authorization (client Bearer still passes through untouched and still suppresses injection; Basic stripped even without `--token`), docstring amended with the Basic-consume contract, new `ProxyBasicGateAuthorizationTests` with the 3 required legs.
+
+**VERIFY:**
+1. **RED/GREEN falsification:** checked out the PRE-FIX proxy over the new tests → `make test-proxy` FAILS in exactly the 2 new secure-mode legs (12 tests, failures=2); restored via `git checkout HEAD --` and proved byte-identical (md5 match). The new tests bite; not a phantom suite.
+2. `make test-proxy` green 3×: worktree (12/12 OK), post-merge main tree (12/12 OK), and the judge's own run.
+3. `gitreins guard` PASS (full test mode) in the worktree; gitleaks clean.
+4. Merge `c63df1d8` (ort, no conflicts) after `3c5bb29c`; post-merge suite green.
+5. Push parity: origin `1cf24329..c63df1d8` + gitlab same; `rev-list --count` = 0 on both.
+
+**VERDICT:** `gitreins task complete DF-HERMES-CANOPY-46` → tier1+tier2 **PASS/COMPLETE** (printed id `ebab0ea9`, artifact `.gitreins/history/2026-09-23/0272895f/verdict.json`). The judge ran its own live secure-mode repro with the exact README flags: gate Basic + `--token` → upstream saw `Bearer <jwt>`, HTTP 200.
+
+**CI:** GREEN first attempt — run `35805479072` on merge tip `c63df1d8` (covers `d2413c45` + `3c5bb29c`). Repo fully green (prior 5 runs also success).
+
+**BOARD:** tasks.jsonl line 376 → `complete` with full closure keys (reasoning/commit_hash/worker_summary/judge_verdict/ci_runs/files_changed/attempts=1/primary_model/primary_provider/completed_at), surgical single-line edit preserving compact-key style, semantic diff = only DF-46 changed (380 lines before/after, id set unchanged). Event 776 (`task_completed`, detail: worktree, commit d2413c45, merge c63df1d8, judge, CI, verify summary). board.jsonl header → ticks_total 554, last_commit d2413c45, last_tick/updated_at 01:24. Backups: `*.t554.bak` alongside each file.
+
+**NOT DONE / residual:** DF-49 (P2, two card PATCH tests expect 400 but server returns 428 CARD_REVISION_REQUIRED at HEAD — pre-existing, invisible to CI) is the most tractable next pick; GAP-080 phase 2b (UI slider) still open; the deploy-staleness alert (event 774) was pre-redeploy — tick 553's deploy landed after it; no staleness re-verification needed this tick (no new backend code).
