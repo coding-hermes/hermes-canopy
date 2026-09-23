@@ -34,6 +34,7 @@ import {
   manifestItemTitle,
   normaliseManifest,
   omissionNote,
+  relevanceLabel,
   type Manifest,
   type ManifestItem,
 } from '../lib/contextManifest.ts';
@@ -51,6 +52,8 @@ export interface ContextRunIndicatorProps {
 // ─── Item rows (same shape as the panel's, scoped to this file) ────────
 
 function ItemRow({ item }: { item: ManifestItem }) {
+  const relevance =
+    item.kind === 'retrieved_topic' ? relevanceLabel(item.relevance) : null;
   return (
     <li
       data-testid="context-run-item"
@@ -72,6 +75,14 @@ function ItemRow({ item }: { item: ManifestItem }) {
           aria-label="truncated"
         />
       )}
+      {relevance && (
+        <span
+          className="shrink-0 font-mono text-[10px] tabular-nums text-content-muted"
+          data-testid="context-run-item-relevance"
+        >
+          {relevance}
+        </span>
+      )}
       <span className="shrink-0 font-mono text-[11px] tabular-nums text-content-muted">
         {formatTokenCount(item.tokenCount)}
       </span>
@@ -82,16 +93,27 @@ function ItemRow({ item }: { item: ManifestItem }) {
 function ItemSection({
   label,
   items,
+  budget,
 }: {
   label: string;
   items: ManifestItem[];
+  /** The tier's own token allocation, when the backend recorded one. */
+  budget?: number;
 }) {
   if (items.length === 0) return null;
 
   return (
     <section className="mt-2" data-testid={`context-run-section-${label.toLowerCase()}`}>
-      <h4 className="text-[11px] font-medium uppercase tracking-wide text-content-muted">
+      <h4 className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-content-muted">
         {label} · {items.length}
+        {typeof budget === 'number' && budget > 0 && (
+          <span
+            data-testid={`context-run-section-${label.toLowerCase()}-budget`}
+            className="font-mono text-[10px] font-normal normal-case text-content-muted"
+          >
+            ({formatTokenCount(budget)} allocated)
+          </span>
+        )}
       </h4>
       <ul className="mt-0.5">
         {items.map((item, i) => (
@@ -214,6 +236,11 @@ export default function ContextRunIndicator({
 
               <ItemSection label="Ancestry" items={manifest.ancestry} />
               <ItemSection label="References" items={manifest.references} />
+              <ItemSection
+                label="Retrieved"
+                items={manifest.retrieved}
+                budget={manifest.retrievalBudget}
+              />
               <ItemSection label="Cards" items={manifest.cards} />
 
               {warnings.length > 0 && (
@@ -228,6 +255,7 @@ export default function ContextRunIndicator({
 
               {manifest.ancestry.length === 0 &&
                 manifest.references.length === 0 &&
+                manifest.retrieved.length === 0 &&
                 manifest.cards.length === 0 && (
                   <p className="mt-1 text-[11px] text-content-muted">
                     Nothing compiled into this context.
