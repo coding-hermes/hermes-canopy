@@ -395,6 +395,45 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("PATCH card null data: status=%d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
+
+	// Contract (SPEC-PL-03): a PATCH with NO If-Match at all → 428
+	// CARD_REVISION_REQUIRED (the malformed-revision class above is 400).
+	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
+		"/api/v1/cards/"+card.ID.String(), ownerID, map[string]any{"data": map[string]any{"n": 2}})
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("PATCH card without If-Match: %v", err)
+	}
+	defer resp.Body.Close()
+	var missingIfMatch apiErrorBody
+	json.NewDecoder(resp.Body).Decode(&missingIfMatch)
+	if resp.StatusCode != http.StatusPreconditionRequired || missingIfMatch.Error.Code != "CARD_REVISION_REQUIRED" {
+		t.Fatalf("PATCH card without If-Match: status=%d, error=%+v, want 428 CARD_REVISION_REQUIRED", resp.StatusCode, missingIfMatch)
+	}
+
+	// Valid PATCH with the current revision → 200. This leg is LAST on
+	// purpose: a successful patch bumps the card revision, which would
+	// stale the If-Match values the earlier legs reuse.
+	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
+		"/api/v1/cards/"+card.ID.String(), ownerID, map[string]any{"data": map[string]any{"n": 3}})
+	req.Header.Set("If-Match", fmt.Sprintf("%d", card.Revision))
+	resp, err = srv.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("PATCH card with If-Match: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		var errBody apiErrorBody
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		t.Fatalf("PATCH card with If-Match: status=%d, error=%+v, want 200", resp.StatusCode, errBody)
+	}
+	var patched service.CardSummary
+	if err := json.NewDecoder(resp.Body).Decode(&patched); err != nil {
+		t.Fatalf("decode patched card: %v", err)
+	}
+	if patched.Revision != card.Revision+1 {
+		t.Fatalf("patched card revision = %d, want %d", patched.Revision, card.Revision+1)
+	}
 }
 
 // ---------------------------------------------------------------------------
