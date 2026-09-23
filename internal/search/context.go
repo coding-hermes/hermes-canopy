@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -77,10 +78,13 @@ func formatNodeForContext(node ContextNode) string {
 	return sb.String()
 }
 
+var atxHeadingMarker = regexp.MustCompile(`(?m)^#+[ 	]+`)
+
 // stripMarkdown removes common markdown formatting characters for plain-text rendering.
 func stripMarkdown(s string) string {
+	s = atxHeadingMarker.ReplaceAllString(s, "")
 	replacer := strings.NewReplacer(
-		"#", "", "**", "", "*", "", "`", "",
+		"**", "", "*", "", "`", "",
 		"[", "", "]", "", "(", "", ")", "",
 		"> ", "", "- ", "",
 	)

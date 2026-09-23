@@ -132,6 +132,8 @@ func TestTruncateSnippet(t *testing.T) {
 func TestStripMarkdown(t *testing.T) {
 	assert.Equal(t, "Hello world", stripMarkdown("**Hello** world"))
 	assert.Equal(t, "Heading", stripMarkdown("# Heading"))
+	assert.Equal(t, "Timeline starts here #q3-outage", stripMarkdown("Timeline starts here #q3-outage"))
+	assert.Equal(t, "Heading\nbody mentions #ref-tag and bold", stripMarkdown("# Heading\nbody mentions #ref-tag and **bold**"))
 	assert.Equal(t, "code here", stripMarkdown("`code here`"))
 }
 
@@ -302,6 +304,21 @@ func TestService_Preview_NotFound(t *testing.T) {
 	svc := NewTopicSearchService(repo, &mockLogRepo{})
 	_, err := svc.GetTopicPreview(context.Background(), uuid.New(), 3)
 	assert.True(t, errors.Is(err, ErrTopicNotFound))
+}
+
+func TestService_Preview_PreservesReferenceTag(t *testing.T) {
+	topicID := uuid.New()
+	repo := &mockSearchRepo{
+		previewMeta:  &TopicPreviewMeta{ID: topicID, Title: "Q3 outage"},
+		previewNodes: []ContextNode{{Content: "Timeline starts here #q3-outage"}},
+	}
+	svc := NewTopicSearchService(repo, &mockLogRepo{})
+
+	preview, err := svc.GetTopicPreview(context.Background(), topicID, 3)
+
+	require.NoError(t, err)
+	require.Len(t, preview.Snippets, 1)
+	assert.Equal(t, "Timeline starts here #q3-outage", preview.Snippets[0])
 }
 
 // --- LogSearch --------------------------------------------------------------
