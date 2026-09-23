@@ -644,6 +644,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // stale binary (older embedded migrations than the live DB) is visible from a
 // single curl — the diagnostic DF-HERMES-CANOPY-1 lacked.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
+	// Build identity rides on every /health answer (R14-03 / GAP-100): a
+	// RUNNING daemon must identify its exact build without the checker
+	// inferring it from file mtimes.
+	bi := currentBuildInfo()
 	schemaV, embeddedV := int64(-1), int64(-1)
 	if dbh, ok := r.Context().Value(healthSchemaKey{}).(HealthDB); ok {
 		schemaV, _ = dbh.SchemaVersion(r.Context())
@@ -652,8 +656,9 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 			health := rh.RelayHealth()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			if _, err := fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d}}`,
-				schemaV, embeddedV, health.Mode, health.Status, health.Sessions); err != nil {
+			if _, err := fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d},"version":%q,"commit":%q,"build_time":%q}`,
+				schemaV, embeddedV, health.Mode, health.Status, health.Sessions,
+				bi.Version, bi.Commit, bi.BuildTime); err != nil {
 				return
 			}
 			return
@@ -661,8 +666,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d}`,
-		schemaV, embeddedV)
+	_, _ = fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"version":%q,"commit":%q,"build_time":%q}`,
+		schemaV, embeddedV, bi.Version, bi.Commit, bi.BuildTime)
 }
 
 // healthSchemaKey lets main() inject a read-only schema-version probe into
@@ -676,12 +681,8 @@ type HealthDB interface {
 	EmbeddedMigrations() int64
 }
 
-// versionHandler responds with the server version.
-func versionHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"version":"dev"}`))
-}
+// versionHandler lives in buildinfo.go — it serves the ldflags-stamped build
+// identity (version/commit/build_time) shared with /health.
 
 // corsMiddleware provides configurable CORS for local development.
 func corsMiddleware(origin string) func(http.Handler) http.Handler {

@@ -16,7 +16,12 @@ GO       ?= go
 BIN_DIR  ?= bin
 BINARY   ?= canopyd
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS   = -ldflags="-X main.version=$(VERSION)"
+COMMIT    ?= $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# R14-03 / GAP-100: every stamped build carries version + commit + build
+# timestamp; the same three values are what `canopyd -version` prints and
+# GET /version and GET /health serve.
+LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)"
 
 # Dev defaults — match the Vite dev proxy target (frontend/vite.config.ts → :8091)
 # and the docker-compose PostgreSQL host port (5437). Export your own values to override.

@@ -46,6 +46,19 @@ import (
 // Example: go build -ldflags="-X main.version=v0.1.0" ./cmd/canopyd
 var version = "dev"
 
+// Build identity beyond the version string (R14-03 / GAP-100): stamped via
+// -ldflags together with version —
+//
+//	go build -ldflags="-X main.version=$(VERSION) -X main.commit=$(git rev-parse --short=8 HEAD) -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/canopyd
+//
+// `make build-embed` (and scripts/deploy-canopyd.sh step 0 through it) does
+// this; a plain `go build` leaves commit/buildTime empty and the surfaces
+// report "unknown" instead of lying.
+var (
+	commit    = ""
+	buildTime = ""
+)
+
 // argRoute is main()'s routing decision for the first positional argument.
 // Only a recognised subcommand may start CLI mode, and a non-flag argument that
 // matches nothing is refused instead of falling through to server mode.
@@ -83,14 +96,28 @@ func classifyArgs(args []string) argRoute {
 	return argRouteUnknown
 }
 
-// versionOutput writes the build version to stdout and returns the exit code
-// for the -version flag. Extracted from main so the flag's user-visible
+// versionOutput writes the build identity line to stdout and returns the exit
+// code for the -version flag. Extracted from main so the flag's user-visible
 // behaviour — which value it prints and what it exits with — is testable
 // without starting a process. `version` is injected at build time with
 // -ldflags -X main.version=…, so this always reports the real build value.
 func versionOutput(stdout io.Writer) int {
-	_, _ = fmt.Fprintln(stdout, version)
+	_, _ = fmt.Fprintln(stdout, identityLine())
 	return 0
+}
+
+// identityLine is the single-line -version identity: version + commit +
+// build timestamp, the exact values /version and /health serve. A deploy is
+// verifiable only if the binary names its own build (R14-03 / GAP-100).
+func identityLine() string {
+	c, b := commit, buildTime
+	if c == "" {
+		c = "unknown"
+	}
+	if b == "" {
+		b = "unknown"
+	}
+	return fmt.Sprintf("%s commit=%s built=%s", version, c, b)
 }
 
 func main() {
@@ -529,6 +556,11 @@ func main() {
 	// so the endpoint can never advertise a version `canopyd -version` does
 	// not print (DF-HERMES-CANOPY-10).
 	handler.MCPVersion = version
+	// R14-03 / GAP-100: feed the ldflags-stamped identity to the HTTP
+	// surfaces (/version, /health) so a RUNNING daemon names its own build.
+	*server.BuildVersion = version
+	*server.BuildCommit = commit
+	*server.BuildTime = buildTime
 	fvFilesRepo := fileviewer.NewPGFileMetadataRepo(database.Pool)
 	fvViewersRepo := fileviewer.NewPGViewerRegistryRepo(database.Pool)
 	fvAccessRepo := fileviewer.NewPGFileAccessLogRepo(database.Pool)

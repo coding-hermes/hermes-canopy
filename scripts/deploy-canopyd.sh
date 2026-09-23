@@ -68,9 +68,10 @@ echo "Deploying canopyd from $REPO_ROOT"
 
 # ── 0. Build from HEAD ────────────────────────────────────────────────────
 cd "$REPO_ROOT"
-echo "[0/6] make build"
-make build || fail "make build failed"
+echo "[0/6] make build-embed (stamped: version+commit+build time, R14-03/GAP-100)"
+make build-embed || fail "make build-embed failed"
 [[ -x bin/canopyd ]] || fail "build did not produce an executable bin/canopyd"
+echo "[0/6] identity: $(./bin/canopyd -version)"
 
 # ── 1. Pre-deploy schema gate (GAP-069, read-only) ────────────────────────
 # Compare the JUST-BUILT binary's embedded migration version against the

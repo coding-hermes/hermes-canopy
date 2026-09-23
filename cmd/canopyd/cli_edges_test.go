@@ -113,7 +113,8 @@ func TestServerUsageListsSubcommands(t *testing.T) {
 }
 
 // TestVersionOutputPrintsBuildVersionAndExitsZero is AC4 for -version: the
-// value printed is the injected build version and the exit code is 0. The flag
+// value printed is the injected build version WITH its commit and build
+// timestamp (R14-03 / GAP-100 identity line) and the exit code is 0. The flag
 // itself staying accepted (rather than being read as a subcommand) is covered
 // by TestClassifyArgsRouting, and proven end to end by running the built binary.
 func TestVersionOutputPrintsBuildVersionAndExitsZero(t *testing.T) {
@@ -125,8 +126,16 @@ func TestVersionOutputPrintsBuildVersionAndExitsZero(t *testing.T) {
 	if code := versionOutput(&buf); code != 0 {
 		t.Errorf("-version exit code = %d, want 0", code)
 	}
-	if got, want := buf.String(), version+"\n"; got != want {
+	want := identityLine() + "\n"
+	if got := buf.String(); got != want {
 		t.Errorf("-version output = %q, want %q", got, want)
+	}
+	// Identity-line contract: the version, a commit= field and a built=
+	// field are all present on one line (R14-03 / GAP-100).
+	for _, part := range []string{version, "commit=", "built="} {
+		if !strings.Contains(buf.String(), part) {
+			t.Errorf("-version output %q missing %q", buf.String(), part)
+		}
 	}
 }
 
