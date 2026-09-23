@@ -38,6 +38,10 @@ type ReferenceRepo interface {
 	// GetTopicBySlug returns a topic by tree_id + slug. Used for resolution.
 	GetTopicBySlug(ctx context.Context, treeID uuid.UUID, slug string) (*Topic, error)
 
+	// ResolveProfileID maps an authenticated users.id to the active profile
+	// that owns persisted resolved-reference links. uuid.Nil means no profile.
+	ResolveProfileID(ctx context.Context, requesterID uuid.UUID) (uuid.UUID, error)
+
 	// ── Cache ──
 
 	UpsertReferenceCache(ctx context.Context, topicID, treeID uuid.UUID, contextHash string, nodeCount int, payload json.RawMessage) error

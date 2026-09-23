@@ -194,6 +194,18 @@ func (s *referenceService) ResolveAtSend(ctx context.Context, treeID, nodeID uui
 		NotFound:   []ParsedReference{},
 	}
 
+	// Resolve the authenticated user to the profile that owns the persisted
+	// link. The JWT requester id is a users.id, while node_resolved_refs
+	// deliberately references profiles(id).
+	profileID, profileErr := s.repo.ResolveProfileID(ctx, requesterID)
+	if profileErr != nil {
+		log.Warn().Err(profileErr).Str("requester_id", requesterID.String()).
+			Msg("reference: failed to resolve requester profile; skipping resolved refs")
+	} else if profileID == uuid.Nil {
+		log.Warn().Str("requester_id", requesterID.String()).
+			Msg("reference: requester has no profile; skipping resolved refs")
+	}
+
 	totalNodesInScope := 0
 	var linksToPersist []ResolvedReferenceLink
 
@@ -240,7 +252,7 @@ func (s *referenceService) ResolveAtSend(ctx context.Context, treeID, nodeID uui
 				TopicID:    topic.ID,
 				RawRef:     ref.Raw,
 				Slug:       ref.Slug,
-				ResolvedBy: requesterID,
+				ResolvedBy: profileID,
 			})
 		}
 
@@ -260,7 +272,7 @@ func (s *referenceService) ResolveAtSend(ctx context.Context, treeID, nodeID uui
 	result.TotalNodesInScope = totalNodesInScope
 
 	// Persist resolved reference links (spec §2: resolution at send time).
-	if len(linksToPersist) > 0 {
+	if len(linksToPersist) > 0 && profileErr == nil && profileID != uuid.Nil {
 		if err := s.repo.InsertResolvedRefs(ctx, linksToPersist); err != nil {
 			log.Warn().Err(err).Msg("reference: failed to persist resolved refs")
 			// Non-fatal: message is already persisted; refs just aren't queryable.
