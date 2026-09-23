@@ -85,6 +85,18 @@ func TestPGNodeRepo_Create_Nil(t *testing.T) {
 	assert.Contains(t, err.Error(), "node is nil")
 }
 
+func TestPGNodeRepo_Create_MissingTreeReturnsSentinel(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	repo := db.NewPGNodeRepo(pool)
+
+	_, err := repo.Create(context.Background(), testNode(uuid.New(), uuid.New()))
+	require.Error(t, err)
+	require.ErrorIs(t, err, db.ErrTreeNotFound)
+	require.NotContains(t, err.Error(), "SQLSTATE")
+	require.NotContains(t, err.Error(), "fk_nodes_tree")
+}
+
 func TestPGNodeRepo_Create_WithDefaults(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)

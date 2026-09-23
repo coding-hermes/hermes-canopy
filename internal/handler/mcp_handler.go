@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -51,6 +52,7 @@ type MCPHandler struct {
 	cardSvc     service.CardService
 	graphSvc    service.GraphService
 	approvalSvc service.ApprovalService
+	treeChecker TreeMemberChecker
 }
 
 // NewMCPHandler creates an MCP handler wired to the given services.
@@ -61,6 +63,7 @@ func NewMCPHandler(
 	cardSvc service.CardService,
 	graphSvc service.GraphService,
 	approvalSvc service.ApprovalService,
+	treeChecker TreeMemberChecker,
 ) *MCPHandler {
 	return &MCPHandler{
 		treeSvc:     treeSvc,
@@ -69,6 +72,7 @@ func NewMCPHandler(
 		cardSvc:     cardSvc,
 		graphSvc:    graphSvc,
 		approvalSvc: approvalSvc,
+		treeChecker: treeChecker,
 	}
 }
 
@@ -396,6 +400,28 @@ func (h *MCPHandler) toolGetTree(ctx context.Context, args json.RawMessage) (any
 	return map[string]any{"tree": tree}, nil
 }
 
+func (h *MCPHandler) checkCreateNodeAccess(ctx context.Context, treeID uuid.UUID) error {
+	if h.treeChecker == nil {
+		return nil
+	}
+	userID := UserIDFromContext(ctx)
+	member, err := h.treeChecker.IsMember(ctx, treeID, userID)
+	if err != nil {
+		return errors.New("internal error: could not verify membership")
+	}
+	if !member {
+		return errors.New("tree not found or you are not a member")
+	}
+	deleted, err := h.treeChecker.IsTreeDeleted(ctx, treeID)
+	if err != nil {
+		return errors.New("internal error: could not verify tree state")
+	}
+	if deleted {
+		return errors.New("tree has been deleted")
+	}
+	return nil
+}
+
 func (h *MCPHandler) toolCreateNode(ctx context.Context, args json.RawMessage) (any, error) {
 	var params struct {
 		TreeID   string `json:"tree_id"`
@@ -418,6 +444,9 @@ func (h *MCPHandler) toolCreateNode(ctx context.Context, args json.RawMessage) (
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent_id UUID: %w", err)
 		}
+	}
+	if err := h.checkCreateNodeAccess(ctx, treeID); err != nil {
+		return nil, fmt.Errorf("create node: %w", err)
 	}
 	// Extract AuthorID from context (set by auth middleware).
 	authorID := UserIDFromContext(ctx)

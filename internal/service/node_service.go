@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 
@@ -300,6 +301,17 @@ func (s *NodeServiceImpl) WithTopicDetection(td TopicDetector) *NodeServiceImpl 
 
 // --- Create ----------------------------------------------------------------
 
+// classifyNodeInsertError keeps a missing tree a request error while
+// preserving infrastructure failures as ErrDatabaseUnavailable. The
+// constraint guard prevents unrelated foreign keys from being misclassified.
+func classifyNodeInsertError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "fk_nodes_tree" {
+		return fmt.Errorf("%w: insert node", ErrTreeNotFound)
+	}
+	return fmt.Errorf("%w: insert node: %v", ErrDatabaseUnavailable, err)
+}
+
 // Create validates the input, checks the parent (if any) is in the
 // same tree and not soft-deleted, opens a transaction, inserts the
 // node and edge, and returns the assembled NodeDetail + EdgeDetail.
@@ -427,7 +439,7 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 		&created.CreatedAt, &created.EditedAt, &created.DeletedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: insert node: %v", ErrDatabaseUnavailable, err)
+		return nil, classifyNodeInsertError(err)
 	}
 
 	// Insert edge from parent → new node. Root nodes (no parent) have
