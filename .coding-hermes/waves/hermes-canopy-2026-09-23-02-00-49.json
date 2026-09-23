@@ -1,0 +1,24 @@
+{
+  "tick_id": "hermes-canopy-2026-09-23-02-00-49",
+  "project": "hermes-canopy",
+  "base_sha": "b8ca28b8",
+  "created_at": "2026-09-23T02:25:00-05:00",
+  "merge_order": [
+    "DF-HERMES-CANOPY-49"
+  ],
+  "workers": [
+    {
+      "task_id": "DF-HERMES-CANOPY-49",
+      "title": "card PATCH tests expect 400 without If-Match; server contract is 428",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-49",
+      "branch": "wt/DF-HERMES-CANOPY-49",
+      "base_sha": "b8ca28b8",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "brief": "/tmp/brief-DF-49.md",
+      "log": "/tmp/worker-DF-49.log",
+      "scope": "two handler test files + .github/workflows/build.yml; no production code"
+    }
+  ],
+  "status": "in_flight"
+}

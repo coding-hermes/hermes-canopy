@@ -3400,3 +3400,32 @@ tasks:
   status: complete
   created_at: '2026-09-22T23:38:26.083121+00:00'
   completed_at: '2026-09-23T00:19:30.560888+00:00'
+- id: DF-HERMES-CANOPY-46
+  title: reference-proxy --token + Basic gate never injects Bearer
+  criteria:
+  - 'With deploy/reference-proxy.py started as --dist ... --api http://127.0.0.1:8091
+    --token <jwt> --require-auth-user u --require-auth-password p, a request carrying
+    the gate Basic credential to an /api path must reach canopyd with Authorization:
+    Bearer <jwt> (not the Basic header), so the proxied call succeeds instead of 401
+    TOKEN_MISSING. Client-sent Bearer tokens still pass through untouched when no
+    --token is configured; Basic scheme headers are never forwarded upstream; deploy/tests/test_reference_proxy.py
+    covers all three legs and make test-proxy passes.'
+  status: complete
+  created_at: '2026-09-23T00:57:59.520022+00:00'
+  completed_at: '2026-09-23T01:14:42.424115+00:00'
+- id: DF-HERMES-CANOPY-49
+  title: card PATCH tests expect 400 without If-Match; server contract is 428
+  criteria:
+  - 'The two stale card PATCH tests are aligned with the shipped If-Match contract
+    and the class cannot hide again: TestAPI_CardCRUD (api_integration_test.go) and
+    TestAPI_CardUpdateValidation (api_integration_extended_test.go) PATCH with a correct
+    If-Match revision read from the create/list response and assert 200; the missing-If-Match
+    legs assert 428 CARD_REVISION_REQUIRED and an invalid-revision leg asserts 400
+    CARD_REVISION_INVALID; CANOPY_TEST_ALLOW_SHARED_DB=1 go test -count=1 -run ''TestAPI_Card''
+    ./internal/handler/ exits 0 with 0 failures; and .github/workflows/build.yml gains
+    a step that runs the handler card API integration tests DB-backed (CANOPY_REQUIRE_DB=1,
+    DSN pointed at the CI postgres service) so a future 428-vs-400 contract drift
+    fails CI instead of hiding.'
+  status: complete
+  created_at: '2026-09-23T02:16:06.725249+00:00'
+  completed_at: '2026-09-23T02:35:07.574476+00:00'
