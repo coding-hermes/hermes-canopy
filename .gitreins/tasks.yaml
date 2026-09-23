@@ -3471,3 +3471,16 @@ tasks:
   status: complete
   created_at: '2026-09-23T05:15:10.269275+00:00'
   completed_at: '2026-09-23T05:24:58.253631+00:00'
+- id: DF-HERMES-CANOPY-55
+  title: README/SELF_HOST install docs assume Go toolchain and sudo a fresh user lacks
+  criteria:
+  - 'Fresh-user install path is honest without a Go toolchain: (1) README Quick Start
+    prerequisites block lists Go 1.25+ alongside PostgreSQL/Node before showing ''make
+    build''; (2) SELF_HOST.md Option 1 example installs the binary without sudo (~/bin
+    with mkdir -p and a PATH note, no root required); (3) SELF_HOST.md Option 2 notes
+    the docker compose plugin requirement and how to check for it; (4) git diff --stat
+    touches only README.md and docs/SELF_HOST.md; (5) docs-only diff so tier-1 short-circuits
+    - report that honestly rather than as a gate.'
+  status: complete
+  created_at: '2026-09-23T06:53:14.352664+00:00'
+  completed_at: '2026-09-23T06:58:45.205075+00:00'

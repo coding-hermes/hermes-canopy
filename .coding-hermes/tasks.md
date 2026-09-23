@@ -3230,3 +3230,20 @@ Pending **24→24**: **DF-HERMES-CANOPY-46 (P1, proxy Bearer-suppression — top
 - Board: task_completed events 791-796 + audit 797; rows closed with judge/commit/worker_summary; header ticks_total 557, last_commit 207a8e20→(board commit); commit `854b21cc` pushed origin+gitlab (0 unpushed both). Worktrees reaped, manifest marked merged. DuckBrain /ticks/tick557-df50-51-52-wave-merged (b327b408).
 
 **NOT DONE / residual:** DF-51's 23502→"database unavailable" 503 mislabel left unchanged per brief (candidate row if the mislabel class is worth one); DF-47 (P3 metadata base64), DF-53/54/55 (P3/P2), DF-52-P4 variant (writeServiceError ErrTreeNotFound case), GAP-080 phase 2b UI slider, GAP-076/078/081 owner-ruling parked. Off-by-one submission sub_267264 queued (3m29s est) — check its answer next tick before re-deriving.
+
+## Tick 558
+
+**Scheduler tick:** hermes-canopy-2026-09-23-06-41-29 · 2026-09-23 · serial tick (WAVE_BUDGET=1)
+
+**Pick:** DF-HERMES-CANOPY-55 (P2, dogfood-2026-09-23-topics-refs) — install docs assume a Go toolchain and sudo a fresh user lacks. Premise re-verified at HEAD: README Quick Start `# Prerequisites` block listed PostgreSQL+Node only before showing `make build` (the full `go 1.25+` list lived only in the far-lower Development section); docs/SELF_HOST.md Option 1 example used `sudo mv canopyd /usr/local/bin/`; no compose-plugin note on Option 2. Premise delta recorded: the row's "SELF_HOST says Quick Start is one command away" claim does NOT reproduce — no such wording in README.md or SELF_HOST.md (grep); the three real fixes stand.
+
+**Work:** worker `gpt-5.6-luna@openai-codex` (proven lane; glm-5.3-flash@zai-glm-default stays demoted), attempt 1, live in ~60s (tree writes visible; 0-byte luna log is normal), committed `af848183` (+7/−4, exactly README.md + docs/SELF_HOST.md):
+- README.md: `Go 1.25+ (for build-from-source)` added to the Quick Start prerequisites block.
+- docs/SELF_HOST.md Option 1: `sudo mv /usr/local/bin/` → `mkdir -p ~/bin && mv canopyd ~/bin/` + ~/bin-PATH note + `~/bin/canopyd -version` verify (no root needed).
+- docs/SELF_HOST.md Option 2: blockquote — requires Docker Compose v2 plugin, check `docker compose version`, package `docker-compose-plugin` on Debian/Ubuntu.
+
+**Verify:** foreman read the full diff against the brief's 5 ACs (all present; scope exactly 2 files; AGENTS.md untouched; no Quick Start reorder). Judge `a5883986` tier1 PASS (docs-only short-circuit, confirmed in guard log — reported honestly per DF-8 doctrine) + tier2 PASS/COMPLETE 5/5 with independent per-criterion evidence.
+
+**Land:** pushed origin `d6f38341..af848183` + gitlab `a0f281dd..af848183` — 0 unpushed both. CI health at tick start: 3/3 recent runs success (no INT-CI filing). Board: task_completed event + audit appended, row flipped complete, header ticks_total 557→558, last_commit→af848183. DuckBrain /ticks/tick558-df55-install-docs-honesty.
+
+**NOT DONE / residual:** DF-47 (P3 metadata base64 round-trip), DF-53/54 (P3 topics/refs gaps), DF-56 (P4 writeServiceError ErrTreeNotFound), GAP-080 phase 2b UI slider, GAP-081 scope honesty, GAP-076/078 owner-ruling parked, FTR-06/PL-04..06 mega-specs (need own design passes), QA-* bunker-infra rows (not project-owned), DF-25 (watch). Off-by-one sub_267264 answer check still owed.
