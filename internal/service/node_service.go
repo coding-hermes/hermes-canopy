@@ -8,6 +8,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -246,6 +247,79 @@ func (n NodeDetail) MarshalJSON() ([]byte, error) {
 		EditedAt:          n.EditedAt,
 		DeletedAt:         n.DeletedAt,
 	})
+}
+
+// UnmarshalJSON accepts native JSON metadata emitted by MarshalJSON and the
+// legacy base64 string emitted by encoding/json for []byte metadata. Null or
+// omitted metadata remains nil, while non-JSON metadata is rejected so the
+// storage representation cannot silently change shape.
+func (n *NodeDetail) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		ID                uuid.UUID       `json:"id"`
+		TreeID            uuid.UUID       `json:"treeId"`
+		ParentID          *uuid.UUID      `json:"parentId"`
+		AuthorID          uuid.UUID       `json:"authorId"`
+		AuthorDisplayName string          `json:"authorDisplayName"`
+		Content           string          `json:"content"`
+		ContentFormat     string          `json:"contentFormat"`
+		NodeType          string          `json:"nodeType"`
+		SequenceNum       int64           `json:"sequenceNum"`
+		Metadata          json.RawMessage `json:"metadata"`
+		Depth             int             `json:"depth"`
+		ChildCount        int             `json:"childCount"`
+		CreatedAt         time.Time       `json:"createdAt"`
+		EditedAt          *time.Time      `json:"editedAt"`
+		DeletedAt         *time.Time      `json:"deletedAt"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	metadata, err := decodeNodeMetadata(wire.Metadata)
+	if err != nil {
+		return err
+	}
+
+	*n = NodeDetail{
+		ID:                wire.ID,
+		TreeID:            wire.TreeID,
+		ParentID:          wire.ParentID,
+		AuthorID:          wire.AuthorID,
+		AuthorDisplayName: wire.AuthorDisplayName,
+		Content:           wire.Content,
+		ContentFormat:     wire.ContentFormat,
+		NodeType:          wire.NodeType,
+		SequenceNum:       wire.SequenceNum,
+		Metadata:          metadata,
+		Depth:             wire.Depth,
+		ChildCount:        wire.ChildCount,
+		CreatedAt:         wire.CreatedAt,
+		EditedAt:          wire.EditedAt,
+		DeletedAt:         wire.DeletedAt,
+	}
+	return nil
+}
+
+func decodeNodeMetadata(raw json.RawMessage) ([]byte, error) {
+	metadata := bytes.TrimSpace(raw)
+	if len(metadata) == 0 || bytes.Equal(metadata, []byte("null")) {
+		return nil, nil
+	}
+	if metadata[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(metadata, &encoded); err != nil {
+			return nil, err
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("node metadata is invalid legacy base64: %w", err)
+		}
+		metadata = decoded
+	}
+	if !json.Valid(metadata) {
+		return nil, fmt.Errorf("node metadata is invalid JSON")
+	}
+	return append([]byte(nil), metadata...), nil
 }
 
 // EdgeDetail is the edge-side companion of a created node. Field names

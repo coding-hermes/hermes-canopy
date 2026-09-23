@@ -145,17 +145,9 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	metadata := bytes.TrimSpace(wire.Metadata)
-	if len(metadata) > 0 && metadata[0] == '"' {
-		var encoded string
-		if err := json.Unmarshal(metadata, &encoded); err == nil {
-			if decoded, err := base64.StdEncoding.DecodeString(encoded); err == nil && json.Valid(decoded) {
-				metadata = decoded
-			}
-		}
-	}
-	if len(metadata) > 0 && !json.Valid(metadata) {
-		return fmt.Errorf("node metadata is invalid JSON")
+	metadata, err := decodeNodeMetadata(wire.Metadata)
+	if err != nil {
+		return err
 	}
 
 	*n = Node{
@@ -174,6 +166,28 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		DeletedAt:     wire.DeletedAt,
 	}
 	return nil
+}
+
+func decodeNodeMetadata(raw json.RawMessage) ([]byte, error) {
+	metadata := bytes.TrimSpace(raw)
+	if len(metadata) == 0 || bytes.Equal(metadata, []byte("null")) {
+		return nil, nil
+	}
+	if metadata[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(metadata, &encoded); err != nil {
+			return nil, err
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("node metadata is invalid legacy base64: %w", err)
+		}
+		metadata = decoded
+	}
+	if !json.Valid(metadata) {
+		return nil, fmt.Errorf("node metadata is invalid JSON")
+	}
+	return append([]byte(nil), metadata...), nil
 }
 
 // MultiReferenceMetadata is the reserved `metadata.multi_reference`

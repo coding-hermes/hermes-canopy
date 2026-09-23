@@ -57,3 +57,30 @@ func TestNodeJSONUnmarshalAcceptsLegacyBase64Metadata(t *testing.T) {
 		t.Fatalf("decoded legacy metadata = %s, want %s", decoded.Metadata, metadata)
 	}
 }
+
+func TestNodeJSONUnmarshalPreservesNullAndRejectsInvalidMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		wire    string
+		wantNil bool
+		wantErr bool
+	}{
+		{name: "null", wire: `{"metadata":null}`, wantNil: true},
+		{name: "missing", wire: `{}`, wantNil: true},
+		{name: "invalid base64", wire: `{"metadata":"not-base64"}`, wantErr: true},
+		{name: "invalid decoded JSON", wire: `{"metadata":"` + base64.StdEncoding.EncodeToString([]byte("not json")) + `"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var decoded Node
+			err := json.Unmarshal([]byte(tt.wire), &decoded)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("UnmarshalJSON error = %v, wantErr=%v", err, tt.wantErr)
+			}
+			if !tt.wantErr && tt.wantNil && decoded.Metadata != nil {
+				t.Fatalf("decoded metadata = %s, want nil", decoded.Metadata)
+			}
+		})
+	}
+}
