@@ -3206,3 +3206,14 @@ Pending **24→24**: **DF-HERMES-CANOPY-46 (P1, proxy Bearer-suppression — top
 **BOARD:** tasks.jsonl DF-HERMES-CANOPY-49 → complete with full closure keys (reasoning/commit_hash/worker_summary/files_changed/attempts=3-judge-rounds/primary_model=gpt-5.6-luna/primary_provider=openai-codex/guard_result=PASS/ci_result=GREEN run 35810977638/judge_verdict=da5dfd88); event 781 task_completed; header → ticks_total 555, last_commit 1fe262c5. Worktree removed + branch deleted post-merge; tick-554 backups (.t554.bak) and .gitreins/logs cleaned.
 
 **NOT DONE / residual:** DF-47 (P3, node metadata base64 round-trip) and DF-48 (P3, MCP/REST FK-vs-NOT_TREE_MEMBER asymmetry) are the next most tractable; GAP-080 phase 2b (UI slider) still open; GAP-076/078/081 remain owner-ruling parked.
+
+## Tick 556 — hermes-canopy-2026-09-23-02-55-00 (2026-09-23)
+
+**OK — DF-HERMES-CANOPY-48 COMPLETE.** Worker wave (1 worker, WAVE_BUDGET 3, single dispatchable in-repo row): `wt/DF-HERMES-CANOPY-48` (base bf0f7e02), worker gpt-5.6-luna@openai-codex, commit `fceae828` (+229/−5, 7 files), merged `--no-ff` as `dc714d3b`, pushed origin+gitlab (0 unpushed both).
+
+- Fix: MCP create_node membership/deleted gate (TreeMemberChecker, nil-tolerant, membersRepo wired server.go:483) + FK 23503/fk_nodes_tree → ErrTreeNotFound (constraint-name-guarded, db+service layers); connection failures still "database unavailable"; REST untouched.
+- Evidence: merged-tree build+vet OK, golangci-lint 0 issues, `CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/handler/...` ok 379s; TestMCPCreateNodeMembershipGate 5/5, TestClassifyNodeInsertError 3/3, TestPGNodeRepo_Create_MissingTreeReturnsSentinel real-PASS.
+- Board: row 377 → complete (reasoning/commit_hash/worker_summary), event 785, header ticks_total 556, commit `d3794538`; manifest merged. Worktree+branch reaped.
+- Off-by-one: discover go-fk-violation-error-classification / go-service-error-classification → not_found (honest no-solution).
+- Judge: gitreins task create+start+complete run; tier2 in flight background at tick time.
+- Mid-tick: dogfood satellite landed `0a7af9b4` filing DF-50 (P0) + DF-51 (P1) → next-tick picks. CI: green on last 3 runs pre-tick; post-push runs pending at tick time.
