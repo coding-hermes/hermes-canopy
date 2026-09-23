@@ -526,6 +526,8 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 	case errors.Is(err, service.ErrNodeNotFound),
 		errors.Is(err, service.ErrParentNotFound):
 		writeError(w, 404, "NOT_FOUND", err.Error())
+	case errors.Is(err, service.ErrTreeNotFound):
+		writeError(w, 404, "TREE_NOT_FOUND", err.Error())
 	case errors.Is(err, service.ErrNodeDeleted),
 		errors.Is(err, service.ErrNodeAlreadyDeleted):
 		writeError(w, 410, "GONE", err.Error())
