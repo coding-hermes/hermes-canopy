@@ -909,7 +909,19 @@ GET /api/v1/graph/trees/{tree_id}/stats
 
 ## Topics
 
-Mounted at `/api/v1/topics`. All require auth.
+Mounted at `/api/v1/topics`. The CRUD routes require a JWT Bearer token.
+The tree-scoped search, preview, and reference routes below require the same
+JWT authentication plus membership in the `{tree_id}` tree. They return the
+standard error envelope:
+
+```json
+{"error":{"code":"…","message":"…"}}
+```
+
+Tree-scoped middleware errors are `400 INVALID_TREE_ID`, `401 TOKEN_MISSING`
+or `TOKEN_INVALID`, `403 NOT_TREE_MEMBER`, `410 TREE_DELETED`, and `500
+INTERNAL_ERROR` (membership/tree-state verification). The route-specific
+errors are listed with each endpoint.
 
 ### List Topics
 
@@ -985,7 +997,291 @@ PATCH /api/v1/topics/{topic_id}
 DELETE /api/v1/topics/{topic_id}
 ```
 
-**Response (200):** Archived topic detail.
+**Response (204):** Empty body. The handler archives the topic and writes no
+response payload.
+
+### Search Topics in a Tree
+
+```
+GET /api/v1/trees/{tree_id}/topics/search
+```
+
+**Query params:**
+
+- `q` (string, required; after trimming, 2–200 characters)
+- `limit` (int, default 20, maximum 100)
+- `offset` (int, default 0)
+- `status` (`active` by default; `archived` or `all` are also supported)
+- `sort` (`relevance` by default; `last_active` or `title` are also supported)
+
+**Response (200):**
+```json
+{
+  "results": [
+    {
+      "topic_id": "uuid",
+      "tree_id": "uuid",
+      "title": "string",
+      "slug": "string",
+      "snippet": "text with <mark>matching terms</mark>",
+      "status": "active",
+      "node_count": 12,
+      "last_active_at": "RFC3339",
+      "relevance": 0.42
+    }
+  ],
+  "total": 1,
+  "query_time_ms": 3
+}
+```
+
+`snippet` is generated with `<mark>` around highlighted search terms. An
+empty result set is returned as `"results": []`.
+
+**Errors:** `SEARCH_QUERY_TOO_SHORT` (400, parameter `q`),
+`SEARCH_QUERY_TOO_LONG` (400, parameter `q`), `SEARCH_STOP_WORDS_ONLY` (400),
+`SEARCH_INVALID_SORT` (400, parameter `sort`), `SEARCH_INVALID_LIMIT` (400,
+parameter `limit`), `INTERNAL_ERROR` (500).
+
+### Recent Topics in a Tree
+
+```
+GET /api/v1/trees/{tree_id}/topics/recent
+```
+
+**Query params:** `limit` (int, default 10; values above 50 are capped at 50).
+
+**Response (200):** The `topics` array uses the same result object fields as
+`Search Topics` (`topic_id`, `tree_id`, `title`, `slug`, `snippet`, `status`,
+`node_count`, `last_active_at`, and `relevance`). For recent topics, results
+are ordered by last activity and `relevance` is `0.0`.
+
+```json
+{
+  "topics": [
+    {
+      "topic_id": "uuid",
+      "tree_id": "uuid",
+      "title": "string",
+      "slug": "string",
+      "snippet": "topic description excerpt",
+      "status": "active",
+      "node_count": 12,
+      "last_active_at": "RFC3339",
+      "relevance": 0
+    }
+  ]
+}
+```
+
+An empty result set is returned as `"topics": []`. **Errors:**
+`INTERNAL_ERROR` (500).
+
+### Topic Preview
+
+```
+GET /api/v1/trees/{tree_id}/topics/{topic_id}/preview
+```
+
+This endpoint has no query parameters. It returns up to three plain-text
+snippets from the topic's earliest nodes, plus preview metadata.
+
+**Response (200):**
+```json
+{
+  "topic_id": "uuid",
+  "title": "string",
+  "snippets": ["first plain-text snippet", "second plain-text snippet"],
+  "participant_count": 2,
+  "node_count": 12,
+  "last_active_at": "RFC3339",
+  "last_active_rel": "3h ago"
+}
+```
+
+**Errors:** `INVALID_TOPIC_ID` (400), `TOPIC_NOT_FOUND` (404),
+`INTERNAL_ERROR` (500).
+
+## References
+
+The reference routes are also tree-scoped, authenticated, and membership-gated.
+They resolve `#topic-slug` references within the selected tree.
+
+### Reference Autocomplete
+
+```
+GET /api/v1/trees/{tree_id}/references/autocomplete
+```
+
+**Query params:**
+
+- `prefix` (string, required; 1–100 characters; whitespace-only prefixes are rejected)
+- `include` (`active` by default; `archived` or `all`)
+- `limit` (int, default 10; values above 20 are capped at 20)
+
+**Response (200):**
+```json
+{
+  "results": [
+    {
+      "slug": "database-schema",
+      "title": "Database schema",
+      "match_type": "prefix",
+      "status": "active",
+      "node_count": 12
+    }
+  ]
+}
+```
+
+`match_type` is `prefix` or `contains`. An empty result set is returned as
+`"results": []`.
+
+**Errors:** `REFERENCE_PREFIX_TOO_SHORT` (400, parameter `prefix`),
+`REFERENCE_PREFIX_TOO_LONG` (400, parameter `prefix`),
+`REFERENCE_INVALID_INCLUDE` (400, parameter `include`),
+`REFERENCE_RESOLUTION_FAILED` (500).
+
+An empty `prefix` returns:
+```json
+{"error":{"code":"REFERENCE_PREFIX_TOO_SHORT","message":"Autocomplete prefix must be at least 1 character","param":"prefix"}}
+```
+
+### Resolve References
+
+```
+POST /api/v1/trees/{tree_id}/references/resolve
+```
+
+This is a non-persisting resolution pass. The request `content` is raw
+message content containing zero or more `#topic-slug` references; it is not a
+node ID.
+
+**Request body:**
+```json
+{
+  "content": "See #database-schema and #missing-topic",
+  "max_nodes": 500,
+  "with_context": false
+}
+```
+
+`content` may be at most 50,000 characters. `max_nodes` and `with_context`
+are accepted request fields; the current resolve handler returns resolution
+metadata only and does not add a context payload to this response.
+
+**Response (200):** `references` contains resolved references and `not_found`
+contains parsed references that did not resolve. `not_found` and `warning` are
+omitted when empty. The non-persisting handler does not receive a node ID, so
+`node_id` is the zero UUID in this response.
+
+```json
+{
+  "node_id": "00000000-0000-0000-0000-000000000000",
+  "tree_id": "uuid",
+  "references": [
+    {
+      "reference": {
+        "raw": "#database-schema",
+        "slug": "database-schema",
+        "offset": 4,
+        "length": 16
+      },
+      "topic": {
+        "id": "uuid",
+        "treeId": "uuid",
+        "title": "Database schema",
+        "slug": "database-schema",
+        "description": "string",
+        "status": "active",
+        "nodeCount": 12,
+        "topicTags": ["database"],
+        "createdAt": "RFC3339"
+      }
+    }
+  ],
+  "not_found": [
+    {"raw":"#missing-topic","slug":"missing-topic","offset":25,"length":14}
+  ],
+  "too_many": false,
+  "total_nodes_in_scope": 12
+}
+```
+
+`archivedAt` (RFC3339) may also be present in the topic summary when the
+resolved topic is archived.
+
+When more than five and no more than ten distinct references are found,
+`too_many` is `true` and `warning` is included. More than ten distinct
+references returns an error.
+
+**Errors:** `INVALID_JSON` (400), `REFERENCE_CONTENT_TOO_LONG` (400,
+parameter `content`), `REFERENCES_TOO_MANY` (400),
+`REFERENCE_RESOLUTION_FAILED` (500).
+
+### Inject Topics and References
+
+```
+POST /api/v1/trees/{tree_id}/references/inject
+```
+
+**Request body:** At least one of `topic_ids` or `references` is required.
+`topic_ids` contains UUIDs; `references` contains raw `#topic-slug` strings.
+`max_nodes` is the per-topic node limit and defaults to 500 when omitted or
+non-positive.
+
+```json
+{
+  "topic_ids": ["uuid"],
+  "references": ["#database-schema"],
+  "max_nodes": 500
+}
+```
+
+**Response (200):**
+```json
+{
+  "context": {
+    "topics": [
+      {
+        "topic_id": "uuid",
+        "title": "Database schema",
+        "slug": "database-schema",
+        "root_node_id": "uuid",
+        "nodes": [
+          {
+            "id": "uuid",
+            "tree_id": "uuid",
+            "author_id": "uuid",
+            "content": "Node content",
+            "created_at": "RFC3339",
+            "sequence_num": 1
+          }
+        ],
+        "total_nodes": 1,
+        "has_more": false,
+        "context_hash": "sha256"
+      }
+    ],
+    "merged_text": "--- topic boundary: database-schema ...",
+    "total_nodes": 1,
+    "truncated": false
+  },
+  "event_id": "sse-event-id",
+  "too_many": false
+}
+```
+
+The response's `context` is a merged `MultiTopicContext`. The current handler
+always emits `too_many`; its `not_found` and `warning` fields are not populated
+by the handler and therefore are omitted. Duplicate topic IDs and references
+are merged before the five-topic limit is applied.
+
+**Errors:** `INVALID_JSON` (400), `REFERENCES_INVALID_INPUT` (400),
+`REFERENCES_TOO_MANY_TOPICS` (400, parameter `topic_ids`), `TOPIC_NOT_FOUND`
+(404), `TOPIC_DELETED` (410), `TOPIC_ARCHIVED_INJECTION` (409),
+`CONTEXT_TOO_LARGE` (413), `REFERENCE_INJECTION_FAILED` (500),
+`REFERENCE_RESOLUTION_FAILED` (500).
 
 ---
 
