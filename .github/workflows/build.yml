@@ -102,6 +102,12 @@ jobs:
         env:
           CANOPY_REQUIRE_DB: "1"
 
+      - name: PG-backed card API integration tests
+        run: go test ./internal/handler/ -run 'TestAPI_Card' -count=1 -timeout=600s
+        env:
+          CANOPY_TEST_DB_URL: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
+          CANOPY_REQUIRE_DB: "1"
+
       # ── Frontend ──────────────────────────────────────────────
 
       - uses: actions/setup-node@v4

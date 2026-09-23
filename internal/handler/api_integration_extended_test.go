@@ -354,6 +354,7 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 	updateBody := map[string]any{}
 	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
 		"/api/v1/cards/"+card.ID.String(), ownerID, updateBody)
+	req.Header.Set("If-Match", fmt.Sprintf("%d", card.Revision))
 	resp, err = srv.Server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("PATCH card missing data: %v", err)
@@ -367,6 +368,7 @@ func TestAPI_CardUpdateValidation(t *testing.T) {
 	// PATCH with null data → 400.
 	req = apiRequest(t, srv.Server.URL, http.MethodPatch,
 		"/api/v1/cards/"+card.ID.String(), ownerID, map[string]any{"data": nil})
+	req.Header.Set("If-Match", fmt.Sprintf("%d", card.Revision))
 	resp, err = srv.Server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("PATCH card null data: %v", err)
