@@ -18,6 +18,7 @@ impersonates canopyd's relevant contract. Python 3 standard library only.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import http.client
 import json
@@ -46,6 +47,14 @@ ASSET_BODY = (b"/* CANOPY_ASSET_MARKER_7c1d */\n"
 #: JWT-shaped (three base64url segments) — the proxy only ever concatenates it.
 INJECTED_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjYW5vcHktcHJveHktdGVzdCJ9.c2lnbmF0dXJl"
 CLIENT_TOKEN = "client-supplied-bogus-jwt"
+BASIC_USER = "canopy"
+BASIC_PASSWORD = "secret"
+
+
+def basic_header() -> str:
+    credentials = f"{BASIC_USER}:{BASIC_PASSWORD}".encode()
+    return "Basic " + base64.b64encode(credentials).decode("ascii")
+
 
 #: How long the stub upstream waits between flushing SSE event 1 and writing
 #: event 2. Comfortably longer than the proxy can take to relay the first event,
@@ -230,7 +239,8 @@ def wait_until_serving(fx: SimpleNamespace, timeout: float = READY_TIMEOUT_SECON
                 f"proxy exited with {fx.proc.returncode} before serving anything; "
                 f"argv={fx.argv}\nstderr:\n{fx.stderr_text()}")
         try:
-            resp, body = http_get(fx.port, "/", timeout=2.0)
+            resp, body = http_get(fx.port, "/", headers=getattr(fx, "readiness_headers", {}),
+                                  timeout=2.0)
             if resp.status == 200 and INDEX_MARKER.encode() in body:
                 return
             last = f"status={resp.status} body={body[:120]!r}"
@@ -279,7 +289,8 @@ def running_proxy(*, token: str | None = None, basic: tuple[str, str] | None = N
             return log_path.read_text(errors="replace")
 
         fx = SimpleNamespace(proc=proc, port=port, dist=dist, stub=stub,
-                             argv=argv, log_path=log_path, stderr_text=stderr_text)
+                             argv=argv, log_path=log_path, stderr_text=stderr_text,
+                             readiness_headers={"Authorization": basic_header()} if basic else {})
         try:
             wait_until_serving(fx)
             yield fx
@@ -428,6 +439,44 @@ class ProxyTokenInjectionTests(unittest.TestCase):
         self.assertEqual(f"Bearer {CLIENT_TOKEN}", seen[-1]["authorization"],
                          "the client's Authorization must pass through untouched")
         self.assertNotIn(INJECTED_TOKEN, seen[-1]["authorization"])
+
+
+class ProxyBasicGateAuthorizationTests(unittest.TestCase):
+    """The proxy gate consumes Basic while preserving or injecting upstream auth."""
+
+    def test_basic_gate_is_consumed_and_token_is_injected_upstream(self) -> None:
+        with running_proxy(token=INJECTED_TOKEN, basic=(BASIC_USER, BASIC_PASSWORD)) as fx:
+            resp, body = http_get(fx.port, "/api/v1/trees",
+                                  headers={"Authorization": basic_header()})
+
+        self.assertEqual(200, resp.status, body.decode())
+        seen = fx.stub.requests_for("/api/v1/trees")
+        self.assertEqual(1, len(seen), seen)
+        self.assertEqual(f"Bearer {INJECTED_TOKEN}", seen[-1]["authorization"])
+        self.assertNotEqual(basic_header(), seen[-1]["authorization"])
+
+    def test_client_bearer_passes_through_without_injection(self) -> None:
+        client_bearer = f"Bearer {CLIENT_TOKEN}"
+        # Basic and Bearer cannot both occupy the single HTTP Authorization header;
+        # exercise client Bearer pass-through on the same --token setup without a gate.
+        with running_proxy(token=INJECTED_TOKEN) as fx:
+            resp, body = http_get(fx.port, "/api/v1/trees",
+                                  headers={"Authorization": client_bearer})
+
+        self.assertEqual(200, resp.status, body.decode())
+        seen = fx.stub.requests_for("/api/v1/trees")
+        self.assertEqual(1, len(seen), seen)
+        self.assertEqual(client_bearer, seen[-1]["authorization"])
+
+    def test_basic_gate_strips_basic_without_token(self) -> None:
+        with running_proxy(basic=(BASIC_USER, BASIC_PASSWORD)) as fx:
+            resp, body = http_get(fx.port, "/api/v1/trees",
+                                  headers={"Authorization": basic_header()})
+
+        self.assertEqual(401, resp.status, body.decode())
+        seen = fx.stub.requests_for("/api/v1/trees")
+        self.assertEqual(1, len(seen), seen)
+        self.assertIsNone(seen[-1]["authorization"])
 
 
 # --------------------------------------------------------------------------- #
