@@ -3350,3 +3350,67 @@ last_tick 11:08:42; last_commit stays 2cf6a5ee (no content commit this tick).
 
 **NOT DONE / residual:** unchanged — GAP-080 phase 3 and GAP-081 wait on owner rulings;
 do not re-derive the idle rationale next tick without re-scanning the live pending set.
+
+
+## Tick 575 — hermes-canopy-2026-09-24-11-27-42 (2026-09-24) — WORK: REVIEW-CANOPY-004 closed (free-form result normalisation)
+
+**Verdict: WORK (foreman-direct, board-only). First real work after a 10-tick idle streak; the
+pick came from re-deriving an inherited dismissal, not from the idle rationale.**
+
+**The pick:** REVIEW-CANOPY-004 (P3, review #14 2026-09-22) — "134 of 199 board warnings are the
+free-form guard_result/ci_result class; fix once with the shared normaliser". Ticks 571-574 all
+dismissed it as "targets the shared normalizer, not canopy-owned code". Re-derived at HEAD:
+the class had SHRUNK 134 -> 12 since the review (vocabulary-enforcing writes cleaned the rest),
+but 12 remained — 11 x `ci_result "PASS"`, 1 x `ci_result` prose carrying run shas
+("GREEN — runs on dc714d3b, d3794538, 8ed2e4e7 all success first attempt"), 1 x
+`guard_result "pass"` — and `boardctl update --normalize` fixes none of them (validator:
+"0 fixable by 'boardctl update <id> --normalize'"). The row's own AC is scoped to THIS board's
+warnings reaching zero, which makes it canopy-owned board work; board surgery is
+foreman-exclusive (workers never touch board rows), so no worker was dispatched.
+
+**The action:**
+- Built the shared normaliser `~/.hermes/scripts/normalize-board-results.py` (fleet-shared
+  location; this board is its first consumer; terminal-jail/duckbrain normalisation is still
+  NOT done — the row's fleet-wide ambition remains open there). Vocabulary mapping
+  {PASS,FAIL,SKIP} / {GREEN,RED,SKIP} with prefix rules + pass/green/success equivalence;
+  original prose preserved verbatim in `review_notes` as
+  `<field> (pre-normalization 2026-09-24): <value>` (the proven gitreins 5a0e83c pattern);
+  per-line serialization-style detection (all 13 targets spaced-ascii) so untouched lines are
+  byte-identical; refuses to guess unknown values; dry-run by default.
+- One real defect caught by spot-check BEFORE commit: the first apply wrote provenance but did
+  NOT reassign the field values (`row[field] = new` missing) — 13 rows would have carried
+  provenance for a normalization that never happened. Pre-image restored from
+  /tmp/tasks.jsonl.pre-normalize, script fixed, re-applied. numstat 13/13 then 14/14
+  (row close) — zero churn, line count unchanged.
+- Applied to this board: 13 rows normalized, result-class warnings 12 -> 0, board warnings
+  204 -> 192 (validator OK), 391 rows / 373 complete / 18 pending (last-wins) / 0 parse
+  failures unchanged. Events 843 (audit) + 844 (task_completed) appended; header
+  ticks_total 574 -> 575, ticks_idle 9 -> 0, last_tick 11:45:02; REVIEW-CANOPY-004 closed with
+  worker_status foreman-direct + worker_summary + foreman_note + guard_result SKIP
+  (board-only diff: tier-1 has no source files to guard — the load-bearing evidence is the
+  validator delta and the byte-identity numstat).
+
+**Verification (all run this tick):** pre-image snapshot + restore round-trip; dry-run census
+matched the jq value census exactly (13); post-apply `git diff --numstat` 13/13; spot-checks on
+GAP-034/GAP-042/DF-HERMES-CANOPY-48 showed typed values + verbatim prose provenance;
+boardctl validate OK (192 warnings, zero result-class); jq counts stable 391/18-pending;
+board.jsonl header bumped in place, still single-line JSON.
+
+**gitreins lifecycle:** task REVIEW-CANOPY-004 created + started BEFORE the work; `task complete`
+fires immediately after this commit (board-only diff -> tier-1 SKIP expected, verdict follows).
+
+**Off-by-one:** pre-solve checked before designing (`jsonl board result-value normalization…` ->
+not_found; corpus has related board-JSONL classes but none covering this). If the normaliser
+needed debugging beyond the one-line fix, the defect (provenance-without-reassignment caught by
+post-write verification) is the non-trivial lesson; submitting as post-debug cadence would apply
+if more than the one fix had been needed.
+
+**Bookkeeping:** tasks.jsonl 14 lines changed (13 normalisations + 1 row close), events.jsonl +2
+lines, board.jsonl header edited in place, tasks.md +1 section. No code files touched; no deploy
+implications; CI will run on this push and is expected green (docs/JSONL-only diff).
+
+**NOT DONE / residual:** the normaliser now exists but has ONE consumer. The fleet-wide intent
+(gitreins already repaired locally; terminal-jail 145, duckbrain 186 and other reviewed boards
+still carry free-form values) needs either adoption per project board or a scheduled sweep —
+filed as REVIEW-CANOPY-004 residual, not silently dropped. GAP-080 phase 3 and GAP-081 remain
+decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra owned.
