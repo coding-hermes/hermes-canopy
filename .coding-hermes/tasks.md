@@ -3275,3 +3275,15 @@ Pending **24→24**: **DF-HERMES-CANOPY-46 (P1, proxy Bearer-suppression — top
 **Land:** `ff5c46f0` pushed to origin **and** gitlab (0 unpushed, 0 remote-ahead both ways). Board: rows updated (DF-54 complete + full closure key set; GAP-080 `worker_status`/`foreman_note`), events 811/812 (`task_completed`) + 813 (recovery `audit`), header `ticks_total` 559→561 / `last_commit`→`ff5c46f0`, manifest closed. CI health at tick start: the three most recent runs were all **success** (no INT-CI row filed).
 
 **NOT DONE / residual:** GAP-080 phase 3 (summarization) needs the summarizer/retention decision; `topic_members` rows are deliberately **not** exported (per-profile membership, not tree structure — named, not implied); a dangling-but-well-formed cursor yields an empty page rather than a 400 (standard keyset semantics; the UUID format itself IS validated). Off-by-one post-debug answers queued for this class: `go-filepath-join-grep-false-negative` (already in corpus), plus the perf-threshold-under-load class recorded on the row.
+
+## Tick 572 — hermes-canopy-2026-09-24-10-12-37 (2026-09-24)
+
+**IDLE — 7th consecutive clean idle, this time with independently re-derived evidence (no dispatch, no gitreins lifecycle, board files + tasks.md only).**
+
+Board re-scan at HEAD 6a475018: 391 rows / 19 pending (last-wins) / 0 parse failures. Pending set verified row-by-row: GAP-080 phase 3 (summarization) and GAP-081 remain decision-bound on owner rulings; GAP-080 phases 1/2a/2b/4a/4b/5a/5b already landed (tick 561 recovery); QA-HERMES-CANOPY-* rows are bunker/fleet-infra owned; FTR-06/PL-04/PL-05/PL-06 are mega-specs needing their own design passes; DF-25 is a P4 watch; REVIEW-CANOPY-004 targets the shared fleet normalizer. Wave check: fewer than 2 mutually independent implementation tasks → WAVE_BUDGET=3 not exercised, serial path moot.
+
+Fresh verification (all run this tick, not inherited): `git fsck --no-dangling` clean; `go build ./...` rc=0; `go vet ./...` rc=0; frontend `npm run build` rc=0; `npx oxlint src` rc=0 (2 pre-existing warnings, no new); CI latest 3 runs GREEN incl. tip 6a475018 (run of 10:06Z, success); release-surface spot-check of RELENG-CANOPY-2026-09-24 confirmed live: GitHub Release v0.1.0 published 2026-09-21 with 5 platform binaries + sha256sums.
+
+Bookkeeping: event 840 (idle audit) appended; header ticks_total 571→572, ticks_idle 6→7, last_tick/updated_at bumped; last_commit stays 2cf6a5ee (no content commit this tick). Repo was clean at tick start (only untracked .gitreins/logs/ + tasks.yaml.lock, not tick-owned, left in place).
+
+**NOT DONE / residual:** unchanged from tick 571 — GAP-080 phase 3 and GAP-081 wait on owner rulings; off-by-one sub_267264 answer check still owed. Do not re-derive the idle rationale next tick without re-scanning the live pending set.
