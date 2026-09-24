@@ -3504,3 +3504,46 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
   path moot.
 - gitreins: 251 tasks, all complete; 0 in_progress/pending — nothing to steward.
   Off-by-one :8766: no debugging performed this tick; no new pre-solve candidate.
+
+## Tick 580 — hermes-canopy-2026-09-24-21-27-14 (2026-09-24) — WORK: dead-worker recovery; QA-31/32 landed+judged, QA-24/25 stale-class closes
+
+- Verdict: WORK. Tick 579 (scheduler hermes-canopy-2026-09-24-19-44-31) dispatched worker
+  step-3.7-flash@stepfun for the paired QA-31+QA-32 brief INTO THE MAIN TREE (event 853) and
+  died mid-task ~20:03Z: no process left, HEAD unmoved, gitreins task QA-HERMES-CANOPY-31-32
+  left in_progress, the two battery scripts surviving untracked. Per the dead-worker doctrine
+  the surviving work was landed FOREMAN-DIRECT, not re-dispatched.
+- Worker's surviving work verified before landing: BOTH fixes were already applied to
+  ~/.hermes/scripts/bunker-qa.sh (mtime 20:03Z) — FIX 3 node+npm bootstrap (node-v22.15.0 into
+  ~/tools/node, HARNESS_NODE=ok/missing verification cell, ENV-BLOCKED availability gate on the
+  ui-probe frontend/ arm) and the polled docker-deploy probe (BUNKER_QA_DEPLOY_PROBE_TIMEOUT
+  deadline, all-000-after-deadline grades INFO). The batteries themselves were incomplete.
+- Foreman repaired 3 test defects in scripts/test-bunker-qa-node-bootstrap.sh: (1) the exit-127
+  npm shim was SILENT — the old arm's `|| true` swallows the code, so RED now asserts the error
+  line the arm leaves in ui.log (assert at the layer where the evidence lives; off-by-one
+  answer 2014 confirms the doctrine); (2) mv-ing the real npm off PATH is unreliable — a second
+  npm/node pair lives at ~/.local/share/vite-plus/bin, so the NEG now uses a minimal-PATH bin
+  dir with NO npm anywhere (non-destructive, subshell-scoped); (3) the T5 awk comment-bounded
+  window drifted on harness comment boundaries twice — replaced with whole-content checks
+  (GEN_TEXT), plus one self-inflicted PATH-string-vs-content grep bug caught and fixed.
+- Evidence: battery QA-31 2/2 PASS (+1 stub-timing note, classified benign in-test), battery
+  QA-32 11/11 PASS; go build ./... + go vet ./... clean; product diff empty. Commit 8c528641
+  (+404/-0, batteries only; harness edits live in the GITLESS /home/kara home repo by design).
+- Gitreins lifecycle: create/start were the dead tick's (19:58:35Z); `task complete
+  QA-HERMES-CANOPY-31-32` fired background 21:44Z → Tier-2 8786aa9a PASS (tier1 PASS + tier2
+  COMPLETE; verdict dir .gitreins/history/2026-09-24/ea2d1f6d, HOST-LOCAL — history is
+  gitignored here). CI GREEN on 8c528641 in-tick (started 21:47:52Z, completed success); both
+  PENDINGs folded SAME TICK (event 855) — no fold debt for 581.
+- Board commits: 013db079 (close QA-31/32), 4d040192 (verdict+CI fold), fc7fc8c2 (QA-24/25
+  closes) — all pushed, parity 0 after each, guards PASS (full mode).
+- Stale-class closes (foreman-direct, no dispatch — fixes already landed): QA-HERMES-CANOPY-24
+  = FIX 1 compose-plugin bake (home-repo 877a6f0, 09-19; block cites QA-WARPFS-11 and the row's
+  rc=125 signature); QA-HERMES-CANOPY-25 = FIX 2 buildx>=0.17 bake (home-repo 1d8639c, 09-20 —
+  commit subject names QA-25). Live greps of the deployed harness + green battery
+  __gen-remote generation as evidence; ci=SKIP (no CI surface for the gitless home repo).
+- Pending set 15 → 11. Remaining: QA-2 (bunker-infra, not project-owned), QA-13 (stale harness
+  premises), QA-28 (upgrade-cell tar-sync design), QA-33 (chaos-resource child cap), DF-25 P4
+  watch, GAP-080/081 owner-bound, FTR-06/PL-04/05/06 mega-specs. Wave check: WAVE_BUDGET=5,
+  but recovery tick — single cause pair, serial foreman-direct; no wave composed.
+- Off-by-one :8766: discovered harness-cell-asserts-cli-exit-code-contract-that-does-not-exist
+  (found:true, answer 2014); submitted bash-test-battery-env-isolation-and-eval-quoting-traps
+  post-debug (sub_4850fe, queued).
