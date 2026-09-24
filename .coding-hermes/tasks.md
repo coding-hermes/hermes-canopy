@@ -3457,3 +3457,50 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
 - Gates: fsck clean; go build/vet PASS; gofmt clean; frontend build PASS;
   CI GREEN 3/3 recent incl tip 56b5ac95; origin 0 / gitlab 0 ahead.
   Off-by-one: no debugging performed, no new pre-solve candidate.
+## Tick 577 — hermes-canopy-2026-09-24-13-43-15 (2026-09-24) — WORK: E2E-001 window satisfied
+
+- Verdict: WORK. The E2E-001 battery ran after ~132 ticks of unmet cadence (last
+  identifiable battery: tick 444, 63/63, window 440-445 — every audit since carried
+  "no identifiable battery tick in the window"). Result: **73/73 PASS, 16 files,
+  FIRST RUN, zero retries, zero skips, 68.81s** (`npm run test:integration`, vitest
+  4.1.10). Raw output /tmp/canopy-e2e-results-t577.txt; report committed at
+  e2e-output/tick577.md. No implementation row was dispatchable (below), so the
+  overdue battery was the real work of this tick (foreman-direct verification per the
+  canopy-e2e-testing window procedure; no worker, no gitreins lifecycle — no task picked).
+- Environment shift discovered: :8091 is NO LONGER a docker canopy-server container —
+  the live deployment is a systemd user unit `canopy-canopyd.service`
+  (/home/kara/bin/canopyd serve, built 2026-09-24T07:17:55Z, commit 47effa62,
+  schema 48 == embedded 48). Deployed..HEAD Go delta = ONE gofmt-only commit
+  (934a0e1b), so the skill's stop-the-unit container-swap was unnecessary; the swap
+  attempt was also approval-gated on this unattended session and never executed —
+  stated honestly, not hidden. The suite ran against the live deployed binary as-is;
+  fresh HEAD build produced (/tmp/canopyd-t577) as evidence. Vite :5173 = pre-existing
+  canopy instance (identity verified via proxied JSON; :5174 is a foreign docker-pr).
+- Data-state recovery (documented T416 recipe): live DB pre-battery had 8 trees, ALL
+  09-23 battery-leak residue (T265 Sync / BUG-040 / GAP040 E2E ...), canonical demo
+  tree UI-02 Rail Demo absent, sweeper regex matched 0 of them. Applied
+  scripts/seed-demo-data.sql -> 9 trees / 24 nodes / 3 topics — exactly the state the
+  T444-era goldens encode, so visual-regression passed first run with goldens
+  untouched (no re-baseline). Pre-verify: proxied 200; write-path 400
+  VALIDATION_ERROR (healthy); raw 401 (expected); /tmp/mockups restored from
+  git-tracked docs/mockups (known ENOENT #20, prevented pre-run).
+- Restores/teardown: :8091 unit untouched (still active as found); vite :5173 and
+  docker PG untouched; tracked a11y artifacts survived (no wipe); no stray root
+  node_modules; battery trees 9 -> 16 then BUG-044 afterAll self-cleaned its 7 (API
+  total back to 2: demo tree + one 09-23 residue tree outside the sweeper's match,
+  left as-found). Working tree carried only the intended board/report files.
+- Gates at post-battery HEAD (T422 window-close convention): go vet PASS; go test
+  non-handler 22 pkgs with CANOPY_TEST_ALLOW_SHARED_DB=1 PASS (all ok, incl db 60s);
+  golangci-lint run ./... = 0 issues; vitest unit 1408/1408 (84 files, 13.06s); tsc
+  --noEmit clean; gitleaks no leaks (401MB, 23.2s). CI GREEN 3/3 recent incl tip
+  b17d8908 (success 2026-09-24T12:33Z). Board integrity: 391 rows / 0 parse failures
+  / 0 duplicate ids; parity origin 0, gitlab 0 ahead pre-push.
+- Pending-set disposition re-derived, not inherited (16 pending): GAP-080 phase 3
+  owner-bound (summarizer/retention decision, 5+ tick precedent), GAP-081 owner-bound;
+  FTR-06 / PL-04 / PL-05 / PL-06 mega-specs need design passes; QA-harness rows
+  (QA-2/13/21/24/25/28/31/32/33) host-script owned (~/.hermes/scripts/bunker-qa.sh,
+  T534 proof — nothing committable from this repo); DF-HERMES-CANOPY-25 P4 watch.
+  Wave check: <2 independent implementation tasks (WAVE_BUDGET=7) — no wave, serial
+  path moot.
+- gitreins: 251 tasks, all complete; 0 in_progress/pending — nothing to steward.
+  Off-by-one :8766: no debugging performed this tick; no new pre-solve candidate.
