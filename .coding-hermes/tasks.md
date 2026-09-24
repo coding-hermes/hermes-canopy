@@ -3287,3 +3287,17 @@ Fresh verification (all run this tick, not inherited): `git fsck --no-dangling` 
 Bookkeeping: event 840 (idle audit) appended; header ticks_total 571→572, ticks_idle 6→7, last_tick/updated_at bumped; last_commit stays 2cf6a5ee (no content commit this tick). Repo was clean at tick start (only untracked .gitreins/logs/ + tasks.yaml.lock, not tick-owned, left in place).
 
 **NOT DONE / residual:** unchanged from tick 571 — GAP-080 phase 3 and GAP-081 wait on owner rulings; off-by-one sub_267264 answer check still owed. Do not re-derive the idle rationale next tick without re-scanning the live pending set.
+
+## Tick 573 — hermes-canopy-2026-09-24-10-42-47 (2026-09-24)
+
+**IDLE — 8th consecutive clean idle; ONE residual CLOSED: the stale "off-by-one sub_267264 still owed" line (no dispatch, no gitreins lifecycle; board files + tasks.md only).**
+
+Discovery at HEAD 2efa1904: repo clean (untracked .gitreins/logs/ + tasks.yaml.lock only, not tick-owned), 0 unpushed on origin AND gitlab, no worktrees, no concurrent canopy tick. Board re-scan: 391 rows / 19 pending (last-wins) / 0 parse failures — jq-verified, not inherited. Pending set re-derived row-by-row: GAP-080 phase 3 (summarization) + GAP-081 = decision-bound owner rulings; QA-HERMES-CANOPY-2/10/12/13/21/24/25/28/31/32/33 = bunker/fleet-infra owned; FTR-06/PL-04/05/06 = mega-specs needing design passes; DF-25 = P4 watch; REVIEW-CANOPY-004 = shared fleet normalizer. DF-60 (the tick-563-flagged serial pick) confirmed complete (commit 67a6b02f, judge ff4e8af6). Wave check: <2 mutually independent implementation tasks under WAVE_BUDGET=6 → no wave, serial fallback moot.
+
+**Residual cleared (the one real action this tick):** "off-by-one sub_267264 answer check still owed" had been copy-forwarded through ticks 570-571-572 residuals. It was FALSE: tick 569's audit event 837 already recorded the check complete. Verified live this tick, independently of event 837: `POST /api/v1/problems/discover {"problem_class":"gitreins-tier2-resource-cap-45m-time-not-tokens"}` → found=true, answer id 2368 (tier2 45m wall-cap vs input-token-cap, matching the tick-557 diagnosis). Residual block line removed from this entry forward; off-by-one duty for this class is DONE.
+
+Fresh verification (all run this tick): `git fsck --no-dangling` clean; `go build ./...` rc=0; `go vet ./...` rc=0; frontend `npm run build` rc=0; `npx oxlint src` rc=0 (2 pre-existing ViewerHost warnings, no new); CI 5/5 recent runs GREEN incl. tip 2efa1904. DuckBrain namespace reachable; last tick key /ticks/tick572-idle-rederived.
+
+Bookkeeping: audit event 841 appended (offbyone residual-closure evidence in detail); header ticks_total 572→573, ticks_idle 7→8, last_tick 10:42:47, last_commit stays 2cf6a5ee (no content commit). Sibling-modification flag on board.jsonl was a false alarm — no concurrent canopy writer (checked /proc: running workers belong to logsey/scheduler/9router), and both writes verified intact post-write.
+
+**NOT DONE / residual:** unchanged from tick 572 minus the closed item — GAP-080 phase 3 and GAP-081 wait on owner rulings; do not re-derive the idle rationale next tick without re-scanning the live pending set.
