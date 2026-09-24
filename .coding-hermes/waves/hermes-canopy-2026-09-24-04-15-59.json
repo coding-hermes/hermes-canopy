@@ -1,0 +1,62 @@
+{
+  "scheduler_tick_id": "hermes-canopy-2026-09-24-04-15-59",
+  "created_at": "2026-09-24T04:30:00-05:00",
+  "finished_at": "2026-09-24T04:05:00-05:00",
+  "wave_budget": 4,
+  "base_sha": "4102de28",
+  "tasks": [
+    {
+      "task_id": "DF-HERMES-CANOPY-57",
+      "title": "Card actions must honour card status (409 on dismissed/archived)",
+      "row_scope": "internal/card/action.go status gate + internal/handler/card_handler.go error mapping + regression tests",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-57",
+      "branch": "wt/DF-HERMES-CANOPY-57",
+      "base_sha": "4102de28",
+      "status": "merged+judged PASS",
+      "worker_commit": "683bddbb",
+      "merge_commit": "3037fddb",
+      "judge_verdict": "a052a9ec (tier1 PASS, tier2 PASS/COMPLETE)",
+      "falsification": "revert internal/card/action.go to HEAD~1 -> both new tests RED (200 + completed instead of 409); restored md5-identical"
+    },
+    {
+      "task_id": "DF-HERMES-CANOPY-58",
+      "title": "Topic search must match node content (wire refresh_topic_node_content_index)",
+      "row_scope": "production callers on topic create + committed node writes",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-58",
+      "branch": "wt/DF-HERMES-CANOPY-58",
+      "base_sha": "4102de28",
+      "status": "merged+judged PASS",
+      "worker_commit": "8a85c8f7",
+      "merge_commit": "d56c4afb",
+      "judge_verdict": "889a2418 (tier1 PASS, tier2 PASS/COMPLETE)",
+      "falsification": "worker tests bypass server.New (they call WithContentIndexer directly), so the foreman proved the PRODUCTION path live: isolated canopyd from HEAD, create tree->node 'quartzite'->topic 'Unrelated title', search q=quartzite => total=1 + <mark> snippet + 1 index row; with server.go reverted to HEAD~1 => total=0 + 0 rows",
+      "live_proof_recipe": "/tmp/canopy-df58-live-probe.sh (isolated DB canopy_scratch_df58_*, own HOME + CANOPY_FILE_ROOT, spare port 8125, real cmd/canopyd serve)"
+    },
+    {
+      "task_id": "DF-HERMES-CANOPY-59",
+      "title": "Cards page: node picker + lifecycle/action controls",
+      "row_scope": "frontend/src/pages/CardsPage.tsx + first CardsPage test",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-59",
+      "branch": "wt/DF-HERMES-CANOPY-59",
+      "base_sha": "4102de28",
+      "status": "merged+judged PASS",
+      "worker_commit": "b6e52aff",
+      "merge_commit": "91a4aaf1",
+      "judge_verdict": "a48ccefd (tier1 PASS, tier2 PASS/COMPLETE)",
+      "premise_correction": "row claimed CardActivityPanel is mounted by nothing — FALSE at HEAD (import CardsPage.tsx:30, render :545-551). Also found+fixed a live defect in scope: the old DELETE archive sent no If-Match -> server 428; replaced with the documented PATCH status transition.",
+      "falsification": "revert CardsPage.tsx to HEAD~1 -> both new tests RED; restored md5-identical"
+    }
+  ],
+  "deferred": [
+    {
+      "task_id": "DF-HERMES-CANOPY-60",
+      "reason": "NOT independent: card JSON key naming + unknown card_type filter touch internal/handler/card_handler.go (shared with DF-57); the mux NotFound error-envelope part touches internal/server/server.go (shared with DF-58). Serialize to the next tick."
+    }
+  ],
+  "dispatch_order": ["DF-HERMES-CANOPY-57", "DF-HERMES-CANOPY-58", "DF-HERMES-CANOPY-59"],
+  "worker_model": "gpt-5.6-luna",
+  "worker_provider": "openai-codex",
+  "note": "Middle-out disjointness held in practice: 57 touched internal/card/*.go + card_handler.go, 58 touched internal/service/* + internal/search/* + server.go, 59 touched frontend/src/pages/CardsPage.tsx only. No conflict during serial merge.",
+  "merge_policy": "serial merge into master after each branch verified; every merge gate-checked",
+  "outcome": "All three merged serially with no conflicts; all three Tier-1+Tier-2 verdicts PASS; falsification performed on each diff; board rows closed surgically (3 lines changed); DF-60 deferred with rationale."
+}
