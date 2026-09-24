@@ -269,6 +269,82 @@ func TestCardActionRouteUnknownCardReturns404(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Lifecycle status gate
+// ---------------------------------------------------------------------------
+
+func TestCardActionRouteLifecycleStatusGate(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     card.CardStatus
+		wantStatus int
+		wantCode   string
+		wantMsg    string
+	}{
+		{
+			name:       "active",
+			status:     card.CardStatusActive,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "dismissed",
+			status:     card.CardStatusDismissed,
+			wantStatus: http.StatusConflict,
+			wantCode:   "CARD_STATUS_DISMISSED",
+			wantMsg:    "dismissed cards do not accept app-data mutations",
+		},
+		{
+			name:       "archived",
+			status:     card.CardStatusArchived,
+			wantStatus: http.StatusConflict,
+			wantCode:   "CARD_STATUS_ARCHIVED",
+			wantMsg:    "archived cards are terminal and cannot be mutated",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, repo, cardID := cardActionStore(t, card.CardAction{Label: "Open", Handler: "open"})
+			if tc.status != card.CardStatusActive {
+				status := tc.status
+				if _, err := repo.Patch(context.Background(), cardID, 1, card.PatchCardInput{Status: &status}); err != nil {
+					t.Fatalf("set status %s: %v", tc.status, err)
+				}
+			}
+
+			before := cardEventTypes(t, repo, cardID)
+			rec := postCardAction(t, newCardActionRouter(svc), cardID.String(), `{"handler":"open","payload":{"nodeId":"n1"}}`)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+
+			after := cardEventTypes(t, repo, cardID)
+			if tc.status == card.CardStatusActive {
+				if len(after) != 2 || after[0] != card.EventActionRequested || after[1] != card.EventActionCompleted {
+					t.Fatalf("event log = %v, want [action_requested action_completed]", after)
+				}
+				return
+			}
+
+			body := decodeCardActionError(t, rec)
+			if body.Code != tc.wantCode {
+				t.Errorf("error code = %q, want %q", body.Code, tc.wantCode)
+			}
+			if body.Message != tc.wantMsg {
+				t.Errorf("error message = %q, want %q", body.Message, tc.wantMsg)
+			}
+			if len(after) != len(before) {
+				t.Fatalf("event count changed from %d to %d for %s card", len(before), len(after), tc.status)
+			}
+			for i := range before {
+				if before[i] != after[i] {
+					t.Fatalf("event %d changed from %s to %s", i, before[i], after[i])
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // AC3: execution failure over HTTP records agent_error
 // ---------------------------------------------------------------------------
 

@@ -72,9 +72,9 @@ type actionErrorEvent struct {
 }
 
 // SubmitCardAction implements service.CardService. A rejected request (no
-// handler, invalid payload, unknown card, undeclared handler) appends nothing;
-// an accepted request appends action_requested and then exactly one terminal
-// event, action_completed or agent_error.
+// handler, invalid payload, unknown card, undeclared handler, archived card, or
+// dismissed card) appends nothing; an accepted request appends action_requested
+// and then exactly one terminal event, action_completed or agent_error.
 func (s *CardServiceImpl) SubmitCardAction(
 	ctx context.Context,
 	cardID uuid.UUID,
@@ -94,6 +94,12 @@ func (s *CardServiceImpl) SubmitCardAction(
 	card, repo, err := s.findCardAndRepo(ctx, cardID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", service.ErrCardNotFound, cardID)
+	}
+	if card.Status == CardStatusArchived {
+		return nil, fmt.Errorf("%w: %s", ErrStatusArchived, cardID)
+	}
+	if card.Status == CardStatusDismissed {
+		return nil, fmt.Errorf("%w: %s", ErrStatusDismissed, cardID)
 	}
 
 	action, ok := findDeclaredAction(card.Actions, handler)
