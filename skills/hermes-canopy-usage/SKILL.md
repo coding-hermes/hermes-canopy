@@ -7,8 +7,8 @@ description: >-
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
   Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
-  09-22 and 09-23 deep dogfood runs.
-version: 2.5.0
+  09-22, 09-23 and 09-24 deep dogfood runs.
+version: 2.6.0
 category: software-development
 ---
 
@@ -19,6 +19,37 @@ GAP-050/051 (2026-08-27) the **live interface of Hermes**: the Dashboard shows r
 gateway runs, the chat composer starts REAL agent runs, SSE streams events, and
 approvals resolve — with the gateway API key held server-side. Go backend
 (`canopyd`) + React/TS PWA + PostgreSQL + live Hermes gateway (:8642).
+
+## Cards surface (verified 2026-09-24, HEAD 3ab7e758)
+
+Cards = structured-data nodes on a tree+node, stored in per-type SQLite
+databases (`CANOPY_CARD_DATA_DIR`, default `~/.hermes/canopy/cards`). All
+routes under `/api/v1/cards`, JWT required. The working pattern:
+
+- Create: `POST /api/v1/cards {treeId,nodeId,appId,cardType,data}` (camelCase)
+  → 201 bare object. **`actions` is NOT accepted at create** (`400 INVALID_JSON
+  unknown field`) — declare actions with PATCH afterwards. Docs don't say this.
+- Every PATCH/DELETE needs `If-Match: <revision>`; missing → 428, stale → 412
+  (body carries the current card snapshot — re-read `revision` from it), empty
+  body → 400 `CARD_PATCH_EMPTY`.
+- Status machine: active→dismissed→active, {active,dismissed}→archived,
+  archived terminal. PATCH/DELETE correctly 409 on dismissed/archived — but
+  **POST /actions is NOT status-guarded (DF-57): it 200s and appends events on
+  dismissed AND archived cards.** Don't treat archived as quiescent yet.
+- Actions: `POST /api/v1/cards/{id}/actions {"handler":...,"payload":{...}}` —
+  handler must match `actions[].handler` else 422; with no app adapter the
+  action completes deterministically (event pair = the record).
+- SSE: `GET /api/v1/cards/{id}/events` → `card_snapshot` frame first (no
+  `id:` line), then `card_event` frames with `id:` = sequence; replay cursor =
+  max(`after_sequence`, `Last-Event-ID`); idle heartbeat every 30 s.
+- Export: `canopyd card export --out f.jsonl` (or `--snapshot-dir`) —
+  in-process SQLite read, byte-deterministic, survives restarts. Use it as the
+  git-friendly card history.
+
+Frontend: `/cards` page (CardsPage.tsx) is a raw create/list form whose create
+dialog demands a hand-pasted node UUID; CardActivityPanel (SSE) exists but
+nothing mounts it (DF-59). Response JSON says `"type"` where docs/API.md says
+`card_type` (DF-60).
 
 ## Topics & #references surface (verified 2026-09-23, HEAD 1fe262c5)
 

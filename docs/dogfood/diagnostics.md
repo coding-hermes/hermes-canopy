@@ -453,3 +453,57 @@ release binary download (5 s) → healthy server (<1 s) → CLI create/list.
 keeping: clone --depth 1 22 s; binary 5 s; serve→health <1 s; virgin-DB
 `/health` reports `schema_version:0` until a later boot (embedded 48) —
 cosmetic but confusing against the STALE BUILD guard's 48/48 message.
+
+## 2026-09-24 — cards + search (10th run)
+
+**The card store is a parallel universe beside Postgres — and that's fine,
+once you know.** Cards don't live in the graph database at all: each card type
+gets its own SQLite file under `CANOPY_CARD_DATA_DIR` (per-type
+database-per-card architecture from SPEC-PL-03), while trees/nodes/topics stay
+in PostgreSQL. Practical consequences a user learns the hard way: (1) the
+`canopyd card export` CLI is the only card surface that reads those files
+in-process — it never contacts the server, so export a card store BEFORE
+switching data dirs or you'll export an empty one; (2) backing up Postgres
+does NOT back up cards; (3) deleting a tree does not cascade to its cards —
+the card rows keep their tree_id either way. The byte-deterministic JSONL
+export (same store → same bytes, proven across a restart) is the intended
+git-diff story — use `--snapshot-dir` on a timer and cards become a
+git-versioned append log, which is exactly the GAP-083 pattern.
+
+**Optimistic concurrency is real — and the error body is the re-sync
+mechanism.** Every card PATCH/DELETE demands `If-Match: <revision>`; get it
+wrong and the 412 response carries the CURRENT card snapshot, so the correct
+client loop is: read revision → PATCH with If-Match → on 412, re-read
+`revision` from the conflict body (not the stale GET cache) and decide again.
+The status machine rides on the same mechanism (active→dismissed→active,
+→archived terminal), and PATCH/DELETE enforce it faithfully — which is what
+made DF-57 visible: the actions route is the ONE mutator that skips the status
+gate, so a "terminal" archived card happily recorded two more action events
+while refusing a simple PATCH with 409. When one route in a family lacks the
+guard the siblings have, the asymmetry is the bug; find it by doing the same
+mutation through every door.
+
+**A search index nobody feeds is a search feature nobody has (DF-58).** The
+topic search SQL has a beautiful second arm: a UNION over
+`topic_node_content_search` with `ts_rank` on node text, so node content
+*should* match. But that table is populated only by
+`refresh_topic_node_content_index()`, whose only callers in the entire repo
+are tests. Live proof: 3 topic-member nodes, 0 rows in the content index,
+`q=<word that appears verbatim in a node>` → zero results while the preview
+endpoint happily shows that node. Two lessons compound here: the schema-level
+test green (trigger exists, function exists) says nothing about the runtime
+write path, and "search works" was true only for the title/description arm
+the trigger DOES feed. If a feature is a UNION of two arms, test that each
+arm independently returns rows — and grep for production callers of any
+"refresh" function, not just its existence.
+
+**Casing is a per-endpoint decision — never assume.** Trees, cards, topics
+create bodies are camelCase (`rootMessage`, `treeId`, `rootNodeId`); node
+create is snake_case (`parent_id`, `node_type`) — sending `parentIds` (the
+shape the tree-create response itself uses for edges) fails with
+`INVALID_BODY unknown field`. Card responses say `"type"` where docs say
+`card_type`. The failure modes are at least loud (400 naming the field), but
+a consumer writing one typed client for "the Canopy API" will trip on it
+repeatedly. The right way: curl the endpoint with the docs' exact body first,
+and treat the response body — not the docs — as the JSON contract of record
+until DF-60 lands.
