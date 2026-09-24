@@ -307,6 +307,10 @@ func (h *CardHandler) SubmitCardAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_PAYLOAD", "payload must be a JSON object")
 	case errors.Is(err, service.ErrCardNotFound):
 		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", "card not found")
+	case errors.Is(err, card.ErrStatusArchived):
+		writeError(w, http.StatusConflict, "CARD_STATUS_ARCHIVED", "archived cards are terminal and cannot be mutated")
+	case errors.Is(err, card.ErrStatusDismissed):
+		writeError(w, http.StatusConflict, "CARD_STATUS_DISMISSED", "dismissed cards do not accept app-data mutations")
 	case errors.Is(err, service.ErrCardActionNotDeclared):
 		writeError(w, http.StatusUnprocessableEntity, "CARD_ACTION_NOT_DECLARED",
 			fmt.Sprintf("handler %q is not a declared action on card %s", handlerName, cardID))

@@ -259,6 +259,80 @@ func TestSubmitCardActionUndeclaredHandlerAppendsNothing(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Lifecycle status gate
+// ---------------------------------------------------------------------------
+
+func TestSubmitCardActionLifecycleStatusGate(t *testing.T) {
+	cases := []struct {
+		name      string
+		status    CardStatus
+		wantErr   error
+		wantTypes []CardEventType
+	}{
+		{
+			name:      "active",
+			status:    CardStatusActive,
+			wantTypes: []CardEventType{EventCardCreated, EventActionRequested, EventActionCompleted},
+		},
+		{
+			name:      "dismissed",
+			status:    CardStatusDismissed,
+			wantErr:   ErrStatusDismissed,
+			wantTypes: []CardEventType{EventCardCreated},
+		},
+		{
+			name:      "archived",
+			status:    CardStatusArchived,
+			wantErr:   ErrStatusArchived,
+			wantTypes: []CardEventType{EventCardCreated},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mgr := testDBManager(t)
+			defer mgr.Close()
+
+			svc := NewCardServiceImpl(mgr)
+			ctx := context.Background()
+			c, repo := createActionCard(t, mgr, CardTypeCompact, CardAction{Label: "Open", Handler: "open"})
+			if tc.status != CardStatusActive {
+				status := tc.status
+				if _, err := repo.Patch(ctx, c.ID, c.Revision, PatchCardInput{Status: &status}); err != nil {
+					t.Fatalf("set status %s: %v", tc.status, err)
+				}
+			}
+
+			before := cardEvents(t, repo, c.ID)
+			outcome, err := svc.SubmitCardAction(ctx, c.ID, "open", json.RawMessage(`{"nodeId":"n1"}`))
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("error = %v, want %v", err, tc.wantErr)
+				}
+				if outcome != nil {
+					t.Fatalf("outcome = %+v, want nil on a rejected status", outcome)
+				}
+			} else if err != nil {
+				t.Fatalf("SubmitCardAction: %v", err)
+			}
+
+			after := cardEvents(t, repo, c.ID)
+			requireEventTypes(t, after, tc.wantTypes...)
+			if tc.wantErr != nil {
+				if len(after) != len(before) {
+					t.Fatalf("event count changed from %d to %d for %s card", len(before), len(after), tc.status)
+				}
+				for i := range before {
+					if before[i].EventType != after[i].EventType {
+						t.Fatalf("event %d changed from %s to %s", i, before[i].EventType, after[i].EventType)
+					}
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Request validation (AC4)
 // ---------------------------------------------------------------------------
 
