@@ -155,7 +155,9 @@ T2_EMPTY_GRADE=$(grep -o '^cell ui-probe [A-Z/]*' "$T2_EMPTY_LOG" 2>/dev/null | 
 [ "$T2_EMPTY_GRADE" = "N/A" ] && ok "T2: empty repo still grades N/A (no false positive)" || bad "T2: empty repo expected N/A, got [$T2_EMPTY_GRADE]"
 
 # ─── T3: disconnect window sizing ───────────────────────────────────────────
-# The window must equal max(observed_duration * 2 + 30, floor).
+# The window must equal max(observed_duration * 2 + 30, floor) — and it must be
+# APPLIED to the timeout invocation, not merely named in the FAIL detail
+# (judge verdict 8efc4e81 caught the named-but-not-applied class).
 echo "[T3] disconnect window sizing"
 FAKE_DUR=100
 FAKE_FLOOR=240
@@ -167,8 +169,20 @@ EXPECTED_WINDOW2=$((150 * 2 + 30))
 [ "$EXPECTED_WINDOW2" -lt "$FAKE_FLOOR" ] && EXPECTED_WINDOW2=$FAKE_FLOOR
 check "T3: 150s suite window exceeds floor" "$EXPECTED_WINDOW2" "330"
 
-# Also assert the generated detail string contains the derivation
+# The generated remote script must (a) compute disc_window BEFORE the disconnect
+# run, (b) source it from the suite duration (suite_dur, timed at the ci-pass
+# native run), (c) actually pass it to `timeout`, and (d) keep the derivation in
+# the FAIL detail.
+T3_GEN_COMPUTE=$(grep -n 'disc_window=\$((' "$GEN" | head -1 | cut -d: -f1)
+T3_GEN_TIMEOUT_LINE=$(grep -n 'timeout \$disc_window bash -c' "$GEN" | head -1)
+T3_GEN_TIMEOUT_N=$(echo "$T3_GEN_TIMEOUT_LINE" | cut -d: -f1)
+T3_GEN_SUITEDUR=$(grep -c 'suite_dur=\$(( suite_end - suite_start ))' "$GEN")
 T3_GEN_DETAIL=$(grep -F 'HANGS when network is cut (timeout ${disc_window}s, sized from the ${native_dur}s suite' "$GEN" | head -1)
+[ -n "$T3_GEN_COMPUTE" ] && ok "T3: generated script computes disc_window" || bad "T3: disc_window never computed"
+[ -n "$T3_GEN_TIMEOUT_LINE" ] && ok "T3: timeout invocation consumes \$disc_window" || bad "T3: timeout uses a fixed window (window named, not applied)"
+[ -n "$T3_GEN_TIMEOUT_N" ] && [ -n "$T3_GEN_COMPUTE" ] && [ "$T3_GEN_COMPUTE" -lt "$T3_GEN_TIMEOUT_N" ] \
+  && ok "T3: window computed BEFORE the disconnect run" || bad "T3: window computed after the run (cannot bound it)"
+[ "$T3_GEN_SUITEDUR" -ge 1 ] && ok "T3: suite duration measured at the ci-pass native run" || bad "T3: suite duration never timed"
 [ -n "$T3_GEN_DETAIL" ] && ok "T3: generated disconnect detail names the derivation" || bad "T3: could not find disconnect detail derivation"
 
 # ─── T4: corruption start-cmd gate ──────────────────────────────────────────
