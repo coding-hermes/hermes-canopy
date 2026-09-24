@@ -3568,3 +3568,16 @@ tasks:
   status: complete
   created_at: '2026-09-24T17:12:01.339213+00:00'
   completed_at: '2026-09-24T18:00:32.008287+00:00'
+- id: QA-HERMES-CANOPY-31-32
+  title: 'bunker-qa harness: polled deploy probe + node/npm toolchain bootstrap (paired
+    QA-31+QA-32)'
+  criteria:
+  - scripts/test-bunker-qa-deploy-probe.sh and scripts/test-bunker-qa-node-bootstrap.sh
+    exist in hermes-canopy, pass on the dev box (exit 0), follow sibling RED/GREEN
+    conventions, and bunker-qa.sh contains the polled deploy probe (BUNKER_QA_DEPLOY_PROBE_TIMEOUT
+    deadline, all-000-after-deadline -> INFO) and FIX 3 node+npm toolchain bootstrap
+    with HARNESS_NODE verification and ENV-BLOCKED INFO grading in the ui-probe frontend
+    arm; product code untouched (go build ./... && go vet ./... clean).
+  status: complete
+  created_at: '2026-09-24T19:58:35.220003+00:00'
+  completed_at: '2026-09-24T21:46:08.617284+00:00'
