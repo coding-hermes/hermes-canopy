@@ -8,7 +8,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
-  Trash2,
   RefreshCw,
   AlertCircle,
   Inbox,
@@ -17,13 +16,14 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { apiGet, apiPost, apiDelete } from '../lib/api';
+import { apiGet, apiPost, apiUrl, authInit } from '../lib/api';
 import { invokeCardAction } from '../lib/cardActions';
 import { resolveCardRenderer } from '../lib/cardRenderers';
 import {
   cardFromSummaryWire,
   cardTypeLabel,
   type Card,
+  type CardStatus,
   type CardSummaryWire,
 } from '../types/card';
 import { Link } from 'react-router-dom';
@@ -31,10 +31,22 @@ import CardActivityPanel from '../components/CardActivityPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
-type CardSummary = CardSummaryWire;
+type CardSummary = CardSummaryWire & {
+  /** Card PATCH/DELETE optimistic-concurrency token from the service summary. */
+  revision: number;
+};
 
 interface ListCardsResponse {
   cards: CardSummary[];
+}
+
+interface NodeSummary {
+  id: string;
+  content: string;
+}
+
+interface ListNodesResponse {
+  nodes: NodeSummary[];
 }
 
 interface TreeSummary {
@@ -51,6 +63,12 @@ interface ListTreesResponse {
 
 
 const CARD_TYPES = ['compact', 'expanded', 'iteration'] as const;
+
+function nodeOptionLabel(node: NodeSummary): string {
+  const excerpt = node.content.replace(/\s+/g, ' ').trim();
+  const shortened = excerpt.length > 72 ? `${excerpt.slice(0, 72)}…` : excerpt;
+  return `${shortened || 'Untitled node'} · ${node.id.slice(0, 8)}`;
+}
 
 // ─── Create Card Dialog ────────────────────────────────────────────────
 
@@ -69,8 +87,34 @@ function CreateCardDialog({
   const [nodeId, setNodeId] = useState('');
   const [appId, setAppId] = useState('canopy');
   const [dataJson, setDataJson] = useState('{}');
+  const [nodes, setNodes] = useState<NodeSummary[]>([]);
+  const [nodesLoading, setNodesLoading] = useState(true);
+  const [nodesError, setNodesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNodes([]);
+    setNodeId('');
+    setNodesLoading(true);
+    setNodesError(null);
+    void apiGet<ListNodesResponse>(`/trees/${treeId}/nodes`)
+      .then((data) => {
+        if (!cancelled) setNodes(data.nodes);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setNodesError(err instanceof Error ? err.message : 'Failed to load nodes');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setNodesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [treeId]);
 
   const handleCreate = async () => {
     if (!treeId) {
@@ -151,13 +195,30 @@ function CreateCardDialog({
             </div>
           </div>
           <div>
-            <label className="block text-xs text-content-muted mb-1">Node ID *</label>
-            <input
+            <label htmlFor="create-card-node-select" className="block text-xs text-content-muted mb-1">
+              Node *
+            </label>
+            <select
+              id="create-card-node-select"
+              data-testid="create-card-node-select"
               value={nodeId}
               onChange={(e) => setNodeId(e.target.value)}
-              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary placeholder-content-faint font-mono focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent"
-              placeholder="UUID of the node to attach card to"
-            />
+              disabled={nodesLoading || nodes.length === 0}
+              className="w-full bg-surface-input border border-line-subtle rounded-lg px-3 py-2 text-sm text-content-primary focus:outline-none focus:ring-2 focus:ring-accent/60 focus:border-accent disabled:opacity-60"
+            >
+              <option value="">
+                {nodesLoading ? 'Loading nodes...' : nodes.length === 0 ? 'No nodes in this tree' : 'Choose a node...'}
+              </option>
+              {nodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {nodeOptionLabel(node)}
+                </option>
+              ))}
+            </select>
+            {nodesError && <p className="mt-1 text-xs text-status-danger">{nodesError}</p>}
+            {!nodesLoading && !nodesError && nodes.length === 0 && (
+              <p className="mt-1 text-xs text-content-muted">This tree has no nodes to attach a card to.</p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-content-muted mb-1">App ID</label>
@@ -204,13 +265,15 @@ function CreateCardDialog({
 function CardRow({
   card,
   isSelected,
+  statusUpdating,
   onOpen,
-  onDelete,
+  onStatusChange,
 }: {
   card: CardSummary;
   isSelected: boolean;
+  statusUpdating: boolean;
   onOpen: () => void;
-  onDelete: () => void;
+  onStatusChange: (status: CardStatus) => void;
 }) {
   const parsed = cardFromSummaryWire(card);
   if (!parsed.ok) {
@@ -257,21 +320,98 @@ function CardRow({
           >
             <ChevronRight className="w-4 h-4" />
           </button>
-          <button
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-            className="p-1.5 rounded-md text-content-faint hover:text-status-danger hover:bg-rose-500/10 transition-colors"
-            title="Archive card"
-            aria-label="Archive card"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canonical.status === 'active' && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStatusChange('dismissed');
+                }}
+                disabled={statusUpdating}
+                className="px-2 py-1 rounded-md text-[11px] font-medium text-content-muted hover:text-content-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
+                aria-label="Dismiss card"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStatusChange('archived');
+                }}
+                disabled={statusUpdating}
+                className="px-2 py-1 rounded-md text-[11px] font-medium text-status-danger hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                aria-label="Archive card"
+              >
+                Archive
+              </button>
+            </>
+          )}
+          {canonical.status === 'dismissed' && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStatusChange('active');
+                }}
+                disabled={statusUpdating}
+                className="px-2 py-1 rounded-md text-[11px] font-medium text-content-muted hover:text-content-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
+                aria-label="Restore card"
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStatusChange('archived');
+                }}
+                disabled={statusUpdating}
+                className="px-2 py-1 rounded-md text-[11px] font-medium text-status-danger hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                aria-label="Archive card"
+              >
+                Archive
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+async function patchCardStatus(card: CardSummary, status: CardStatus): Promise<CardSummary> {
+  const response = await fetch(
+    apiUrl(`/cards/${encodeURIComponent(card.id)}`),
+    authInit({
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'If-Match': String(card.revision),
+      },
+      body: JSON.stringify({ status }),
+    }),
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    let message = text || `HTTP ${response.status}`;
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: unknown } | unknown };
+      const apiError = parsed.error;
+      if (typeof apiError === 'object' && apiError !== null && 'message' in apiError) {
+        const detail = (apiError as { message?: unknown }).message;
+        if (typeof detail === 'string' && detail) message = detail;
+      } else if (typeof apiError === 'string' && apiError) {
+        message = apiError;
+      }
+    } catch {
+      // Keep the plain response text for non-JSON failures.
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<CardSummary>;
 }
 
 // ─── Main Component ────────────────────────────────────────────────────
@@ -285,7 +425,7 @@ export default function CardsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [showCreate, setShowCreate] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<CardSummary | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   // The card whose live activity panel is open (null = closed). Exactly one
   // at a time: the panel owns the stream subscription (SPEC-PL-03 §9).
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -331,16 +471,17 @@ export default function CardsPage() {
     if (selectedTreeId) void fetchCards(selectedTreeId, t || undefined);
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleCardStatus = async (card: CardSummary, status: CardStatus) => {
+    if (statusUpdatingId) return;
+    setStatusUpdatingId(card.id);
+    setError(null);
     try {
-      await apiDelete(`/cards/${deleteTarget.id}`);
-      setCards((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-      if (selectedCardId === deleteTarget.id) setSelectedCardId(null);
+      const updated = await patchCardStatus(card, status);
+      setCards((prev) => prev.map((current) => (current.id === updated.id ? updated : current)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to archive card');
+      setError(err instanceof Error ? err.message : `Failed to set card status to ${status}`);
     } finally {
-      setDeleteTarget(null);
+      setStatusUpdatingId(null);
     }
   };
 
@@ -535,8 +676,9 @@ export default function CardsPage() {
               key={card.id}
               card={card}
               isSelected={card.id === selectedCardId}
+              statusUpdating={statusUpdatingId === card.id}
               onOpen={() => setSelectedCardId(card.id)}
-              onDelete={() => setDeleteTarget(card)}
+              onStatusChange={(status) => void handleCardStatus(card, status)}
             />
           ))}
         </div>
@@ -558,38 +700,6 @@ export default function CardsPage() {
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
         />
-      )}
-
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteTarget(null)} />
-          <div className="relative glass-raised rounded-xl w-full max-w-sm mx-4">
-            <div className="px-5 py-4 border-b border-line-subtle">
-              <h2 className="text-sm font-medium text-content-primary">Archive Card</h2>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-sm text-content-secondary">
-                Archive this {deleteTarget.type} card?
-                This will soft-delete the card.
-              </p>
-            </div>
-            <div className="px-5 py-3 border-t border-line-subtle flex items-center justify-end gap-2">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-3 py-1.5 text-xs font-medium text-content-muted hover:text-content-primary rounded-lg hover:bg-surface-hover transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors"
-              >
-                Archive
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
