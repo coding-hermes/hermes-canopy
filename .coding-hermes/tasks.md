@@ -3432,3 +3432,28 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
   `mutation-script-writes-provenance-skips-value-reassignment` (the defect the spot-check
   caught mid-tick). DuckBrain narration key `/ticks/tick575-rc004-result-normalization`
   written (id d326d61d).
+
+### Tick 576 — idle + 2 stale closures (QA-HERMES-CANOPY-10, QA-HERMES-CANOPY-12)
+
+- Verdict: IDLE+STALE-CLOSURES — 11th consecutive clean idle for actionable work
+  (streak 10 per header). No implementation task dispatchable: GAP-080 phase 3 +
+  GAP-081 decision-bound on owner rulings; QA-HERMES-CANOPY-* infra/harness rows
+  bunker/fleet-infra owned (cells live in host ~/.hermes/scripts/bunker-qa.sh);
+  FTR-06/PL-04..06 mega-specs need design passes (FTR-06<-PL-04<-GAP-001,
+  PL-05<-PL-01, PL-06<-GAP-001); DF-25 P4 watch. Wave check: <2 independent
+  implementation tasks (WAVE_BUDGET=3) — no wave.
+- ONE real action class: closed 2 stale pending rows whose premises this tick
+  falsified with live evidence (QA ledger 149 rows, /tmp run-dir scan, the
+  2026-09-24 00:30 QA cycle event):
+  - QA-HERMES-CANOPY-10 ("permanent re-pick, dies in preflight"): the
+    hermes-canopy QA cycle 2026-09-24 00:30 RAN on bunker-las-02 (agent
+    c4b985cd, launch OK); 0 /tmp/dagger-role-qa-* dirs today; the single
+    'not a git repo' ledger hit is mafia-ai-benchmark 2026-08-28, predating
+    the row.
+  - QA-HERMES-CANOPY-12 ("collect fails, no launch record"): one-off on
+    2026-09-14; the 2026-09-24 cycle collected fine (no collect failure in
+    the cycle event or ledger since).
+  Closing evidence re-derived, not copy-forward. Pending 19 -> 17.
+- Gates: fsck clean; go build/vet PASS; gofmt clean; frontend build PASS;
+  CI GREEN 3/3 recent incl tip 56b5ac95; origin 0 / gitlab 0 ahead.
+  Off-by-one: no debugging performed, no new pre-solve candidate.
