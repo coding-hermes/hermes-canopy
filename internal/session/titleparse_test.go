@@ -45,7 +45,7 @@ func TestParseTitle_CommitHash(t *testing.T) {
 		hash  string
 	}{
 		{"Fix in commit a1b2c3d", "a1b2c3d"},
-		{"revert abc1234def5678", "abc1234def5678"},           // 12 chars
+		{"revert abc1234def5678", "abc1234def5678"},                                                        // 12 chars
 		{"long hash 0123456789abcdef0123456789abcdef01234567", "0123456789abcdef0123456789abcdef01234567"}, // 40 chars
 	}
 	for _, tt := range tests {

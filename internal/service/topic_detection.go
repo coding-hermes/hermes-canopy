@@ -47,9 +47,9 @@ func DefaultDetectionConfig() DetectionConfig {
 
 // Detection level constants.
 const (
-	DetectionLevelOff         = "off"
+	DetectionLevelOff          = "off"
 	DetectionLevelExplicitOnly = "explicit_only"
-	DetectionLevelFull        = "full"
+	DetectionLevelFull         = "full"
 )
 
 // DetectionType enumerates the signal classes.

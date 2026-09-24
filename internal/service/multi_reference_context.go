@@ -67,10 +67,10 @@ type ReferenceContextOptions struct {
 // ReferenceContextResult is the §9.3 200 envelope. Field names are
 // snake_case (§9: HTTP boundaries use snake_case).
 type ReferenceContextResult struct {
-	NodeID          uuid.UUID           `json:"node_id"`
-	TreeID          uuid.UUID           `json:"tree_id"`
-	ParentMode      string              `json:"parent_mode"`
-	PrimarySourceID uuid.UUID           `json:"primary_source_id"`
+	NodeID          uuid.UUID            `json:"node_id"`
+	TreeID          uuid.UUID            `json:"tree_id"`
+	ParentMode      string               `json:"parent_mode"`
+	PrimarySourceID uuid.UUID            `json:"primary_source_id"`
 	Context         ReferenceContextView `json:"context"`
 	// SourceChangedSinceCreation is present (true) only when verify_hash
 	// was requested and the live snapshot no longer matches the creation
@@ -80,12 +80,12 @@ type ReferenceContextResult struct {
 
 // ReferenceContextView is the §9.3 `context` object.
 type ReferenceContextView struct {
-	Sources               []ReferenceContextSource `json:"sources"`
-	IsSyntheticMergePoint bool                     `json:"is_synthetic_merge_point"`
+	Sources               []ReferenceContextSource   `json:"sources"`
+	IsSyntheticMergePoint bool                       `json:"is_synthetic_merge_point"`
 	BranchSpan            ReferenceContextBranchSpan `json:"branch_span"`
-	TokenBudget           int                      `json:"token_budget"`
-	TokensUsed            int                      `json:"tokens_used"`
-	ManifestHash          string                   `json:"manifest_hash"`
+	TokenBudget           int                        `json:"token_budget"`
+	TokensUsed            int                        `json:"tokens_used"`
+	ManifestHash          string                     `json:"manifest_hash"`
 }
 
 // ReferenceContextSource is one §9.3 `context.sources[]` entry. The label is

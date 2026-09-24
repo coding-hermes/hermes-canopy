@@ -128,7 +128,7 @@ type sqlStmt struct {
 }
 
 // splitStatements lexes SQL and splits it into statements at top-level `;`. It is
-// comment-safe (-- and /* */ are removed), string-safe ('..' with '' escapes),
+// comment-safe (-- and /* */ are removed), string-safe ('..' with ” escapes),
 // dollar-quote-safe ($$ .. $$ bodies are copied verbatim, so the `;` inside PL/pgSQL
 // bodies does not split a statement) and paren-depth-aware.
 //

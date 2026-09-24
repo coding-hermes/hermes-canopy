@@ -16,12 +16,12 @@ type DelegationGoal struct {
 // session. Every field is optional; empty values mean "no association
 // found" and are omitted from the metadata JSON.
 type Associations struct {
-	ParentSessionID  string            `json:"parent_session_id,omitempty"`
-	ChildSessionIDs  []string          `json:"child_session_ids,omitempty"`
-	DelegationGoals  []DelegationGoal  `json:"delegation_goals,omitempty"`
-	Project          string            `json:"project,omitempty"`
-	BoardTask        string            `json:"board_task,omitempty"`
-	CommitHash       string            `json:"commit_hash,omitempty"`
+	ParentSessionID string           `json:"parent_session_id,omitempty"`
+	ChildSessionIDs []string         `json:"child_session_ids,omitempty"`
+	DelegationGoals []DelegationGoal `json:"delegation_goals,omitempty"`
+	Project         string           `json:"project,omitempty"`
+	BoardTask       string           `json:"board_task,omitempty"`
+	CommitHash      string           `json:"commit_hash,omitempty"`
 }
 
 // SessionIndex is a pre-computed lookup structure that maps session IDs
@@ -110,13 +110,13 @@ func ComputeAssociations(s Session, idx *SessionIndex) Associations {
 // ALWAYS present (ImportedBefore depends on it). Association keys are
 // only included when they have meaningful values.
 type TreeMetadata struct {
-	SessionID       string            `json:"session_id"`
-	ParentSessionID string            `json:"parent_session_id,omitempty"`
-	ChildSessionIDs []string          `json:"child_session_ids,omitempty"`
-	DelegationGoals []DelegationGoal  `json:"delegation_goals,omitempty"`
-	Project         string            `json:"project,omitempty"`
-	BoardTask       string            `json:"board_task,omitempty"`
-	CommitHash      string            `json:"commit_hash,omitempty"`
+	SessionID       string           `json:"session_id"`
+	ParentSessionID string           `json:"parent_session_id,omitempty"`
+	ChildSessionIDs []string         `json:"child_session_ids,omitempty"`
+	DelegationGoals []DelegationGoal `json:"delegation_goals,omitempty"`
+	Project         string           `json:"project,omitempty"`
+	BoardTask       string           `json:"board_task,omitempty"`
+	CommitHash      string           `json:"commit_hash,omitempty"`
 }
 
 // NewTreeMetadata builds a TreeMetadata from a session ID and its

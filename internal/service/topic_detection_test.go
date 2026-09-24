@@ -17,11 +17,11 @@ import (
 // makeNode is a test helper that creates a db.Node with the given content.
 func makeNode(content string) db.Node {
 	return db.Node{
-		ID:        uuid.New(),
-		TreeID:    uuid.New(),
-		Content:   content,
-		NodeType:  db.NodeTypeMessage,
-		AuthorID:  uuid.New(),
+		ID:       uuid.New(),
+		TreeID:   uuid.New(),
+		Content:  content,
+		NodeType: db.NodeTypeMessage,
+		AuthorID: uuid.New(),
 	}
 }
 

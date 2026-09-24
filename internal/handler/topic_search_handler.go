@@ -1,9 +1,10 @@
 // Package handler — topic search & context injection HTTP handler.
 // Implements SPEC-TM-03 §6 endpoints (tree-scoped, membership-gated):
-//   GET  /trees/{tree_id}/topics/search
-//   GET  /trees/{tree_id}/topics/recent
-//   GET  /trees/{tree_id}/topics/{topic_id}/preview
-//   POST /trees/{tree_id}/context/inject
+//
+//	GET  /trees/{tree_id}/topics/search
+//	GET  /trees/{tree_id}/topics/recent
+//	GET  /trees/{tree_id}/topics/{topic_id}/preview
+//	POST /trees/{tree_id}/context/inject
 //
 // Auth + tree membership are enforced by middleware upstream (same pattern
 // as /trees/{tree_id}/events). Error responses follow spec §8.
@@ -106,9 +107,9 @@ func (h *TopicSearchHandler) SearchTopics(w http.ResponseWriter, r *http.Request
 
 	// Broadcast search_logged SSE event (best-effort).
 	h.broadcastSSE(r, treeID, "search_logged", map[string]any{
-		"query":          q,
-		"result_count":   total,
-		"query_time_ms":  elapsed.Milliseconds(),
+		"query":         q,
+		"result_count":  total,
+		"query_time_ms": elapsed.Milliseconds(),
 	})
 
 	// Ensure non-nil slice so empty results marshal as [] not null (spec §9).
@@ -227,9 +228,9 @@ func (h *TopicSearchHandler) InjectContext(w http.ResponseWriter, r *http.Reques
 	for i, tc := range result.Topics {
 		eventName := "context_injected:" + strconv.Itoa(i)
 		lastEventID = h.broadcastSSE(r, treeID, eventName, map[string]any{
-			"topic_id":            tc.TopicID,
-			"node_count":          len(tc.Nodes),
-			"context_hash":        tc.ContextHash,
+			"topic_id":             tc.TopicID,
+			"node_count":           len(tc.Nodes),
+			"context_hash":         tc.ContextHash,
 			"total_nodes_in_scope": tc.TotalNodes,
 		})
 	}

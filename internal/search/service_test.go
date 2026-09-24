@@ -25,8 +25,8 @@ func TestCompileMultiTopicContext_BoundaryMarkers(t *testing.T) {
 			Nodes: []ContextNode{
 				{ID: uuid.New(), Content: "Hello from topic A", CreatedAt: time.Now()},
 			},
-			TotalNodes: 1,
-			HasMore:    false,
+			TotalNodes:  1,
+			HasMore:     false,
 			ContextHash: "abc123",
 		},
 		{
@@ -37,8 +37,8 @@ func TestCompileMultiTopicContext_BoundaryMarkers(t *testing.T) {
 			Nodes: []ContextNode{
 				{ID: uuid.New(), Content: "Hello from topic B", CreatedAt: time.Now()},
 			},
-			TotalNodes: 1,
-			HasMore:    false,
+			TotalNodes:  1,
+			HasMore:     false,
 			ContextHash: "def456",
 		},
 	}

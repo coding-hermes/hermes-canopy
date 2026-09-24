@@ -1,9 +1,10 @@
 // Package handler — topic detection HTTP handlers.
 // Implements SPEC-TM-02 §8.2 endpoints:
-//   POST /v1/topic-proposals/{proposal_id}/confirm
-//   POST /v1/topic-proposals/{proposal_id}/dismiss
-//   GET  /trees/{tree_id}/topic-detection
-//   PUT  /trees/{tree_id}/topic-detection
+//
+//	POST /v1/topic-proposals/{proposal_id}/confirm
+//	POST /v1/topic-proposals/{proposal_id}/dismiss
+//	GET  /trees/{tree_id}/topic-detection
+//	PUT  /trees/{tree_id}/topic-detection
 //
 // Routes are tree-scoped where applicable and membership-gated upstream.
 // Error responses follow the spec §9 error catalog.

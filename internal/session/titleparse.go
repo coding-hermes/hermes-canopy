@@ -54,10 +54,10 @@ var projectColonRe = regexp.MustCompile(`^([a-z0-9][a-z0-9]*(?:-[a-z0-9]+)+):\s`
 //   - Board task:   "BUG-034", "WIRE-006", "GAP-001", "TASK-123" (case-insensitive)
 //   - Commit hash:  7-40 hex chars as a standalone token ("a1b2c3d")
 //   - Project slug: extracted from sync/cron titles and colon-prefixed titles:
-//       "hermes-canopy-duckbrain-sync · Aug 09" → "hermes-canopy"
-//       "9router-duckbrain-sync · Aug 09"       → "9router"
-//       "totalstack-shape-validator · Aug 09"   → "totalstack-shape-validator"
-//       "hermes-canopy: Fix BUG-034"            → "hermes-canopy"
+//     "hermes-canopy-duckbrain-sync · Aug 09" → "hermes-canopy"
+//     "9router-duckbrain-sync · Aug 09"       → "9router"
+//     "totalstack-shape-validator · Aug 09"   → "totalstack-shape-validator"
+//     "hermes-canopy: Fix BUG-034"            → "hermes-canopy"
 //
 // Unmatched titles ("Documenting the Kelly leverage cycle", "alpha",
 // "H4F Hourly Health Check · Aug 09 19:12") produce an empty TitleInfo

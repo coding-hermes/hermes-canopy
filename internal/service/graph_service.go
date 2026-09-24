@@ -28,7 +28,7 @@ type GraphEdgeSummary struct {
 	// ID is the persisted `edges.id`. SPEC-PL-06 §7.1 requires the
 	// frontend to render React Flow edges with the database identity, so a
 	// convergence edge can be re-read, inspected and hover-linked by id.
-	ID uuid.UUID `json:"id"`
+	ID       uuid.UUID `json:"id"`
 	SourceID uuid.UUID `json:"source_id"`
 	TargetID uuid.UUID `json:"target_id"`
 	EdgeType string    `json:"edge_type"` // reply | fork | reference | synthesis
