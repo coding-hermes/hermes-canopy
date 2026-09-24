@@ -3547,3 +3547,59 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
 - Off-by-one :8766: discovered harness-cell-asserts-cli-exit-code-contract-that-does-not-exist
   (found:true, answer 2014); submitted bash-test-battery-env-isolation-and-eval-quoting-traps
   post-debug (sub_4850fe, queued).
+
+## Tick 581 — hermes-canopy-2026-09-24-22-15-26 (2026-09-24) — WORK: stale-class closeout of QA-2/28/33/13
+
+- Verdict: WORK (board bookkeeping on landed evidence; no dispatch, no product diff).
+  Four stale-class closes, foreman-direct, following the tick-580 QA-24/25 recipe. Every
+  row's own fix directive already ships in the deployed harness
+  (~/.hermes/scripts/bunker-qa.sh, git-tracked in the GITLESS /home/kara home repo), and
+  event 853 (dead tick 579) had already recorded the live-cycle falsification for the
+  trio: "QA-24/25/28 premises falsified by 09-24 00:30 cycle ledger (agent c4b985cd):
+  toolchain-bootstrap OK, upgrade OK, docker-deploy INFO not FAIL".
+- QA-HERMES-CANOPY-2 (P2, get.docker.com hard-dep): closed on FIX 2 (QA-WARPFS-2-3 block)
+  — 3-attempt ladder on the pinned docker-28.5.2 static tarball (backoff 5s/15s) + ONE
+  docker-rootless-extras fallback artifact, no --resolve pinning by design; the block's
+  own comment cites this row's 2026-09-05 exit-6 event verbatim. Intro commit 877a6f0.
+  Pre-fix signature proven from /tmp/bunker-qa-evidence-hermes-canopy-1789803203.jsonl
+  (agent 1d236132, 09-19): docker-deploy FAIL rc=125 with NO fallback attempt.
+- QA-HERMES-CANOPY-28 (P2, upgrade cell treeless): closed on ship_prev_tag_tree
+  (QA-OFF-BY-ONE-22, commit 51efab5) + frozen git-archive-HEAD sync (QA-TERMINAL-JAIL-9,
+  f136f29); call sites bunker-qa.sh:2003/:2109 grep-verified; repo carries rc1+v0.1.0 and
+  `git archive --format=tar rc1` streams 45,250,560 bytes clean; the 09-24 00:30 cycle
+  graded the upgrade cell OK.
+- QA-HERMES-CANOPY-33 (P3, cap not applied to child): closed on QA-H3-16 (commit 215cf5d)
+  — the row's own UNVERIFIED string self-refutes: child_saw=3145728 CAP_REQUESTED=3145728
+  is the old whole-line sed capture ("3145728 3145728"), i.e. the cap DID reach the child;
+  the first-field fix landed 09-21 and four post-fix chaos-resource cells read PASS
+  "suite survives 3G memory cap (cap=3145728KB child_saw=3145728 subshell_saw=3145728
+  parent_saw=unlimited)" (off-by-one 09-22T12:40Z, sdk-go 09-21T23:52Z, app
+  09-24T14:22Z, logsey 09-24T20:32Z) — parent_saw=unlimited is exactly the child_saw <
+  parent asymmetry the row demanded, gated on the child's own readback. Host mechanism
+  sanity re-probed this tick: subshell 3145728 → child 3145728 → parent unlimited.
+- QA-HERMES-CANOPY-13 (P3, QA-slot hygiene): closed on own-cycle board-wide probe —
+  post-09-19 QA rows are QA-21..QA-33 with unique monotonic slot ids ("QA-HERMES-CANOPY-1"
+  appears on exactly 1 line, "QA-HERMES-CANOPY-2" exactly 1; 391-row last-write-wins
+  census = 0 parse failures, 0 duplicate ids); later rows embed same-cycle probe output
+  (agent id + server + head sha + verbatim evidence string); last-row-per-id map over open
+  QA rows had zero shadowed pendings.
+- Process notes: (1) the row-closure script's first write FUSED four closed rows into
+  their following lines (missing trailing newline in the re-serialized row) — caught by
+  the script's own full-parse verification before any commit, repaired by raw_decode
+  splitting that re-serialized ONLY the edited rows and kept neighbor bytes verbatim;
+  final census 391 lines / 391 unique ids / 0 blank lines. (2) Pending set is now
+  exactly: FTR-06, PL-04, PL-05, PL-06, GAP-080, GAP-081, DF-HERMES-CANOPY-25 —
+  GAP-080/081 owner-bound (5+ tick precedent), FTR-06/PL-04/05/06 mega-specs need design
+  passes, DF-25 P4 watch. No independent implementation pair remains ⇒ no wave
+  (WAVE_BUDGET=10, serial moot). (3) board-venv PATH shadowed the pipx gitreins shim
+  during the commit hook (ModuleNotFoundError, known trap) — commit taken --no-verify
+  per the board-only-commit recipe; the diff-scoped guard had already short-circuited
+  "No supported source files found" (shell/JSONL-only diff) on the visible hook run.
+- Gitreins: 0 non-terminal tasks (the two ● entries in task list are complete tasks whose
+  titles contain the word "pending"); nothing to steward. Off-by-one :8766: no debugging
+  performed this tick — all three mechanisms were re-verified from landed evidence and
+  the harness's own comment blocks; no new pre-solve candidate, no post-debug submission.
+- Board commits: 5a16b242 (event 857 + 4 closes + header last_tick/ticks_total/last_commit)
+  — pushed origin AND gitlab, rev-list 0/0 after each. CI at tick open: 5/5 recent runs
+  success incl. 76022a98 (22:01Z). CI on 5a16b242: PENDING at tick close (board-only
+  diff; next tick folds).
