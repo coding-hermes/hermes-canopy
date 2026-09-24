@@ -126,6 +126,13 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, apiErrorBody{Error: apiError{Code: code, Message: message}})
 }
 
+// NotFoundHandler writes the canonical error envelope for unmatched routes.
+// It is exported narrowly so the production router can use the same envelope
+// as endpoint handlers without exposing the response types.
+func NotFoundHandler(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "route not found")
+}
+
 // --- URL parameter helpers --------------------------------------------------
 
 // parseTreeID reads and validates the {tree_id} chi URL parameter.

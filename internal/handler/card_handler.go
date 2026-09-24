@@ -117,6 +117,29 @@ type cardsListResponse struct {
 	Cards []service.CardSummary `json:"cards"`
 }
 
+var supportedCardTypes = []service.CardType{
+	service.CardTypeCompact,
+	service.CardTypeExpanded,
+	service.CardTypeIteration,
+}
+
+func isSupportedCardType(cardType service.CardType) bool {
+	for _, supported := range supportedCardTypes {
+		if cardType == supported {
+			return true
+		}
+	}
+	return false
+}
+
+func invalidCardTypeMessage() string {
+	values := make([]string, 0, len(supportedCardTypes))
+	for _, cardType := range supportedCardTypes {
+		values = append(values, string(cardType))
+	}
+	return "card_type must be one of: " + strings.Join(values, ", ")
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────
 
 // ListCards returns a paginated list of cards filtered by tree/node.
@@ -143,6 +166,10 @@ func (h *CardHandler) ListCards(w http.ResponseWriter, r *http.Request) {
 	var cardType *service.CardType
 	if raw := r.URL.Query().Get("card_type"); raw != "" {
 		ct := service.CardType(raw)
+		if !isSupportedCardType(ct) {
+			writeError(w, http.StatusBadRequest, "INVALID_CARD_TYPE", invalidCardTypeMessage())
+			return
+		}
 		cardType = &ct
 	}
 

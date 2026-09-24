@@ -1313,6 +1313,11 @@ under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`.
 DuckDB is **not** used: `internal/card/duckdb/` is cgo-only and has zero importers
 repo-wide — it is archived, not the card backend.
 
+**REST CardSummary compatibility:** list and detail responses use the wire key
+`type` for the card type. Do not rename it to `card_type`: `card_type` remains the
+key used by the SSE envelope, the domain `card.Card`, and card-export JSONL. These
+are intentionally different shapes.
+
 ### List Cards
 
 ```
@@ -1321,6 +1326,10 @@ GET /api/v1/cards
 
 **Query params:** `tree_id` (UUID), `node_id` (UUID), `card_type` (string),
 `limit` (int, default 50), `offset` (int, default 0)
+
+When supplied, `card_type` must be `compact`, `expanded`, or `iteration`.
+Other non-empty values return `400 INVALID_CARD_TYPE` and the service is not
+called.
 
 **Response (200):**
 ```json
@@ -1331,7 +1340,7 @@ GET /api/v1/cards
       "tree_id": "uuid",
       "node_id": "uuid",
       "app_id": "string",
-      "card_type": "string",
+      "type": "compact | expanded | iteration",
       "data": {},
       "created_at": "RFC3339"
     }
@@ -1356,6 +1365,12 @@ POST /api/v1/cards
 }
 ```
 
+The create decoder is strict: `actions` is not accepted on POST and an
+`actions` field is rejected rather than silently dropped. New cards start with
+an empty action list. To declare actions, create the card first, read the
+returned `revision`, then PATCH `actions` with `If-Match` set to that revision;
+see Update Card below.
+
 **Response (201):** Created card detail.
 
 ### Get Card
@@ -1364,7 +1379,8 @@ POST /api/v1/cards
 GET /api/v1/cards/{card_id}
 ```
 
-**Response (200):** Card detail.
+**Response (200):** Card detail. The detail uses the same REST CardSummary wire
+shape as the list response, including `type` (not `card_type`).
 
 ### Update Card
 

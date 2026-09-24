@@ -276,6 +276,9 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Use(telemetry.MetricsMiddleware(metrics))
 	}
 
+	// Keep unmatched public routes on the same JSON error contract as handlers.
+	r.NotFound(handler.NotFoundHandler)
+
 	// Health and version endpoints (public — no auth).
 	r.Get("/health", healthHandler)
 	r.Get("/healthz", healthHandler)
@@ -309,6 +312,10 @@ func newRouter(deps *routeDeps) *chi.Mux {
 				return ""
 			}, telemetry.NewResumeTracker(telemetry.DefaultResumeIdleGap)))
 		}
+
+		// Apply the canonical NotFound handler after auth so an unknown API
+		// route preserves the existing authentication ordering.
+		r.NotFound(handler.NotFoundHandler)
 
 		// Topic search + context injection (TM-03). Tree-scoped, membership-gated.
 		// Registered BEFORE the /trees mount so chi's radix router resolves
