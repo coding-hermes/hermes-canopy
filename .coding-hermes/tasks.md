@@ -3301,3 +3301,52 @@ Fresh verification (all run this tick): `git fsck --no-dangling` clean; `go buil
 Bookkeeping: audit event 841 appended (offbyone residual-closure evidence in detail); header ticks_total 572→573, ticks_idle 7→8, last_tick 10:42:47, last_commit stays 2cf6a5ee (no content commit). Sibling-modification flag on board.jsonl was a false alarm — no concurrent canopy writer (checked /proc: running workers belong to logsey/scheduler/9router), and both writes verified intact post-write.
 
 **NOT DONE / residual:** unchanged from tick 572 minus the closed item — GAP-080 phase 3 and GAP-081 wait on owner rulings; do not re-derive the idle rationale next tick without re-scanning the live pending set.
+
+## Tick 574 — hermes-canopy-2026-09-24-11-08-42 (2026-09-24) — BACKFILL: tick-log hole for ticks 562-573 closed
+
+**IDLE + BACKFILL — 10th consecutive clean idle for actionable work (streak 9 per header
+ticks_idle 8→9); ONE real action: the tick-log hole is closed.** No dispatch, no worker, no
+gitreins lifecycle; board files + tasks.md only.
+
+**The hole:** ticks 562-571 appended board audit/lifecycle events and each committed its own
+board state (commits 47effa62…76541e22), but none wrote a `## Tick NNN` section to tasks.md —
+the file this repo's convention treats as the maintenance tick record. Board state itself was
+NEVER lost (every tick's audit event + header bump landed); only tasks.md was skipped, by ten
+consecutive sessions. Cause not determinable post-hoc (likely the same terminal-blocked/crashed
+session class documented fleet-wide); recorded as-is, not diagnosed-by-guess.
+
+**Per-tick reconstruction (from events.jsonl 816-841 + git log):**
+
+| Tick | Verdict | Evidence |
+|---|---|---|
+| 562 | unknown | no board event of any kind (events 815-817 are pre-563 or the 00:55 QA annotation); annotated unknown, not invented |
+| 563 | WAVE of 3, all PASS | DF-57 683bddbb/merge 3037fddb/judge a052a9ec · DF-58 8a85c8f7/merge d56c4afb/judge 889a2418 · DF-59 b6e52aff/merge 91a4aaf1/judge a48ccefd; CI 35959886441 GREEN; DF-60 deferred non-independent (event 824) |
+| 564 | WORK — DF-60 complete | serial worker gpt-5.6-luna@openai-codex; commit 67a6b02f; tiers 1+2 PASS judge ff4e8af6; CI 35963487563 GREEN (events 827/828/831) |
+| 565 | idle | event 832; board commit 47effa62 |
+| 566 | idle + gofmt drift fix | foreman-direct 934a0e1b, gates re-run green (event 833) |
+| 567 | idle; CI status corrected | first closeout claimed green while run for e8834431 was in_progress; corrected by event 835 / commit f7cc9758 |
+| 568 | idle | event 836, commit 1c30cd67 |
+| 569 | idle; off-by-one residuals closed | sub_267264 + sub_672962 verified COMPLETE (event 837), commit dcb12fe8 |
+| 570 | idle | event 838, commit 162224df |
+| 571 | idle | event 839, commit 6a475018 |
+| 572 | idle (evidence re-derived) | event 840, commit 2efa1904; release spot-check v0.1.0 verified live |
+| 573 | idle; residual drift cleared | event 841, commit 76541e22; sub_267264 re-verified live (answer 2368); copy-forward residual line removed |
+
+**Idle verdict (re-derived, not inherited):** 391 rows / 372 complete / 19 pending last-wins /
+0 parse failures (jq). Pending set unchanged in classification: GAP-080 phase 3 + GAP-081
+decision-bound on owner rulings; QA-HERMES-CANOPY-2/10/12/13/21/24/25/28/31/32/33 bunker/
+fleet-infra owned; FTR-06/PL-04/05/06 mega-specs needing design passes; DF-25 P4 watch;
+REVIEW-CANOPY-004 targets the shared fleet normalizer, not canopy-owned code. Wave check:
+fewer than 2 mutually independent implementation tasks (WAVE_BUDGET=1) → no wave. Off-by-one:
+nothing to debug this tick — no fix was designed, so no pre-solve lookup owed.
+
+Fresh verification (all run this tick): `git fsck --no-dangling` clean; `go build ./...` rc=0;
+`go vet ./...` rc=0; `gofmt -l` on tracked Go files clean; frontend `npm run build` rc=0;
+`npx oxlint src` rc=0 (2 pre-existing ViewerHost warnings); CI green incl. tip 76541e22;
+remotes parity origin 0 / gitlab 0 ahead; no worktrees; no concurrent canopy writer.
+
+Bookkeeping: audit event 842 appended; header ticks_total 573→574, ticks_idle 8→9,
+last_tick 11:08:42; last_commit stays 2cf6a5ee (no content commit this tick).
+
+**NOT DONE / residual:** unchanged — GAP-080 phase 3 and GAP-081 wait on owner rulings;
+do not re-derive the idle rationale next tick without re-scanning the live pending set.
