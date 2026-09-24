@@ -116,7 +116,9 @@ OUT=$(run_chain "$PROJECT")
 GRADE=$(grade_of "$OUT")
 if [ "$GRADE" = "OK" ]; then
   ok "post-fix chain grades ui-probe OK for the frontend-only fixture"
-  grep -q "(frontend/)" <<<"$OUT" && ok "OK detail names the frontend/ arm" || bad "OK detail missing '(frontend/)': [$OUT]"
+  # The OK detail may enrich the arm name (e.g. "(frontend/, landed: URL)" since
+  # 00a91e4) — the invariant is that the detail NAMES the frontend/ arm.
+  grep -q "(frontend/" <<<"$OUT" && ok "OK detail names the frontend/ arm" || bad "OK detail missing '(frontend/': [$OUT]"
 else
   bad "post-fix chain expected OK, got [$GRADE]: [$OUT]"
   sed -n '1,20p' "$PROJECT/.qa9logs/ui.log" 2>/dev/null
