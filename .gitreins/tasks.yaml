@@ -3501,3 +3501,33 @@ tasks:
   status: complete
   created_at: '2026-09-23T10:24:19.607316+00:00'
   completed_at: '2026-09-23T10:31:22.691393+00:00'
+- id: DF-HERMES-CANOPY-57
+  title: Card actions must honour card status (409 on dismissed/archived)
+  criteria:
+  - POST /api/v1/cards/{id}/actions on a card whose status is dismissed returns 409
+    CARD_STATUS_DISMISSED and appends NO events; on an archived card returns 409 CARD_STATUS_ARCHIVED
+    and appends no events; a regression test asserts both; an active card still returns
+    200 with the action_requested + action_completed event pair.
+  status: complete
+  created_at: '2026-09-24T04:26:38.413162+00:00'
+  completed_at: '2026-09-24T04:54:37.189091+00:00'
+- id: DF-HERMES-CANOPY-58
+  title: Topic search must match node content (wire refresh_topic_node_content_index)
+  criteria:
+  - After creating a topic over a tree, searching a word that appears only in a member
+    node's content returns that topic with a mark-annotated snippet; RefreshNodeContentIndex
+    has at least one production caller (not tests only); a test asserts a node-content-only
+    query matches the topic.
+  status: complete
+  created_at: '2026-09-24T04:26:38.802475+00:00'
+  completed_at: '2026-09-24T04:55:45.168392+00:00'
+- id: DF-HERMES-CANOPY-59
+  title: 'Cards page: node picker + lifecycle/action controls'
+  criteria:
+  - The create-card dialog offers a node picker populated from the selected tree's
+    nodes instead of a hand-pasted UUID; the cards page exposes dismiss/restore/archive
+    lifecycle controls using the documented If-Match PATCH; frontend tests cover the
+    new behaviour.
+  status: complete
+  created_at: '2026-09-24T04:26:39.221200+00:00'
+  completed_at: '2026-09-24T05:04:18.948794+00:00'
