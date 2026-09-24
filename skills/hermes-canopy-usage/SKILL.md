@@ -8,7 +8,7 @@ description: >-
   GAP-071, casing split, docs drift). Load this before touching the stack.
   Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
   09-22, 09-23 and 09-24 deep dogfood runs.
-version: 2.6.0
+version: 2.7.0
 category: software-development
 ---
 
@@ -90,6 +90,48 @@ that never fire. Don't build on resolved-refs queries until DF-50 lands.**
 (labelled "database unavailable"). Edgeless trees import fine (201).
 Export/import round-trips are NOT a backup strategy until this lands; export
 also omits topics (DF-54).
+
+## Synthesis / merge, sync-snapshot, plugins, context compiler (verified 2026-09-24b, HEAD 76022a98, run 8)
+
+- **Synthesis**: only via `POST /trees/{id}/merge` (node-create with
+  `node_type:"synthesis"` → 400 sentinel). One txn: node + 1 reply edge +
+  N synthesis edges; `merged_source_ids` echoes sources. Chained merges legal
+  (a synthesis node can source another merge). Named errors:
+  `SOURCE_TARGET_OVERLAP`, `MIN_SOURCE_NODES`, `TREE_MISMATCH`,
+  `SOURCE_NODE_DELETED`. Create-tree REQUIRES `rootMessage.content` — a title-only
+  body 400s `tree service: root message content is required`.
+- **Context compiler**: `GET /context/{node_id}?budget=N` → `{content, manifest}`;
+  the manifest (tokenBudget, tokensUsed, ancestry, manifestHash) is INSIDE
+  `.manifest`, not top-level. `manifestHash` is stable across identical requests.
+  `budget=0` → 400 INVALID_BUDGET; deleted node → 404.
+- **Sync**: `GET /trees/{id}/sync?sinceHash=<64hex>` → 200 delta, 204 when
+  current. **POST /trees/{id}/sync/snapshot 500s whenever the tree-state hash
+  already exists** (DF-62: plain INSERT vs unique idx_snapshots_tree_hash;
+  auto-snapshots after mutations usually win the race). Treat any
+  non-mutated-tree snapshot as likely-500; re-snapshot after the next write.
+- **Plugins**: the documented dev JWT (sub = USER uuid) 500s on
+  `POST /plugins/` — FK `author_profile_id` needs a PROFILES id (DF-63).
+  Working pattern: mint the same HS256 token with sub = the dev profile UUID
+  (find via psql `profiles`, no route returns it). Lifecycle works as the docs
+  table says: `{name}` = manifest name verbatim in `/versions`, `/activate`,
+  `/disable`, `/archive`; `{name}` = SLUG in `/update`, `/rollback`; `{id}` =
+  row UUID but **GET /plugins/{id} 404s any non-active row** (observed;
+  undocumented opposite of the docs' "any status" claim). Rollback body needs
+  `target_version` + `actor_profile_id`. GET /plugins/{name}/versions returns a
+  BARE ARRAY despite docs' `{plugins:[...]}` (DF-64a).
+- **Export/import**: clean trees round-trip (import → 201 flat summary
+  `{treeId,nodeCount,edgeCount,topicCount,resolvedRefCount}`); ANY tree with a
+  soft-deleted node exports edges to nowhere and import rejects the whole
+  payload (DF-61). Don't rely on export→import for real trees yet.
+- Approvals list routes answer `{"approvals":[],"limit":50,"offset":0,"total":0}`
+  when empty — safe to poll.
+- **Perf (hyperfine 20 runs, warm)**: merge 7.0ms, context compile 7.5ms,
+  sync delta 6.9ms, graph stats 7.0ms — nothing user-noticeable.
+- **Fresh-box install truth (bunker, 2026-09-24b)**: compose path real — build+up
+  232s, health 200, full tree→merge smoke inside the container. Bunker
+  specifics: DOCKER_HOST=unix:///run/bunker/<agent>/docker.sock (systemd unit
+  may bounce); published :8092 RSTs from the agent user — smoke INSIDE
+  canopy-server with busybox `wget --header "k: v"` (space, not `=`).
 
 ## Entry points
 
