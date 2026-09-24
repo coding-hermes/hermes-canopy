@@ -62,6 +62,7 @@ type TopicServiceImpl struct {
 	cooldownRepo db.SubjectCooldownRepo
 	analyzer     Analyzer
 	now          func() time.Time
+	contentIndex TopicContentIndexer
 
 	// proposalMu serializes concurrent ConfirmProposal calls for the same
 	// proposal ID to ensure idempotency (one topic created, both return it).
@@ -106,6 +107,53 @@ func (s *TopicServiceImpl) WithDetection(
 	return s
 }
 
+func (s *TopicServiceImpl) WithContentIndexer(indexer TopicContentIndexer) *TopicServiceImpl {
+	s.contentIndex = indexer
+	return s
+}
+
+// RefreshNodeContentForTopics refreshes the content index for every topic
+// whose derived membership contains nodeID. It is deliberately best-effort:
+// node writes must not fail because search indexing is unavailable.
+func (s *TopicServiceImpl) RefreshNodeContentForTopics(ctx context.Context, nodeID uuid.UUID) {
+	if s.contentIndex == nil || s.repo == nil {
+		return
+	}
+	topics, err := s.repo.GetTopicsForNode(ctx, nodeID)
+	if err != nil {
+		log.Ctx(ctx).Warn().Err(err).Str("node_id", nodeID.String()).
+			Msg("topic: find topics for content refresh failed")
+		return
+	}
+	for _, topic := range topics {
+		if _, err := s.contentIndex.RefreshNodeContentIndex(ctx, topic.ID, []uuid.UUID{nodeID}); err != nil {
+			log.Ctx(ctx).Warn().Err(err).
+				Str("topic_id", topic.ID.String()).
+				Str("node_id", nodeID.String()).
+				Msg("topic: refresh node content index after node write failed")
+		}
+	}
+}
+
+// refreshTopicContentIndex refreshes the current derived member set for a
+// newly-created topic. Search indexing is best-effort and never blocks topic
+// creation.
+func (s *TopicServiceImpl) refreshTopicContentIndex(ctx context.Context, topicID uuid.UUID) {
+	if s.contentIndex == nil {
+		return
+	}
+	nodeIDs, err := s.contentIndex.GetTopicNodeIDs(ctx, topicID)
+	if err != nil {
+		log.Ctx(ctx).Warn().Err(err).Str("topic_id", topicID.String()).
+			Msg("topic: get member nodes for content index refresh failed")
+		return
+	}
+	if _, err := s.contentIndex.RefreshNodeContentIndex(ctx, topicID, nodeIDs); err != nil {
+		log.Ctx(ctx).Warn().Err(err).Str("topic_id", topicID.String()).
+			Msg("topic: refresh node content index after create failed")
+	}
+}
+
 // detectionEnabled returns true if all detection dependencies are wired.
 func (s *TopicServiceImpl) detectionEnabled() bool {
 	return s.proposalRepo != nil && s.configRepo != nil && s.cooldownRepo != nil
@@ -142,6 +190,7 @@ func (s *TopicServiceImpl) CreateTopic(ctx context.Context, treeID, rootNodeID u
 	} else {
 		t.NodeCount = count
 	}
+	s.refreshTopicContentIndex(ctx, t.ID)
 	return topicToSummary(t), nil
 }
 
@@ -453,6 +502,7 @@ func (s *TopicServiceImpl) ConfirmProposal(ctx context.Context, proposalID uuid.
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrProposalDuplicate, err)
 	}
+	s.refreshTopicContentIndex(ctx, topic.ID)
 
 	// Mark proposal confirmed.
 	_ = s.proposalRepo.UpdateStatus(ctx, proposalID, "confirmed", s.now())

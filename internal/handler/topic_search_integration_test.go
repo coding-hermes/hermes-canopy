@@ -22,6 +22,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/search"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 	"github.com/coding-hermes/hermes-canopy/internal/testutil"
 )
@@ -541,6 +542,87 @@ func TestTM03_SQLInjectionAttempt(t *testing.T) {
 				"SQL injection must not leak data")
 		}
 	}
+}
+
+func configureTopicContentIndexer(topicSvc *service.TopicServiceImpl, searchSvc *search.TopicSearchService) {
+	topicSvc.WithContentIndexer(*searchSvc)
+}
+
+// --- Scenario 2: Topic creation indexes current node content ---------------
+
+func TestTM03_TopicCreateIndexesNodeContent(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	srv, searchSvc := newSearchTestServer(t, pool)
+
+	treeID, profileID := tm03CreateTestTree(t, pool)
+	rootNode := tm03CreateTestNode(t, pool, treeID, profileID, "The quartzite signal is only in node content")
+
+	topicSvc := service.NewTopicServiceImpl(
+		db.NewPGTopicRepo(pool),
+		db.NewPGTopicMemberRepo(pool),
+		db.NewPGTreeRepo(pool),
+		db.NewPGNodeRepo(pool),
+	)
+	configureTopicContentIndexer(topicSvc, searchSvc)
+	created, err := topicSvc.CreateTopic(context.Background(), treeID, rootNode,
+		"Unrelated title", "Unrelated description")
+	require.NoError(t, err)
+
+	resp := doSearchRequest(t, srv, treeID, "quartzite")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var body searchResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.Equal(t, 1, body.Total)
+	require.Len(t, body.Results, 1)
+	assert.Equal(t, created.ID, body.Results[0].TopicID)
+	assert.Contains(t, body.Results[0].Snippet, "<mark>")
+}
+
+// --- Scenario 2: Member-node writes refresh topic content -------------------
+
+func TestTM03_NodeWritesRefreshTopicContent(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+	srv, searchSvc := newSearchTestServer(t, pool)
+
+	treeID, profileID := tm03CreateTestTree(t, pool)
+	rootNode := tm03CreateTestNode(t, pool, treeID, profileID, "Initial member content")
+	topicSvc := service.NewTopicServiceImpl(
+		db.NewPGTopicRepo(pool),
+		db.NewPGTopicMemberRepo(pool),
+		db.NewPGTreeRepo(pool),
+		db.NewPGNodeRepo(pool),
+	)
+	configureTopicContentIndexer(topicSvc, searchSvc)
+	_, err := topicSvc.CreateTopic(context.Background(), treeID, rootNode,
+		"Member write topic", "")
+	require.NoError(t, err)
+
+	nodeSvc := service.NewNodeService(
+		db.NewPGNodeRepo(pool), db.NewPGEdgeRepo(pool), pool, nil,
+	).WithTopicDetection(topicSvc)
+	newContent := "edited member text called cobaltite"
+	_, err = nodeSvc.Update(context.Background(), rootNode, service.UpdateNodeInput{Content: &newContent})
+	require.NoError(t, err)
+
+	resp := doSearchRequest(t, srv, treeID, "cobaltite")
+	var body searchResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, 1, body.Total)
+
+	_, err = nodeSvc.Reply(context.Background(), rootNode, service.ReplyInput{
+		Content: "reply text called vanadinite", AuthorID: profileID,
+	})
+	require.NoError(t, err)
+	resp = doSearchRequest(t, srv, treeID, "vanadinite")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.Equal(t, 1, body.Total)
 }
 
 // --- Scenario 2: Search by node content (with content index) ---------------

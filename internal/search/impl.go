@@ -127,6 +127,20 @@ func (s *topicSearchService) GetTopicPreview(ctx context.Context, topicID uuid.U
 	}, nil
 }
 
+// GetTopicNodeIDs returns the current derived member node IDs for a topic.
+// It uses the existing topic_member_nodes-backed repository path.
+func (s *topicSearchService) GetTopicNodeIDs(ctx context.Context, topicID uuid.UUID) ([]uuid.UUID, error) {
+	nodes, _, _, err := s.repo.GetTopicNodes(ctx, topicID, 1000000)
+	if err != nil {
+		return nil, fmt.Errorf("get topic node IDs: %w", err)
+	}
+	ids := make([]uuid.UUID, 0, len(nodes))
+	for _, node := range nodes {
+		ids = append(ids, node.ID)
+	}
+	return ids, nil
+}
+
 // RefreshNodeContentIndex re-indexes node content for a topic.
 func (s *topicSearchService) RefreshNodeContentIndex(ctx context.Context, topicID uuid.UUID, nodeIDs []uuid.UUID) (int, error) {
 	count, err := s.repo.RefreshNodeContentIndex(ctx, topicID, nodeIDs)

@@ -629,6 +629,10 @@ func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input Cr
 	// BE-18: Broadcast node_added to tree subscribers.
 	s.broadcastNodeEvent(ctx, treeID, "node_added", created.ID, created.AuthorID)
 
+	// TM-03: Refresh derived topic content indexes after the node commit.
+	// Search indexing is optional and non-fatal to node creation.
+	s.runTopicContentRefresh(ctx, created.ID)
+
 	// TM-02: Auto-detection hook — invoked after the node is committed and
 	// broadcast. Detection must NEVER fail node creation: errors are logged
 	// and swallowed. The topicSvc is optional (nil for tests).
@@ -874,6 +878,9 @@ func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input Up
 
 	// BE-18: Broadcast node_updated to tree subscribers.
 	s.broadcastNodeEvent(ctx, detail.TreeID, "node_updated", nodeID, detail.AuthorID)
+
+	// TM-03: Keep content indexes current after a committed edit.
+	s.runTopicContentRefresh(ctx, nodeID)
 
 	return detail, nil
 }
@@ -1377,6 +1384,15 @@ func (s *NodeServiceImpl) broadcastNodeEvent(ctx context.Context, treeID uuid.UU
 		Timestamp: time.Now().UTC(),
 		ActorID:   actorID,
 	})
+}
+
+// runTopicContentRefresh refreshes the optional content index after a node
+// write. The type assertion keeps existing TopicDetector implementations and
+// tests nil-safe.
+func (s *NodeServiceImpl) runTopicContentRefresh(ctx context.Context, nodeID uuid.UUID) {
+	if refresher, ok := s.topicSvc.(TopicContentRefresher); ok {
+		refresher.RefreshNodeContentForTopics(ctx, nodeID)
+	}
 }
 
 // runTopicDetection invokes auto-topic-detection for a newly persisted node.
