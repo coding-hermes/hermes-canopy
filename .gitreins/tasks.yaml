@@ -3553,3 +3553,18 @@ tasks:
   status: complete
   created_at: '2026-09-24T11:37:27.182788+00:00'
   completed_at: '2026-09-24T11:49:01.167055+00:00'
+- id: QA-HERMES-CANOPY-21
+  title: Fix 4 bunker-qa harness evidence defects (ci-pass act label, ui-probe go-native
+    arm, disconnect window, corruption start-cmd gate)
+  criteria:
+  - 'bunker-qa.sh: ci-pass details are native-led (no detail begins ''act rc='' when
+    native results are reported); ui-probe grades a go.mod+http.ListenAndServe fixture
+    OK naming the pattern and an empty repo N/A; chaos-disconnect window = max(2x
+    observed suite duration + 30s, override floor) named in the detail; chaos-corruption
+    grades UNVERIFIED without truncating any state file when no start command was
+    detected. New scripts/test-bunker-qa-ci-labels-and-windows.sh passes T1-T4; the
+    four existing test-bunker-qa-*.sh batteries still pass; bash -n clean on both
+    scripts; commits land in both repos with the co-author trailer.'
+  status: complete
+  created_at: '2026-09-24T17:12:01.339213+00:00'
+  completed_at: '2026-09-24T18:00:32.008287+00:00'
