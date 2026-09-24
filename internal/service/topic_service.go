@@ -12,6 +12,20 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
+// TopicContentIndexer is the narrow search capability needed to keep node
+// content searchable as topic membership changes. Implementations must treat
+// repeated refreshes as safe and idempotent.
+type TopicContentIndexer interface {
+	GetTopicNodeIDs(ctx context.Context, topicID uuid.UUID) ([]uuid.UUID, error)
+	RefreshNodeContentIndex(ctx context.Context, topicID uuid.UUID, nodeIDs []uuid.UUID) (int, error)
+}
+
+// TopicContentRefresher is the optional hook used by node writes to refresh
+// every topic whose derived membership now contains the written node.
+type TopicContentRefresher interface {
+	RefreshNodeContentForTopics(ctx context.Context, nodeID uuid.UUID)
+}
+
 // TopicSummary is a lightweight view of a topic for list responses.
 type TopicSummary struct {
 	ID          uuid.UUID `json:"id"`
@@ -29,16 +43,16 @@ type TopicSummary struct {
 // topic proposal. Returned by AutoDetect and PreviewProposal. The persisted
 // form lives in db.TopicProposal.
 type TopicProposal struct {
-	ID            uuid.UUID    `json:"id"`
-	TreeID        uuid.UUID    `json:"treeId"`
-	RootNodeID    uuid.UUID    `json:"rootNodeId"`
-	Title         string       `json:"title"`
-	Description   string       `json:"description"`
+	ID            uuid.UUID     `json:"id"`
+	TreeID        uuid.UUID     `json:"treeId"`
+	RootNodeID    uuid.UUID     `json:"rootNodeId"`
+	Title         string        `json:"title"`
+	Description   string        `json:"description"`
 	DetectionType DetectionType `json:"detectionType"`
-	Confidence    float32      `json:"confidence"`
-	SubjectKey    string       `json:"subjectKey"`
-	Status        string       `json:"status"`
-	ExpiresAt     time.Time    `json:"expiresAt"`
+	Confidence    float32       `json:"confidence"`
+	SubjectKey    string        `json:"subjectKey"`
+	Status        string        `json:"status"`
+	ExpiresAt     time.Time     `json:"expiresAt"`
 }
 
 // TopicService defines the contract for topic CRUD, search, lifecycle,

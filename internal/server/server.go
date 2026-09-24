@@ -91,6 +91,9 @@ func New(
 	relayRegistry *relay.RelayRegistry,
 	cfg *config.Config,
 ) *Server {
+	if impl, ok := topicSvc.(*service.TopicServiceImpl); ok {
+		impl.WithContentIndexer(topicSearchSvc)
+	}
 	deps := &routeDeps{
 		healthProbe:     healthProbe,
 		jwtSecret:       jwtSecret,

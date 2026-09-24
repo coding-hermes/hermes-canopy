@@ -192,5 +192,6 @@ type TopicSearchService interface {
 	InjectContext(ctx context.Context, treeID uuid.UUID, req InjectContextRequest) (*MultiTopicContext, error)
 	GetTopicPreview(ctx context.Context, topicID uuid.UUID, snippetCount int) (*TopicPreview, error)
 	RefreshNodeContentIndex(ctx context.Context, topicID uuid.UUID, nodeIDs []uuid.UUID) (int, error)
+	GetTopicNodeIDs(ctx context.Context, topicID uuid.UUID) ([]uuid.UUID, error)
 	LogSearch(ctx context.Context, entry SearchLogEntry) error
 }
