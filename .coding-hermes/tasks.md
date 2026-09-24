@@ -3414,3 +3414,21 @@ implications; CI will run on this push and is expected green (docs/JSONL-only di
 still carry free-form values) needs either adoption per project board or a scheduled sweep —
 filed as REVIEW-CANOPY-004 residual, not silently dropped. GAP-080 phase 3 and GAP-081 remain
 decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra owned.
+
+
+### Tick 575 addendum — gitreins verdict + CI + closeout
+
+- `gitreins task complete REVIEW-CANOPY-004`: **tier2 PASS, Overall PASS ✓** (verdict id
+  `54e9793f`, dir `9f93b272` — gitignored per repo convention, id recorded in judge event 845).
+  The judge independently verified all four AC sub-claims: result-class warnings zero, ALL
+  13 provenance entries verbatim in review_notes, untouched rows byte-identical (14 changed
+  lines of 392), boardctl validate exit 0 — and confirmed the normaliser is IDEMPOTENT
+  (re-run: "rows to change: 0").
+- CI run 35995225047 on commit 14558f8d: **success, first attempt**. No failing runs anywhere
+  in the recent window; no INT-CI row owed.
+- Pushed: origin 0 / gitlab 0 ahead. Chore commit carries `.gitreins/tasks.yaml` (task record),
+  judge event 845, and `board.jsonl last_commit -> 14558f8d`.
+- Off-by-one post-debug submission `sub_98d181` queued:
+  `mutation-script-writes-provenance-skips-value-reassignment` (the defect the spot-check
+  caught mid-tick). DuckBrain narration key `/ticks/tick575-rc004-result-normalization`
+  written (id d326d61d).
