@@ -3651,3 +3651,13 @@ tasks:
   status: complete
   created_at: '2026-09-25T06:24:59.311950+00:00'
   completed_at: '2026-09-25T07:30:39.482804+00:00'
+- id: GAP-081
+  title: Scope honesty for shipped-but-deferred subsystems
+  criteria:
+  - docs/scope-honesty.md exists with per-subsystem verdicts (federation, transport,
+    relay+tenants, MLS) each backed by measured LOC + migration evidence and an explicit
+    feature-gated vs adopted-with-owner verdict; proposed reconciled Deferred-section
+    text included (AGENTS.md NOT edited); no code changes; go build ./... clean
+  status: complete
+  created_at: '2026-09-25T08:47:00.987927+00:00'
+  completed_at: '2026-09-25T08:53:03.213870+00:00'
