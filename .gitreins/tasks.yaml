@@ -3661,3 +3661,22 @@ tasks:
   status: complete
   created_at: '2026-09-25T08:47:00.987927+00:00'
   completed_at: '2026-09-25T08:53:03.213870+00:00'
+- id: PL-06-SSE
+  title: "PL-06 phase 6: retained context-audit storage + reference_context_invalidated\
+    \ SSE (SPEC-PL-06 \xA710.1)"
+  criteria:
+  - CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/service/... ./internal/handler/...
+    green; git grep reference_context_invalidated finds emission+tests; go vet + golangci-lint
+    0 issues; additive-only wire change proven by existing-envelope test
+  status: complete
+  created_at: '2026-09-25T10:32:18.391061+00:00'
+  completed_at: '2026-09-25T11:22:22.734557+00:00'
+- id: PL-06-UI
+  title: "PL-06 phase 7: composer selection UI + multi_reference_converged SSE handling\
+    \ (SPEC-PL-06 \xA74.1/\xA74.3/\xA710)"
+  criteria:
+  - frontend npx vitest run all green with new scenario-6/12/13 tests; oxlint no new
+    issues; vite build 0 errors; no backend files touched
+  status: complete
+  created_at: '2026-09-25T10:32:19.533842+00:00'
+  completed_at: '2026-09-25T11:22:54.116718+00:00'
