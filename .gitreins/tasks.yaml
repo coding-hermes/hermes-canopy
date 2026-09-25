@@ -3642,3 +3642,12 @@ tasks:
   status: complete
   created_at: '2026-09-25T04:30:03.711672+00:00'
   completed_at: '2026-09-25T04:32:18.058791+00:00'
+- id: GAP-080-P3
+  title: summarization of budget-dropped items (deterministic local summarizer)
+  criteria:
+  - go build/vet/test green; recompile determinism (identical summaryText and manifestHash);
+    zero-omission payload byte-identical; SummarizedCount==OmittedCount; no-budget
+    warning path; frontend tests green
+  status: complete
+  created_at: '2026-09-25T06:24:59.311950+00:00'
+  completed_at: '2026-09-25T07:30:39.482804+00:00'
