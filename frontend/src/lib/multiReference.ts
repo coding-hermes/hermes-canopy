@@ -22,8 +22,45 @@
  * server-computed, and the palette is the fixed §7.2 ramp.
  */
 
+import { z } from 'zod';
 import { referencePalette, type ReferenceColorKey } from '../theme.ts';
 import { shortNodeId } from './nodeShortId.ts';
+
+/** UUID-validated composite convergence payload from the tree SSE stream (§10.2). */
+const convergenceUuidSchema = z.string().uuid();
+export const multiReferenceConvergedEventSchema = z.object({
+  tree_id: convergenceUuidSchema,
+  node_id: convergenceUuidSchema,
+  parent_mode: z.literal('multi_reference'),
+  primary_source_id: convergenceUuidSchema,
+  source_node_ids: z.array(convergenceUuidSchema).min(2).max(20),
+  edge_ids: z.array(convergenceUuidSchema).min(2).max(20),
+  is_synthetic_merge_point: z.boolean(),
+  common_ancestor_id: convergenceUuidSchema.nullable(),
+  context_manifest_hash: z.string().regex(/^[a-f0-9]{64}$/),
+  created_at: z.string().datetime(),
+}).superRefine((payload, ctx) => {
+  if (new Set(payload.source_node_ids).size !== payload.source_node_ids.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['source_node_ids'], message: 'source IDs must be unique' });
+  }
+  if (new Set(payload.edge_ids).size !== payload.edge_ids.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['edge_ids'], message: 'edge IDs must be unique' });
+  }
+  if (payload.edge_ids.length !== payload.source_node_ids.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['edge_ids'], message: 'one edge is required per source' });
+  }
+  if (!payload.source_node_ids.includes(payload.primary_source_id)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['primary_source_id'], message: 'primary source must be selected' });
+  }
+});
+
+export type MultiReferenceConvergedEvent = z.infer<typeof multiReferenceConvergedEventSchema>;
+
+/** Parse an untrusted SSE composite event without letting malformed data mutate the replica. */
+export function parseMultiReferenceConvergedEvent(raw: unknown): MultiReferenceConvergedEvent | null {
+  const parsed = multiReferenceConvergedEventSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 
 // ─── Palette (§7.2) ────────────────────────────────────────────────────
 

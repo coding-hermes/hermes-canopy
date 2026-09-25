@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SSESyncProvider } from '../yjsProvider.ts';
 import { createTreeDoc, getNode } from '../treeStore.ts';
+import { multiReferenceConvergedEventSchema } from '../../lib/multiReference.ts';
 
 class MockEventSource {
   url: string;
@@ -299,5 +300,125 @@ describe('SSESyncProvider', () => {
 
     // Should not throw.
     expect(() => provider.clearLocalPresence()).not.toThrow();
+  });
+
+
+  it('applies node and reference edges before convergence and stores the composite state (scenario 6)', async () => {
+    const treeId = '123e4567-e89b-12d3-a456-426614174000';
+    const nodeId = '123e4567-e89b-12d3-a456-426614174301';
+    const sourceA = '123e4567-e89b-12d3-a456-426614174101';
+    const sourceB = '123e4567-e89b-12d3-a456-426614174202';
+    const edgeA = '123e4567-e89b-12d3-a456-426614174401';
+    const edgeB = '123e4567-e89b-12d3-a456-426614174402';
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId });
+    provider.connect();
+    await vi.waitFor(() => expect(provider.connected).toBe(true));
+    const es = lastInstance();
+
+    es.dispatch('node_added', makeEnvelope(treeId, 'node_added', {
+      node_id: nodeId,
+      content: 'reply',
+      node_type: 'message',
+      parent_mode: 'multi_reference',
+      metadata: { multi_reference: { canonicalSourceIds: [sourceA, sourceB] } },
+    }));
+    for (const [id, source] of [[edgeA, sourceA], [edgeB, sourceB]]) {
+      es.dispatch('edge_added', makeEnvelope(treeId, 'edge_added', {
+        edge_id: id,
+        source_id: source,
+        target_id: nodeId,
+        edge_type: 'reference',
+        metadata: { source_label: source === sourceA ? 'R1' : 'R2' },
+      }));
+    }
+    es.dispatch('multi_reference_converged', makeEnvelope(treeId, 'multi_reference_converged', {
+      tree_id: treeId,
+      node_id: nodeId,
+      parent_mode: 'multi_reference',
+      primary_source_id: sourceA,
+      source_node_ids: [sourceA, sourceB],
+      edge_ids: [edgeA, edgeB],
+      is_synthetic_merge_point: true,
+      common_ancestor_id: null,
+      context_manifest_hash: 'a'.repeat(64),
+      created_at: '2026-09-25T12:00:00.000Z',
+    }));
+
+    const node = getNode(doc, nodeId);
+    expect(node?.metadata).toMatchObject({
+      multi_reference: expect.objectContaining({
+        canonicalSourceIds: [sourceA, sourceB],
+        primarySourceId: sourceA,
+        isSyntheticMergePoint: true,
+        contextManifestHash: 'a'.repeat(64),
+      }),
+    });
+    expect(doc.edges.size).toBe(2);
+  });
+
+  it('requests replay and never fabricates missing convergence edges (scenarios 6 and 15)', async () => {
+    const treeId = '123e4567-e89b-12d3-a456-426614174010';
+    const nodeId = '123e4567-e89b-12d3-a456-426614174311';
+    const sourceA = '123e4567-e89b-12d3-a456-426614174111';
+    const sourceB = '123e4567-e89b-12d3-a456-426614174212';
+    const edgeA = '123e4567-e89b-12d3-a456-426614174411';
+    const edgeB = '123e4567-e89b-12d3-a456-426614174412';
+    const replay = vi.fn();
+    const doc = createTreeDoc(treeId);
+    const provider = new SSESyncProvider(doc, { treeId, onReplayRequired: replay });
+    provider.connect();
+    await vi.waitFor(() => expect(provider.connected).toBe(true));
+    const es = lastInstance();
+
+    es.dispatch('node_added', makeEnvelope(treeId, 'node_added', {
+      node_id: nodeId,
+      content: 'reply',
+      node_type: 'message',
+      parent_mode: 'multi_reference',
+    }));
+    es.dispatch('edge_added', makeEnvelope(treeId, 'edge_added', {
+      edge_id: edgeA,
+      source_id: sourceA,
+      target_id: nodeId,
+      edge_type: 'reference',
+    }));
+    es.dispatch('multi_reference_converged', makeEnvelope(treeId, 'multi_reference_converged', {
+      tree_id: treeId,
+      node_id: nodeId,
+      parent_mode: 'multi_reference',
+      primary_source_id: sourceA,
+      source_node_ids: [sourceA, sourceB],
+      edge_ids: [edgeA, edgeB],
+      is_synthetic_merge_point: false,
+      common_ancestor_id: null,
+      context_manifest_hash: 'b'.repeat(64),
+      created_at: '2026-09-25T12:00:00.000Z',
+    }));
+
+    expect(replay).toHaveBeenCalledWith(expect.objectContaining({ node_id: nodeId, edge_ids: [edgeA, edgeB] }));
+    expect(doc.edges.has(edgeB)).toBe(false);
+    expect(getNode(doc, nodeId)?.metadata?.multi_reference).toBeUndefined();
+  });
+
+  it('validates the convergence payload shape before dispatch (scenario 5)', () => {
+    const valid = {
+      tree_id: '123e4567-e89b-12d3-a456-426614174000',
+      node_id: '123e4567-e89b-12d3-a456-426614174301',
+      parent_mode: 'multi_reference',
+      primary_source_id: '123e4567-e89b-12d3-a456-426614174101',
+      source_node_ids: ['123e4567-e89b-12d3-a456-426614174101', '123e4567-e89b-12d3-a456-426614174202'],
+      edge_ids: ['123e4567-e89b-12d3-a456-426614174401', '123e4567-e89b-12d3-a456-426614174402'],
+      is_synthetic_merge_point: true,
+      common_ancestor_id: null,
+      context_manifest_hash: 'c'.repeat(64),
+      created_at: '2026-09-25T12:00:00.000Z',
+    };
+    expect(multiReferenceConvergedEventSchema.parse(valid)).toEqual(valid);
+    expect(() => multiReferenceConvergedEventSchema.parse({ ...valid, edge_ids: ['not-a-uuid'] })).toThrow();
+    expect(() => multiReferenceConvergedEventSchema.parse({
+      ...valid,
+      source_node_ids: [valid.source_node_ids[0], valid.source_node_ids[0]],
+    })).toThrow();
   });
 });

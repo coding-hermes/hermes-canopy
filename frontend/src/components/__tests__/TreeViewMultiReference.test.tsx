@@ -131,7 +131,50 @@ vi.mock('../ReferenceInspectorPanel.tsx', () => ({ default: () => null }));
 vi.mock('../ContextManifestPanel.tsx', () => ({ default: () => null }));
 vi.mock('../ContextRunIndicator.tsx', () => ({ default: () => null }));
 vi.mock('../ContextAuditDialog.tsx', () => ({ default: () => null }));
-vi.mock('../MessageComposer.tsx', () => ({ default: () => null }));
+vi.mock('../MessageComposer.tsx', () => ({
+  default: () => null,
+  MultiReferenceComposer: (props: {
+    sources: Array<{ id: string }>;
+    draft: string;
+    onDraftChange: (value: string) => void;
+    onReorder: (sourceIds: string[]) => void;
+    onSubmit: () => void;
+    preflightRequired: boolean;
+    onPreflight: () => void;
+    replyDisabled: boolean;
+    error: string | null;
+  }) => createElement(
+    'div',
+    { 'data-testid': 'multi-reference-composer' },
+    props.sources.map((source, index) => createElement('span', {
+      key: source.id,
+      'data-testid': `multi-reference-chip-${source.id}`,
+    }, source.id, index > 0 && createElement('button', {
+      'aria-label': `Move R${index + 1} up`,
+      onClick: () => props.onReorder([
+        ...props.sources.slice(0, index - 1).map((item) => item.id),
+        source.id,
+        props.sources[index - 1].id,
+        ...props.sources.slice(index + 1).map((item) => item.id),
+      ]),
+    }, 'up'))),
+    createElement('textarea', {
+      'data-testid': 'multi-reference-content',
+      value: props.draft,
+      onChange: (event: Event) => props.onDraftChange((event.target as HTMLTextAreaElement).value),
+    }),
+    createElement('button', {
+      'data-testid': 'multi-reference-send',
+      disabled: props.preflightRequired || props.replyDisabled,
+      onClick: props.onSubmit,
+    }, 'Create synthesis'),
+    props.preflightRequired && createElement('button', {
+      'data-testid': 'multi-reference-preflight',
+      onClick: props.onPreflight,
+    }, 'Run preflight again'),
+    props.error && createElement('p', { 'data-testid': 'multi-reference-error' }, props.error),
+  ),
+}));
 
 // ─── Harness ───────────────────────────────────────────────────────────
 
@@ -491,5 +534,68 @@ describe('TreeView — multi-reference synthesis affordance (DF-HERMES-CANOPY-42
     expect(
       container.querySelector('[data-testid="multi-reference-content"]'),
     ).toBeNull();
+  });
+
+  it('reordering source chips invalidates the token and requires a new preflight (scenario 2, §4.3)', async () => {
+    renderTreeView(`/tree/${TREE_ID}`);
+    await flushPromises();
+    toggle(NODE_A);
+    toggle(NODE_B);
+    await clickSynthesize();
+
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Move R2 up"]')?.click());
+    expect(container.querySelector('[data-testid="multi-reference-preflight"]')).not.toBeNull();
+    expect(sendButton().disabled).toBe(true);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="multi-reference-preflight"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(posts).toHaveLength(2);
+    expect(posts[1].body?.source_node_ids).toEqual([NODE_B, NODE_A]);
+  });
+
+  it('disables Reply and keeps the server underbudget text visible (scenario 12)', async () => {
+    preflightResponse = {
+      ...PREFLIGHT_ENVELOPE,
+      context_budget: {
+        ...PREFLIGHT_ENVELOPE.context_budget,
+        fits: false,
+        error: 'REFERENCE_CONTEXT_BUDGET_EXCEEDED: selected sources are too large',
+      },
+    };
+    renderTreeView(`/tree/${TREE_ID}`);
+    await flushPromises();
+    toggle(NODE_A);
+    toggle(NODE_B);
+    await clickSynthesize();
+
+    expect(sendButton().disabled).toBe(true);
+    expect(container.textContent).toContain('REFERENCE_CONTEXT_BUDGET_EXCEEDED');
+  });
+
+  it('preserves the draft and asks for renewed preflight after stale create (scenario 13)', async () => {
+    createStatus = 409;
+    createResponse = {
+      error: { code: 'REFERENCE_SELECTION_STALE', message: 'selection token expired' },
+    };
+    renderTreeView(`/tree/${TREE_ID}`);
+    await flushPromises();
+    toggle(NODE_A);
+    toggle(NODE_B);
+    await clickSynthesize();
+    const textarea = q<HTMLTextAreaElement>('[data-testid="multi-reference-content"]');
+    act(() => setTextareaValue(textarea, 'draft survives token expiry'));
+
+    await act(async () => {
+      sendButton().click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(q<HTMLTextAreaElement>('[data-testid="multi-reference-content"]').value).toBe('draft survives token expiry');
+    expect(container.querySelector('[data-testid="multi-reference-preflight"]')).not.toBeNull();
+    expect(container.textContent).toContain('Run preflight again before replying');
   });
 });

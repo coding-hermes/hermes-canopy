@@ -17,7 +17,9 @@ import { Share2 } from 'lucide-react';
 import TreeCanvas from '../components/TreeCanvas.tsx';
 import NavigationBar from '../components/NavigationBar.tsx';
 import MessageComposer, {
+  MultiReferenceComposer,
   type PinnedNode,
+  type ComposerReferenceSource,
 } from '../components/MessageComposer.tsx';
 import PresenceBar from '../components/PresenceBar.tsx';
 import CollaborativeCursors from '../components/CollaborativeCursors.tsx';
@@ -109,6 +111,19 @@ function buildInitialMembers(): Member[] {
   ];
 }
 
+/** Re-read authoritative nodes + persisted edges after an SSE convergence gap. */
+async function replayTreeGraph(treeId: string, treeDoc: TreeYDoc): Promise<void> {
+  const nodesResponse = await apiGet<{ nodes: BackendNodePayload[] }>(`/trees/${treeId}/nodes`);
+  const nodes = nodesResponse?.nodes ?? [];
+  const rootId = rootNodeIdOf(nodes);
+  if (rootId) {
+    const graph = await apiGet<RawSubtree>(subtreeRequestPath(treeId, rootId));
+    mergeBackendEdges(treeDoc, toEdgePayloads(graph?.edges));
+    mergeBackendNodes(treeDoc, toGraphNodePayloads(graph?.nodes));
+  }
+  mergeBackendNodes(treeDoc, nodes);
+}
+
 // ─── Component ─────────────────────────────────────────────────────────
 
 export default function TreeView() {
@@ -179,6 +194,11 @@ export default function TreeView() {
         },
         onSynced: () => {
           // Re-render will be triggered by Yjs observer in useYjsTree
+        },
+        onReplayRequired: () => {
+          void replayTreeGraph(resolvedTreeId, treeDoc).catch((err: unknown) => {
+            console.warn('[TreeView] SSE convergence replay failed', err);
+          });
         },
       });
       provider.connect();
@@ -422,10 +442,14 @@ export default function TreeView() {
    * parsed or persisted client-side.
    */
   const [synthesisPhase, setSynthesisPhase] = useState<
-    'idle' | 'previewing' | 'submitting'
+    'idle' | 'previewing' | 'submitting' | 'needs_preflight'
   >('idle');
   const [synthesisError, setSynthesisError] = useState<string | null>(null);
   const [synthesisContent, setSynthesisContent] = useState('');
+  const [synthesisSources, setSynthesisSources] = useState<ComposerReferenceSource[]>([]);
+  const [synthesisBudgetFits, setSynthesisBudgetFits] = useState(true);
+  /** Opaque preflight token; never parsed or persisted client-side. */
+  const synthesisTokenRef = useRef<string | null>(null);
 
   /** Toggle one node in the synthesis selection (insertion order = §5.1 R#). */
   const toggleSynthesisSelection = useCallback((nodeId: string) => {
@@ -435,15 +459,11 @@ export default function TreeView() {
         ? prev.filter((id) => id !== nodeId)
         : [...prev, nodeId],
     );
+    setSynthesisPhase((phase) =>
+      phase === 'previewing' || phase === 'needs_preflight' ? 'needs_preflight' : phase,
+    );
+    synthesisTokenRef.current = null;
   }, []);
-
-  /**
-   * The signed selection token from the last successful preflight (§9.1).
-   * Held in a ref rather than state: it is a write-path credential, not
-   * something any render consumes, and it must be readable from
-   * `submitSynthesis` without joining a callback dependency chain.
-   */
-  const synthesisTokenRef = useRef<string | null>(null);
 
   /** Step 1 — preflight the selection; on 200 open the composer (§9.1). */
   const startSynthesis = useCallback(async () => {
@@ -454,10 +474,32 @@ export default function TreeView() {
       const envelope = await referencePreflight(treeId, synthesisSelection, {
         profileContextBudget: SYNTHESIS_PROFILE_BUDGET,
       });
+      const fits = envelope.context_budget.fits !== false;
+      const budget = envelope.context_budget as typeof envelope.context_budget & {
+        error?: string;
+        message?: string;
+      };
+      const sources = envelope.sources.length > 0
+        ? envelope.sources.map((source) => ({
+            id: source.node_id,
+            label: source.source_label,
+            colorKey: source.color_key,
+            preview: source.content_preview,
+          }))
+        : synthesisSelection.map((id) => ({ id }));
+      setSynthesisSources(sources);
+      setSynthesisBudgetFits(fits);
       // Opaque token handoff (§9.2): stored verbatim, spent once in step 2.
-      synthesisTokenRef.current = envelope.selection_token;
-      setSynthesisContent('');
+      synthesisTokenRef.current = fits ? envelope.selection_token : null;
       setSynthesisPhase('previewing');
+      if (!fits) {
+        setSynthesisError(
+          budget.error ?? budget.message ??
+          'REFERENCE_CONTEXT_BUDGET_EXCEEDED: the selected sources do not fit the context budget.',
+        );
+      } else {
+        setSynthesisError(null);
+      }
     } catch (err) {
       synthesisTokenRef.current = null;
       setSynthesisError(
@@ -468,9 +510,9 @@ export default function TreeView() {
 
   /** Step 2 — spend the token, then mirror the 201 node into the replica. */
   const submitSynthesis = useCallback(async () => {
-    if (!treeId || synthesisPhase !== 'previewing') return;
+    if (!treeId || synthesisPhase !== 'previewing' || !synthesisBudgetFits) return;
     const content = synthesisContent.trim();
-    if (!content) return;
+    if (!content || !synthesisTokenRef.current) return;
     setSynthesisError(null);
     setSynthesisPhase('submitting');
     try {
@@ -532,11 +574,28 @@ export default function TreeView() {
       setSynthesisPhase('idle');
       setSynthesisContent('');
       setSynthesisSelection([]);
+      setSynthesisSources([]);
+      setSynthesisBudgetFits(true);
     } catch (err) {
-      setSynthesisError(err instanceof Error ? err.message : String(err));
-      setSynthesisPhase('idle');
+      const message = err instanceof Error ? err.message : String(err);
+      // A create rejection may mean the five-minute token was consumed or
+      // became stale. Keep the draft and make renewal explicit (§15.2 #13).
+      synthesisTokenRef.current = null;
+      setSynthesisError(`${message} Run preflight again before replying.`);
+      setSynthesisPhase('needs_preflight');
     }
-  }, [treeId, synthesisPhase, synthesisContent]);
+  }, [treeId, synthesisPhase, synthesisContent, synthesisBudgetFits]);
+
+  /** Reordering changes canonical order and therefore invalidates the token (§4.3). */
+  const reorderSynthesisSources = useCallback((sourceIds: string[]) => {
+    const byId = new Map(synthesisSources.map((source) => [source.id, source]));
+    setSynthesisSources(sourceIds.map((id) => byId.get(id)).filter((source): source is ComposerReferenceSource => source !== undefined));
+    setSynthesisSelection(sourceIds);
+    synthesisTokenRef.current = null;
+    setSynthesisBudgetFits(true);
+    setSynthesisError('Selection order changed. Run preflight again before replying.');
+    setSynthesisPhase('needs_preflight');
+  }, [synthesisSources]);
 
   /** Cancel / dismiss: drop the composer and any error, keep the selection. */
   const cancelSynthesis = useCallback(() => {
@@ -1062,48 +1121,25 @@ export default function TreeView() {
         `submitting`); Send spends the token (§9.2) and merges the created
         node into the replica, Cancel just drops it.
       */}
-      {(synthesisPhase === 'previewing' || synthesisPhase === 'submitting') && (
-        <div
-          data-testid="multi-reference-composer"
-          className="shrink-0 border-t border-line-subtle bg-surface-panel px-3 py-2"
-        >
-          <textarea
-            data-testid="multi-reference-content"
-            value={synthesisContent}
-            onChange={(e) => setSynthesisContent(e.target.value)}
-            placeholder={`Synthesize a reply from ${synthesisSelection.length} selected nodes…`}
-            rows={3}
-            disabled={synthesisPhase === 'submitting'}
-            className="w-full rounded-lg bg-surface-base text-content-primary text-sm p-2 border border-line-subtle focus:outline-none focus:border-accent3"
-            aria-label="Synthesis content"
-          />
-          <div className="flex items-center gap-2 mt-1.5">
-            <button
-              data-testid="multi-reference-send"
-              onClick={() => {
-                void submitSynthesis();
-              }}
-              disabled={synthesisPhase === 'submitting' || !synthesisContent.trim()}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: token.accent3 }}
-            >
-              {synthesisPhase === 'submitting' ? 'Synthesizing…' : 'Create synthesis'}
-            </button>
-            <button
-              onClick={cancelSynthesis}
-              disabled={synthesisPhase === 'submitting'}
-              className="px-2.5 py-1 rounded-lg text-xs text-content-muted border border-line-subtle disabled:opacity-40"
-            >
-              Cancel
-            </button>
-            <span className="text-[11px] text-content-muted">
-              {synthesisSelection.length} sources · reply lands under the first selected node
-            </span>
-          </div>
-        </div>
+      {(synthesisPhase === 'previewing' || synthesisPhase === 'submitting' || synthesisPhase === 'needs_preflight') && (
+        <MultiReferenceComposer
+          sources={synthesisSources}
+          draft={synthesisContent}
+          onDraftChange={setSynthesisContent}
+          onReorder={reorderSynthesisSources}
+          onPreflight={() => {
+            void startSynthesis();
+          }}
+          onSubmit={submitSynthesis}
+          onCancel={cancelSynthesis}
+          preflightRequired={synthesisPhase === 'needs_preflight'}
+          replyDisabled={!synthesisBudgetFits}
+          submitting={synthesisPhase === 'submitting'}
+          error={synthesisError}
+        />
       )}
 
-      {synthesisError && (
+      {synthesisError && synthesisPhase === 'idle' && (
         <p
           data-testid="multi-reference-error"
           className="shrink-0 px-3 py-1 text-[11px] text-status-danger"

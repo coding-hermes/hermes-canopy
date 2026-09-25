@@ -49,6 +49,7 @@ import {
 } from 'react';
 import { Send, Paperclip, Pin, X, AtSign, Hash, Smile, Sparkles } from 'lucide-react';
 import { token, palette, alpha, nodeTypeColor } from '../theme.ts';
+import { referenceSourceLabel, referenceStroke } from '../lib/multiReference.ts';
 import {
   DEFAULT_PLACEHOLDER,
   describeSendError,
@@ -241,6 +242,152 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── Multi-reference composer ──────────────────────────────────────────
+
+export interface ComposerReferenceSource {
+  id: string;
+  /** Server label retained for provenance; the visible label follows chip order. */
+  label?: string;
+  colorKey?: string;
+  preview?: string;
+}
+
+export interface MultiReferenceComposerProps {
+  sources: readonly ComposerReferenceSource[];
+  draft: string;
+  onDraftChange: (draft: string) => void;
+  onReorder: (sourceIds: string[]) => void;
+  onPreflight: () => void;
+  onSubmit: () => void | Promise<void>;
+  onCancel: () => void;
+  preflightRequired: boolean;
+  replyDisabled: boolean;
+  submitting: boolean;
+  error: string | null;
+}
+
+/**
+ * Composer affordance for the §4.1 selection-token flow. The parent owns the
+ * draft and token because reordering is a semantic input change, not a local
+ * drag-only concern: it must invalidate the held preflight token (§4.3).
+ */
+export function MultiReferenceComposer({
+  sources,
+  draft,
+  onDraftChange,
+  onReorder,
+  onPreflight,
+  onSubmit,
+  onCancel,
+  preflightRequired,
+  replyDisabled,
+  submitting,
+  error,
+}: MultiReferenceComposerProps) {
+  const move = (index: number, offset: -1 | 1): void => {
+    const target = index + offset;
+    if (target < 0 || target >= sources.length) return;
+    const next = sources.map((source) => source.id);
+    [next[index], next[target]] = [next[target], next[index]];
+    onReorder(next);
+  };
+
+  const disabled = submitting || preflightRequired || replyDisabled || draft.trim().length === 0;
+
+  return (
+    <div
+      data-testid="multi-reference-composer"
+      className="shrink-0 border-t border-line-subtle bg-surface-panel px-3 py-2"
+    >
+      <div className="flex flex-wrap items-center gap-1.5 mb-2" aria-label="Selected reference sources">
+        {sources.map((source, index) => {
+          const label = referenceSourceLabel(index);
+          const color = referenceStroke(source.colorKey);
+          return (
+            <span
+              key={source.id}
+              data-testid={`multi-reference-chip-${source.id}`}
+              className="inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] text-content-primary"
+              style={{ borderColor: alpha(color, 0.55), backgroundColor: alpha(color, 0.12) }}
+              title={source.preview ?? source.id}
+            >
+              <strong style={{ color }}>{label}</strong>
+              <span className="max-w-36 truncate">{source.preview ?? source.id}</span>
+              <button
+                type="button"
+                aria-label={`Move ${label} up`}
+                onClick={() => move(index, -1)}
+                disabled={index === 0 || submitting}
+                className="px-0.5 text-content-muted disabled:opacity-30"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${label} down`}
+                onClick={() => move(index, 1)}
+                disabled={index === sources.length - 1 || submitting}
+                className="px-0.5 text-content-muted disabled:opacity-30"
+              >
+                ↓
+              </button>
+            </span>
+          );
+        })}
+      </div>
+      <textarea
+        data-testid="multi-reference-content"
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        placeholder={`Reply from ${sources.length} selected sources…`}
+        rows={3}
+        disabled={submitting}
+        className="w-full rounded-lg bg-surface-base text-content-primary text-sm p-2 border border-line-subtle focus:outline-none focus:border-accent3"
+        aria-label="Multi-reference reply"
+      />
+      <div className="flex items-center gap-2 mt-1.5">
+        <button
+          data-testid="multi-reference-reply"
+          type="button"
+          onClick={() => void onSubmit()}
+          disabled={disabled}
+          className="px-2.5 py-1 rounded-lg text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: token.accent3 }}
+        >
+          {submitting ? 'Replying…' : 'Reply'}
+        </button>
+        {preflightRequired && (
+          <button
+            data-testid="multi-reference-preflight"
+            type="button"
+            onClick={onPreflight}
+            disabled={submitting}
+            className="px-2.5 py-1 rounded-lg text-xs text-content-primary border border-accent3/40"
+          >
+            Run preflight again
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={submitting}
+          className="px-2.5 py-1 rounded-lg text-xs text-content-muted border border-line-subtle disabled:opacity-40"
+        >
+          Cancel
+        </button>
+        <span className="text-[11px] text-content-muted">
+          {sources.length} sources · order is used for R labels
+        </span>
+      </div>
+      {error && (
+        <p data-testid="multi-reference-error" className="mt-1 text-[11px] text-status-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 // ─── Main Component ────────────────────────────────────────────────────

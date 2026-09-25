@@ -34,6 +34,11 @@ import {
   handleTopicCreated,
 } from './topicProposalStore.ts';
 import { notifyTopicsChanged } from '../lib/activeTree.ts';
+import {
+  parseMultiReferenceConvergedEvent,
+  type MultiReferenceConvergedEvent,
+  normaliseMultiReferenceMetadata,
+} from '../lib/multiReference.ts';
 import { authInit } from '../lib/api.ts';
 import { subscribeSse, type SseSubscription } from '../lib/sse.ts';
 
@@ -54,6 +59,8 @@ export interface YjsProviderOptions {
   onSynced?: () => void;
   /** Called when remote presence state changes */
   onPresenceChange?: PresenceChangeHandler;
+  /** Called when a composite convergence event is ahead of local edge state. */
+  onReplayRequired?: (event: MultiReferenceConvergedEvent) => void;
 }
 
 // ─── SSE Event Envelope ─────────────────────────────────────────────────
@@ -187,6 +194,7 @@ export class SSESyncProvider {
           'yjs_update',
           'presence_update',
           'cursor_update',
+          'multi_reference_converged',
           'topic_proposed',
           'topic_created',
         ],
@@ -287,6 +295,9 @@ export class SSESyncProvider {
           (envelope.data as Record<string, unknown>) ?? {},
         );
         break;
+      case 'multi_reference_converged':
+        this._handleMultiReferenceConverged(envelope.data);
+        break;
       case 'topic_proposed':
         this._handleTopicProposed(
           (envelope.data as Record<string, unknown>) ?? {},
@@ -305,6 +316,44 @@ export class SSESyncProvider {
     }
 
     this.options.onSynced?.();
+  }
+
+  /**
+   * Apply the composite only after node_added and every edge_added landed.
+   * A gap is recoverable state, never permission to infer an edge from parentId.
+   */
+  private _handleMultiReferenceConverged(data: unknown): void {
+    const event = parseMultiReferenceConvergedEvent(data);
+    if (!event) return;
+
+    const node = this.doc.nodes.get(event.node_id);
+    const missingEdge = event.edge_ids.some((edgeId) => !this.doc.edges.has(edgeId));
+    if (!node || missingEdge) {
+      this.options.onReplayRequired?.(event);
+      return;
+    }
+
+    const metadata = (node.get('metadata') as Record<string, unknown> | null) ?? {};
+    const previous = normaliseMultiReferenceMetadata(metadata.multi_reference);
+    const branchSpan = previous?.branchSpan ?? (event.common_ancestor_id
+      ? { commonAncestorId: event.common_ancestor_id, sourceBranches: [] }
+      : null);
+    const nextMetadata = {
+      ...metadata,
+      multi_reference: {
+        version: previous?.version ?? 1,
+        primarySourceId: event.primary_source_id,
+        canonicalSourceIds: [...event.source_node_ids],
+        isSyntheticMergePoint: event.is_synthetic_merge_point,
+        branchSpan,
+        contextManifestHash: event.context_manifest_hash,
+        contextTokenBudget: previous?.contextTokenBudget ?? 0,
+      },
+    };
+
+    this.doc.ydoc.transact(() => {
+      node.set('metadata', nextMetadata);
+    }, 'sse-provider');
   }
 
   private normalizeNodePayload(data: unknown): Record<string, unknown> {
@@ -327,6 +376,8 @@ export class SSESyncProvider {
     map('edge_id', 'edgeId');
     map('edge_type', 'edgeType');
     map('mutation_type', 'mutationType');
+    map('parent_mode', 'parentMode');
+    map('metadata', 'metadata');
     return out;
   }
 
@@ -345,6 +396,8 @@ export class SSESyncProvider {
     map('target_id', 'targetId');
     map('actor_id', 'actorId');
     map('timestamp', 'timestamp');
+    map('sequence_num', 'sequenceNum');
+    map('metadata', 'metadata');
     return out;
   }
 
