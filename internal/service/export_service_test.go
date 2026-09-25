@@ -189,6 +189,70 @@ func TestExportImportRoundTripWithEdges(t *testing.T) {
 	require.Equal(t, 1, edgeCount, "reply edge must survive the round trip")
 }
 
+// TestExportImportRoundTripWithSoftDeletedNode verifies that an export remains
+// importable when an active edge points at a soft-deleted node. Export keeps
+// the active-node view and drops the now-dangling edge.
+func TestExportImportRoundTripWithSoftDeletedNode(t *testing.T) {
+	pool := testutil.NewIntegrationPool(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO users (id, hermes_user_id, display_name) VALUES ($1, $2, 'Soft Delete Roundtrip Owner')`,
+		userID, "soft-delete-roundtrip-"+userID.String())
+	require.NoError(t, err, "insert owner user")
+	ownerID := uuid.New()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO profiles (id, owner_id, name, display_name) VALUES ($1, $2, 'Soft Delete Roundtrip Owner', 'Soft Delete Roundtrip Owner')`,
+		ownerID, userID)
+	require.NoError(t, err, "insert owner profile")
+
+	svc := NewExportService(
+		db.NewPGTreeRepo(pool),
+		db.NewPGNodeRepo(pool),
+		db.NewPGEdgeRepo(pool),
+		pool,
+	)
+	treeSvc := NewTreeService(db.NewPGTreeRepo(pool), db.NewPGNodeRepo(pool), db.NewPGEdgeRepo(pool), pool)
+	created, err := treeSvc.CreateTree(ctx, CreateTreeParams{
+		OwnerID:       userID,
+		Title:         "Soft-deleted node roundtrip tree",
+		RootContent:   "root",
+		ContentFormat: FormatPlain,
+		NodeType:      NodeTypeMessage,
+	})
+	require.NoError(t, err, "create tree")
+
+	var deletedNodeID uuid.UUID
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO nodes (tree_id, parent_id, author_id, content, content_format, node_type)
+		 VALUES ($1, $2, $3, 'deleted reply', 'plain', 'message') RETURNING id`,
+		created.ID, created.RootNodeID, ownerID).Scan(&deletedNodeID))
+	_, err = pool.Exec(ctx,
+		`INSERT INTO edges (tree_id, source_id, target_id, edge_type, sequence_num)
+		 VALUES ($1, $2, $3, 'reply', 2)`,
+		created.ID, created.RootNodeID, deletedNodeID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`UPDATE nodes SET deleted_at = clock_timestamp() WHERE id = $1`, deletedNodeID)
+	require.NoError(t, err)
+
+	exported, err := svc.ExportTree(ctx, created.ID)
+	require.NoError(t, err, "export tree with soft-deleted node")
+	require.Len(t, exported.Nodes, 1, "soft-deleted node must stay out of the active export")
+	require.Empty(t, exported.Edges, "export must not retain an edge to an excluded node")
+
+	wire, err := json.Marshal(exported)
+	require.NoError(t, err, "marshal export")
+	var decoded ExportData
+	require.NoError(t, json.Unmarshal(wire, &decoded), "unmarshal export")
+
+	imported, err := svc.ImportTree(ctx, &decoded, userID)
+	require.NoError(t, err, "soft-deleted-node export must import successfully")
+	require.Equal(t, 1, imported.NodeCount)
+	require.Equal(t, 0, imported.EdgeCount)
+}
+
 // DF-HERMES-CANOPY-54a: a version-2 export carries topics + resolved refs,
 // and importing that payload reproduces them under NEW ids (topic parent
 // order-independent, resolved_by falls back to the importer's profile).
