@@ -189,6 +189,8 @@ func (h *PluginHandler) fail(w http.ResponseWriter, e error) {
 	switch {
 	case errors.Is(e, service.ErrInvalidPluginManifest):
 		writeError(w, 400, "INVALID_MANIFEST", e.Error())
+	case errors.Is(e, service.ErrPluginAuthorProfileNotFound):
+		writeError(w, 400, "INVALID_REQUEST", e.Error())
 	case errors.Is(e, service.ErrPluginConflict), errors.Is(e, db.ErrPluginDuplicate):
 		writeError(w, 409, "VERSION_CONFLICT", e.Error())
 	case errors.Is(e, service.ErrPluginRegistryMissing), errors.Is(e, db.ErrPluginNotFound):

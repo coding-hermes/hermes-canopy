@@ -12,12 +12,14 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
-	ErrInvalidPluginManifest = errors.New("plugin registry: invalid manifest")
-	ErrPluginConflict        = errors.New("plugin registry: version conflict")
-	ErrPluginRegistryMissing = errors.New("plugin registry: not found")
+	ErrInvalidPluginManifest       = errors.New("plugin registry: invalid manifest")
+	ErrPluginConflict              = errors.New("plugin registry: version conflict")
+	ErrPluginRegistryMissing       = errors.New("plugin registry: not found")
+	ErrPluginAuthorProfileNotFound = errors.New("plugin registry: author profile not found")
 )
 
 type PluginManifest struct {
@@ -126,11 +128,44 @@ func registrySlug(name string) string {
 	}
 	return strings.Trim(b.String(), "-")
 }
+
+func (s *PluginRegistryServiceImpl) resolveAuthorProfile(c context.Context, actor uuid.UUID) (uuid.UUID, error) {
+	resolver, ok := s.repo.(db.PluginAuthorProfileResolver)
+	if !ok {
+		// Preserve the in-memory/service-only contract: callers that do not
+		// provide persistence-backed identity resolution already pass a profile.
+		return actor, nil
+	}
+	profileID, err := resolver.ResolveAuthorProfile(c, actor)
+	if errors.Is(err, db.ErrNotFound) {
+		return uuid.Nil, fmt.Errorf("%w: user %s has no profile", ErrPluginAuthorProfileNotFound, actor)
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("plugin registry: resolve author profile for user %s: %w", actor, err)
+	}
+	if profileID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("%w: user %s resolved to an empty profile", ErrPluginAuthorProfileNotFound, actor)
+	}
+	return profileID, nil
+}
+
+func classifyPluginRegisterError(err error, actor uuid.UUID) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && strings.Contains(pgErr.ConstraintName, "author_profile_id") {
+		return fmt.Errorf("%w: user %s has no profile", ErrPluginAuthorProfileNotFound, actor)
+	}
+	return err
+}
+
 func (s *PluginRegistryServiceImpl) Register(c context.Context, source string, actor uuid.UUID) (*db.Plugin, error) {
 	if len([]byte(source)) >= 1_048_576 {
 		return nil, ErrInvalidPluginManifest
 	}
 	m, raw, e := parseRegistryManifest(source)
+	if e != nil {
+		return nil, e
+	}
+	actorProfileID, e := s.resolveAuthorProfile(c, actor)
 	if e != nil {
 		return nil, e
 	}
@@ -143,14 +178,14 @@ func (s *PluginRegistryServiceImpl) Register(c context.Context, source string, a
 	if _, e = hex.DecodeString(digest); e != nil {
 		return nil, ErrInvalidPluginManifest
 	}
-	p, e := s.repo.Register(c, &db.Plugin{Name: m.Name, Slug: slug, Version: m.Version, Description: m.Description, AuthorProfileID: actor, Permissions: m.Permissions, ManifestJSON: raw, SourceJS: source, SourceSHA256: digest, SourceByteSize: len([]byte(source)), IconURL: m.IconURL})
+	p, e := s.repo.Register(c, &db.Plugin{Name: m.Name, Slug: slug, Version: m.Version, Description: m.Description, AuthorProfileID: actorProfileID, Permissions: m.Permissions, ManifestJSON: raw, SourceJS: source, SourceSHA256: digest, SourceByteSize: len([]byte(source)), IconURL: m.IconURL})
 	if errors.Is(e, db.ErrPluginDuplicate) {
 		return nil, ErrPluginConflict
 	}
 	if e != nil {
-		return nil, e
+		return nil, classifyPluginRegisterError(e, actor)
 	}
-	if e = s.repo.Audit(c, p.ID, "registered", actor, map[string]any{"name": p.Name, "version": p.Version}); e != nil {
+	if e = s.repo.Audit(c, p.ID, "registered", actorProfileID, map[string]any{"name": p.Name, "version": p.Version}); e != nil {
 		return nil, e
 	}
 	return p, nil
