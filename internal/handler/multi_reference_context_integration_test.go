@@ -134,11 +134,19 @@ func mrEvents(c *transportTestClient) []sse.SSEEvent {
 	return append([]sse.SSEEvent(nil), c.events...)
 }
 
+func mrContentHash(t *testing.T, pool *pgxpool.Pool, nodeID uuid.UUID) string {
+	t.Helper()
+	var hash string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT content_hash FROM nodes WHERE id = $1`, nodeID).Scan(&hash))
+	return hash
+}
+
 // --- §9.3: 200 envelope ------------------------------------------------------
 
 func TestReferenceContextRead_HappyPath(t *testing.T) {
 	pool := testutil.NewSharedIntegrationPool(t)
-	srv, _ := mrContextServer(t, pool)
+	srv, hub := mrContextServer(t, pool)
 	treeID := mrTree(t, pool)
 	root := mrNode(t, pool, treeID, nil, "root message")
 	srcA := mrNode(t, pool, treeID, &root, "the first approach stores edges")
@@ -147,6 +155,15 @@ func TestReferenceContextRead_HappyPath(t *testing.T) {
 	created, nodeID := mrCreateReply(t, srv, treeID, []uuid.UUID{srcA, srcB}, "both, ordered")
 	createCtx := created["reference_context"].(map[string]any)
 
+	// The creation response carries the bounded source-hash snapshot that the
+	// later lazy audit reads back from node metadata.
+	nodeMeta := created["node"].(map[string]any)["metadata"].(map[string]any)
+	audit := nodeMeta["context_audit"].(map[string]any)
+	assert.Equal(t, mrContentHash(t, pool, srcA), audit[srcA.String()])
+	assert.Equal(t, mrContentHash(t, pool, srcB), audit[srcB.String()])
+
+	client := newTransportTestClient("pl06-audit-unchanged", testUserID, treeID)
+	require.NoError(t, hub.Subscribe(context.Background(), treeID, client))
 	status, body := mrGet(t, srv, mrContextPath(nodeID), authHeader(t))
 	require.Equal(t, http.StatusOK, status, "read body: %s", string(body))
 	envelope := mrDecode(t, body)
@@ -157,6 +174,11 @@ func TestReferenceContextRead_HappyPath(t *testing.T) {
 	assert.Equal(t, "multi_reference", envelope["parent_mode"])
 	assert.Equal(t, srcA.String(), envelope["primary_source_id"])
 	assert.NotContains(t, envelope, "source_changed_since_creation", "an untouched snapshot is not flagged")
+	assert.NotContains(t, envelope, "context_invalidated", "an unchanged snapshot is not invalidated")
+	for _, event := range mrEvents(client) {
+		assert.NotEqual(t, "reference_context_invalidated", event.Type,
+			"unchanged sources do not emit retained-context invalidation")
+	}
 
 	ctxObj, ok := envelope["context"].(map[string]any)
 	require.True(t, ok, "context missing: %s", string(body))
@@ -332,13 +354,16 @@ func TestReferenceContextRead_MaxSourceTokensTruncates(t *testing.T) {
 
 func TestReferenceContextRead_VerifyHashDetectsMutatedSource(t *testing.T) {
 	pool := testutil.NewSharedIntegrationPool(t)
-	srv, _ := mrContextServer(t, pool)
+	srv, hub := mrContextServer(t, pool)
 	treeID := mrTree(t, pool)
 	root := mrNode(t, pool, treeID, nil, "root")
 	srcA := mrNode(t, pool, treeID, &root, "original A")
 	srcB := mrNode(t, pool, treeID, &root, "original B")
 	created, nodeID := mrCreateReply(t, srv, treeID, []uuid.UUID{srcA, srcB}, "reply")
 	storedHash := created["reference_context"].(map[string]any)["manifest_hash"]
+	oldSourceHash := mrContentHash(t, pool, srcB)
+	client := newTransportTestClient("pl06-audit-modified", testUserID, treeID)
+	require.NoError(t, hub.Subscribe(context.Background(), treeID, client))
 
 	// A source edited after creation must be visible to a verifying read.
 	_, err := pool.Exec(context.Background(),
@@ -349,9 +374,23 @@ func TestReferenceContextRead_VerifyHashDetectsMutatedSource(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "body: %s", string(body))
 	envelope := mrDecode(t, body)
 	assert.Equal(t, true, envelope["source_changed_since_creation"])
+	assert.Equal(t, true, envelope["context_invalidated"])
+	assert.Equal(t, []any{"source_modified"}, envelope["invalidation_reasons"])
 	// The reported hash remains the creation provenance, never a fresh one.
 	assert.Equal(t, storedHash, envelope["context"].(map[string]any)["manifest_hash"])
 	assert.Contains(t, string(body), "silently rewritten B", "the current content is what the route returns")
+
+	events := mrEvents(client)
+	require.Len(t, events, 1)
+	assert.Equal(t, "reference_context_invalidated", events[0].Type)
+	var invalidated map[string]any
+	require.NoError(t, json.Unmarshal(events[0].Data, &invalidated))
+	assert.Equal(t, treeID.String(), invalidated["tree_id"])
+	assert.Equal(t, nodeID.String(), invalidated["node_id"])
+	assert.Equal(t, srcB.String(), invalidated["source_node_id"])
+	assert.Equal(t, oldSourceHash, invalidated["old_hash"])
+	assert.Equal(t, mrContentHash(t, pool, srcB), invalidated["new_hash"])
+	assert.Equal(t, "source_modified", invalidated["reason"])
 
 	// verify_hash=false drops the assertion entirely.
 	status, body = mrGet(t, srv, mrContextPath(nodeID)+"?verify_hash=false", authHeader(t))
@@ -359,7 +398,40 @@ func TestReferenceContextRead_VerifyHashDetectsMutatedSource(t *testing.T) {
 	assert.NotContains(t, mrDecode(t, body), "source_changed_since_creation")
 }
 
-// --- §9.3: authorization -----------------------------------------------------
+func TestReferenceContextRead_SoftDeletedSourceEmitsInvalidation(t *testing.T) {
+	pool := testutil.NewSharedIntegrationPool(t)
+	srv, hub := mrContextServer(t, pool)
+	treeID := mrTree(t, pool)
+	root := mrNode(t, pool, treeID, nil, "root")
+	srcA := mrNode(t, pool, treeID, &root, "source A")
+	srcB := mrNode(t, pool, treeID, &root, "source B")
+	_, nodeID := mrCreateReply(t, srv, treeID, []uuid.UUID{srcA, srcB}, "reply")
+	oldSourceHash := mrContentHash(t, pool, srcB)
+	client := newTransportTestClient("pl06-audit-deleted", testUserID, treeID)
+	require.NoError(t, hub.Subscribe(context.Background(), treeID, client))
+
+	_, err := pool.Exec(context.Background(),
+		`UPDATE nodes SET deleted_at = clock_timestamp() WHERE id = $1`, srcB)
+	require.NoError(t, err)
+
+	status, body := mrGet(t, srv, mrContextPath(nodeID), authHeader(t))
+	require.Equal(t, http.StatusOK, status, "body: %s", string(body))
+	envelope := mrDecode(t, body)
+	assert.Equal(t, true, envelope["context_invalidated"])
+	assert.Equal(t, []any{"source_deleted"}, envelope["invalidation_reasons"])
+
+	events := mrEvents(client)
+	require.Len(t, events, 1)
+	assert.Equal(t, "reference_context_invalidated", events[0].Type)
+	var invalidated map[string]any
+	require.NoError(t, json.Unmarshal(events[0].Data, &invalidated))
+	assert.Equal(t, treeID.String(), invalidated["tree_id"])
+	assert.Equal(t, nodeID.String(), invalidated["node_id"])
+	assert.Equal(t, srcB.String(), invalidated["source_node_id"])
+	assert.Equal(t, oldSourceHash, invalidated["old_hash"])
+	assert.Equal(t, "", invalidated["new_hash"])
+	assert.Equal(t, "source_deleted", invalidated["reason"])
+}
 
 func TestReferenceContextRead_NonMemberForbidden(t *testing.T) {
 	pool := testutil.NewSharedIntegrationPool(t)

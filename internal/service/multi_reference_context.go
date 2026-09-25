@@ -31,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // ReferenceMaxSourceTokens is the §6.2 per-source token ceiling and the
@@ -64,6 +65,24 @@ type ReferenceContextOptions struct {
 	VerifyHash bool
 }
 
+// referenceContextSSEHubKey carries the shared hub from the HTTP handler into
+// the TreeService read without changing the existing TreeService interface.
+type referenceContextSSEHubKey struct{}
+
+// WithReferenceContextSSEHub supplies the post-read publication sink for a
+// lazy retained-context audit. A nil hub is valid and simply disables events.
+func WithReferenceContextSSEHub(ctx context.Context, hub sse.SSEHub) context.Context {
+	if hub == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, referenceContextSSEHubKey{}, hub)
+}
+
+func referenceContextSSEHub(ctx context.Context) sse.SSEHub {
+	hub, _ := ctx.Value(referenceContextSSEHubKey{}).(sse.SSEHub)
+	return hub
+}
+
 // ReferenceContextResult is the §9.3 200 envelope. Field names are
 // snake_case (§9: HTTP boundaries use snake_case).
 type ReferenceContextResult struct {
@@ -76,6 +95,10 @@ type ReferenceContextResult struct {
 	// was requested and the live snapshot no longer matches the creation
 	// provenance.
 	SourceChangedSinceCreation bool `json:"source_changed_since_creation,omitempty"`
+	// ContextInvalidated and InvalidationReasons are additive retained-context
+	// audit fields. They are omitted for an unchanged snapshot.
+	ContextInvalidated  bool     `json:"context_invalidated,omitempty"`
+	InvalidationReasons []string `json:"invalidation_reasons,omitempty"`
 }
 
 // ReferenceContextView is the §9.3 `context` object.
@@ -129,6 +152,18 @@ type referenceContextSourceRow struct {
 	ContentHash   string
 	SequenceNum   int64
 	SourceDeleted bool
+}
+
+// referenceContextInvalidation is the internal form used by both the response
+// and the §10.1 event. TreeID and NodeID make the event complete without
+// relying on the surrounding request URL.
+type referenceContextInvalidation struct {
+	TreeID       uuid.UUID
+	NodeID       uuid.UUID
+	SourceNodeID uuid.UUID
+	OldHash      string
+	NewHash      string
+	Reason       string
 }
 
 // --- Read --------------------------------------------------------------------
@@ -199,7 +234,79 @@ func (s *TreeServiceImpl) GetReferenceContext(ctx context.Context, nodeID uuid.U
 		return nil, fmt.Errorf("%w: iterate reference parents: %v", ErrDatabaseUnavailable, err)
 	}
 
-	return buildReferenceContext(node, reserved, sources, opts)
+	invalidations := checkReferenceContextInvalidated(node, contextAuditMetadata(node.Metadata), sources)
+	result, err := buildReferenceContext(node, reserved, sources, opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.VerifyHash && len(invalidations) > 0 {
+		result.ContextInvalidated = true
+		result.InvalidationReasons = invalidationReasons(invalidations)
+		for _, invalidation := range invalidations {
+			s.broadcastReferenceContextInvalidated(ctx, invalidation)
+		}
+	}
+	return result, nil
+}
+
+// contextAuditMetadata decodes the bounded creation snapshot. Missing or
+// malformed snapshots are treated as legacy metadata: existing context reads
+// remain available, but there is no false-positive invalidation claim.
+func contextAuditMetadata(metadata []byte) map[string]string {
+	raw := metadataSection(metadata, "context_audit")
+	if len(raw) == 0 {
+		return nil
+	}
+	var audit map[string]string
+	if err := json.Unmarshal(raw, &audit); err != nil {
+		return nil
+	}
+	return audit
+}
+
+// checkReferenceContextInvalidated compares each live source hash and soft
+// deletion state with the creation snapshot stored on the target node.
+func checkReferenceContextInvalidated(node referenceContextNode, audit map[string]string, rows []referenceContextSourceRow) []referenceContextInvalidation {
+	if len(audit) == 0 {
+		return nil
+	}
+	invalidations := make([]referenceContextInvalidation, 0, len(rows))
+	for _, row := range rows {
+		oldHash, ok := audit[row.SourceID.String()]
+		if !ok {
+			continue
+		}
+		invalidation := referenceContextInvalidation{
+			TreeID:       node.TreeID,
+			NodeID:       node.ID,
+			SourceNodeID: row.SourceID,
+			OldHash:      oldHash,
+			NewHash:      row.ContentHash,
+		}
+		if row.SourceDeleted {
+			invalidation.Reason = "source_deleted"
+			invalidation.NewHash = ""
+		} else if row.ContentHash != oldHash {
+			invalidation.Reason = "source_modified"
+		} else {
+			continue
+		}
+		invalidations = append(invalidations, invalidation)
+	}
+	return invalidations
+}
+
+func invalidationReasons(invalidations []referenceContextInvalidation) []string {
+	seen := make(map[string]struct{}, len(invalidations))
+	reasons := make([]string, 0, len(invalidations))
+	for _, invalidation := range invalidations {
+		if _, ok := seen[invalidation.Reason]; ok {
+			continue
+		}
+		seen[invalidation.Reason] = struct{}{}
+		reasons = append(reasons, invalidation.Reason)
+	}
+	return reasons
 }
 
 // buildReferenceContext assembles the §9.3 envelope from the persisted node

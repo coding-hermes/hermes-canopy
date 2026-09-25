@@ -71,6 +71,47 @@ func defaultReferenceContextOptions() ReferenceContextOptions {
 	return ReferenceContextOptions{IncludeContent: true, VerifyHash: true}
 }
 
+func TestContextAuditMetadata_RoundTripsSourceHashes(t *testing.T) {
+	_, reserved, rows := referenceContextFixture(t)
+	audit := map[string]string{
+		rows[0].SourceID.String(): rows[0].ContentHash,
+		rows[1].SourceID.String(): rows[1].ContentHash,
+		rows[2].SourceID.String(): rows[2].ContentHash,
+	}
+
+	raw, err := buildMultiReferenceMetadataWithAudit(nil, reserved, audit, nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, audit, contextAuditMetadata(raw))
+	assert.Contains(t, string(raw), `"multi_reference"`)
+	assert.Contains(t, string(raw), `"context_audit"`)
+}
+
+func TestCheckReferenceContextInvalidated_ChangedAndDeletedSources(t *testing.T) {
+	node, _, rows := referenceContextFixture(t)
+	audit := map[string]string{
+		rows[0].SourceID.String(): rows[0].ContentHash,
+		rows[1].SourceID.String(): rows[1].ContentHash,
+		rows[2].SourceID.String(): rows[2].ContentHash,
+	}
+
+	unchanged := checkReferenceContextInvalidated(node, audit, rows)
+	assert.Empty(t, unchanged, "unchanged sources do not invalidate retained context")
+
+	rows[1].ContentHash = "hash-b-edited"
+	rows[2].SourceDeleted = true
+	invalidations := checkReferenceContextInvalidated(node, audit, rows)
+	require.Len(t, invalidations, 2)
+	assert.Equal(t, rows[1].SourceID, invalidations[0].SourceNodeID)
+	assert.Equal(t, "hash-b", invalidations[0].OldHash)
+	assert.Equal(t, "hash-b-edited", invalidations[0].NewHash)
+	assert.Equal(t, "source_modified", invalidations[0].Reason)
+	assert.Equal(t, rows[2].SourceID, invalidations[1].SourceNodeID)
+	assert.Equal(t, "hash-c", invalidations[1].OldHash)
+	assert.Empty(t, invalidations[1].NewHash)
+	assert.Equal(t, "source_deleted", invalidations[1].Reason)
+	assert.Equal(t, []string{"source_modified", "source_deleted"}, invalidationReasons(invalidations))
+}
+
 func TestReferenceContextBuild_PersistsCreationOrderAndLabels(t *testing.T) {
 	node, reserved, rows := referenceContextFixture(t)
 

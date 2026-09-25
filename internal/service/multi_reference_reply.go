@@ -4,10 +4,10 @@
 // §13.2 (reserved metadata merge), §4.2 (atomic creation sequence), and the
 // §3.5 invariant checks. Selection preflight lives in multi_reference.go.
 //
-// Deferred by this phase (see the ticket): the §10 SSE event vocabulary
-// (the created node rides the ordinary node broadcast), §9.3
-// GET /nodes/{id}/reference-context, §6 context-compiler integration, and
-// the frontend of §4.1/§4.3/§7.
+// Implements the retained context audit from SPEC-PL-06 §10.1: creation
+// persists source hashes in bounded node metadata and the §9.3 read path
+// compares them lazily before emitting invalidation events. The frontend of
+// §4.1/§4.3/§7 remains outside this service package.
 package service
 
 import (
@@ -221,7 +221,11 @@ func (s *NodeServiceImpl) CreateMultiReferenceReply(ctx context.Context, treeID 
 
 	// §13.1 step 6 / §3.5 invariant 3 — target message with the display
 	// anchor. nodes.id DEFAULT uuidv7() allocates the target UUIDv7.
-	meta, err := buildMultiReferenceMetadata(clientMeta, db.MultiReferenceMetadata{
+	contextAudit := make(map[string]string, len(sources))
+	for _, source := range sources {
+		contextAudit[source.ID.String()] = source.ContentHash
+	}
+	meta, err := buildMultiReferenceMetadataWithAudit(clientMeta, db.MultiReferenceMetadata{
 		Version:               db.MultiReferenceMetadataVersion,
 		PrimarySourceID:       primary,
 		CanonicalSourceIDs:    orderedIDs,
@@ -229,7 +233,7 @@ func (s *NodeServiceImpl) CreateMultiReferenceReply(ctx context.Context, treeID 
 		BranchSpan:            branchSpanToDB(span),
 		ContextManifestHash:   manifestHash,
 		ContextTokenBudget:    budget,
-	}, input.RequestID, requestHash)
+	}, contextAudit, input.RequestID, requestHash)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +369,38 @@ func (s *NodeServiceImpl) broadcastMultiReferenceConverged(treeID, actorID uuid.
 		return
 	}
 	s.sseHub.Broadcast(treeID, sse.ComposeEvent(treeID, actorID, "multi_reference_converged", payload))
+}
+
+// SSEHub exposes the node service's shared hub to the multi-reference
+// handler, which passes it into the service read context for lazy-audit
+// publication.
+func (s *NodeServiceImpl) SSEHub() sse.SSEHub {
+	return s.sseHub
+}
+
+// ReferenceContextInvalidatedEvent is the §10.1 payload emitted when a
+// retained multi-reference source no longer matches its creation snapshot.
+// A deleted source has no current hash, so NewHash is empty for that reason.
+type ReferenceContextInvalidatedEvent struct {
+	TreeID       uuid.UUID `json:"tree_id"`
+	NodeID       uuid.UUID `json:"node_id"`
+	SourceNodeID uuid.UUID `json:"source_node_id"`
+	OldHash      string    `json:"old_hash"`
+	NewHash      string    `json:"new_hash"`
+	Reason       string    `json:"reason"`
+}
+
+// broadcastReferenceContextInvalidated publishes one §10.1 event per source
+// invalidation after the read has observed the committed source state.
+func (s *TreeServiceImpl) broadcastReferenceContextInvalidated(ctx context.Context, invalidation referenceContextInvalidation) {
+	hub := referenceContextSSEHub(ctx)
+	if hub == nil {
+		return
+	}
+	payload := ReferenceContextInvalidatedEvent(invalidation)
+	hub.Broadcast(invalidation.TreeID, sse.ComposeEvent(
+		invalidation.TreeID, requesterFromContext(ctx), "reference_context_invalidated", payload,
+	))
 }
 
 // referenceEdgeIDs returns the created edges' ids in creation order (the
@@ -511,18 +547,17 @@ func decodeMetadataObject(raw json.RawMessage) (map[string]json.RawMessage, erro
 	return obj, nil
 }
 
-// buildMultiReferenceMetadata merges client metadata with the server-owned
-// reserved key (§13.2): a client-supplied `multi_reference` object is dropped
-// and replaced, other keys are retained, and the merged document is rejected
-// (never truncated) when it exceeds the 16 KiB maximum.
-func buildMultiReferenceMetadata(clientMeta map[string]json.RawMessage, reserved db.MultiReferenceMetadata, requestID *uuid.UUID, requestHash string) ([]byte, error) {
+// buildMultiReferenceMetadataWithAudit adds the creation-time source hashes to
+// the bounded node metadata. The audit is server-owned just like
+// multi_reference, so client metadata cannot replace or spoof it.
+func buildMultiReferenceMetadataWithAudit(clientMeta map[string]json.RawMessage, reserved db.MultiReferenceMetadata, contextAudit map[string]string, requestID *uuid.UUID, requestHash string) ([]byte, error) {
 	if requestID != nil {
 		reserved.RequestID = requestID.String()
 		reserved.RequestHash = requestHash
 	}
-	merged := make(map[string]json.RawMessage, len(clientMeta)+1)
+	merged := make(map[string]json.RawMessage, len(clientMeta)+2)
 	for k, v := range clientMeta {
-		if k == "multi_reference" {
+		if k == "multi_reference" || k == "context_audit" {
 			continue
 		}
 		merged[k] = v
@@ -532,6 +567,13 @@ func buildMultiReferenceMetadata(clientMeta map[string]json.RawMessage, reserved
 		return nil, fmt.Errorf("%w: encode reserved metadata: %v", ErrDatabaseUnavailable, err)
 	}
 	merged["multi_reference"] = rawReserved
+	if len(contextAudit) > 0 {
+		rawAudit, err := json.Marshal(contextAudit)
+		if err != nil {
+			return nil, fmt.Errorf("%w: encode context audit metadata: %v", ErrDatabaseUnavailable, err)
+		}
+		merged["context_audit"] = rawAudit
+	}
 
 	out, err := json.Marshal(merged)
 	if err != nil {

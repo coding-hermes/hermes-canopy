@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // MultiReferenceHandler wires the multi-message reference endpoints to the
@@ -33,12 +34,17 @@ type MultiReferenceHandler struct {
 	// per-node membership itself (the flat mount carries no tree_id
 	// segment, so TreeMembershipMiddleware cannot run there). Nil skips
 	// the check and is only used by DB-free wiring harnesses.
-	members TreeMemberChecker
+	members  TreeMemberChecker
+	auditHub sse.SSEHub
 }
 
 // NewMultiReferenceHandler returns a handler over the two services.
 func NewMultiReferenceHandler(treeSvc service.TreeService, nodeSvc service.NodeService) *MultiReferenceHandler {
-	return &MultiReferenceHandler{treeSvc: treeSvc, nodeSvc: nodeSvc}
+	var auditHub sse.SSEHub
+	if nodeImpl, ok := nodeSvc.(*service.NodeServiceImpl); ok {
+		auditHub = nodeImpl.SSEHub()
+	}
+	return &MultiReferenceHandler{treeSvc: treeSvc, nodeSvc: nodeSvc, auditHub: auditHub}
 }
 
 // WithMembership wires the per-node membership checker used by the §9.3
@@ -208,7 +214,9 @@ func (h *MultiReferenceHandler) GetReferenceContext(w http.ResponseWriter, r *ht
 		return
 	}
 
-	result, err := h.treeSvc.GetReferenceContext(r.Context(), nodeID, opts)
+	readCtx := service.WithRequester(r.Context(), userID)
+	readCtx = service.WithReferenceContextSSEHub(readCtx, h.auditHub)
+	result, err := h.treeSvc.GetReferenceContext(readCtx, nodeID, opts)
 	if err != nil {
 		writeReferenceServiceError(w, r, err)
 		return
