@@ -13,15 +13,22 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 type registryStub struct {
-	rows   []db.Plugin
-	audits int
+	rows                  []db.Plugin
+	audits                int
+	lastAuditActor        uuid.UUID
+	profileForUser        map[uuid.UUID]uuid.UUID
+	acceptedAuthorProfile uuid.UUID
 }
 
 func (s *registryStub) Register(_ context.Context, p *db.Plugin) (*db.Plugin, error) {
+	if s.acceptedAuthorProfile != uuid.Nil && p.AuthorProfileID != s.acceptedAuthorProfile {
+		return nil, errors.New("insert plugin: violates author_profile_id foreign key")
+	}
 	for _, x := range s.rows {
 		if x.Name == p.Name && x.Version == p.Version {
 			return nil, db.ErrPluginDuplicate
@@ -39,6 +46,18 @@ func (s *registryStub) Register(_ context.Context, p *db.Plugin) (*db.Plugin, er
 	s.rows = append(s.rows, *p)
 	return p, nil
 }
+
+func (s *registryStub) ResolveAuthorProfile(_ context.Context, actor uuid.UUID) (uuid.UUID, error) {
+	if s.profileForUser == nil {
+		return actor, nil
+	}
+	profileID, ok := s.profileForUser[actor]
+	if !ok {
+		return uuid.Nil, db.ErrNotFound
+	}
+	return profileID, nil
+}
+
 func (s *registryStub) GetByID(_ context.Context, id uuid.UUID) (*db.Plugin, error) {
 	for i := range s.rows {
 		if s.rows[i].ID == id {
@@ -85,8 +104,9 @@ func (s *registryStub) Archive(_ context.Context, n string) (*db.Plugin, error) 
 func (s *registryStub) Rollback(context.Context, string) (*db.Plugin, error) {
 	return nil, errors.New("unused")
 }
-func (s *registryStub) Audit(context.Context, uuid.UUID, string, uuid.UUID, map[string]any) error {
+func (s *registryStub) Audit(_ context.Context, _ uuid.UUID, _ string, actor uuid.UUID, _ map[string]any) error {
 	s.audits++
+	s.lastAuditActor = actor
 	return nil
 }
 func (s *registryStub) Update(_ context.Context, p *db.Plugin, _ uuid.UUID) (*db.Plugin, error) {
@@ -123,9 +143,59 @@ func pluginReq(t *testing.T, h *PluginHandler, method, path, body string) *httpt
 	r.ServeHTTP(w, q)
 	return w
 }
+
+func authenticatedPluginReq(t *testing.T, h *PluginHandler, userID uuid.UUID, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID.String()}).SignedString([]byte(db.DevJWTSecretDefault))
+	if err != nil {
+		t.Fatalf("sign dev JWT: %v", err)
+	}
+	r := chi.NewRouter()
+	r.Use(AuthMiddleware(db.DevJWTSecretDefault))
+	r.Mount("/api/v1/plugins", h.Routes())
+	q := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	q.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, q)
+	return w
+}
+
 func pluginBody(src string) string {
 	b, _ := json.Marshal(map[string]string{"source_js": src})
 	return string(b)
+}
+
+func TestPluginRegistryRegisterResolvesUserSubjectToProfile(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	profileID := uuid.MustParse("01a0d018-8c71-76ce-9ea4-b4f835328400")
+	repo := &registryStub{
+		profileForUser:        map[uuid.UUID]uuid.UUID{userID: profileID},
+		acceptedAuthorProfile: profileID,
+	}
+	h := NewPluginHandler(service.NewPluginRegistryService(repo))
+	w := authenticatedPluginReq(t, h, userID, http.MethodPost, "/api/v1/plugins/", pluginBody(pluginSource("dev-viewer", "1.0.0", "data_read")))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if got := repo.rows[0].AuthorProfileID; got != profileID {
+		t.Fatalf("author profile=%s, want %s", got, profileID)
+	}
+	if repo.lastAuditActor != profileID {
+		t.Fatalf("audit actor=%s, want profile %s", repo.lastAuditActor, profileID)
+	}
+}
+
+func TestPluginRegistryRegisterWithoutProfileIsInvalidRequest(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	repo := &registryStub{profileForUser: map[uuid.UUID]uuid.UUID{}}
+	h := NewPluginHandler(service.NewPluginRegistryService(repo))
+	w := authenticatedPluginReq(t, h, userID, http.MethodPost, "/api/v1/plugins/", pluginBody(pluginSource("profileless", "1.0.0", "data_read")))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), userID.String()) {
+		t.Fatalf("body=%s, want the token subject", w.Body.String())
+	}
 }
 
 func TestPluginRegistryRegistrationScenarios(t *testing.T) {

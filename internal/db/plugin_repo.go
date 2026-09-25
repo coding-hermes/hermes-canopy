@@ -55,6 +55,14 @@ type PluginRepo interface {
 	RollbackTo(context.Context, string, string, uuid.UUID) (*Plugin, error)
 }
 
+// PluginAuthorProfileResolver is the optional identity lookup used by the
+// plugin service. Authentication supplies a users.id, while plugin authors
+// are stored as profiles.id. Keeping this capability separate preserves the
+// lightweight in-memory PluginRepo contract used by service tests.
+type PluginAuthorProfileResolver interface {
+	ResolveAuthorProfile(context.Context, uuid.UUID) (uuid.UUID, error)
+}
+
 func (r *PGPluginRepo) Update(ctx context.Context, p *Plugin, actor uuid.UUID) (*Plugin, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -139,6 +147,27 @@ func (r *PGPluginRepo) RollbackTo(ctx context.Context, slug, version string, act
 type PGPluginRepo struct{ pool *pgxpool.Pool }
 
 func NewPGPluginRegistryRepo(pool *pgxpool.Pool) *PGPluginRepo { return &PGPluginRepo{pool: pool} }
+
+// ResolveAuthorProfile maps the authenticated users.id to the profile row
+// recorded by plugin_registry. A profile whose id equals the actor wins for
+// callers that already provide a profile id; otherwise the newest active
+// profile owned by the actor is selected.
+func (r *PGPluginRepo) ResolveAuthorProfile(ctx context.Context, actorID uuid.UUID) (uuid.UUID, error) {
+	var profileID uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+        SELECT id
+        FROM profiles
+        WHERE deleted_at IS NULL AND (id = $1 OR owner_id = $1)
+        ORDER BY (id = $1) DESC, created_at DESC
+        LIMIT 1`, actorID).Scan(&profileID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("db: resolve plugin author profile: %w", err)
+	}
+	return profileID, nil
+}
 
 const registryColumns = `id,name,slug,version,description,author_profile_id,permissions,
 manifest_json,source_js,source_sha256,source_byte_size,icon_url,status,install_count,
