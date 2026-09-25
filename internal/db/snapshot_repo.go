@@ -9,11 +9,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/google/uuid"
@@ -147,6 +149,12 @@ func (r *PGSnapshotRepo) CreateSnapshot(ctx context.Context, treeID uuid.UUID) (
 	).Scan(&snap.ID, &snap.TreeID, &snap.ParentHash, &snap.Hash,
 		&snap.NodeCount, &snap.EdgeCount, &snap.SnapshotData, &snap.CreatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return scanSnapshot(r.pool.QueryRow(ctx,
+				`SELECT id, tree_id, parent_hash, hash, node_count, edge_count, snapshot_data, created_at
+				 FROM tree_snapshots WHERE tree_id = $1 AND hash = $2`, treeID, hash))
+		}
 		return nil, fmt.Errorf("snapshot: insert: %w", err)
 	}
 	return &snap, nil
