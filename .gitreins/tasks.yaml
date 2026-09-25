@@ -3627,3 +3627,18 @@ tasks:
   status: complete
   created_at: '2026-09-25T02:11:06.704834+00:00'
   completed_at: '2026-09-25T03:29:51.076286+00:00'
+- id: DF-HERMES-CANOPY-64
+  title: Align docs/API.md with wire truth on import response + plugin-versions envelope
+    + profile mapping id semantics
+  criteria:
+  - 'AC1: docs/API.md Import Tree response documents the real flat camelCase summary
+    (treeId/rootNodeId/nodeCount/edgeCount/topicCount/resolvedRefCount + Location
+    header), not the nonexistent {tree_id} object, verified against a live 201 capture.
+    AC2: List Plugin Versions section records the re-verification that the {plugins:[...]}
+    envelope has always been the wire shape (the dogfood bare-array claim is stale).
+    AC3: Profiles section states rows carry no id (profileName is the route key) and
+    that mapping rows are hermes gateway profiles, not canopy profiles.id values usable
+    as plugin actor_profile_id. AC4: gitleaks clean; no Go/frontend source files touched.'
+  status: complete
+  created_at: '2026-09-25T04:30:03.711672+00:00'
+  completed_at: '2026-09-25T04:32:18.058791+00:00'

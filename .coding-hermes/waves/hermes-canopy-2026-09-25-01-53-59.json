@@ -52,6 +52,8 @@
     "master_push": "6eb9d693..01dc6a34",
     "rev_list_origin_master_dotdot_head": 0
   },
+  "finished_at": "2026-09-25T04:35:00-05:00",
+  "recovery_note": "Closed by recovery tick hermes-canopy-2026-09-25-04-13-33: all 3 workers merged (e22f292f/01dc6a34/33dd7949 proven ancestors of master), board rows complete, gitreins verdicts COMPLETE (61=f31c0b80, 63=584a0223, 65=ec9bcfb9), CI green. Branches wt/-63/-65 kept as evidence per fleet convention.",
   "gate": {
     "sweep": "30 pkgs ok SWEEP_EXIT=0 (CANOPY_TEST_ALLOW_SHARED_DB=1)",
     "handler": "ok 638.8s HANDLER_EXIT=0",

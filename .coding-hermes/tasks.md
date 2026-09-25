@@ -3644,3 +3644,59 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
   evidence; no new pre-solve candidate, no post-debug submission).
 - Pending set: DF-64 (P2, next serial pick), GAP-080/081 (owner-bound P2), DF-25 (P4),
   FTR-06/PL-04/05/06 (P3 mega-specs needing design passes).
+
+## Tick 583 — hermes-canopy-2026-09-25-04-13-33 (2026-09-25) — WORK: wave-recovery closeout + DF-64 foreman-direct (premise half-refuted, docs-only fix)
+
+- WAVE RECOVERY (hermes-canopy-2026-09-25-01-53-59): evidence-first classification — NOT a
+  0-worker dead wave. All 3 workers already merged: e22f292f (61) / 01dc6a34 (63) /
+  33dd7949 (65) proven ancestors of master via merge-base --is-ancestor; board rows
+  complete; verdicts COMPLETE on disk (61=f31c0b80, 63=584a0223, 65=ec9bcfb9, plus 62=417588bf);
+  CI green (3 recent runs); worktrees gone. The banner's "(0 worker(s))" was the dead
+  tick's last write, not git truth. Closeout: manifest finished_at + recovery_note set
+  (patch tool), wt/-63/-65 branches kept as evidence (fleet convention; branch -d is
+  approval-gated here). Recovery consumed no worker dispatches.
+- PICK: DF-HERMES-CANOPY-64 (P2, the wave's deliberate exclusion; the rest of the pending
+  set is decision-bound/phase-split: GAP-080/081 owner rulings, FTR-06/PL-04/05/06 mega-specs,
+  DF-25 P4 watch). Premise re-verified at HEAD BEFORE fixing — and it was HALF FALSE:
+- Part 1 (plugin versions returns bare array) REFUTED: envelope {plugins:[...]} present
+    since PL-01 (9a2f6e17, 09-01) — git show at wave base 6eb9d693 + git log -S both agree;
+    live probe on the freshly deployed binary returns {"plugins":[]}. The dogfood session
+    consumed stale wire state; no code change needed.
+- Part 2 (import response shape) REAL but INVERTED: wire returns a flat camelCase summary
+    {treeId,rootNodeId,nodeCount,edgeCount,topicCount,resolvedRefCount} + Location (live 201
+    capture); docs promised {tree_id}/{topic_count} — a shape that never shipped (git -S: no
+    commit ever returned tree_id from the handler). Frontend consumer FirstRunOnboarding.tsx
+    reads result.treeId, confirming the wire side. docs/API.md now documents the real shape.
+- Part 3 (mapping rows lack id) REAL but CROSS-DOMAIN: live probe on the dev workspace
+    shows rows without id; profileName is the route key (per-profile routes key on it), and
+    the mapping rows are hermes gateway profiles — NOT canopy profiles.id values usable as
+    plugin actor_profile_id (DF-63's fix resolves that against the canopy profiles table).
+    Adding an id would fabricate a foreign id space; docs/API.md now states both facts.
+- DEPLOY: canopyd redeployed BEFORE the live probes (bash scripts/deploy-canopyd.sh ->
+  DEPLOY OK 2026-09-24 23:26 -05, gateway smoke passed) so probe claims are about HEAD.
+- FIX (foreman-direct, docs-only — single file, no source change): docs/API.md +29/-3,
+  commit d169091e (co-author trailer via .gitmessage). Guard: commit-time tier-1 PASS
+  (full test mode). Pushed 8b4144e2..d169091e, rev-list origin/master..HEAD = 0. CI on
+  d169091e GREEN (gh run success, folded into row+event same tick).
+- GITREINS: task create+start DF-HERMES-CANOPY-64 (criterion written from re-verified
+  premise), task complete ran in background (foreground Tier-2 kills learned fleet-wide);
+  verdict dir b2325637 COMPLETE (CLI printed handle 460e2a8b was the job id — artifact
+  matched by parsing verdict.json task_id). .gitreins/history is gitignored → artifact
+  host-local, cited as such.
+- PROBES: dev JWT minted per docs (sub 00000000-0000-0000-0000-000000000001,
+  dev-secret-change-me). Read-only routes probed live; round-trip used a SELF-CREATED
+  probe tree (POST /trees → export → import → DELETE x2, both 204); tree list re-checked:
+  0 probe trees remain. Live DB untouched otherwise.
+- Board: tasks.jsonl 1 row closed via byte-exact dumper-probed surgical rewrite (396 rows,
+  0 parse failures, numstat 1/1; two-pass write after a script bug — continuation asserted
+  the exact part-1 state per the JSONL-editing recipe; completed_at written in the board's
+  UTC convention after a local-time first write); events 864 appended (string-detail
+  convention, spaced inner style, compact outer — reproduced from the newest line);
+  board.jsonl header 582→583, last_commit d169091e. tasks.md remains the only other file
+  updated this tick (maintenance protocol: board files carry the close).
+- Off-by-one :8766: discover probed for api-docs-shape-drift + stale-dogfood classes —
+  both not_found (no cached answer; nothing non-trivial debugged this tick, no
+  post-debug submission owed).
+- Pending set: GAP-080/081 (owner-bound P2), DF-25 (P4), FTR-06/PL-04/05/06 (P3 mega-specs),
+  QA-HERMES-CANOPY-* (bunker-infra, other owner). Next tractable work likely needs a
+  design/phase split or a fresh dogfood/QA cycle to surface new rows.
