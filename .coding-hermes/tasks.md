@@ -3603,3 +3603,44 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
   — pushed origin AND gitlab, rev-list 0/0 after each. CI at tick open: 5/5 recent runs
   success incl. 76022a98 (22:01Z). CI on 5a16b242: PENDING at tick close (board-only
   diff; next tick folds).
+
+## Tick 582 — hermes-canopy-2026-09-25-01-53-59 (2026-09-25) — WORK: DF-62 recovery close + 3-worker wave (DF-61/63/65), all judges PASS
+
+- Verdict: WORK — recovery + wave, 4 rows closed (DF-62 recovery, DF-61/63/65 wave), every
+  row Tier-2 PASS. Remote parity 0 at every step; worktrees reaped.
+- Recovery at tick open: HEAD 6eb9d693 (DF-62 fix by the dead prior session, 01:21-01:30Z)
+  was UNPUSHED with the gitreins task left in_progress. Pushed first (rev-list 0), CI on the
+  commit GREEN (run 2026-09-25T01:54:47Z), gitreins task complete -> tier-1 PASS + tier-2
+  COMPLETE (artifact .gitreins/history/2026-09-25/417588bf), foreman re-ran
+  TestCreateSnapshotIdempotentOnDuplicateHash live (PASS 6.99s). Row closed (event 859).
+- Wave: WAVE_BUDGET 6, loadavg 5.9 at dispatch. Picked DF-61 (P1 export/import) + DF-63 (P1
+  plugin dev-JWT) + DF-65 (P2 tree detail node_count) — pairwise file-disjoint verified at
+  HEAD. DF-64 EXCLUDED (touches both plugin handler and import envelope -> conflicts with
+  61+63; next serial pick). Premises re-verified at HEAD before dispatch (repo.go:112 FK
+  insert; treeToSummary:1252 NodeCount:1 + GetTree never syncs). Manifest written BEFORE
+  dispatch: .coding-hermes/waves/hermes-canopy-2026-09-25-01-53-59.json.
+- Workers: gpt-5.6-luna @ openai-codex, 3/3 live (children visible after 87s; -Q logs flush
+  at exit only). Serial merges: 4cc14443 (61, edge-drop shape) -> e22f292f; 108b10f8 (65) ->
+  33dd7949; 2517c6f5 (63, user->profile resolution + 400 INVALID_REQUEST on missing profile;
+  also fixed no-profile 201-with-user-uuid defect) -> 01dc6a34.
+- Verification: foreman personally re-ran the falsification in each worker's worktree
+  (revert touched files to HEAD~1 -> new tests RED -> restore -> GREEN, worktree clean):
+  DF-61 'export must not retain an edge to an excluded node'; DF-65 'detail node_count = 1,
+  want 4' x3 assertions; DF-63 'status=500 INTERNAL_ERROR' + profileless 'status=201'
+  authorProfileId=...0001. Judged after push: all tier-2 PASS (61: 5518a316/f31c0b80,
+  63: 06cc2aa3, 65: b289ce6e).
+- Master gate (post-merge, CANOPY_TEST_ALLOW_SHARED_DB=1): sweep 30 pkgs ok (exit 0),
+  ./internal/handler ok 638.8s, golangci-lint run ./... = 0 issues, gitleaks no leaks,
+  frontend vitest 1408/1408, oxlint 2 pre-existing warnings (no frontend files touched).
+  build/vet clean. CI green on 01dc6a34; CI on 8b4144e2 (board-only) pending at close, next
+  tick folds.
+- Board: tasks.jsonl 4 rows closed via per-line surgical rewrite (396 lines, 0 parse
+  failures); events 858-863 (dispatch, 4 completions incl. 62, wave close); board.jsonl
+  header sed-bumped (last_tick/ticks_total=582/last_commit=01dc6a34). Board commit 8b4144e2
+  pushed (rev-list 0). Worktrees reaped (61 via reap; 63/65 hand-removed for .gitreins/logs/
+  junk; wt/* branches retained as evidence). DuckBrain: /ticks/tick582-wave-df61-63-65
+  (28efb342) + /project/hermes-canopy/status/2026-09-25 (08027efa), both read-back verified.
+- Off-by-one :8766: no debugging performed this tick (all mechanisms pre-verified from repo
+  evidence; no new pre-solve candidate, no post-debug submission).
+- Pending set: DF-64 (P2, next serial pick), GAP-080/081 (owner-bound P2), DF-25 (P4),
+  FTR-06/PL-04/05/06 (P3 mega-specs needing design passes).
