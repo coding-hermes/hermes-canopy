@@ -1680,8 +1680,24 @@ the remapped topic + node, and `resolved_by` falls back to the importing
 user's newest profile when the original profile does not exist. Imports of
 version-1 payloads stay byte-compatible with the old behaviour.
 
-**Response (201):** `{ "tree_id": "uuid" }` with `Location` header. The
-result also reports `topic_count` and `resolved_ref_count`.
+**Response (201):** a flat summary object with a `Location` header pointing
+at the new tree (shape captured live, DF-HERMES-CANOPY-64):
+
+```json
+{
+  "treeId": "uuid",
+  "rootNodeId": "uuid",
+  "nodeCount": 1,
+  "edgeCount": 0,
+  "topicCount": 0,
+  "resolvedRefCount": 0
+}
+```
+
+An earlier revision of this document promised `{ "tree_id": "uuid" }` with
+snake_case `topic_count` / `resolved_ref_count` — that shape was never the
+wire format; the onboarding import flow has always consumed the flat
+camelCase summary above.
 
 ---
 
@@ -2001,7 +2017,9 @@ GET /api/v1/plugins/{name}/versions
 `{name}` is the manifest name. The UUID that § Register Plugin returns for the row is the `id` field (the plugin lifecycle SSE payloads carry the same value as `plugin_id`), so a reference written `GET /api/v1/plugins/{plugin_id}/versions` denotes this endpoint: the path parameter is the manifest name, not that id.
 
 **Response (200):** `{"plugins": […]}` — every version of that plugin, newest
-first. An unknown name is an empty list, not a 404.
+first. An unknown name is an empty list, not a 404. Re-verified live
+(DF-HERMES-CANOPY-64): this envelope has been the wire shape since the route
+shipped (PL-01); a 2026-09-24 dogfood report of a bare array was stale.
 
 **Error codes:** `INTERNAL_ERROR` (500)
 
@@ -2363,6 +2381,14 @@ GET /api/v1/workspaces/{workspace_id}/profiles
   ]
 }
 ```
+
+**No `id` field (verified live, DF-HERMES-CANOPY-64):** mapping rows are
+keyed by `profileName` — that name is the path parameter of the per-profile
+routes below, so a row is addressable without an id. These are **Hermes
+gateway profile mappings**, not canopy `profiles.id` rows: a value from this
+response cannot be used as a plugin `actor_profile_id` (that field resolves
+against the canopy `profiles` table; § Register Plugin resolves the JWT user
+to it).
 
 ### Set Active Profile
 
