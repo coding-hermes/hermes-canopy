@@ -3680,3 +3680,14 @@ tasks:
   status: complete
   created_at: '2026-09-25T10:32:19.533842+00:00'
   completed_at: '2026-09-25T11:22:54.116718+00:00'
+- id: DF-HERMES-CANOPY-25-REPRO
+  title: 'Reproduce or clear DF-HERMES-CANOPY-25: handler package timeout under quiet
+    PG'
+  criteria:
+  - Run the full internal/handler package once, alone, against the local PG with CANOPY_TEST_ALLOW_SHARED_DB=1
+    and -timeout 10m. If it passes under the 10m timeout with no TruncateAll stall,
+    record the measurement on the board row and downgrade the watch; if it times out
+    or stalls, escalate to a real defect row with pg lock evidence.
+  status: complete
+  created_at: '2026-09-25T15:13:36.189419+00:00'
+  completed_at: '2026-09-25T15:26:51.548919+00:00'
