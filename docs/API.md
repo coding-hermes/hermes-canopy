@@ -1318,6 +1318,112 @@ repo-wide — it is archived, not the card backend.
 key used by the SSE envelope, the domain `card.Card`, and card-export JSONL. These
 are intentionally different shapes.
 
+### Iteration Cards (SPEC-PL-04 phase 2)
+
+Iteration routes use the shipped `/api/v1` prefix (the spec's conceptual
+`/api/cards/...` paths are not literal deployment paths). They share the
+authenticated `/cards` surface and persist in the iteration SQLite database.
+
+#### Create
+
+```
+POST /api/v1/cards/iteration
+Content-Type: application/json
+
+{"subtype":"iteration_search","agentId":"agent-0191a9c3","appId":"canopy.agent"}
+```
+
+Response (`201`):
+
+```json
+{"id":"uuid","card_type":"iteration","status":"active","revision":1,"data":{"subtype":"iteration_search","state":"running","agentId":"agent-0191a9c3"}}
+```
+
+#### Get
+
+```
+GET /api/v1/cards/iteration/{card_id}
+```
+
+Response (`200`): the base card with validated iteration `data`, for example
+`{"id":"uuid","card_type":"iteration","data":{"subtype":"iteration_search","state":"running"}}`.
+
+#### Patch
+
+```
+PATCH /api/v1/cards/iteration/{card_id}
+If-Match: 1
+Content-Type: application/json
+
+{"data":{"title":"Find primary documentation"}}
+```
+
+Response (`200`): the updated card. Agent tokens may patch mutable title, state,
+progress, and subtype fields only while their process is registered. Browser
+clients may send only presentation metadata, for example
+`{"presentation":{"highlighted":true}}`; identity, execution, and result
+fields are never patchable by either actor.
+
+#### Submit feedback
+
+```
+POST /api/v1/cards/iteration/{card_id}/feedback
+Content-Type: application/json
+
+{"subtype":"iteration_search","feedbackType":"relevance","target":{"url":"https://example.com/docs"},"sessionId":"uuid-v7"}
+```
+
+Response (`202`):
+
+```json
+{"id":"uuid","cardId":"uuid","feedbackKind":"relevance","acknowledged":false}
+```
+
+The authenticated user is the feedback actor; a supplied actor ID is ignored.
+The agent acknowledges the returned ID through the iteration service, which
+persists `feedback_acknowledged` before removing it from the in-memory queue.
+
+#### Cancel
+
+```
+POST /api/v1/cards/iteration/{card_id}/cancel
+Content-Type: application/json
+
+{"reason":"The command is using the wrong environment."}
+```
+
+Response (`202`): `{"cardId":"uuid","status":"cancelled"}`. A terminal
+card returns `409 ITERATION_ALREADY_COMPLETED`.
+
+#### Active cards
+
+```
+GET /api/v1/cards/iteration/active
+```
+
+Response (`200`): `{"cards":[{"id":"uuid","card_type":"iteration","status":"active"}]}`;
+cards are ordered by their latest committed event.
+
+#### Events (SSE)
+
+```
+GET /api/v1/cards/iteration/{card_id}/events
+Accept: text/event-stream
+```
+
+Response (`200`, `text/event-stream`):
+
+```
+id: 2
+event: iteration_event
+data: {"cardId":"uuid","subtype":"iteration_search","eventType":"url_discovered","data":{"url":"https://example.com/docs"},"sequence":2}
+
+```
+
+The stream also emits `heartbeat` frames every 30 seconds. Persistent frames
+carry their committed SQLite sequence in both `id` and the JSON payload; replay
+uses the greater of `after` and `Last-Event-ID`.
+
 ### List Cards
 
 ```
@@ -3642,3 +3748,17 @@ actual code:
     `TestRouteParityCollabRoutes`, `TestRouteParityWorkspaceProfileRoutes`,
     and `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
     sides.
+
+## Iteration progress (SPEC-PL-04 phase 2)
+
+The aggregate endpoint is outside the `/cards` mount but remains authenticated:
+
+```
+GET /api/v1/iteration/progress
+```
+
+Response (`200`):
+
+```json
+{"progress":[{"cardId":"uuid","type":"search","title":"Find documentation","current":3,"total":5,"status":"running"}],"summary":{"active":1,"running":1,"waitingForUser":0,"completed":0,"failed":0,"cancelled":0}}
+```

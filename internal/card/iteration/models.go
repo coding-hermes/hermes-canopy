@@ -276,6 +276,15 @@ type CancelInput struct {
 	At      time.Time `json:"at"`
 }
 
+// IterationPatchInput is the authorization-aware materialized-state patch
+// accepted by the HTTP adapter. Agent patches merge only mutable iteration data;
+// browser patches store presentation metadata separately.
+type IterationPatchInput struct {
+	Data         json.RawMessage
+	Presentation json.RawMessage
+	Agent        bool
+}
+
 // IterationCardService is the phase-one service contract.
 type IterationCardService interface {
 	CreateCard(ctx context.Context, subtype IterationSubtype, agentID string) (*card.Card, error)

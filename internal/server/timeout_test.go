@@ -188,6 +188,7 @@ func TestSSERouteAllowlistMatchesRouter(t *testing.T) {
 		"/api/v1/trees/{}/events":            true,
 		"/api/v1/plugins/{}/events":          true,
 		"/api/v1/cards/{}/events":            true,
+		"/api/v1/cards/iteration/{}/events":  true,
 		"/api/v1/workspace/channels/{}/feed": true,
 		"/api/v1/gateway/runs/{}/events":     true,
 		"/api/v1/workspaces/{}/mls/events":   true,

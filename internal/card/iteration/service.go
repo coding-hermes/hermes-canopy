@@ -19,6 +19,7 @@ var (
 	ErrAgentNotRegistered = errors.New("iteration: agent is not registered for card")
 	ErrCardNotActive      = errors.New("iteration: card is not active")
 	ErrTerminalCard       = errors.New("iteration: card is terminal")
+	ErrPatchForbidden     = errors.New("iteration: patch is not permitted")
 )
 
 // IterationCardServiceImpl composes the existing card repository and adds the
@@ -292,33 +293,135 @@ func (s *IterationCardServiceImpl) AppendEvent(ctx context.Context, cardID uuid.
 	return nil
 }
 
-func (s *IterationCardServiceImpl) SubmitFeedback(ctx context.Context, cardID uuid.UUID, input FeedbackInput) error {
+// GetCard returns an iteration card after validating its typed data.
+func (s *IterationCardServiceImpl) GetCard(ctx context.Context, cardID uuid.UUID) (*card.Card, error) {
+	value, err := s.getIterationCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	stored, _, err := s.findCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	_ = value
+	return stored, nil
+}
+
+// PatchCard applies an authorization-aware materialized iteration patch.
+func (s *IterationCardServiceImpl) PatchCard(ctx context.Context, cardID uuid.UUID, expectedRevision int64, input IterationPatchInput) (*card.Card, error) {
+	current, repo, err := s.findCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	data, err := ValidateCardData(current.Data)
+	if err != nil {
+		return nil, err
+	}
+	if isTerminalState(data.State) {
+		return nil, ErrTerminalCard
+	}
+
+	var patchObject map[string]any
+	actorKind := card.ActorUser
+	actorID := "user"
+	if input.Agent {
+		if len(input.Data) == 0 {
+			return nil, ErrPatchForbidden
+		}
+		patchObject, err = decodeObject(input.Data, "patch data")
+		if err != nil {
+			return nil, err
+		}
+		s.mu.RLock()
+		process := s.processes[cardID]
+		s.mu.RUnlock()
+		if process == nil || process.ID() != data.AgentID {
+			return nil, ErrAgentNotRegistered
+		}
+		for _, field := range []string{"agentId", "sessionId", "subtype", "command", "path", "absolutePath", "params", "result"} {
+			if _, present := patchObject[field]; present {
+				return nil, ErrPatchForbidden
+			}
+		}
+		var currentObject map[string]any
+		if err := json.Unmarshal(current.Data, &currentObject); err != nil {
+			return nil, err
+		}
+		for key, value := range patchObject {
+			currentObject[key] = value
+		}
+		if input.Presentation != nil {
+			return nil, ErrPatchForbidden
+		}
+		input.Data, err = json.Marshal(currentObject)
+		if err != nil {
+			return nil, err
+		}
+		actorKind = card.ActorAgent
+		actorID = data.AgentID
+	} else {
+		if len(input.Presentation) == 0 {
+			return nil, ErrPatchForbidden
+		}
+		var presentation any
+		if err := json.Unmarshal(input.Presentation, &presentation); err != nil {
+			return nil, fmt.Errorf("iteration: presentation must be valid JSON: %w", err)
+		}
+		var currentObject map[string]any
+		if err := json.Unmarshal(current.Data, &currentObject); err != nil {
+			return nil, err
+		}
+		currentObject["presentation"] = presentation
+		input.Data, err = json.Marshal(currentObject)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := ValidateCardData(input.Data); err != nil {
+		return nil, err
+	}
+	updated, err := repo.Patch(ctx, cardID, expectedRevision, card.PatchCardInput{Data: &input.Data})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := repo.AppendEvent(ctx, cardID, card.AppendEventInput{
+		EventID: mustUUIDv7(), EventType: card.CardEventType(card.EventCardUpdated),
+		ActorKind: actorKind, ActorID: actorID, Payload: input.Data,
+	}); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+// SubmitFeedbackEvent persists feedback and returns the durable feedback record
+// so an HTTP adapter can return its generated ID to the caller.
+func (s *IterationCardServiceImpl) SubmitFeedbackEvent(ctx context.Context, cardID uuid.UUID, input FeedbackInput) (FeedbackEvent, error) {
 	data, repo, err := s.findCard(ctx, cardID)
 	if err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	if data.Status != card.CardStatusActive {
-		return ErrCardNotActive
+		return FeedbackEvent{}, ErrCardNotActive
 	}
 	parsed, err := ValidateCardData(data.Data)
 	if err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	if input.CardID != uuid.Nil && input.CardID != cardID {
-		return fmt.Errorf("iteration: feedback card ID mismatch")
+		return FeedbackEvent{}, fmt.Errorf("iteration: feedback card ID mismatch")
 	}
 	if input.Subtype != parsed.Subtype {
-		return fmt.Errorf("iteration: feedback subtype mismatch")
+		return FeedbackEvent{}, fmt.Errorf("iteration: feedback subtype mismatch")
 	}
 	if input.SessionID.String() != cardSessionID(data.Data) {
-		return fmt.Errorf("iteration: feedback session does not match card")
+		return FeedbackEvent{}, fmt.Errorf("iteration: feedback session does not match card")
 	}
 	if err := validateFeedback(input, parsed); err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	feedbackID, err := newUUIDv7()
 	if err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	createdAt := input.Timestamp
 	if createdAt.IsZero() {
@@ -327,15 +430,20 @@ func (s *IterationCardServiceImpl) SubmitFeedback(ctx context.Context, cardID uu
 	feedback := FeedbackEvent{ID: feedbackID, CardID: cardID, Subtype: input.Subtype, FeedbackKind: input.FeedbackKind, Target: input.Target, Note: input.Note, ActorID: input.ActorID, SessionID: input.SessionID, CreatedAt: createdAt}
 	payload, err := json.Marshal(feedback)
 	if err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	stored, err := repo.AppendEvent(ctx, cardID, card.AppendEventInput{EventID: mustUUIDv7(), EventType: card.CardEventType(EventUserFeedback), ActorKind: card.ActorUser, ActorID: input.ActorID, Payload: payload})
 	if err != nil {
-		return err
+		return FeedbackEvent{}, err
 	}
 	s.feedback.publish(feedback)
 	s.events.publish(cardID, fromCardEvent(stored, parsed.Subtype))
-	return nil
+	return feedback, nil
+}
+
+func (s *IterationCardServiceImpl) SubmitFeedback(ctx context.Context, cardID uuid.UUID, input FeedbackInput) error {
+	_, err := s.SubmitFeedbackEvent(ctx, cardID, input)
+	return err
 }
 
 func cardSessionID(raw json.RawMessage) string {
@@ -514,6 +622,36 @@ func (s *IterationCardServiceImpl) SubscribeEvents(ctx context.Context, cardID u
 		return nil, nil, err
 	}
 	return s.events.subscribe(ctx, cardID)
+}
+
+// ListEvents returns the durable event stream after sequence for SSE replay.
+func (s *IterationCardServiceImpl) ListEvents(ctx context.Context, cardID uuid.UUID, afterSequence int64, limit int) ([]IterationEvent, error) {
+	data, repo, err := s.findCard(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := ValidateCardData(data.Data)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := repo.ListEvents(ctx, cardID, afterSequence, limit)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]IterationEvent, 0, len(stored))
+	for _, event := range stored {
+		payload := event.Payload
+		var envelope PayloadEnvelope
+		if json.Unmarshal(event.Payload, &envelope) == nil && len(envelope.Data) > 0 {
+			payload = envelope.Data
+		}
+		result = append(result, IterationEvent{
+			Sequence: event.Sequence, CardID: event.CardID, Subtype: parsed.Subtype,
+			EventType: string(event.EventType), Data: payload, AgentID: event.ActorID,
+			CreatedAt: event.CreatedAt,
+		})
+	}
+	return result, nil
 }
 
 func (s *IterationCardServiceImpl) getIterationCard(ctx context.Context, cardID uuid.UUID) (IterationCardData, error) {

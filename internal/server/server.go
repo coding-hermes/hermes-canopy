@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
+	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
@@ -78,6 +79,7 @@ func New(
 	mlsHandler *handler.MLSHandler,
 	topicSvc service.TopicService,
 	cardSvc service.CardService,
+	iterationSvc *iteration.IterationCardServiceImpl,
 	graphSvc service.GraphService,
 	mergeSvc service.MergeService,
 	collabSvc collaboration.CollaborationService,
@@ -113,6 +115,7 @@ func New(
 		mlsHandler:      mlsHandler,
 		topicSvc:        topicSvc,
 		cardSvc:         cardSvc,
+		iterationSvc:    iterationSvc,
 		graphSvc:        graphSvc,
 		mergeSvc:        mergeSvc,
 		collabSvc:       collabSvc,
@@ -176,6 +179,7 @@ type routeDeps struct {
 	mlsHandler      *handler.MLSHandler
 	topicSvc        service.TopicService
 	cardSvc         service.CardService
+	iterationSvc    *iteration.IterationCardServiceImpl
 	graphSvc        service.GraphService
 	mergeSvc        service.MergeService
 	collabSvc       collaboration.CollaborationService
@@ -212,6 +216,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	mlsHandler := deps.mlsHandler
 	topicSvc := deps.topicSvc
 	cardSvc := deps.cardSvc
+	iterationSvc := deps.iterationSvc
 	graphSvc := deps.graphSvc
 	mergeSvc := deps.mergeSvc
 	collabSvc := deps.collabSvc
@@ -432,6 +437,9 @@ func newRouter(deps *routeDeps) *chi.Mux {
 			impl.WithEventHub(card.NewCardEventHub())
 		}
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
+		iterationHandler := handler.NewIterationCardHandler(iterationSvc)
+		r.Mount("/cards/iteration", iterationHandler.Routes())
+		r.Get("/iteration/progress", iterationHandler.Progress)
 
 		// Collaboration endpoints (SPEC-FTR-01 §5.1/§5.2) — workspace CRUD,
 		// membership, and invitations.
