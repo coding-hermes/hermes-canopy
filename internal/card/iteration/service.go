@@ -542,7 +542,9 @@ func (s *IterationCardServiceImpl) CancelCard(ctx context.Context, cardID uuid.U
 	process := s.processes[cardID]
 	s.mu.RUnlock()
 	if process == nil {
-		return fmt.Errorf("iteration: cancellation process is unavailable")
+		// SPEC-PL-04 §6.4: a missing/crashed process surfaces as 404
+		// ITERATION_AGENT_NOT_FOUND, not a 400-class error.
+		return ErrAgentNotRegistered
 	}
 	if err := process.Cancel(ctx, cardID); err != nil {
 		return fmt.Errorf("iteration: cancellation rejected: %w", err)
