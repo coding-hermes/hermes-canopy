@@ -808,6 +808,15 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
 			return nil, fmt.Errorf("%w: stats: %v", ErrDatabaseUnavailable, err)
 		}
 		detail.Stats = stats
+		// Keep the top-level summary in sync with the graph statistics.
+		detail.NodeCount = stats.NodeCount
+	} else {
+		// Detail responses without stats still expose the real active-node
+		// count. Reuse the list path's count semantics for this one tree;
+		// count failures remain cosmetic, as they are for list summaries.
+		summaries := []TreeSummary{detail.TreeSummary}
+		s.fillNodeCounts(ctx, summaries)
+		detail.NodeCount = summaries[0].NodeCount
 	}
 
 	if opts.IncludeMembers {
@@ -1255,7 +1264,7 @@ func treeToSummary(t db.Tree) TreeSummary {
 		Title:       t.Title,
 		Description: t.Description,
 		OwnerID:     t.OwnerID,
-		NodeCount:   1, // root only; full count requires GetCounts
+		NodeCount:   1, // default; list and detail paths replace it with the active count
 		MemberCount: 1, // owner only
 		CreatedAt:   t.CreatedAt,
 		UpdatedAt:   coalesceTime(t.EditedAt, t.CreatedAt),
