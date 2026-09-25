@@ -143,8 +143,10 @@ func (s *ExportServiceImpl) WithTopicReferences(topicRepo db.TopicRepo, referenc
 
 // --- ExportTree -------------------------------------------------------------
 
-// ExportTree fetches the tree metadata, all active nodes, and all active
-// edges for the given tree and packs them into an ExportData envelope.
+// ExportTree fetches the tree metadata, all active nodes, and active
+// edges whose endpoints are also active for the given tree and packs them
+// into an ExportData envelope. Edges to soft-deleted nodes are omitted so
+// the exported graph remains internally consistent and importable.
 // A tree that exists but has no nodes returns an export with empty
 // slices (still valid — the importer handles this gracefully).
 func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*ExportData, error) {
@@ -164,6 +166,21 @@ func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*
 	edges, err := s.edgeRepo.GetByTree(ctx, treeID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: fetch edges: %v", ErrDatabaseUnavailable, err)
+	}
+
+	activeNodeIDs := make(map[uuid.UUID]struct{}, len(nodes))
+	for _, node := range nodes {
+		activeNodeIDs[node.ID] = struct{}{}
+	}
+	activeEdges := make([]db.Edge, 0, len(edges))
+	for _, edge := range edges {
+		if _, ok := activeNodeIDs[edge.SourceID]; !ok {
+			continue
+		}
+		if _, ok := activeNodeIDs[edge.TargetID]; !ok {
+			continue
+		}
+		activeEdges = append(activeEdges, edge)
 	}
 
 	var topics []TopicWire
@@ -207,7 +224,7 @@ func (s *ExportServiceImpl) ExportTree(ctx context.Context, treeID uuid.UUID) (*
 			RootNodeID:  rootNodeID,
 		},
 		Nodes:        nodes,
-		Edges:        edges,
+		Edges:        activeEdges,
 		Topics:       topics,
 		ResolvedRefs: resolvedRefs,
 		Version:      2,
