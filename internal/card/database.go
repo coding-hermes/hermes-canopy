@@ -73,6 +73,29 @@ func (m *CardDBManager) Repository(ctype CardType) (CardRepository, error) {
 	return repo, nil
 }
 
+// Database returns the raw per-type database for a caller that must combine an
+// event insert and materialized card update in one transaction. The returned
+// handle is owned by the manager and must not be closed by the caller.
+func (m *CardDBManager) Database(ctype CardType) (*sql.DB, error) {
+	if !IsValidCardType(ctype) {
+		return nil, fmt.Errorf("card: invalid card type %q", ctype)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if db, ok := m.dbs[ctype]; ok {
+		return db, nil
+	}
+	db, err := m.openDB(ctype)
+	if err != nil {
+		return nil, err
+	}
+	m.dbs[ctype] = db
+	m.repos[ctype] = NewSQLiteCardRepo(db)
+	return db, nil
+}
+
 // openDB creates the data directory, opens/creates the SQLite database,
 // sets pragmas, and runs the migration for the given card type.
 func (m *CardDBManager) openDB(ctype CardType) (*sql.DB, error) {
