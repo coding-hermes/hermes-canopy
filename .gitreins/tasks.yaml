@@ -3705,3 +3705,17 @@ tasks:
   status: complete
   created_at: '2026-09-25T17:19:32.249910+00:00'
   completed_at: '2026-09-25T17:58:07.135034+00:00'
+- id: PL-04-P2
+  title: Iteration card HTTP/SSE surface (SPEC-PL-04 phase 2)
+  criteria:
+  - "Iteration card engine (internal/card/iteration, d7f68c90) is reachable over HTTP:\
+    \ all 8 spec-6 routes mounted on the /api/v1 cards router at the composition root\
+    \ (server.go + main.go), SSE endpoint emits sequence-tagged iteration_event frames\
+    \ with heartbeat, PATCH enforces If-Match + the spec 6.2 browser/agent permission\
+    \ split, cancel without a registered process returns 404 ITERATION_AGENT_NOT_FOUND\
+    \ per \xA76.4, docs/API.md documents the routes, handler tests through the mounted\
+    \ router prove behavior; go build/vet, golangci-lint 0 issues, full sweep + handler\
+    \ suite green"
+  status: complete
+  created_at: '2026-09-25T20:16:16.257714+00:00'
+  completed_at: '2026-09-25T20:16:21.401282+00:00'
