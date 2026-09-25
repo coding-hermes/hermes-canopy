@@ -3581,3 +3581,49 @@ tasks:
   status: complete
   created_at: '2026-09-24T19:58:35.220003+00:00'
   completed_at: '2026-09-24T21:46:08.617284+00:00'
+- id: DF-HERMES-CANOPY-62
+  title: Snapshot insert idempotent on duplicate (tree_id, hash)
+  criteria:
+  - 'AC1: A second CreateSnapshot call for an unchanged tree returns the existing
+    snapshot (no error) instead of a 23505 duplicate-key error. AC2: POST /api/v1/trees/{id}/sync/snapshot
+    no longer returns 500 INTERNAL_ERROR when the current tree-state hash already
+    exists; it returns a success response carrying the existing snapshot. AC3: PG-backed
+    regression test added that fails against the pre-fix repo code and passes post-fix,
+    green with CANOPY_TEST_ALLOW_SHARED_DB=1. AC4: go build ./... && go vet ./...
+    clean; no unrelated file churn.'
+  status: complete
+  created_at: '2026-09-25T01:21:46.526521+00:00'
+  completed_at: '2026-09-25T02:00:25.057047+00:00'
+- id: DF-HERMES-CANOPY-61
+  title: Fix export->import round-trip for trees with soft-deleted nodes
+  criteria:
+  - 'AC1: Export of a tree containing a soft-deleted node imports successfully (round-trip
+    200); commit body states the fix shape (tombstone vs edge-drop). AC2: New round-trip
+    regression test incl. a soft-deleted node fails pre-fix, passes post-fix. AC3:
+    Clean trees still round-trip; existing export/import tests green. AC4: go build/vet
+    clean; CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/service/... green.'
+  status: complete
+  created_at: '2026-09-25T02:11:03.496731+00:00'
+  completed_at: '2026-09-25T03:07:00.962744+00:00'
+- id: DF-HERMES-CANOPY-63
+  title: Plugin registration resolves user->profile for dev JWT
+  criteria:
+  - 'AC1: POST /api/v1/plugins/ with documented dev JWT (sub=user uuid) no longer
+    500s; succeeds when dev user has a profile. AC2: Regression test via handler/service
+    path with user-sub token fails pre-fix (500), passes post-fix. AC3: Author attribution
+    semantics preserved; existing plugin tests green. AC4: go build/vet clean; CANOPY_TEST_ALLOW_SHARED_DB=1
+    plugin+handler tests green.'
+  status: complete
+  created_at: '2026-09-25T02:11:05.242671+00:00'
+  completed_at: '2026-09-25T03:17:00.782401+00:00'
+- id: DF-HERMES-CANOPY-65
+  title: Tree detail node_count agrees with node list and graph stats
+  criteria:
+  - 'AC1: GET tree detail node_count equals active non-deleted node count, consistent
+    with stats and node list, with and without IncludeStats. AC2: Regression test
+    with a multi-node tree fails pre-fix (count=1), passes post-fix. AC3: Existing
+    tree service tests green (list semantics unchanged). AC4: go build/vet clean;
+    CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./internal/service/... green.'
+  status: complete
+  created_at: '2026-09-25T02:11:06.704834+00:00'
+  completed_at: '2026-09-25T03:29:51.076286+00:00'

@@ -1,0 +1,63 @@
+{
+  "tick_id": "hermes-canopy-2026-09-25-01-53-59",
+  "created_at": "2026-09-25T02:05:00-05:00",
+  "base": "6eb9d6933f4272504eb45eece8f93a37e7333cdc",
+  "wave_budget": 6,
+  "workers_planned": 3,
+  "worker_lane": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai-codex"
+  },
+  "tasks": [
+    {
+      "row_id": "DF-HERMES-CANOPY-61",
+      "priority": "P1",
+      "title": "Export->import dead for trees with soft-deleted nodes",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-61",
+      "branch": "wt/DF-HERMES-CANOPY-61",
+      "brief": "/tmp/brief-df61.md",
+      "disjoint_surface": "internal/service/export_service.go",
+      "status": "merged",
+      "worker_commit": "4cc14443",
+      "merge_commit": "e22f292f"
+    },
+    {
+      "row_id": "DF-HERMES-CANOPY-63",
+      "priority": "P1",
+      "title": "Plugin registration 500 with documented dev JWT (user->profile not resolved)",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-63",
+      "branch": "wt/DF-HERMES-CANOPY-63",
+      "brief": "/tmp/brief-df63.md",
+      "disjoint_surface": "internal/plugin/** + internal/handler/plugin_handler.go",
+      "status": "merged",
+      "worker_commit": "2517c6f5",
+      "merge_commit": "01dc6a34"
+    },
+    {
+      "row_id": "DF-HERMES-CANOPY-65",
+      "priority": "P2",
+      "title": "Tree detail node_count disagrees with node list and graph stats",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-65",
+      "branch": "wt/DF-HERMES-CANOPY-65",
+      "brief": "/tmp/brief-df65.md",
+      "disjoint_surface": "internal/service/tree_service.go (GetTree/treeToSummary)",
+      "status": "merged",
+      "worker_commit": "108b10f8",
+      "merge_commit": "33dd7949"
+    }
+  ],
+  "disjointness_note": "Pairwise file-disjoint verified at HEAD 6eb9d693: DF-61 touches export_service; DF-63 touches plugin pkg + plugin handler; DF-65 touches tree_service (GetTree path). DF-64 deliberately EXCLUDED from the wave (touches both import envelope and plugin handler => conflicts with DF-61 and DF-63); re-pick on a later serial tick. DF-62 already landed in-tree by the dead prior session (commit 6eb9d693, pushed this tick; gitreins lifecycle running).",
+  "merge_plan": "serial merges, gate each: gitreins task per row (created+started), Tier-1 on branch, merge --no-ff, post-merge full gate on master (CANOPY_TEST_ALLOW_SHARED_DB=1 sweep + handler pkg + golangci-lint full-repo + gitleaks), then gitreins task complete per row, push after each merge.",
+  "pushed": {
+    "master_push": "6eb9d693..01dc6a34",
+    "rev_list_origin_master_dotdot_head": 0
+  },
+  "gate": {
+    "sweep": "30 pkgs ok SWEEP_EXIT=0 (CANOPY_TEST_ALLOW_SHARED_DB=1)",
+    "handler": "ok 638.8s HANDLER_EXIT=0",
+    "golangci": "0 issues",
+    "gitleaks": "no leaks",
+    "vitest": "1408/1408",
+    "oxlint": "2 pre-existing warnings, no frontend files touched"
+  }
+}
