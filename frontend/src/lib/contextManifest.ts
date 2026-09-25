@@ -94,6 +94,16 @@ export interface RawManifest {
    * "budget" label in the UI.
    */
   retrievalBudget?: number | null;
+  /**
+   * Summary digest of the budget-dropped oldest nodes (GAP-080 phase 3),
+   * appended to the payload as its final section. Omitted entirely when the
+   * compile dropped nothing or could not afford the digest.
+   */
+  summaryText?: string | null;
+  /** The digest's own token cost, recorded alongside `summaryText`. */
+  summaryTokenCount?: number | null;
+  /** The number of budget-dropped nodes the digest covers. */
+  summarizedCount?: number | null;
   omittedCount?: number | null;
   omittedReason?: string | null;
   truncationMarkers?: string[] | null;
@@ -152,6 +162,16 @@ export interface Manifest {
    * misleading "0 tokens budget" label.
    */
   retrievalBudget: number;
+  /**
+   * Summary digest of the budget-dropped oldest nodes (GAP-080 phase 3).
+   * `''` when the compile dropped nothing or could not afford the digest —
+   * the panel renders no Summarized section for an empty string.
+   */
+  summaryText: string;
+  /** The digest's own token cost; `0` alongside an empty `summaryText`. */
+  summaryTokenCount: number;
+  /** The number of budget-dropped nodes the digest covers. */
+  summarizedCount: number;
   omittedCount: number;
   /** `"budget"` | `"depth"` | `""` */
   omittedReason: string;
@@ -372,6 +392,11 @@ export function normaliseManifest(
     // The tier's allocation, recorded only when the retrieval step RAN. `0`
     // when absent — the panel shows a budget figure only when non-zero.
     retrievalBudget: toCount(raw.retrievalBudget),
+    // Phase-3 summary digest. `''`/0/0 when the compile dropped nothing or
+    // could not afford the digest; the panel renders no section for it.
+    summaryText: raw.summaryText ?? '',
+    summaryTokenCount: toCount(raw.summaryTokenCount),
+    summarizedCount: toCount(raw.summarizedCount),
     omittedCount: toCount(raw.omittedCount),
     omittedReason: raw.omittedReason ?? '',
     truncationMarkers: toStrings(raw.truncationMarkers),

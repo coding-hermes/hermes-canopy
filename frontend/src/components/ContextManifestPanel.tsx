@@ -524,6 +524,36 @@ export default function ContextManifestPanel({
             budget={manifest.retrievalBudget}
           />
 
+          {/*
+           * Phase-3 summary digest (GAP-080 phase 3). Renders ONLY when the
+           * backend recorded one — a compile that dropped nothing (or could
+           * not afford the digest) leaves no Summarized heading behind.
+           */}
+          {manifest.summaryText !== '' && (
+            <section
+              className="mt-2 border-l-2 border-status-warning pl-2"
+              data-testid="context-section-summarized"
+            >
+              <h4 className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-content-muted">
+                Summarized
+                {manifest.summarizedCount > 0 && (
+                  <span>· {manifest.summarizedCount}</span>
+                )}
+                {manifest.summaryTokenCount > 0 && (
+                  <span
+                    data-testid="context-section-summarized-tokens"
+                    className="font-mono text-[10px] font-normal normal-case text-content-muted"
+                  >
+                    ({formatTokenCount(manifest.summaryTokenCount)} tokens)
+                  </span>
+                )}
+              </h4>
+              <pre className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] text-status-warning">
+                {manifest.summaryText}
+              </pre>
+            </section>
+          )}
+
           {warnings.length > 0 && (
             <ul className="mt-2 space-y-0.5" data-testid="context-warnings">
               {warnings.map((warning, i) => (

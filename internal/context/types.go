@@ -105,6 +105,23 @@ type Manifest struct {
 	// RetrievalBudget is the tier's token allocation for this compile, recorded
 	// when the retrieval step RAN (searched), omitted when it did not.
 	RetrievalBudget int `json:"retrievalBudget,omitempty"`
+
+	// SummaryText is the GAP-080 phase-3 digest of the budget-dropped oldest
+	// nodes, appended to the compiled payload as its final section when the
+	// budget allowed. Deterministic (same tree → byte-identical text), so the
+	// phase-5a manifest hash stays stable across recompiles. Omitted when no
+	// nodes were dropped by budget or the digest did not fit.
+	SummaryText string `json:"summaryText,omitempty"`
+
+	// SummaryTokenCount is the digest's own estimated token cost, deducted
+	// from the compile's budget when the digest was included. Omitted with
+	// SummaryText.
+	SummaryTokenCount int `json:"summaryTokenCount,omitempty"`
+
+	// SummarizedCount is the number of budget-dropped nodes the digest covers.
+	// It equals the budget-walk's omitted count when the digest was included.
+	// Omitted with SummaryText.
+	SummarizedCount int `json:"summarizedCount,omitempty"`
 }
 
 // ManifestItem describes one component of the compiled context.

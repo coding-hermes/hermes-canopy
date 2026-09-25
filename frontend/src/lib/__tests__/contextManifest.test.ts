@@ -49,6 +49,9 @@ function manifest(overrides: Partial<Manifest> = {}): Manifest {
     cards: [],
     retrieved: [],
     retrievalBudget: 0,
+    summaryText: '',
+    summaryTokenCount: 0,
+    summarizedCount: 0,
     omittedCount: 0,
     omittedReason: '',
     truncationMarkers: [],
@@ -638,6 +641,32 @@ describe('normaliseManifest — retrieved tier', () => {
     });
     expect(m?.retrieved).toEqual([]);
     expect(m?.retrievalBudget).toBe(0);
+  });
+
+  it('carries the phase-3 summary fields when present', () => {
+    const m = normaliseManifest({
+      manifest: {
+        summaryText: '--- summarized older messages (2) ---\n[node a] did the thing.',
+        summaryTokenCount: 42,
+        summarizedCount: 2,
+      },
+    });
+    expect(m?.summaryText).toContain('summarized older messages (2)');
+    expect(m?.summaryTokenCount).toBe(42);
+    expect(m?.summarizedCount).toBe(2);
+  });
+
+  it('normalises an absent summary to empty string / zero counts', () => {
+    const m = normaliseManifest({
+      manifest: {
+        ancestry: null,
+        references: null,
+        cards: null,
+      },
+    });
+    expect(m?.summaryText).toBe('');
+    expect(m?.summaryTokenCount).toBe(0);
+    expect(m?.summarizedCount).toBe(0);
   });
 
   it('preserves a relevance value on any item it arrived on (display is gated to the retrieved tier)', () => {

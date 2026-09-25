@@ -196,6 +196,7 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	var ancestryContent []string
 	var ancestryItems []ManifestItem
 	var ancestryPinned []bool
+	var ancestryNodes []db.Node // same newest-first order as the slices below
 	for i := len(ancestors) - 1; i >= 0; i-- {
 		node := ancestors[i]
 		text := fmt.Sprintf("--- node %s (%s) ---\n%s", node.ID, node.AuthorID, node.Content)
@@ -207,6 +208,7 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 			TokenCount: c.est.Estimate(text),
 		})
 		ancestryPinned = append(ancestryPinned, isPinned(node.Metadata))
+		ancestryNodes = append(ancestryNodes, node)
 	}
 
 	// ── Step 4: Budget application ──────────────────────────────────────
@@ -218,12 +220,16 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	// keeps ONLY pinned ones and omits the rest. With zero pins the tail
 	// contributes nothing, so the result is byte-identical to the pre-GAP-080
 	// behaviour (GAP-080 phase 1).
+	//
+	// Every budget-dropped node is captured (GAP-080 phase 3) so the walk's
+	// tail can be summarized instead of vanishing silently.
 	remainingBudget := req.TokenBudget
 	var keptContent []string
 	var keptItems []ManifestItem
 	totalOmittedByBudget := 0
 	pinnedKept := 0
 	tailPhase := false
+	var budgetDropped []OmittedNode
 
 	for i := 0; i < len(ancestryContent); i++ {
 		tokens := c.est.Estimate(ancestryContent[i])
@@ -233,6 +239,11 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 			// Older unpinned item after the prefix ended — omit, never count
 			// a pinned (kept) item as omitted.
 			totalOmittedByBudget++
+			budgetDropped = append(budgetDropped, OmittedNode{
+				ID:      ancestryNodes[i].ID,
+				Author:  ancestryNodes[i].AuthorID,
+				Content: ancestryNodes[i].Content,
+			})
 			continue
 		}
 
@@ -251,6 +262,11 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		// Unpinned and does not fit: the prefix phase ends here.
 		tailPhase = true
 		totalOmittedByBudget++
+		budgetDropped = append(budgetDropped, OmittedNode{
+			ID:      ancestryNodes[i].ID,
+			Author:  ancestryNodes[i].AuthorID,
+			Content: ancestryNodes[i].Content,
+		})
 	}
 
 	// SPEC-IMPL-GAP-001 §7 — "Budget smaller than one node": when the walk kept
@@ -280,6 +296,13 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		if totalOmittedByBudget > 0 {
 			totalOmittedByBudget--
 		}
+		// The same node is the FIRST entry of budgetDropped (the walk runs
+		// newest→oldest): it is kept below, so it must not be summarized
+		// (GAP-080 phase 3 — the digest covers only nodes absent from the
+		// payload).
+		if len(budgetDropped) > 0 {
+			budgetDropped = budgetDropped[1:]
+		}
 		keptContent = append(keptContent, ancestryContent[0])
 		keptItems = append(keptItems, ancestryItems[0])
 		manifest.Warnings = append(manifest.Warnings, "budget too small for single node")
@@ -299,6 +322,31 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 		}
 		manifest.TruncationMarkers = append(manifest.TruncationMarkers,
 			fmt.Sprintf("%d messages omitted", totalOmittedByBudget))
+	}
+
+	// ── Step 4b: Summary digest of the budget-dropped nodes (GAP-080 phase 3) ──
+	// The vision's promise: older material is summarized, not dropped. The
+	// digest is built from the walk's captured drops — reordered oldest→
+	// newest (the walk runs the other way), byte-deterministic — and appended
+	// as the payload's FINAL section when the remaining budget affords it.
+	// When it does not fit (or pinned overage consumed the budget), the
+	// omission is reported as a warning and the payload stays identical to
+	// the pre-phase-3 compiler.
+	if len(budgetDropped) > 0 {
+		ordered := make([]OmittedNode, len(budgetDropped))
+		for i, n := range budgetDropped {
+			ordered[len(budgetDropped)-1-i] = n
+		}
+		summaryText, summaryTokens := summarizeOmittedNodes(c.est, ordered)
+		if remainingBudget > 0 && summaryTokens <= remainingBudget {
+			remainingBudget -= summaryTokens
+			manifest.SummaryText = summaryText
+			manifest.SummaryTokenCount = summaryTokens
+			manifest.SummarizedCount = len(ordered)
+		} else {
+			manifest.Warnings = append(manifest.Warnings,
+				"summary omitted: no budget for digest")
+		}
 	}
 
 	ancestryContent = keptContent
@@ -388,6 +436,12 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	}
 	if len(cardContent) > 0 {
 		finalContent += "\n\n" + joinSections(cardContent)
+	}
+	// The summary digest is the payload's FINAL section (GAP-080 phase 3):
+	// the ancestry of kept nodes reads newest-first, the folded tiers follow,
+	// and the compact digest of everything the budget dropped comes last.
+	if manifest.SummaryText != "" {
+		finalContent += "\n\n" + manifest.SummaryText
 	}
 
 	// The selected-source block is the highest-priority block of the turn, so

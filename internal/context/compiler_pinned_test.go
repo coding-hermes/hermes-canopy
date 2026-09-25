@@ -199,8 +199,16 @@ func TestGAP080_NoPinsParity(t *testing.T) {
 		if len(res.Manifest.TruncationMarkers) != 1 || res.Manifest.TruncationMarkers[0] != "1 messages omitted" {
 			t.Errorf("TruncationMarkers = %v, want [\"1 messages omitted\"]", res.Manifest.TruncationMarkers)
 		}
-		if len(res.Manifest.Warnings) != 0 {
-			t.Errorf("Warnings = %v, want none", res.Manifest.Warnings)
+		// GAP-080 phase 3: the single dropped node's digest (31 tokens) does
+		// not fit the 10-token leftover, so the compiler warns that the
+		// digest was omitted instead of summarizing. The exact-bytes payload
+		// assertion above is unchanged — no summary section was appended.
+		if len(res.Manifest.Warnings) != 1 || res.Manifest.Warnings[0] != "summary omitted: no budget for digest" {
+			t.Errorf("Warnings = %v, want [\"summary omitted: no budget for digest\"]", res.Manifest.Warnings)
+		}
+		if res.Manifest.SummaryText != "" || res.Manifest.SummaryTokenCount != 0 || res.Manifest.SummarizedCount != 0 {
+			t.Errorf("summary fields = %q/%d/%d, want zero (digest did not fit)",
+				res.Manifest.SummaryText, res.Manifest.SummaryTokenCount, res.Manifest.SummarizedCount)
 		}
 		if res.Manifest.TokensUsed != 70 || len(res.Manifest.Ancestry) != 3 {
 			t.Errorf("TokensUsed/Ancestry = %d/%d, want 70/3", res.Manifest.TokensUsed, len(res.Manifest.Ancestry))
@@ -229,8 +237,12 @@ func TestGAP080_NoPinsParity(t *testing.T) {
 		if len(res.Manifest.TruncationMarkers) != 1 || res.Manifest.TruncationMarkers[0] != "4 messages omitted" {
 			t.Errorf("TruncationMarkers = %v, want [\"4 messages omitted\"]", res.Manifest.TruncationMarkers)
 		}
-		if len(res.Manifest.Warnings) != 0 {
-			t.Errorf("Warnings = %v, want none", res.Manifest.Warnings)
+		if len(res.Manifest.Warnings) != 1 || res.Manifest.Warnings[0] != "summary omitted: no budget for digest" {
+			t.Errorf("Warnings = %v, want [\"summary omitted: no budget for digest\"] (GAP-080 phase 3: 4-node digest does not fit the 64-token leftover)", res.Manifest.Warnings)
+		}
+		if res.Manifest.SummaryText != "" || res.Manifest.SummaryTokenCount != 0 || res.Manifest.SummarizedCount != 0 {
+			t.Errorf("summary fields = %q/%d/%d, want zero (digest did not fit)",
+				res.Manifest.SummaryText, res.Manifest.SummaryTokenCount, res.Manifest.SummarizedCount)
 		}
 		// Content is 6 sections of 289 chars + 5 blank-line joins = 1744 chars;
 		// the pre-fix SHA-256 pins the bytes exactly (the literal is 1.7 KB).

@@ -655,6 +655,63 @@ describe('ContextManifestPanel — retrieved tier', () => {
   }
 });
 
+// ─── Phase-3 summary digest (GAP-080 phase 3) ──────────────────────────
+
+describe('ContextManifestPanel — summarized digest', () => {
+  /** A body carrying a populated summary digest. */
+  function summaryResponse(overrides: Record<string, unknown>) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        okResponse(
+          isModelsCall(String(url))
+            ? MODELS_BODY
+            : compiledBody({
+                summaryText:
+                  '--- summarized older messages (2) ---\n[node 11111111-1111-1111-1111-111111111111 by a] picked Postgres.\n[node 22222222-2222-2222-2222-222222222222 by a] drafted the schema.',
+                summaryTokenCount: 96,
+                summarizedCount: 2,
+                ...overrides,
+              }),
+        ),
+      ),
+    );
+  }
+
+  it('renders a Summarized section only when a digest is present', async () => {
+    summaryResponse({});
+
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    const section = q('[data-testid="context-section-summarized"]');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain('Summarized');
+    expect(section?.textContent).toContain('2');
+    expect(section?.textContent).toContain('96');
+    expect(section?.textContent).toContain('picked Postgres.');
+  });
+
+  it('renders NO Summarized section when the compile dropped nothing', async () => {
+    // The default compiledBody has no `summaryText` key at all.
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    expect(q('[data-testid="context-section-summarized"]')).toBeNull();
+  });
+
+  it('renders NO Summarized section for an explicitly empty digest', async () => {
+    summaryResponse({ summaryText: '', summaryTokenCount: 0, summarizedCount: 0 });
+
+    mount({ nodeId: NODE_A });
+    await settle();
+    act(() => q('[data-testid="context-manifest-toggle"]')?.click());
+
+    expect(q('[data-testid="context-section-summarized"]')).toBeNull();
+  });
+});
+
 // ─── The two request knobs (GAP-080 phase 2b) ──────────────────────────
 
 describe('ContextManifestPanel — model choice', () => {
