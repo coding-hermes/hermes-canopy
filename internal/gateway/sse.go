@@ -45,6 +45,40 @@ type RunEvent struct {
 	Raw map[string]any `json:"-"`
 }
 
+// UnmarshalJSON accepts the gateway's string-or-boolean error field. The
+// gateway uses booleans as completion flags, so both true and false carry no
+// error message and map to the empty string. Missing and null values do too.
+func (e *RunEvent) UnmarshalJSON(data []byte) error {
+	type runEventAlias RunEvent
+	var aux struct {
+		*runEventAlias
+		Error json.RawMessage `json:"error"`
+	}
+	aux.runEventAlias = (*runEventAlias)(e)
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	e.Error = ""
+	if len(aux.Error) == 0 || string(aux.Error) == "null" {
+		return nil
+	}
+
+	var value any
+	if err := json.Unmarshal(aux.Error, &value); err != nil {
+		return err
+	}
+	switch value := value.(type) {
+	case string:
+		e.Error = value
+	case bool:
+		// Boolean error values are gateway status flags, not messages.
+	default:
+		return fmt.Errorf("gateway: RunEvent.error must be a string, boolean, null, or absent")
+	}
+	return nil
+}
+
 // StreamEvent is a parsed event plus the raw SSE data line, used by the
 // service layer for fan-out and replay.
 type StreamEvent struct {
