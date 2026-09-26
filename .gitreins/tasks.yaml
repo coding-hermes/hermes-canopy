@@ -3719,3 +3719,15 @@ tasks:
   status: complete
   created_at: '2026-09-25T20:16:16.257714+00:00'
   completed_at: '2026-09-25T20:16:21.401282+00:00'
+- id: GAP-100
+  title: 'SSE streams survive http.Server WriteTimeout: per-write deadline exemption
+    for the 7-route allowlist'
+  criteria:
+  - A >30s SSE connection on an isolated boot receives heartbeat frames and stays
+    open; all 7 allowlist routes are exempt from the server WriteTimeout via a single
+    middleware that re-arms a bounded per-write deadline (no unbounded deadline leak);
+    regression test on a real http.Server with short WriteTimeout proves stream survival
+    pre/post; TestSSERouteAllowlistMatchesRouter extended; full gate battery green.
+  status: complete
+  created_at: '2026-09-25T21:41:40.127052+00:00'
+  completed_at: '2026-09-26T01:49:09.144630+00:00'
