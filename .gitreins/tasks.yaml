@@ -3755,3 +3755,21 @@ tasks:
   status: complete
   created_at: '2026-09-26T03:15:57.202319+00:00'
   completed_at: '2026-09-26T05:14:04.450024+00:00'
+- id: DF-HERMES-CANOPY-67
+  title: 'Run output never lands in the tree: persist a gateway run''s output as a
+    reply node'
+  criteria:
+  - 'internal/gateway gains an optional RunOutputSink invoked synchronously after
+    releasing the service mutex on run.completed, only for runs carrying a source
+    node, with nil-sink behavior byte-identical to pre-change; the composition root
+    wires an adapter over the node service that creates a reply node under the source
+    node (author = dev-hermes profile, metadata {run_id, origin: gateway_run}) and
+    merges last_gateway_run into the source node''s existing metadata without clobbering
+    keys; sink errors log and record a warning without changing the run''s completed
+    status; a PG-backed integration test runs with CANOPY_TEST_ALLOW_SHARED_DB=1 asserting
+    0 SKIP; a real-binary isolated-boot proof (stub gateway) shows the reply node
+    and source metadata through the mounted router; go build/vet clean, golangci-lint
+    0 issues; docs/API.md section 13 documents the contract'
+  status: complete
+  created_at: '2026-09-26T06:01:07.774027+00:00'
+  completed_at: '2026-09-26T06:14:45.710654+00:00'
