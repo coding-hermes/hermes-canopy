@@ -356,13 +356,12 @@ under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`
 (`internal/card/database.go`). `internal/card/duckdb/` still exists but is cgo-only
 and has **zero importers repo-wide** — it is archived, not a shipped card backend.
 
-**2026-09-16 storage ruling.** PostgreSQL contradicts the product vision (single
-binary, no Docker, no PostgreSQL, no external dependencies) and the SQLite-native
-Hermes ecosystem. The owner ruling is **SQLite-first** — `modernc.org/sqlite`
-(pure Go, WAL) as the authoritative graph store inside one
-zero-external-dependency binary. **Status: declared direction only.** It is tracked
-as board row **GAP-076** and has **not landed**; PostgreSQL remains the authoritative
-graph store until it does.
+**2026-09-16 storage ruling.** SQLite boot path is shipped behind
+`CANOPY_DB_DRIVER=sqlite`; it applies core migrations and checks the schema, then
+refuses full server startup because non-core PostgreSQL repositories are not
+substituted. **Full SQLite-only serving is not yet supported.** See
+[docs/SQLITE-RUNTIME.md](docs/SQLITE-RUNTIME.md) for the runtime details. PostgreSQL
+remains the default and authoritative graph store.
 
 ## API Reference
 
@@ -726,6 +725,15 @@ METRICS_ENABLED=true \
 | `CORS_ORIGIN` | `*` | CORS allowed origins |
 | `JWT_SECRET` | `dev-secret-change-me` | HS256 signing secret (set a real value in production) |
 | `CANOPY_DB_URL` | *(unset)* | Override DSN; takes priority over all `DB_*` fields |
+| `CANOPY_DB_DRIVER` | `postgres` (when unset or empty) | Runtime database backend; accepts `postgres` or `sqlite`. Set `CANOPY_DB_DRIVER=sqlite` to use the SQLite boot path |
+| `CANOPY_SQLITE_PATH` | `~/.canopy/canopy.sqlite` | SQLite database path when `CANOPY_DB_DRIVER=sqlite`; unset or empty uses this default |
+| `API_SERVER_KEY` | *(unset)* | Optional API key used as the fallback for `HERMES_WEBUI_GATEWAY_API_KEY`; unset or empty means no fallback key |
+| `HERMES_WEBUI_GATEWAY_API_KEY` | *(unset; falls back to `API_SERVER_KEY`)* | API key for the Hermes WebUI gateway; unset or empty uses `API_SERVER_KEY`, if set |
+| `HERMES_WEBUI_GATEWAY_BASE_URL` | `http://127.0.0.1:8642` | Hermes WebUI gateway base URL; unset or empty uses this default |
+| `CANOPY_NATS_URL` | *(unset or empty)* | NATS server URL; setting a literal URL enables NATS wiring |
+| `CANOPY_NATS_CREDS` | *(unset or empty)* | Optional NATS credentials value, used when configured |
+| `CANOPY_TRUSTED_PROXIES` | *(unset or empty)* | Comma-separated trusted-proxy CIDRs; unset or empty trusts no forwarded proxy, and literal entries are validated at startup |
+| `REFERENCE_SELECTION_SECRET` | *(unset or empty; falls back to `JWT_SECRET`)* | Secret for reference selection; unset or empty falls back to `JWT_SECRET` |
 | `CONTEXT_MAX_ANCESTORS` | `50` | Max ancestors in context compilation |
 | `CONTEXT_MAX_REFS` | `5` | Max topic references (soft; hard cap is 2×) |
 | `CONTEXT_DEFAULT_BUDGET` | `8000` | Default token budget for context compilation. Also the fallback for every failure mode of `CONTEXT_BUDGET_PERCENT` below |
