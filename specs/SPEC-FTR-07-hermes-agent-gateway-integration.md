@@ -574,6 +574,14 @@ Forwards a user message to the Hermes gateway. canopyd assembles the context man
 
 **Response (SSE stream):** Hermes events wrapped in Canopy SSE envelopes (see §4.1).
 
+**Live gateway run contract.** The raw Hermes gateway `POST /v1/runs`
+requires `{"input": "..."}`. A raw `{"message": "..."}` body answers
+**400 Missing 'input' field**. Canopy's `POST /api/v1/gateway/runs` is the
+Canopy-facing exception: it accepts `message` (plus optional `session_id`,
+`model`, and `node_id`) and translates that field to upstream `input` when
+proxying, as represented by `StartRunRequest.Input` in
+`internal/gateway/client.go` (`json:"input"`).
+
 ### 5.2 Skill Invocation
 
 ```
