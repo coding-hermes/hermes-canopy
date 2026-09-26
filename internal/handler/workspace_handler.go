@@ -350,6 +350,12 @@ func (h *WorkspaceHandler) ChannelEvents(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// GAP-100: clear the server's whole-response WriteTimeout now that
+	// headers are committed and run every frame write below under a bounded,
+	// re-armed deadline (see sse.FrameWriter).
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	// Drain anything the hub already sent for this client during Subscribe
 	// before yielding to the event loop.
 	if err := client.Flush(); err != nil {
@@ -387,6 +393,7 @@ func (h *WorkspaceHandler) ChannelEvents(w http.ResponseWriter, r *http.Request)
 		case <-ctx.Done():
 			return
 		case <-heartbeatCh:
+			frames.BeforeFrame()
 			if err := client.SendRaw(": heartbeat\n\n"); err != nil {
 				return
 			}
@@ -395,6 +402,7 @@ func (h *WorkspaceHandler) ChannelEvents(w http.ResponseWriter, r *http.Request)
 			}
 		case <-time.After(50 * time.Millisecond):
 			// Periodic flush to drain buffered events to the client.
+			frames.BeforeFrame()
 			if err := client.Flush(); err != nil {
 				return
 			}

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // DF-HERMES-CANOPY-33: the global r.Use(middleware.Timeout(60s)) wrapped EVERY
@@ -68,6 +70,35 @@ func requestTimeoutExemptSSE(d time.Duration) func(http.Handler) http.Handler {
 				return
 			}
 			timeout(next).ServeHTTP(w, r)
+		})
+	}
+}
+
+// sseWriteDeadlineExemptMiddleware marks an SSE stream request so its
+// handler can clear the http.Server-level WriteTimeout (GAP-100).
+//
+// http.Server's WriteTimeout is a single absolute write deadline set at
+// request-read time over the WHOLE response — it is not per-write and
+// Flush() does not extend it — so every stream route was killed server-side
+// at the server's 30s boundary and survived only via reconnect +
+// Last-Event-ID replay. The marker (internal/sse) lets the handler lift that
+// deadline via sse.NewFrameWriter once its headers are committed; each frame
+// write then runs under a bounded, re-armed deadline so a stuck peer still
+// drops the connection instead of pinning a goroutine. Ordinary requests
+// never receive the marker and keep the server's whole-response
+// WriteTimeout untouched.
+//
+// Mounted globally right beside requestTimeoutExemptSSE so the exemption
+// covers every route on the predicate's allowlist — the same set
+// TestSSERouteAllowlistMatchesRouter pins against the real router — with one
+// mechanism and no per-handler copies.
+func sseWriteDeadlineExemptMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isSSEStreamRequest(r) {
+				r = sse.MarkWriteDeadlineExempt(r)
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

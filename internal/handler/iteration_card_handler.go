@@ -16,6 +16,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 const (
@@ -342,11 +343,18 @@ func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// GAP-100: clear the server's whole-response WriteTimeout now that
+	// headers are committed and run every frame write below under a bounded,
+	// re-armed deadline (see sse.FrameWriter).
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	lastSequence := cursor
 	for _, event := range replay {
 		if event.Sequence > lastSequence {
 			lastSequence = event.Sequence
 		}
+		frames.BeforeFrame()
 		if err := writeIterationEvent(w, event); err != nil {
 			return
 		}
@@ -366,12 +374,14 @@ func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Reque
 			if event.Sequence <= lastSequence {
 				continue
 			}
+			frames.BeforeFrame()
 			if err := writeIterationEvent(w, event); err != nil {
 				return
 			}
 			lastSequence = event.Sequence
 			flusher.Flush()
 		case <-ticker.C:
+			frames.BeforeFrame()
 			body, _ := json.Marshal(map[string]any{"lastSequence": lastSequence, "timestamp": time.Now().UTC()})
 			if err := writeIterationSSEFrame(w, "", "heartbeat", body); err != nil {
 				return

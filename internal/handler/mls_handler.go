@@ -355,6 +355,12 @@ func (h *MLSHandler) MLSEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// GAP-100: clear the server's whole-response WriteTimeout now that
+	// headers are committed and run every frame write below under a bounded,
+	// re-armed deadline (see sse.FrameWriter).
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	userID := uuid.Nil // MVP: sentinel userID; auth middleware (BE-07) replaces this.
 
 	hub := h.svc.Hub()
@@ -385,6 +391,7 @@ func (h *MLSHandler) MLSEvents(w http.ResponseWriter, r *http.Request) {
 	// Welcome delivery: send current group state as a welcome_message event.
 	h.sendWelcome(r.Context(), workspaceID, client)
 
+	frames.BeforeFrame()
 	if err := client.Flush(); err != nil {
 		return
 	}
@@ -395,6 +402,7 @@ func (h *MLSHandler) MLSEvents(w http.ResponseWriter, r *http.Request) {
 			log.Ctx(r.Context()).Warn().Err(err).Str("last_event_id", lastID).Msg("mls sse replay failed")
 		}
 	}
+	frames.BeforeFrame()
 	if err := client.Flush(); err != nil {
 		return
 	}
@@ -408,10 +416,12 @@ func (h *MLSHandler) MLSEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
+			frames.BeforeFrame()
 			if err := client.SendRaw(": heartbeat\n\n"); err != nil {
 				return
 			}
 		default:
+			frames.BeforeFrame()
 			if err := client.Flush(); err != nil {
 				return
 			}

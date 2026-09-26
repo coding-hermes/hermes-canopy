@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // Card SSE streaming contract (SPEC-PL-03 §9).
@@ -38,11 +39,6 @@ const (
 	// handler holds it in a field so tests can inject a short interval instead
 	// of waiting half a minute.
 	cardSSEHeartbeatInterval = 30 * time.Second
-
-	// cardSSEWriteDeadline is twice the heartbeat cadence: clearing the server's
-	// 30s WriteTimeout keeps the idle stream open, while this bound still drops
-	// a peer that stops accepting writes.
-	cardSSEWriteDeadline = 2 * cardSSEHeartbeatInterval
 
 	// cardSSEBacklogLimit is the largest replay the stream serves
 	// (SPEC-PL-03 §10 CARD_SSE_BACKLOG_LIMIT). A request further behind than
@@ -165,25 +161,11 @@ func (h *CardHandler) StreamCardEvents(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	// The server's WriteTimeout covers the whole response, so clear it after
-	// the initial flush. Each later frame gets its own bounded write deadline.
-	rc := http.NewResponseController(w)
-	deadlineSupported := true
-	warnUnsupportedDeadline := func(err error) {
-		log.Ctx(ctx).Warn().Err(err).Str("card_id", cardID.String()).
-			Msg("card sse: response writer does not support write deadlines")
-		deadlineSupported = false
-	}
-	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		warnUnsupportedDeadline(err)
-	}
-	setSSEWriteDeadline := func() {
-		if !deadlineSupported {
-			return
-		}
-		if err := rc.SetWriteDeadline(time.Now().Add(cardSSEWriteDeadline)); err != nil {
-			warnUnsupportedDeadline(err)
-		}
-	}
+	// the initial flush (GAP-100, shared policy in internal/sse). Each later
+	// frame gets its own bounded write deadline.
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+	setSSEWriteDeadline := frames.BeforeFrame
 
 	// 5. Snapshot, then replay. The replay reports the highest sequence it
 	// framed — the dedupe watermark the live loop below applies to an event

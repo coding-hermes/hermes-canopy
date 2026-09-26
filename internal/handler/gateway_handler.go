@@ -37,6 +37,7 @@ import (
 
 	ctxpkg "github.com/coding-hermes/hermes-canopy/internal/context"
 	"github.com/coding-hermes/hermes-canopy/internal/gateway"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // ContextCompiler compiles a node's budgeted context. Satisfied by
@@ -348,6 +349,14 @@ func (h *GatewayHandler) RunEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
+	// GAP-100: clear the server's whole-response WriteTimeout now that
+	// headers are committed and run every frame write in the live loop below
+	// under a bounded, re-armed deadline (see sse.FrameWriter). The history
+	// replay above stays under the server deadline on purpose — it is
+	// bounded and fast.
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	// A terminal run has nothing left to stream — close like the gateway
 	// itself does (its SSE stream ends at run completion). Non-terminal
 	// runs stay open for live fan-out.
@@ -366,9 +375,11 @@ func (h *GatewayHandler) RunEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
+			frames.BeforeFrame()
 			writeSSE(se.Raw)
 			flusher.Flush()
 		case <-heartbeat.C:
+			frames.BeforeFrame()
 			_, _ = w.Write([]byte(": heartbeat\n\n"))
 			flusher.Flush()
 		case <-ctx.Done():

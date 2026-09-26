@@ -190,6 +190,14 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// GAP-100: the server's whole-response WriteTimeout still covers this
+	// response. Clear it now that headers are committed, and run every frame
+	// write below under a bounded, re-armed deadline instead (see
+	// FrameWriter — clearing alone would let a stuck peer pin the
+	// goroutine forever).
+	frames := NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	// Drain anything the hub already sent for this client during
 	// Subscribe before yielding to the event loop.
 	if err := client.Flush(); err != nil {
@@ -225,6 +233,7 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-heartbeatCh:
+			frames.BeforeFrame()
 			if err := client.SendRaw(formatHeartbeat()); err != nil {
 				return
 			}
@@ -233,6 +242,7 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-time.After(50 * time.Millisecond):
 			// Periodic flush to drain buffered events to the client.
+			frames.BeforeFrame()
 			if err := client.Flush(); err != nil {
 				return
 			}

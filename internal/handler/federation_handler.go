@@ -503,12 +503,20 @@ func (h *FederationHandler) Events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	// GAP-100: clear the server's whole-response WriteTimeout now that
+	// headers are committed and run every frame write below under a bounded,
+	// re-armed deadline (see sse.FrameWriter).
+	frames := sse.NewFrameWriter(w, r)
+	frames.ClearWriteDeadline()
+
 	encoder := json.NewEncoder(w)
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case envelope := <-ch:
+			frames.BeforeFrame()
 			_, _ = w.Write([]byte("event: ftl_event\ndata: "))
 			_ = encoder.Encode(envelope)
 			_, _ = w.Write([]byte("\n"))

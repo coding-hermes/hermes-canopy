@@ -22,6 +22,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
 // ── test harness ──────────────────────────────────────────────────────
@@ -246,6 +247,18 @@ func newCardSSERouter(svc service.CardService, heartbeat time.Duration) http.Han
 	r := chi.NewRouter()
 	r.Mount("/cards", NewCardHandler(svc).WithSSEHeartbeat(heartbeat).Routes())
 	return r
+}
+
+// markedCardSSERouter serves the card SSE stream behind the production
+// write-deadline marking middleware (GAP-100): the handler clears the server
+// WriteTimeout only for requests the server marked as streams, so a test
+// that exercises that behavior with a real WriteTimeout must mount the same
+// marking a production boot does.
+func markedCardSSERouter(svc service.CardService, heartbeat time.Duration) http.Handler {
+	base := newCardSSERouter(svc, heartbeat)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base.ServeHTTP(w, sse.MarkWriteDeadlineExempt(r))
+	})
 }
 
 // runCardSSEStream serves one SSE request on its own goroutine and returns the
@@ -497,7 +510,7 @@ func TestCardSSE_SurvivesServerWriteTimeout(t *testing.T) {
 		serverWriteTimeout = 300 * time.Millisecond
 		heartbeatInterval  = 80 * time.Millisecond
 	)
-	router := newCardSSERouter(svc, heartbeatInterval)
+	router := markedCardSSERouter(svc, heartbeatInterval)
 	server := httptest.NewUnstartedServer(router)
 	server.Config.WriteTimeout = serverWriteTimeout
 	server.Start()

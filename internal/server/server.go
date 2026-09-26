@@ -269,6 +269,12 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	// chi's WithTimeout ended every stream cleanly at ~60s and the client
 	// never retried. See internal/server/timeout.go.
 	r.Use(requestTimeoutExemptSSE(60 * time.Second))
+	// GAP-100: mark every allowlist stream so its handler can clear the
+	// server-level whole-response WriteTimeout and re-arm a bounded
+	// per-write deadline per frame (internal/sse.FrameWriter). The chi
+	// middleware.Timeout above only removed the request-context deadline —
+	// the http.Server WriteTimeout still killed every stream at 30s.
+	r.Use(sseWriteDeadlineExemptMiddleware())
 	r.Use(corsMiddleware(cfg.CORSOrigin))
 	r.Use(handler.BodySizeLimit(1024 * 1024)) // 1MB per SPEC-API-02 §10.1
 
