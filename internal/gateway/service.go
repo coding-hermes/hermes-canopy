@@ -506,9 +506,14 @@ func (s *Service) observe(runID string) {
 	}
 	// A stream can end cleanly at the transport layer without carrying the
 	// gateway's terminal run event. Record that boundary explicitly so the
-	// registry does not keep presenting a started/running run forever. The
-	// synthetic event is ignored when an earlier event already made the run
-	// terminal (including run.observe_error).
+	// registry does not keep presenting a started/running run forever. A stop
+	// request is not such a terminal boundary: keep its stopping status intact.
+	s.mu.RLock()
+	stopping := s.runs[runID] != nil && s.runs[runID].Status == "stopping"
+	s.mu.RUnlock()
+	if stopping {
+		return
+	}
 	s.noteEvent(runID, RunEvent{Event: "run.stream_closed", RunID: runID, Timestamp: float64(time.Now().Unix())})
 }
 
