@@ -22,12 +22,17 @@ import (
 // gatewayStub simulates the Hermes gateway api_server for handler tests.
 type gatewayStub struct {
 	*httptest.Server
-	events  []string
-	stopped atomic.Int64
+	events        []string
+	streamRelease <-chan struct{}
+	stopped       atomic.Int64
 }
 
 func newGatewayStub(events []string) *gatewayStub {
-	g := &gatewayStub{events: events}
+	return newGatewayStubWithStream(events, nil)
+}
+
+func newGatewayStubWithStream(events []string, streamRelease <-chan struct{}) *gatewayStub {
+	g := &gatewayStub{events: events, streamRelease: streamRelease}
 	g.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -47,6 +52,12 @@ func newGatewayStub(events []string) *gatewayStub {
 			w.Header().Set("Content-Type", "text/event-stream")
 			for _, payload := range g.events {
 				fmt.Fprintf(w, "data: %s\n\n", payload)
+			}
+			if g.streamRelease != nil {
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+				<-g.streamRelease
 			}
 			fmt.Fprint(w, ": stream closed\n\n")
 		default:
@@ -176,18 +187,44 @@ func TestGatewayStartRunValidation(t *testing.T) {
 	}
 }
 
+func waitForGatewayRunStatus(t *testing.T, svc *gateway.Service, runID, want string) gateway.RunRecord {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rec, ok := svc.Run(runID)
+		if ok && rec.Status == want {
+			return rec
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run %s never reached %q: %+v", runID, want, rec)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestGatewayStopAndApproval(t *testing.T) {
-	stub := newGatewayStub(nil)
+	streamRelease := make(chan struct{})
+	stub := newGatewayStubWithStream([]string{
+		`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hello"}`,
+	}, streamRelease)
 	defer stub.Close()
+	defer close(streamRelease)
 	r, svc := newGatewayTestRouter(stub)
+	t.Cleanup(svc.Close)
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
 	}
+	waitForGatewayRunStatus(t, svc, "run_test", "running")
 
+	// Keep the gateway stream open until the run is stopped so this test
+	// exercises the non-terminal stop/approval contract deterministically.
 	resp, body := gwDoJSON(t, r, http.MethodPost, "/runs/run_test/stop", "")
 	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"stopping"`) {
 		t.Fatalf("stop: %d %s", resp.StatusCode, body)
+	}
+	if stub.stopped.Load() != 1 {
+		t.Fatalf("gateway stop calls = %d, want 1", stub.stopped.Load())
 	}
 
 	resp, body = gwDoJSON(t, r, http.MethodPost, "/runs/run_test/approval", `{"choice":"once","approval_id":"appr-9"}`)
@@ -203,6 +240,34 @@ func TestGatewayStopAndApproval(t *testing.T) {
 	resp, _ = gwDoJSON(t, r, http.MethodPost, "/runs/ghost/stop", "")
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown run stop should 404, got %d", resp.StatusCode)
+	}
+}
+
+// TestGatewayStopDisconnectedRunReturnsTerminalStatus protects the
+// DF-HERMES-CANOPY-69 contract: a cleanly closed gateway stream is terminal,
+// so stopping it is an idempotent 200 that reports disconnected and does not
+// call the gateway. The frontend hides stop and approval controls for this
+// status; the handler remains safe if an old client posts a stop request.
+func TestGatewayStopDisconnectedRunReturnsTerminalStatus(t *testing.T) {
+	stub := newGatewayStub(nil)
+	defer stub.Close()
+	r, svc := newGatewayTestRouter(stub)
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitForGatewayRunStatus(t, svc, "run_test", "disconnected")
+
+	resp, body := gwDoJSON(t, r, http.MethodPost, "/runs/run_test/stop", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stop on disconnected run should 200, got %d: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"status":"disconnected"`) || strings.Contains(body, `"stopping"`) {
+		t.Fatalf("stop body should preserve disconnected terminal status: %s", body)
+	}
+	if stub.stopped.Load() != 0 {
+		t.Fatalf("gateway stop called on disconnected run: %d", stub.stopped.Load())
 	}
 }
 
