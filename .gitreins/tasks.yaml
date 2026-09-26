@@ -3731,3 +3731,27 @@ tasks:
   status: complete
   created_at: '2026-09-25T21:41:40.127052+00:00'
   completed_at: '2026-09-26T01:49:09.144630+00:00'
+- id: DF-HERMES-CANOPY-66
+  title: Gateway RunEvent SSE decoding dies on JSON bool error field
+  criteria:
+  - 'internal/gateway decodes a tool.completed SSE event whose error field is a JSON
+    bool (error:false) without error: parse succeeds with Error as empty string and
+    Event/Tool preserved; string and absent error still decode as before; regression
+    test with the captured payload shape; go build ./cmd/canopyd, go vet ./..., go
+    test -count=1 ./internal/gateway/... and golangci-lint run ./... all clean'
+  status: complete
+  created_at: '2026-09-26T03:15:56.368818+00:00'
+  completed_at: '2026-09-26T05:13:32.038867+00:00'
+- id: DF-HERMES-CANOPY-68
+  title: 'Live gateway docs: message-to-input translation + CONTEXT_MODEL_WINDOWS
+    quickstart'
+  criteria:
+  - docs/API.md section 13, specs/SPEC-FTR-07, and README gateway quickstart document
+    (1) that the gateway's own POST /v1/runs contract is input (a message body answers
+    400 Missing input field) while Canopy's POST /api/v1/gateway/runs accepts message
+    and translates, and (2) CONTEXT_MODEL_WINDOWS as the quickstart remedy when GET
+    /api/v1/gateway/models answers source unknown_model, with the measured effect;
+    claims verified against internal/gateway/client.go; docs-only diff
+  status: complete
+  created_at: '2026-09-26T03:15:57.202319+00:00'
+  completed_at: '2026-09-26T05:14:04.450024+00:00'
