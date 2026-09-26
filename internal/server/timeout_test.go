@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/coding-hermes/hermes-canopy/internal/config"
+	"github.com/coding-hermes/hermes-canopy/internal/sse"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
 )
 
@@ -200,5 +202,52 @@ func TestSSERouteAllowlistMatchesRouter(t *testing.T) {
 		if !got[pattern] {
 			t.Fatalf("known SSE route %s not matched by the predicate on the real router (set: %v)", pattern, got)
 		}
+	}
+
+	// GAP-100 extension: the suffix census above only proves the predicate
+	// RECOGNIZES each route — the WriteTimeout exemption is useless unless
+	// the request is actually MARKED by sseWriteDeadlineExemptMiddleware in
+	// its production position. Replay the router's real global middleware
+	// chain over a capture endpoint and assert every allowlist entry gets
+	// marked, while ordinary GET routes stay unmarked so the server
+	// WriteTimeout keeps bounding them. Federation cannot mount on this
+	// DB-free router (federationSvc == nil), so it is pinned at the predicate
+	// level together with the method rule: the GET stream is marked, the POST
+	// write is not.
+	probeMarked := func(method, path string) bool {
+		captured := false
+		var h http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			captured = sse.WriteDeadlineExempt(r)
+			w.WriteHeader(http.StatusOK)
+		})
+		mws := router.Middlewares()
+		for i := len(mws) - 1; i >= 0; i-- {
+			h = mws[i](h)
+		}
+		req := httptest.NewRequest(method, path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return captured
+	}
+
+	for pattern := range want {
+		path := strings.ReplaceAll(pattern, "{}", uuid.NewString()[:8])
+		if !probeMarked(http.MethodGet, path) {
+			t.Fatalf("SSE route %s is on the allowlist but sseWriteDeadlineExemptMiddleware does not mark it — the server WriteTimeout would still kill the stream (GAP-100)", pattern)
+		}
+	}
+	for _, path := range []string{
+		"/api/v1/trees/" + uuid.NewString()[:8] + "/nodes",
+		"/health",
+	} {
+		if probeMarked(http.MethodGet, path) {
+			t.Fatalf("ordinary route %s was marked for the write-deadline exemption — the exemption leaked", path)
+		}
+	}
+	if !probeMarked(http.MethodGet, "/api/v1/federation/events") {
+		t.Fatal("GET /api/v1/federation/events is a stream route but was not marked")
+	}
+	if probeMarked(http.MethodPost, "/api/v1/federation/events") {
+		t.Fatal("POST /api/v1/federation/events is an ordinary write but was marked")
 	}
 }
