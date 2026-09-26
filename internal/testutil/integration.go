@@ -111,6 +111,31 @@ func resolveAdminURL() string {
 	return defaultAdminURL
 }
 
+// targetURLForDB derives a connection URL for dbName from the optional test
+// database override. The override selects the PostgreSQL server and URL
+// options, not a fixed database: every integration pool still gets its own
+// unique database. The admin URL remains separate so it can create and drop
+// that database.
+func targetURLForDB(baseURL, dbName string) (string, error) {
+	if baseURL == "" {
+		return fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", dbName), nil
+	}
+
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse test database URL: %w", err)
+	}
+	if (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" {
+		return "", fmt.Errorf("test database URL must be a postgres URL with a host")
+	}
+
+	// Path is the PostgreSQL database name. Clear RawPath so a path escaped in
+	// the override cannot survive after replacing it with the generated name.
+	u.Path = "/" + dbName
+	u.RawPath = ""
+	return u.String(), nil
+}
+
 // sharedDBGateMessage is the skip message emitted when the GAP-069 gate
 // refuses the implicit shared :5437 default. It names every env var that
 // unlocks the tests and WHY the gate exists.
@@ -514,11 +539,12 @@ func NewIntegrationPool(t *testing.T) *pgxpool.Pool {
 	// Drop (if re-running) and recreate the unique test database.
 	_ = dropTestDBByName(ctx, adminURL, dbName)
 
-	// Connect to the newly-created database.
-	targetURL := fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", dbName)
-	if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
-		// If a custom URL is set, use it as-is (user wants a specific DB).
-		targetURL = u
+	// Connect to the newly-created database. CANOPY_TEST_DB_URL selects the
+	// server and connection options, while its database path is replaced with
+	// this pool's unique database name.
+	targetURL, err := targetURLForDB(os.Getenv("CANOPY_TEST_DB_URL"), dbName)
+	if err != nil {
+		t.Fatalf("NewIntegrationPool: %v", err)
 	}
 
 	cfg, err := pgxpool.ParseConfig(targetURL)
@@ -626,9 +652,12 @@ func NewSharedIntegrationPool(t *testing.T) *pgxpool.Pool {
 			return
 		}
 
-		targetURL := fmt.Sprintf("postgres://canopy:canopy@localhost:5437/%s?sslmode=disable", sharedPoolName)
-		if u := os.Getenv("CANOPY_TEST_DB_URL"); u != "" {
-			targetURL = u
+		// Connect to the package's unique database. CANOPY_TEST_DB_URL
+		// supplies the server and connection options, not a fixed database.
+		targetURL, err := targetURLForDB(os.Getenv("CANOPY_TEST_DB_URL"), sharedPoolName)
+		if err != nil {
+			sharedPoolErr = fmt.Errorf("NewSharedIntegrationPool: %w", err)
+			return
 		}
 
 		cfg, err := pgxpool.ParseConfig(targetURL)

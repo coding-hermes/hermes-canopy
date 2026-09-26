@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -111,8 +112,8 @@ func TestHostPortFromURL(t *testing.T) {
 // unset value into sibling tests in the same binary (e.g. TestSweepKeepsFreshDB
 // would see the default URL instead of a caller-provided override).
 func TestResolveAdminURL(t *testing.T) {
-	const adminURL = "postgres://canopy:canopy@db-a:1111/postgres?sslmode=disable"
-	const testURL = "postgres://canopy:canopy@db-b:2222/canopy?sslmode=disable"
+	const adminURL = "postgres://canopy:***@db-a:1111/postgres?sslmode=disable"
+	const testURL = "postgres://canopy:***@db-b:2222/canopy?sslmode=disable"
 
 	t.Run("admin wins over test", func(t *testing.T) {
 		t.Setenv("CANOPY_ADMIN_DB_URL", adminURL)
@@ -135,6 +136,60 @@ func TestResolveAdminURL(t *testing.T) {
 			t.Fatalf("resolveAdminURL() = %q, want %q", got, defaultAdminURL)
 		}
 	})
+}
+
+// TestTargetURLForDBOverride proves CANOPY_TEST_DB_URL selects the server and
+// connection options without pinning a pool to the override's database.
+// Pure unit test — no PostgreSQL or network required.
+func TestTargetURLForDBOverride(t *testing.T) {
+	const baseURL = "postgresql://canopy:p%40ss@db.example:6543/service_db?sslmode=verify-full&application_name=canopy-ci"
+	const dbName = "canopy_0123abcd"
+
+	got, err := targetURLForDB(baseURL, dbName)
+	if err != nil {
+		t.Fatalf("targetURLForDB() error = %v", err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse target URL %q: %v", got, err)
+	}
+	if parsed.Scheme != "postgresql" {
+		t.Fatalf("target scheme = %q, want postgresql", parsed.Scheme)
+	}
+	if parsed.Host != "db.example:6543" {
+		t.Fatalf("target host = %q, want db.example:6543", parsed.Host)
+	}
+	if parsed.User == nil || parsed.User.Username() != "canopy" {
+		t.Fatalf("target user = %v, want canopy", parsed.User)
+	}
+	password, ok := parsed.User.Password()
+	if !ok || password != "p@ss" {
+		t.Fatalf("target password = %q, want p@ss", password)
+	}
+	if parsed.Path != "/"+dbName {
+		t.Fatalf("target database path = %q, want /%s", parsed.Path, dbName)
+	}
+	if parsed.RawQuery != "sslmode=verify-full&application_name=canopy-ci" {
+		t.Fatalf("target query = %q, want original query", parsed.RawQuery)
+	}
+	if strings.Contains(parsed.Path, "service_db") {
+		t.Fatalf("target still uses fixed override database: %q", parsed.Path)
+	}
+}
+
+// TestTargetURLForDBDefault preserves the built-in target URL when no override
+// is configured.
+func TestTargetURLForDBDefault(t *testing.T) {
+	const dbName = "canopy_89abcdef"
+
+	got, err := targetURLForDB("", dbName)
+	if err != nil {
+		t.Fatalf("targetURLForDB() error = %v", err)
+	}
+	want := "postgres://canopy:canopy@localhost:5437/" + dbName + "?sslmode=disable"
+	if got != want {
+		t.Fatalf("targetURLForDB() = %q, want %q", got, want)
+	}
 }
 
 // TestSharedDBRefused exercises the GAP-069 shared-DB gate decision table.
