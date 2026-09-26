@@ -695,22 +695,32 @@ func TestServiceStopRunSweptRaceMarksNotFound(t *testing.T) {
 // TestServiceStopRunNonTerminalStillCallsGateway is the regression guard:
 // stopping a live run still forwards to the gateway and marks 'stopping'.
 func TestServiceStopRunNonTerminalStillCallsGateway(t *testing.T) {
-	stub := newGatewayStub(nil)
-	defer stub.Close()
-	c, _ := NewClient(stub.URL, "k")
+	stub := newLiveGatewayStub(`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hello"}`)
+	t.Cleanup(func() { closeLiveGatewayStub(t, stub) })
+	c, err := NewClient(stub.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := NewService(c)
 	t.Cleanup(svc.Close)
 
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
 	}
+	// Synchronize on the held-open SSE connection. The observer cannot reach
+	// the stream-closed transition while this handler waits for client close.
+	<-stub.eventStarted
+
 	if err := svc.StopRun(context.Background(), "run_test"); err != nil {
 		t.Fatal(err)
 	}
 	if stub.stopped.Load() != 1 {
 		t.Fatalf("gateway stop not forwarded: %d", stub.stopped.Load())
 	}
-	rec, _ := svc.Run("run_test")
+	rec, ok := svc.Run("run_test")
+	if !ok {
+		t.Fatal("run missing after stop")
+	}
 	if rec.Status != "stopping" {
 		t.Fatalf("status = %q, want stopping", rec.Status)
 	}
