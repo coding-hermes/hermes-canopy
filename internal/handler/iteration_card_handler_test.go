@@ -17,24 +17,27 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
 const iterationTestSecret = "iteration-handler-test-secret"
 
 type iterationTestServer struct {
-	t   *testing.T
-	svc *iteration.IterationCardServiceImpl
-	r   *chi.Mux
-	h   *IterationCardHandler
-	srv *httptest.Server
-	mgr *card.CardDBManager
+	t       *testing.T
+	svc     *iteration.IterationCardServiceImpl
+	r       *chi.Mux
+	h       *IterationCardHandler
+	srv     *httptest.Server
+	mgr     *card.CardDBManager
+	cardSvc *card.CardServiceImpl
 }
 
 func newIterationTestServer(t *testing.T) *iterationTestServer {
 	t.Helper()
 	mgr := card.NewCardDBManager(t.TempDir())
 	svc := iteration.NewIterationCardService(mgr)
-	h := NewIterationCardHandler(svc).WithSSEHeartbeat(25 * time.Millisecond)
+	cardSvc := card.NewCardServiceImpl(mgr).WithEventHub(card.NewCardEventHub())
+	h := NewIterationCardHandler(svc, cardSvc).WithSSEHeartbeat(25 * time.Millisecond)
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(AuthMiddleware(iterationTestSecret))
@@ -46,7 +49,7 @@ func newIterationTestServer(t *testing.T) *iterationTestServer {
 		srv.Close()
 		_ = mgr.Close()
 	})
-	return &iterationTestServer{t: t, svc: svc, r: r, h: h, srv: srv, mgr: mgr}
+	return &iterationTestServer{t: t, svc: svc, r: r, h: h, srv: srv, mgr: mgr, cardSvc: cardSvc}
 }
 
 func iterationToken(t *testing.T, role string) string {
@@ -396,6 +399,65 @@ func TestIterationCrashSSEEmitsErrorAndSnapshot(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("crash SSE frames: agent_error=%v card_snapshot=%v", sawError, sawSnapshot)
 		}
+	}
+}
+
+func TestIterationSSEForwardsDurableBaseCardDismissal(t *testing.T) {
+	ts := newIterationTestServer(t)
+	created := createIterationCard(t, ts, iteration.IterationSubtypeSearch, "agent-dismiss-sse")
+	request, err := http.NewRequest(http.MethodGet, ts.srv.URL+"/api/v1/cards/iteration/"+created.ID.String()+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+iterationToken(t, "browser"))
+	response, err := ts.srv.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("SSE response = %d", response.StatusCode)
+	}
+
+	lines := make(chan string, 64)
+	go func() {
+		scanner := bufio.NewScanner(response.Body)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+
+	dismissed := string(card.CardStatusDismissed)
+	if _, err := ts.cardSvc.PatchCard(context.Background(), created.ID, created.Revision, service.CardPatchInput{Status: &dismissed}); err != nil {
+		t.Fatalf("dismiss card: %v", err)
+	}
+
+	var dataLine string
+	deadline := time.After(2 * time.Second)
+	for dataLine == "" {
+		select {
+		case line, open := <-lines:
+			if !open {
+				t.Fatal("SSE stream closed before card_dismissed")
+			}
+			if line == "event: card_dismissed" {
+				line, open = <-lines
+				if !open {
+					t.Fatal("SSE stream closed before card_dismissed payload")
+				}
+				dataLine = strings.TrimPrefix(line, "data: ")
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for card_dismissed frame")
+		}
+	}
+	var frame iterationSSEEvent
+	if err := json.Unmarshal([]byte(dataLine), &frame); err != nil {
+		t.Fatalf("card_dismissed payload: %v", err)
+	}
+	if frame.CardID != created.ID || frame.EventType != string(card.EventCardDismissed) || frame.Sequence <= 0 || frame.CreatedAt.IsZero() {
+		t.Fatalf("card_dismissed frame = %+v", frame)
 	}
 }
 

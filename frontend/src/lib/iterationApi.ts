@@ -249,7 +249,7 @@ export function openIterationEventStream(
   card: IterationCardRecord,
   handlers: IterationStreamHandlers,
   factory?: EventSourceFactory,
-): { close: () => void; getLastSequence: () => number } {
+): { close: () => void; getLastSequence: () => number; isClosed: () => boolean } {
   const url = apiUrl(`/cards/iteration/${encodeURIComponent(card.id)}/events`);
   let currentCard = card;
   let lastSequence = 0;
@@ -275,19 +275,24 @@ export function openIterationEventStream(
         handlers.onSnapshot?.(next);
         return;
       }
-      if (type !== 'iteration_event') return;
+      const dismissal = type === 'card_dismissed';
+      if (type !== 'iteration_event' && !dismissal) return;
       const sequence = numberOf(body.sequence, numberOf(lastEventId ? Number(lastEventId) : undefined));
-      if (sequence <= lastSequence) return;
-      lastSequence = sequence;
+      // The base-card lifecycle stream has its own sequence namespace. A
+      // dismissal must still reach the card even when its sequence is lower
+      // than the iteration event watermark.
+      if (!dismissal && sequence <= lastSequence) return;
+      if (!dismissal) lastSequence = sequence;
+      const rawCreatedAt = body.createdAt ?? body.created_at;
       const frame: IterationEventFrame = {
-        cardId: stringOf(body.cardId, card.id),
+        cardId: stringOf(body.cardId ?? body.card_id, card.id),
         subtype: subtypeOf(body.subtype ?? card.data.subtype),
-        eventType: stringOf(body.eventType, 'iteration_event'),
+        eventType: stringOf(body.eventType ?? body.event_type, dismissal ? 'card_dismissed' : 'iteration_event'),
         data: body.data,
         sequence,
-        createdAt: typeof body.createdAt === 'string' ? body.createdAt : undefined,
+        createdAt: typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined,
       };
-      currentCard = applyIterationEvent(currentCard, frame);
+      if (!dismissal) currentCard = applyIterationEvent(currentCard, frame);
       handlers.onEvent?.(frame, currentCard);
     } catch (error) {
       handlers.onError?.(error);
@@ -314,16 +319,17 @@ export function openIterationEventStream(
     add('heartbeat');
     add('card_snapshot');
     add('iteration_event');
+    add('card_dismissed');
   } else {
     subscription = subscribeSse(url, {
-      eventTypes: ['iteration_event', 'card_snapshot', 'heartbeat'],
+      eventTypes: ['iteration_event', 'card_snapshot', 'heartbeat', 'card_dismissed'],
       onOpen: handlers.onOpen,
       onError: handlers.onError,
       onEvent: processFrame,
     });
   }
 
-  return { close, getLastSequence: () => lastSequence };
+  return { close, getLastSequence: () => lastSequence, isClosed: () => closed };
 }
 
 export function fetchActiveIterationCards(): Promise<IterationCardRecord[]> {

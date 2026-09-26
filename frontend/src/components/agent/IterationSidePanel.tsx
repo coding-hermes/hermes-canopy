@@ -202,7 +202,7 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const streams = useRef(new Map<string, { close: () => void }>());
+  const streams = useRef(new Map<string, { close: () => void; isClosed: () => boolean }>());
   const cardsRef = useRef(cards);
   const announcementAt = useRef(new Map<string, number>());
   cardsRef.current = cards;
@@ -293,10 +293,16 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
 
   const onDismiss = (card: IterationCardRecord) => {
     setDismissing((current) => new Set(current).add(card.id));
+    const stream = streams.current.get(card.id);
     void dismissIterationCard(card).then(() => {
-      streams.current.get(card.id)?.close();
-      streams.current.delete(card.id);
-      setCards((current) => current.filter((value) => value.id !== card.id));
+      // PATCH commits the lifecycle event; the active list changes when that
+      // durable event reaches this card stream. If no live stream exists,
+      // removing on PATCH success is the safe fallback for a closed stream.
+      if (!stream || stream.isClosed()) {
+        streams.current.get(card.id)?.close();
+        streams.current.delete(card.id);
+        setCards((current) => current.filter((value) => value.id !== card.id));
+      }
     }).catch((dismissError: unknown) => setError(dismissError instanceof Error ? dismissError.message : 'Unable to dismiss card')).finally(() => setDismissing((current) => { const next = new Set(current); next.delete(card.id); return next; }));
   };
 

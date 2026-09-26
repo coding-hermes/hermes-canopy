@@ -16,6 +16,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
+	"github.com/coding-hermes/hermes-canopy/internal/service"
 	"github.com/coding-hermes/hermes-canopy/internal/sse"
 )
 
@@ -24,16 +25,23 @@ const (
 	iterationSSEReplayMax = 10000
 )
 
+// CardEventSubscriber is the minimal base-card event seam needed to forward
+// durable lifecycle events onto an iteration card's stream.
+type CardEventSubscriber interface {
+	SubscribeCardEvents(cardID uuid.UUID) (<-chan service.CardEvent, func())
+}
+
 // IterationCardHandler exposes the phase-two iteration-card HTTP/SSE surface.
 // The concrete service is intentional: the HTTP adapter needs the typed GET,
 // patch, feedback-result, and replay seams added around the phase-one engine.
 type IterationCardHandler struct {
-	svc       *iteration.IterationCardServiceImpl
-	heartbeat time.Duration
+	svc        *iteration.IterationCardServiceImpl
+	cardEvents CardEventSubscriber
+	heartbeat  time.Duration
 }
 
-func NewIterationCardHandler(svc *iteration.IterationCardServiceImpl) *IterationCardHandler {
-	return &IterationCardHandler{svc: svc, heartbeat: iterationSSEHeartbeat}
+func NewIterationCardHandler(svc *iteration.IterationCardServiceImpl, cardEvents CardEventSubscriber) *IterationCardHandler {
+	return &IterationCardHandler{svc: svc, cardEvents: cardEvents, heartbeat: iterationSSEHeartbeat}
 }
 
 // WithSSEHeartbeat is a test seam; production uses the 30-second spec cadence.
@@ -319,6 +327,14 @@ func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer unsubscribe()
+	var cardEvents <-chan service.CardEvent
+	var unsubscribeCardEvents func()
+	if h.cardEvents != nil {
+		cardEvents, unsubscribeCardEvents = h.cardEvents.SubscribeCardEvents(cardID)
+		if unsubscribeCardEvents != nil {
+			defer unsubscribeCardEvents()
+		}
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "STREAMING_NOT_SUPPORTED", "streaming responses are not supported")
@@ -367,6 +383,32 @@ func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Reque
 		select {
 		case <-r.Context().Done():
 			return
+		case cardEvent, open := <-cardEvents:
+			if !open {
+				cardEvents = nil
+				continue
+			}
+			if cardEvent.EventType != string(card.EventCardDismissed) {
+				continue
+			}
+			// The base-card service publishes only after its lifecycle row has
+			// committed. Keep the existing iteration sequence watermark separate:
+			// the two card databases own independent event logs.
+			body, marshalErr := json.Marshal(iterationSSEEvent{
+				CardID: cardEvent.CardID, EventType: string(card.EventCardDismissed),
+				Data: cardEvent.Payload, Sequence: cardEvent.Sequence, CreatedAt: cardEvent.CreatedAt,
+			})
+			if marshalErr != nil {
+				return
+			}
+			frames.BeforeFrame()
+			if err := writeIterationSSEFrame(w, strconv.FormatInt(cardEvent.Sequence, 10), "card_dismissed", body); err != nil {
+				return
+			}
+			flusher.Flush()
+			// A card can only be dismissed once. Disabling this case avoids
+			// forwarding any later base-card lifecycle events on this stream.
+			cardEvents = nil
 		case event, open := <-events:
 			if !open {
 				return

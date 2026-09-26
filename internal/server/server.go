@@ -454,7 +454,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 			impl.WithEventHub(card.NewCardEventHub())
 		}
 		r.Mount("/cards", handler.NewCardHandler(cardSvc).Routes())
-		iterationHandler := handler.NewIterationCardHandler(iterationSvc)
+		iterationHandler := handler.NewIterationCardHandler(iterationSvc, cardSvc)
 		r.Mount("/cards/iteration", iterationHandler.Routes())
 		r.Get("/iteration/progress", iterationHandler.Progress)
 

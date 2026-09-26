@@ -78,6 +78,26 @@ describe('iterationApi REST surface', () => {
 });
 
 describe('iterationApi EventSource stream', () => {
+  it('delivers a durable dismissal frame even when its base-card sequence is lower', () => {
+    let source!: FakeEventSource;
+    const factory = vi.fn((url: string) => {
+      source = new FakeEventSource(url);
+      return source;
+    });
+    const card = normalizeIterationCard(rawCard());
+    const received: string[] = [];
+    const stream = openIterationEventStream(card, {
+      onEvent: (event) => received.push(`${event.eventType}:${event.cardId}:${event.createdAt}`),
+    }, factory);
+
+    source.emit('iteration_event', { cardId: 'card-1', subtype: 'iteration_thinking', eventType: 'thought_progress', sequence: 9, data: { progress: { current: 2, total: 3, status: 'running' } } });
+    source.emit('card_dismissed', { card_id: 'card-1', event_type: 'card_dismissed', sequence: 2, created_at: '2026-09-26T12:03:00Z', data: { status: 'dismissed' } });
+
+    expect(received).toEqual(['thought_progress:card-1:undefined', 'card_dismissed:card-1:2026-09-26T12:03:00Z']);
+    expect(stream.getLastSequence()).toBe(9);
+    stream.close();
+  });
+
   it('opens one source, applies snapshots/events, gates duplicate sequences, tracks heartbeat, and closes', () => {
     let source!: FakeEventSource;
     const factory = vi.fn((url: string) => {

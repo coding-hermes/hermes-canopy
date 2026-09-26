@@ -88,15 +88,46 @@ describe('IterationSidePanel — §8.1 shell and compact renderers', () => {
     await settle();
 
     expect(container.querySelector('[data-testid="iteration-side-panel"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="iteration-header-status"]')?.textContent).toContain('Tool');
+    expect(container.querySelector('[data-testid="iteration-header-status"]')?.textContent).toBe('Tool');
     expect(container.textContent).toContain('Results: 1');
     expect(container.textContent).toContain('Running · cancellable');
     expect(container.textContent).toContain('main.go · lines 1-10');
     expect(container.textContent).toContain('Active step: Gather sources');
     expect(container.textContent).toContain('Approve file_write');
     expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(5);
+    expect([...container.querySelectorAll<HTMLElement>('[data-card-id]')].map((item) => item.dataset.cardId)).toEqual(['tool', 'thinking', 'file', 'code', 'search']);
     expect(sources).toHaveLength(5);
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/cards/iteration/active')).toBe(true);
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/iteration/progress')).toBe(true);
+  });
+
+  it('waits for card_dismissed before removing a card, even when PATCH is unresolved', async () => {
+    let resolveDismiss!: (response: Response) => void;
+    const pendingDismiss = new Promise<Response>((resolve) => { resolveDismiss = resolve; });
+    fetchMock = vi.fn()
+      .mockResolvedValueOnce(ok({ cards: [card('code', 'iteration_code_exec', '2026-09-26T12:01:00Z')] }))
+      .mockResolvedValueOnce(ok({ progress: [] }))
+      .mockImplementation((url: string) => url === '/api/v1/cards/code' ? pendingDismiss : Promise.resolve(ok({})));
+    vi.stubGlobal('fetch', fetchMock);
+    sources = [];
+    const factory: EventSourceFactory = (url) => { const source = new FakeSource(url); sources.push(source); return source; };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    mount(factory);
+    await settle();
+
+    const dismiss = container.querySelector('[aria-label="Dismiss iteration_code_exec card"]') as HTMLButtonElement;
+    act(() => dismiss.click());
+    await settle();
+    expect(container.querySelector('[data-card-id="code"]')).not.toBeNull();
+
+    const source = sources[0]!;
+    act(() => source.emit('card_dismissed', { cardId: 'code', eventType: 'card_dismissed', sequence: 9, createdAt: '2026-09-26T12:09:00Z', data: { status: 'dismissed' } }));
+    expect(container.querySelector('[data-card-id="code"]')).toBeNull();
+    resolveDismiss(ok({}));
+    await settle();
+    expect(container.querySelector('[data-card-id="code"]')).toBeNull();
   });
 
   it('reorders from a committed event without losing the focused expand control', async () => {
@@ -136,12 +167,73 @@ describe('IterationSidePanel — §8.1 shell and compact renderers', () => {
     act(() => dismiss.click());
     await settle();
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/cards/code')).toBe(true);
-    expect(sources[0]?.closed).toBe(true);
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false);
+    const dismissCall = fetchMock.mock.calls.find(([url]) => url === '/api/v1/cards/code');
+    expect(dismissCall).toBeDefined();
+    const dismissInit = dismissCall![1] as RequestInit;
+    expect(dismissInit.method).toBe('PATCH');
+    expect(dismissInit.body).toBe(JSON.stringify({ status: 'dismissed' }));
+    expect(container.querySelector('[data-card-id="code"]')).not.toBeNull();
+    expect(sources[0]?.closed).toBe(false);
+    act(() => sources[0]!.emit('card_dismissed', { cardId: 'code', eventType: 'card_dismissed', sequence: 3, createdAt: '2026-09-26T12:03:00Z', data: { status: 'dismissed' } }));
     expect(container.querySelector('[data-card-id="code"]')).toBeNull();
+    expect(sources[0]?.closed).toBe(true);
   });
-});
+  it('keeps expand and dismiss controls keyboard reachable and operable', async () => {
+    fetchMock = vi.fn().mockResolvedValueOnce(ok({ cards: [card('code', 'iteration_code_exec', '2026-09-26T12:01:00Z')] })).mockResolvedValueOnce(ok({ progress: [] })).mockResolvedValue(ok({}));
+    vi.stubGlobal('fetch', fetchMock);
+    sources = [];
+    const factory: EventSourceFactory = (url) => { const source = new FakeSource(url); sources.push(source); return source; };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    mount(factory);
+    await settle();
 
-describe('IterationSidePanel — recovery and announcements', () => {
+    const expand = container.querySelector('[aria-label="Expand iteration_code_exec card"]') as HTMLButtonElement;
+    const dismiss = container.querySelector('[aria-label="Dismiss iteration_code_exec card"]') as HTMLButtonElement;
+    act(() => {
+      expand.focus();
+      expand.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(expand);
+    expect(expand.tabIndex).toBe(0);
+    act(() => expand.click());
+    expect(expand.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      dismiss.focus();
+      dismiss.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      dismiss.click();
+    });
+    expect(document.activeElement).toBe(dismiss);
+    expect(dismiss.tabIndex).toBe(0);
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/cards/code')).toBe(true);
+  });
+
+  it('wires expand and collapse with aria-expanded and aria-controls', async () => {
+    fetchMock = vi.fn().mockResolvedValueOnce(ok({ cards: [card('thinking', 'iteration_thinking', '2026-09-26T12:01:00Z')] })).mockResolvedValueOnce(ok({ progress: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    sources = [];
+    const factory: EventSourceFactory = (url) => { const source = new FakeSource(url); sources.push(source); return source; };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    mount(factory);
+    await settle();
+
+    const expand = container.querySelector('[aria-label="Expand iteration_thinking card"]') as HTMLButtonElement;
+    const detailsID = expand.getAttribute('aria-controls');
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(detailsID).toBe('iteration-details-thinking');
+    expect(container.querySelector(`#${detailsID}`)).toBeNull();
+    act(() => expand.click());
+    expect(expand.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector(`#${detailsID}`)).not.toBeNull();
+    act(() => expand.click());
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector(`#${detailsID}`)).toBeNull();
+  });
+
   it('keeps prior activity visible for interrupted cards and removes stale cancel controls', async () => {
     fetchMock = vi.fn().mockResolvedValueOnce(ok({ cards: [card('interrupted', 'iteration_code_exec', '2026-09-26T12:01:00Z', 'interrupted')] })).mockResolvedValueOnce(ok({ progress: [] }));
     vi.stubGlobal('fetch', fetchMock);
@@ -159,7 +251,7 @@ describe('IterationSidePanel — recovery and announcements', () => {
     expect(container.textContent).toContain('No committed activity received yet.');
   });
 
-  it('throttles code output announcements to one per two seconds', async () => {
+  it('announces committed status in a polite live region and throttles code output announcements', async () => {
     vi.useFakeTimers();
     fetchMock = vi.fn().mockResolvedValueOnce(ok({ cards: [card('code', 'iteration_code_exec', '2026-09-26T12:01:00Z')] })).mockResolvedValueOnce(ok({ progress: [] }));
     vi.stubGlobal('fetch', fetchMock);
@@ -171,8 +263,10 @@ describe('IterationSidePanel — recovery and announcements', () => {
     mount(factory);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     const source = sources[0]!;
-    act(() => source.emit('iteration_event', { cardId: 'code', subtype: 'iteration_code_exec', eventType: 'exec_output', sequence: 1, data: { state: 'completed' } }));
     const live = container.querySelector('[data-testid="live-code"]')!;
+    expect(live.getAttribute('role')).toBe('status');
+    expect(live.getAttribute('aria-live')).toBe('polite');
+    act(() => source.emit('iteration_event', { cardId: 'code', subtype: 'iteration_code_exec', eventType: 'exec_output', sequence: 1, data: { state: 'completed' } }));
     expect(live.textContent).toContain('Done');
     act(() => source.emit('iteration_event', { cardId: 'code', subtype: 'iteration_code_exec', eventType: 'exec_output', sequence: 2, data: { state: 'failed' } }));
     expect(live.textContent).toContain('Done');
