@@ -1424,6 +1424,13 @@ The stream also emits `heartbeat` frames every 30 seconds. Persistent frames
 carry their committed SQLite sequence in both `id` and the JSON payload; replay
 uses the greater of `after` and `Last-Event-ID`.
 
+When the registered process crashes, the service first commits an `agent_error`
+event and the card's `interrupted` state, then emits an `iteration_event` for the
+error followed by a `card_snapshot` frame containing the preserved materialized
+card. Agent mutations against an interrupted card return `409 ITERATION_RECOVERY_REQUIRED`;
+a replacement must replay and acknowledge queued feedback and complete the explicit
+resume sequence before new work is accepted.
+
 ### List Cards
 
 ```

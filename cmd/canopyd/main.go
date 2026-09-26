@@ -473,6 +473,8 @@ func main() {
 	}
 	calendarSvc := calendar.NewService(calendarStore)
 	iterationSvc := iteration.NewIterationCardService(cardDBMgr)
+	iterationMonitor := iteration.NewProcessMonitor(iterationSvc, time.Second)
+	iterationMonitor.Start(ctx)
 
 	// Collaboration service — SPEC-FTR-01 Phase P1 (workspace CRUD,
 	// membership, invitations). Identity = users (see internal/collaboration).

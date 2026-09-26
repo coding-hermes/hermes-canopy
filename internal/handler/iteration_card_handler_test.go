@@ -347,3 +347,80 @@ func TestIterationSSESequenceAndHeartbeat(t *testing.T) {
 		}
 	}
 }
+
+func TestIterationCrashSSEEmitsErrorAndSnapshot(t *testing.T) {
+	ts := newIterationTestServer(t)
+	created := createIterationCard(t, ts, iteration.IterationSubtypeSearch, "agent-crash-sse")
+	process := testIterationProcess{id: "agent-crash-sse"}
+	if err := ts.svc.RegisterProcess(context.Background(), created.ID, process); err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodGet, ts.srv.URL+"/api/v1/cards/iteration/"+created.ID.String()+"/events?after=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+iterationToken(t, "browser"))
+	response, err := ts.srv.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("SSE response = %d", response.StatusCode)
+	}
+	lines := make(chan string, 32)
+	go func() {
+		scanner := bufio.NewScanner(response.Body)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+	if err := ts.svc.ReportProcessStatus(context.Background(), created.ID, process.id, iteration.AgentProcessStatusCrashed); err != nil {
+		t.Fatal(err)
+	}
+	var sawError, sawSnapshot bool
+	deadline := time.After(2 * time.Second)
+	for !(sawError && sawSnapshot) {
+		select {
+		case line, open := <-lines:
+			if !open {
+				t.Fatal("crash SSE stream closed before both frames")
+			}
+			if strings.Contains(line, `"eventType":"agent_error"`) {
+				sawError = true
+			}
+			if line == "event: card_snapshot" {
+				sawSnapshot = true
+			}
+		case <-deadline:
+			t.Fatalf("crash SSE frames: agent_error=%v card_snapshot=%v", sawError, sawSnapshot)
+		}
+	}
+}
+
+func TestIterationRecoveryRequiredMapsToConflict(t *testing.T) {
+	ts := newIterationTestServer(t)
+	created := createIterationCard(t, ts, iteration.IterationSubtypeSearch, "agent-http-recovery")
+	process := testIterationProcess{id: "agent-http-recovery"}
+	if err := ts.svc.RegisterProcess(context.Background(), created.ID, process); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.svc.ReportProcessStatus(context.Background(), created.ID, process.id, iteration.AgentProcessStatusCrashed); err != nil {
+		t.Fatal(err)
+	}
+	response := iterationRequest(t, ts.srv, http.MethodPatch, "/api/v1/cards/iteration/"+created.ID.String(), "agent", map[string]any{
+		"data": map[string]any{"title": "must recover first"},
+	}, "2")
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("recovery-required status = %d, want 409", response.StatusCode)
+	}
+	var envelope map[string]map[string]string
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["error"]["code"] != "ITERATION_RECOVERY_REQUIRED" {
+		t.Fatalf("recovery-required envelope = %v", envelope)
+	}
+}

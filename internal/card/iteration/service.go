@@ -20,11 +20,12 @@ var (
 	ErrCardNotActive      = errors.New("iteration: card is not active")
 	ErrTerminalCard       = errors.New("iteration: card is terminal")
 	ErrPatchForbidden     = errors.New("iteration: patch is not permitted")
+	ErrRecoveryRequired   = errors.New("iteration: interrupted card requires explicit recovery")
 )
 
-// IterationCardServiceImpl composes the existing card repository and adds the
-// iteration domain boundary. The process registry is deliberately in-memory;
-// crash detection and replacement replay are later-phase hooks.
+// IterationCardServiceImpl composes the card repository with the iteration
+// domain boundary. The process registry and crash-recovery coordination are
+// deliberately in-memory; durable card events remain the recovery source of truth.
 type IterationCardServiceImpl struct {
 	dbMgr *card.CardDBManager
 
@@ -34,16 +35,21 @@ type IterationCardServiceImpl struct {
 	events    *eventHub
 	feedback  *feedbackHub
 
+	// recovery records which replacement processes have been given the durable
+	// feedback replay. It is deliberately ephemeral; the card event log remains
+	// the source of truth for whether feedback is acknowledged.
+	recovery map[uuid.UUID]recoveryState
+
 	// materializeHook is a test seam for proving rollback after event INSERT.
 	// Production callers leave it nil.
 	materializeHook func(*sql.Tx) error
 }
 
-// NewIterationCardService creates the phase-one engine over a CardDBManager.
+// NewIterationCardService creates the iteration engine over a CardDBManager.
 func NewIterationCardService(dbMgr *card.CardDBManager) *IterationCardServiceImpl {
 	return &IterationCardServiceImpl{
 		dbMgr: dbMgr, agents: make(map[uuid.UUID]string), processes: make(map[uuid.UUID]AgentProcess),
-		events: newEventHub(), feedback: newFeedbackHub(),
+		events: newEventHub(), feedback: newFeedbackHub(), recovery: make(map[uuid.UUID]recoveryState),
 	}
 }
 
@@ -195,6 +201,9 @@ func (s *IterationCardServiceImpl) AppendEvent(ctx context.Context, cardID uuid.
 	if isTerminalState(data.State) {
 		return ErrTerminalCard
 	}
+	if data.State == IterationStateInterrupted {
+		return ErrRecoveryRequired
+	}
 	if event.Subtype != data.Subtype {
 		return fmt.Errorf("iteration: event subtype %q does not match card subtype %q", event.Subtype, data.Subtype)
 	}
@@ -319,6 +328,9 @@ func (s *IterationCardServiceImpl) PatchCard(ctx context.Context, cardID uuid.UU
 	}
 	if isTerminalState(data.State) {
 		return nil, ErrTerminalCard
+	}
+	if data.State == IterationStateInterrupted {
+		return nil, ErrRecoveryRequired
 	}
 
 	var patchObject map[string]any

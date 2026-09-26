@@ -371,6 +371,14 @@ func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Reque
 			if !open {
 				return
 			}
+			if event.EventType == iteration.EventCardSnapshot {
+				frames.BeforeFrame()
+				if err := writeIterationEvent(w, event); err != nil {
+					return
+				}
+				flusher.Flush()
+				continue
+			}
 			if event.Sequence <= lastSequence {
 				continue
 			}
@@ -396,7 +404,11 @@ func writeIterationEvent(w interface{ Write([]byte) (int, error) }, event iterat
 	if err != nil {
 		return err
 	}
-	return writeIterationSSEFrame(w, strconv.FormatInt(event.Sequence, 10), "iteration_event", body)
+	name := "iteration_event"
+	if event.EventType == iteration.EventCardSnapshot {
+		return writeIterationSSEFrame(w, "", "card_snapshot", body)
+	}
+	return writeIterationSSEFrame(w, strconv.FormatInt(event.Sequence, 10), name, body)
 }
 
 func writeIterationSSEFrame(w interface{ Write([]byte) (int, error) }, id, event string, data []byte) error {
@@ -454,6 +466,8 @@ func (h *IterationCardHandler) writeIterationError(w http.ResponseWriter, r *htt
 		} else {
 			writeError(w, http.StatusForbidden, "ITERATION_PROCESS_FORBIDDEN", "agent process is not registered for card")
 		}
+	case errors.Is(err, iteration.ErrRecoveryRequired):
+		writeError(w, http.StatusConflict, "ITERATION_RECOVERY_REQUIRED", "interrupted card requires explicit recovery")
 	case errors.Is(err, iteration.ErrTerminalCard):
 		writeError(w, http.StatusConflict, "ITERATION_TERMINAL_STATE", "iteration card is in a terminal state")
 	case errors.Is(err, iteration.ErrPatchForbidden):

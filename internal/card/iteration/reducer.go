@@ -171,6 +171,14 @@ func reduceEvent(current json.RawMessage, subtype IterationSubtype, eventType st
 		// in the next phase. The common envelope is left unchanged.
 	}
 
+	if eventType == EventAgentError {
+		setState(IterationStateInterrupted)
+	}
+	if eventType == EventAgentProgress {
+		if message, _ := event["message"].(string); message == "resumed" {
+			setState(IterationStateRunning)
+		}
+	}
 	if eventType == EventCardCancelled {
 		setState(IterationStateCancelled)
 	}

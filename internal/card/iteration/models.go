@@ -97,10 +97,12 @@ const (
 
 // Base event names retained by SPEC-PL-03 and used by the engine lifecycle.
 const (
-	EventCardCreated     = "card_created"
-	EventAgentProgress   = "agent_progress"
-	EventAgentOutput     = "agent_output"
-	EventAgentError      = "agent_error"
+	EventCardCreated   = "card_created"
+	EventAgentProgress = "agent_progress"
+	EventAgentOutput   = "agent_output"
+	EventAgentError    = "agent_error"
+	// EventCardSnapshot is an in-memory SSE notification, not a durable event.
+	EventCardSnapshot    = "card_snapshot"
 	EventUserFeedback    = "user_feedback"
 	EventActionRequested = "action_requested"
 	EventActionCompleted = "action_completed"
@@ -250,8 +252,8 @@ type CreateIterationCardInput struct {
 	Process     AgentProcess      `json:"-"`
 }
 
-// AgentProcess is the cancellation and feedback bridge owned by a process
-// manager. Crash detection and replacement replay are intentionally deferred.
+// AgentProcess is the cancellation, status, and feedback bridge owned by a
+// process manager. Crash status transitions are consumed by ProcessMonitor.
 type AgentProcess interface {
 	ID() string
 	SubscribeFeedback(ctx context.Context, cardID uuid.UUID) (<-chan FeedbackEvent, error)
