@@ -3773,3 +3773,16 @@ tasks:
   status: complete
   created_at: '2026-09-26T06:01:07.774027+00:00'
   completed_at: '2026-09-26T06:14:45.710654+00:00'
+- id: INT-CI-004
+  title: Gateway nonterminal stop regression still races on TestServiceStopRunNonTerminal
+  criteria:
+  - 'TestServiceStopRunNonTerminalStillCallsGateway is deterministic: go test -count=200
+    -run TestServiceStopRunNonTerminal ./internal/gateway/ passes 200/200 and -count=50
+    -race passes 50/50 with the SSE stream held open for the stop assertions (no sleeps/retries);
+    a separate test locks the disconnected path (immediate EOF -> terminal disconnected
+    preserved, gateway stop not called); whole package green at -count=1 -race and
+    -count=1 -short; production code unchanged (only internal/gateway/service_test.go
+    in the diff)'
+  status: complete
+  created_at: '2026-09-26T13:50:01.029332+00:00'
+  completed_at: '2026-09-26T13:58:19.356339+00:00'
