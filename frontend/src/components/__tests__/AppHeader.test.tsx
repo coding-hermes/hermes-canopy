@@ -16,8 +16,6 @@ import AppHeader from '../AppHeader.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// ─── Fixtures ──────────────────────────────────────────────────────────
-
 function okResponse(body: unknown): Response {
   return {
     ok: true,
@@ -37,28 +35,18 @@ function errorResponse(status: number): Response {
 }
 
 function defaultFetch(url: string): Promise<Response> {
-  if (url === '/health') {
-    return Promise.resolve(okResponse({ status: 'ok', service: 'canopyd' }));
-  }
-  if (url.startsWith('/api/v1/trees')) {
-    return Promise.resolve(okResponse({ trees: [] }));
-  }
-  if (url.startsWith('/api/v1/topics')) {
-    return Promise.resolve(okResponse({ topics: [] }));
-  }
+  if (url === '/health') return Promise.resolve(okResponse({ status: 'ok', service: 'canopyd' }));
+  if (url.startsWith('/api/v1/trees')) return Promise.resolve(okResponse({ trees: [] }));
+  if (url.startsWith('/api/v1/topics')) return Promise.resolve(okResponse({ topics: [] }));
   return Promise.reject(new Error(`unexpected fetch: ${url}`));
 }
-
-// ─── Harness ───────────────────────────────────────────────────────────
 
 let container: HTMLDivElement;
 let root: Root;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 function mount() {
-  act(() => {
-    root.render(createElement(MemoryRouter, null, createElement(AppHeader)));
-  });
+  act(() => root.render(createElement(MemoryRouter, null, createElement(AppHeader))));
 }
 
 async function settle(): Promise<void> {
@@ -88,74 +76,53 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// ─── Backend status ────────────────────────────────────────────────────
-
 describe('AppHeader — backend status', () => {
   it('shows a green dot and the service name when /health is healthy', async () => {
     mount();
     await settle();
-
     const pill = q('[data-testid="backend-status"]');
     expect(pill).not.toBeNull();
     expect(pill?.getAttribute('title')).toBe('Backend is healthy');
     expect(pill?.getAttribute('aria-label')).toBe('Backend is healthy');
     expect(pill?.textContent).toContain('Backend: canopyd');
-
     const dot = pill?.querySelector('span[aria-hidden="true"]');
     expect(dot?.className).toContain('bg-status-success');
     expect(dot?.className).not.toContain('bg-status-danger');
-
     expect(fetchMock).toHaveBeenCalledWith('/health');
   });
 
   it('shows a danger dot and "unreachable" when /health returns non-ok', async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url === '/health') {
-        return Promise.resolve(errorResponse(503));
-      }
-      return defaultFetch(url);
-    });
-
+    fetchMock.mockImplementation((url: string) => url === '/health' ? Promise.resolve(errorResponse(503)) : defaultFetch(url));
     mount();
     await settle();
-
     const pill = q('[data-testid="backend-status"]');
     expect(pill?.textContent).toContain('Backend: unreachable');
     expect(pill?.getAttribute('title')).toBe('Backend is unreachable');
     expect(pill?.getAttribute('aria-label')).toBe('Backend is unreachable');
-
     const dot = pill?.querySelector('span[aria-hidden="true"]');
     expect(dot?.className).toContain('bg-status-danger');
     expect(dot?.className).not.toContain('bg-status-success');
   });
 
   it('shows "unreachable" when /health fetch rejects', async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url === '/health') {
-        return Promise.reject(new Error('network down'));
-      }
-      return defaultFetch(url);
-    });
-
+    fetchMock.mockImplementation((url: string) => url === '/health' ? Promise.reject(new Error('network down')) : defaultFetch(url));
     mount();
     await settle();
-
-    const pill = q('[data-testid="backend-status"]');
-    expect(pill?.textContent).toContain('Backend: unreachable');
+    expect(q('[data-testid="backend-status"]')?.textContent).toContain('Backend: unreachable');
   });
 
   it('treats an unexpected status field as unhealthy', async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url === '/health') {
-        return Promise.resolve(okResponse({ status: 'degraded' }));
-      }
-      return defaultFetch(url);
-    });
-
+    fetchMock.mockImplementation((url: string) => url === '/health' ? Promise.resolve(okResponse({ status: 'degraded' })) : defaultFetch(url));
     mount();
     await settle();
+    expect(q('[data-testid="backend-status"]')?.textContent).toContain('Backend: unreachable');
+  });
 
-    const pill = q('[data-testid="backend-status"]');
-    expect(pill?.textContent).toContain('Backend: unreachable');
+  it('exposes the labeled agent activity trigger in the application chrome', async () => {
+    mount();
+    await settle();
+    const trigger = q('[data-testid="iteration-panel-trigger"]') as HTMLButtonElement | null;
+    expect(trigger?.textContent).toContain('Agent activity');
+    expect(trigger?.getAttribute('aria-label')).toBe('Open agent activity');
   });
 });

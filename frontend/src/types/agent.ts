@@ -29,7 +29,7 @@ export type ProgressType = 'search' | 'code_exec' | 'file_read' | 'thinking' | '
 export type ProgressStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface CardProgress {
-  cardId?: string;
+  cardId: string;
   parentCardId?: string;
   type: ProgressType;
   title: string;
@@ -37,7 +37,7 @@ export interface CardProgress {
   total: number;
   status: ProgressStatus;
   phase?: string;
-  updatedAt?: string;
+  updatedAt: string;
 }
 
 // ─── Thinking Card ─────────────────────────────────────────────────────

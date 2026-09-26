@@ -30,7 +30,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
-import { Menu, Network, List, GitMerge, type LucideIcon } from 'lucide-react';
+import { Menu, Network, List, GitMerge, Activity, type LucideIcon } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import type { TopicSummary } from '../types/topic';
 import { ACTIVE_TREE_STORAGE_KEY, readStoredTreeId, resolveDemoAliasSync } from '../lib/activeTree';
@@ -129,7 +129,13 @@ function ViewSelector({
 
 // ─── Header ────────────────────────────────────────────────────────────
 
-export default function AppHeader({ onMenuClick }: { onMenuClick?: () => void } = {}) {
+export default function AppHeader({
+  onMenuClick,
+  onIterationPanelClick,
+}: {
+  onMenuClick?: () => void;
+  onIterationPanelClick?: () => void;
+} = {}) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -289,8 +295,18 @@ export default function AppHeader({ onMenuClick }: { onMenuClick?: () => void } 
       {/* View mode — Tree / Detail / Merge */}
       <ViewSelector active={mode} treeId={treeId} />
 
-      {/* Utility zone — backend status (dev indicator) */}
+      {/* Utility zone — agent activity trigger + backend status */}
       <div className="flex shrink-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={onIterationPanelClick}
+          className="inline-flex items-center gap-1.5 rounded-sm bg-surface-input px-2 py-1 text-xs text-content-muted ring-1 ring-inset ring-line-subtle transition-colors hover:bg-surface-hover hover:text-content-primary"
+          aria-label="Open agent activity"
+          data-testid="iteration-panel-trigger"
+        >
+          <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Agent activity</span>
+        </button>
         <span
           data-testid="backend-status"
           title={backendTitle}

@@ -29,6 +29,7 @@ import TopicsRail from './components/TopicsRail'
 import TopicSearchPanel from './components/TopicSearchPanel'
 import AppHeader from './components/AppHeader'
 import ShortcutHelp from './components/ShortcutHelp'
+import IterationSidePanel from './components/agent/IterationSidePanel'
 import { useShortcuts } from './hooks/useShortcuts'
 import { MERGE_ROUTE } from './lib/shortcuts'
 
@@ -72,6 +73,7 @@ function Layout() {
   const location = useLocation()
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [iterationPanelOpen, setIterationPanelOpen] = useState(false)
 
   // Mobile drawer: close on navigation so every route change lands on the
   // page, never on an open overlay (Bane 08-18: sidebar close in all modes).
@@ -198,7 +200,10 @@ function Layout() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header — context title, view selector, status (UI-03) */}
-        <AppHeader onMenuClick={() => setSidebarOpen(true)} />
+        <AppHeader
+          onMenuClick={() => setSidebarOpen(true)}
+          onIterationPanelClick={() => setIterationPanelOpen(true)}
+        />
 
         {/* Content */}
         <main id="main-content" className="flex-1 overflow-auto" role="main">
@@ -212,6 +217,11 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <IterationSidePanel
+        open={iterationPanelOpen}
+        onClose={() => setIterationPanelOpen(false)}
+      />
 
       {/* Shortcut help overlay — toggled by `?` (UI-07) */}
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
