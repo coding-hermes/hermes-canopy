@@ -33,12 +33,20 @@ type gatewayStub struct {
 	getStatus map[string]string
 	// stopNotFound makes POST /v1/runs/{id}/stop answer 404 (swept race).
 	stopNotFound bool
+	// streamRelease keeps the SSE response open for tests that need to
+	// exercise a non-terminal run without racing stream closure.
+	streamRelease <-chan struct{}
 }
 
 func newGatewayStub(events []string) *gatewayStub {
+	return newGatewayStubWithStream(events, nil)
+}
+
+func newGatewayStubWithStream(events []string, streamRelease <-chan struct{}) *gatewayStub {
 	g := &gatewayStub{
-		events:    events,
-		getStatus: map[string]string{"run_test": "running"},
+		events:        events,
+		getStatus:     map[string]string{"run_test": "running"},
+		streamRelease: streamRelease,
 	}
 	g.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -72,6 +80,12 @@ func newGatewayStub(events []string) *gatewayStub {
 			w.Header().Set("Content-Type", "text/event-stream")
 			for _, payload := range g.events {
 				fmt.Fprintf(w, "data: %s\n\n", payload)
+			}
+			if g.streamRelease != nil {
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+				<-g.streamRelease
 			}
 			fmt.Fprint(w, ": stream closed\n\n")
 		default:
@@ -328,8 +342,12 @@ func TestServiceStartRunGatewayDown(t *testing.T) {
 }
 
 func TestServiceStopAndApproval(t *testing.T) {
-	stub := newGatewayStub(nil)
+	streamRelease := make(chan struct{})
+	stub := newGatewayStubWithStream([]string{
+		`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"hello"}`,
+	}, streamRelease)
 	defer stub.Close()
+	defer close(streamRelease)
 	c, _ := NewClient(stub.URL, "k")
 	svc := NewService(c)
 	t.Cleanup(svc.Close)
@@ -337,6 +355,11 @@ func TestServiceStopAndApproval(t *testing.T) {
 	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
 		t.Fatal(err)
 	}
+	waitForStatus(t, svc, "run_test", "running")
+
+	// Keep the gateway stream open until the non-terminal stop and approval
+	// assertions have completed; otherwise immediate EOF can mark the run
+	// disconnected before StopRun reads the local record.
 	if err := svc.StopRun(context.Background(), "run_test"); err != nil {
 		t.Fatal(err)
 	}
@@ -349,6 +372,32 @@ func TestServiceStopAndApproval(t *testing.T) {
 	r, ok := svc.Run("run_test")
 	if !ok || r.Status != "stopping" {
 		t.Fatalf("record should be stopping: %+v ok=%v", r, ok)
+	}
+}
+
+// TestServiceStopDisconnectedRunIsTerminalIdempotent protects the shipped
+// stream-close contract separately from the non-terminal stop test above.
+func TestServiceStopDisconnectedRunIsTerminalIdempotent(t *testing.T) {
+	stub := newGatewayStub(nil)
+	defer stub.Close()
+	c, _ := NewClient(stub.URL, "k")
+	svc := NewService(c)
+	t.Cleanup(svc.Close)
+
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus(t, svc, "run_test", "disconnected")
+
+	if err := svc.StopRun(context.Background(), "run_test"); err != nil {
+		t.Fatalf("stop on disconnected run should be idempotent: %v", err)
+	}
+	if stub.stopped.Load() != 0 {
+		t.Fatalf("gateway stop called on disconnected run: %d", stub.stopped.Load())
+	}
+	r, ok := svc.Run("run_test")
+	if !ok || r.Status != "disconnected" || !r.IsTerminal() {
+		t.Fatalf("disconnected run changed after idempotent stop: %+v ok=%v", r, ok)
 	}
 }
 
