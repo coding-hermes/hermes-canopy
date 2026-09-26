@@ -136,6 +136,86 @@ func TestServiceStartRunObservesEvents(t *testing.T) {
 	}
 }
 
+func TestServiceObserveStreamClosedWithoutRunCompletedIsTerminal(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "runs.jsonl")
+	stub := newGatewayStub([]string{
+		`{"event":"message.delta","run_id":"run_test","timestamp":1.0,"delta":"partial"}`,
+	})
+	defer stub.Close()
+
+	client, err := NewClient(stub.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewServiceWithState(client, stateFile)
+	t.Cleanup(svc.Close)
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	waitForStatus(t, svc, "run_test", "disconnected")
+	rec, ok := svc.Run("run_test")
+	if !ok {
+		t.Fatal("stream-closed run missing")
+	}
+	if rec.Status != "disconnected" || rec.LastEvent != "run.stream_closed" {
+		t.Fatalf("stream-closed record = %+v, want disconnected/run.stream_closed", rec)
+	}
+	if !rec.IsTerminal() {
+		t.Fatalf("stream-closed status must be terminal: %+v", rec)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		raw, readErr := os.ReadFile(stateFile)
+		if readErr == nil && strings.Contains(string(raw), `"status":"disconnected"`) && strings.Contains(string(raw), `"last_event":"run.stream_closed"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stream-closed terminal state was not persisted (err=%v, raw=%s)", readErr, raw)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	svc.Close()
+	reloaded := NewServiceWithState(client, stateFile)
+	t.Cleanup(reloaded.Close)
+	restored, ok := reloaded.Run("run_test")
+	if !ok || restored.Status != "disconnected" || restored.LastEvent != "run.stream_closed" || !restored.IsTerminal() {
+		t.Fatalf("reloaded stream-closed record = %+v, ok=%v", restored, ok)
+	}
+}
+
+func TestServiceObserveErrorMarksRunFailed(t *testing.T) {
+	stub := newGatewayStub([]string{"{not json}"})
+	defer stub.Close()
+
+	client, err := NewClient(stub.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(client)
+	t.Cleanup(svc.Close)
+	if _, err := svc.StartRun(context.Background(), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	waitForStatus(t, svc, "run_test", "failed")
+	rec, ok := svc.Run("run_test")
+	if !ok {
+		t.Fatal("observe-error run missing")
+	}
+	if rec.Status != "failed" || rec.LastEvent != "run.observe_error" {
+		t.Fatalf("observe-error record = %+v, want failed/run.observe_error", rec)
+	}
+	if rec.Error == "" || !strings.Contains(rec.Error, "decode SSE event") {
+		t.Fatalf("observe error was not retained: %+v", rec)
+	}
+	if !rec.IsTerminal() {
+		t.Fatalf("observe_error status must be terminal: %+v", rec)
+	}
+}
+
 type runOutputSinkStub struct {
 	mu     sync.Mutex
 	err    error

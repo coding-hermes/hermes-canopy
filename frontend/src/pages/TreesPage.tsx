@@ -72,7 +72,7 @@ interface ListTreesResponse {
 // and a shortcut to the live dashboard. Data comes from the gateway
 // through canopyd — never seeded.
 
-const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'not_found']);
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'disconnected', 'not_found']);
 
 function LiveHermesStrip() {
   const navigate = useNavigate();

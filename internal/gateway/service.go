@@ -72,7 +72,10 @@ type RunRecord struct {
 // IsTerminal reports whether the run reached a terminal gateway state.
 func (r *RunRecord) IsTerminal() bool {
 	switch r.Status {
-	case "completed", "failed", "cancelled", "not_found":
+	case "completed", "failed", "cancelled", "disconnected", "not_found":
+		// disconnected is retained as terminal for records written by older
+		// versions, which used it for an observe stream that closed. New
+		// observe errors use failed; stream closures keep the legacy status.
 		return true
 	}
 	return false
@@ -473,38 +476,40 @@ func (s *Service) observe(runID string) {
 	}
 	body, err := s.client.ObserveRun(ctx, runID)
 	if err != nil {
-		s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
+		if !errors.Is(err, context.Canceled) {
+			s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
+		}
 		return
 	}
 	defer func() { _ = body.Close() }()
 
 	stream := NewSSEStream(body)
-	streamEnded := false
 	for {
 		ev, err := stream.Next()
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
+			if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
 				log.Warn().Err(err).Str("run_id", runID).Msg("gateway observe: stream error")
 				s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
 			}
 			break
 		}
 		if ev == nil {
-			streamEnded = true
 			break
 		}
 		s.noteEvent(runID, ev.Event)
 	}
-	if !streamEnded {
-		// Stream cut without the gateway's close sentinel: mark the run
-		// disconnected so the dashboard does not show a phantom live run.
-		s.mu.Lock()
-		if rec, ok := s.runs[runID]; ok && !rec.IsTerminal() && rec.Status != "stopping" {
-			rec.Status = "disconnected"
-			rec.LastEvent = "run.stream_closed"
-		}
-		s.mu.Unlock()
+	// Close cancels the service context to interrupt body reads. That is an
+	// expected lifecycle shutdown, not an observe failure or a stream-close
+	// terminal event for the run.
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
 	}
+	// A stream can end cleanly at the transport layer without carrying the
+	// gateway's terminal run event. Record that boundary explicitly so the
+	// registry does not keep presenting a started/running run forever. The
+	// synthetic event is ignored when an earlier event already made the run
+	// terminal (including run.observe_error).
+	s.noteEvent(runID, RunEvent{Event: "run.stream_closed", RunID: runID, Timestamp: float64(time.Now().Unix())})
 }
 
 // noteEvent applies one streamed event to the record and broadcasts it.
@@ -512,6 +517,12 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 	s.mu.Lock()
 	rec, ok := s.runs[runID]
 	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	if ev.Event == "run.stream_closed" && (rec.IsTerminal() || rec.Status == "stopping") {
+		// A terminal gateway event (or an intentional stop) is authoritative;
+		// do not let the observer's transport close overwrite its last event.
 		s.mu.Unlock()
 		return
 	}
@@ -544,6 +555,12 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 	case "run.cancelled":
 		rec.Status = "cancelled"
 		changed = true
+	case "run.stream_closed":
+		// The gateway did not provide a terminal run event before its SSE
+		// stream closed. Keep the established disconnected vocabulary, but
+		// treat it as terminal so status refresh cannot resurrect the run.
+		rec.Status = "disconnected"
+		changed = true
 	case "approval.request":
 		rec.Status = "waiting_for_approval"
 		changed = true
@@ -553,7 +570,11 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 			changed = true
 		}
 	case "run.observe_error":
-		rec.Status = "disconnected"
+		// An observe error means Canopy lost the run's authoritative event
+		// stream; it is a failed observation, not the ordinary disconnected
+		// transport state shown for a stream that simply closed.
+		rec.Status = "failed"
+		rec.Error = ev.Error
 		changed = true
 	}
 
