@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/coding-hermes/hermes-canopy/internal/calendar"
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
 	"github.com/coding-hermes/hermes-canopy/internal/config"
@@ -466,6 +467,11 @@ func main() {
 	// Uses SQLite per-type databases under ~/.hermes/canopy/cards/.
 	cardDBMgr := card.NewCardDBManager(card.DataDir())
 	cardSvc := card.NewCardServiceImpl(cardDBMgr)
+	calendarStore, err := calendar.NewCardCalendarStore(cardDBMgr)
+	if err != nil {
+		log.Fatal().Err(err).Msg("initialize calendar store")
+	}
+	calendarSvc := calendar.NewService(calendarStore)
 	iterationSvc := iteration.NewIterationCardService(cardDBMgr)
 
 	// Collaboration service — SPEC-FTR-01 Phase P1 (workspace CRUD,
@@ -594,7 +600,7 @@ func main() {
 	srv := server.New(
 		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
-		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, iterationSvc, graphSvc, mergeService, collabSvc, metrics,
+		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, calendarSvc, iterationSvc, graphSvc, mergeService, collabSvc, metrics,
 		ctxCompiler, pluginSvc, fileViewerSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg, database.Pool)
 	if natsBus != nil {
 		srv.SetTransportDrain(natsBus.Drain)

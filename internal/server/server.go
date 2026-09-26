@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/coding-hermes/hermes-canopy/internal/calendar"
 	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/card/iteration"
 	"github.com/coding-hermes/hermes-canopy/internal/collaboration"
@@ -54,6 +55,7 @@ type Server struct {
 	transportAdaper transport.TransportAdapter
 	mlsHandler      *handler.MLSHandler
 	metrics         *telemetry.Metrics
+	calendarSvc     calendar.Service
 	relayCancel     context.CancelFunc
 	transportDrain  func() error
 }
@@ -80,6 +82,7 @@ func New(
 	mlsHandler *handler.MLSHandler,
 	topicSvc service.TopicService,
 	cardSvc service.CardService,
+	calendarSvc calendar.Service,
 	iterationSvc *iteration.IterationCardServiceImpl,
 	graphSvc service.GraphService,
 	mergeSvc service.MergeService,
@@ -117,6 +120,7 @@ func New(
 		mlsHandler:      mlsHandler,
 		topicSvc:        topicSvc,
 		cardSvc:         cardSvc,
+		calendarSvc:     calendarSvc,
 		iterationSvc:    iterationSvc,
 		graphSvc:        graphSvc,
 		mergeSvc:        mergeSvc,
@@ -149,6 +153,7 @@ func New(
 		transportAdaper: transportAdaper,
 		mlsHandler:      mlsHandler,
 		metrics:         metrics,
+		calendarSvc:     calendarSvc,
 		relayCancel:     relayCancel,
 		httpServer: &http.Server{
 			Addr:         addr,
@@ -182,6 +187,7 @@ type routeDeps struct {
 	mlsHandler      *handler.MLSHandler
 	topicSvc        service.TopicService
 	cardSvc         service.CardService
+	calendarSvc     calendar.Service
 	iterationSvc    *iteration.IterationCardServiceImpl
 	graphSvc        service.GraphService
 	mergeSvc        service.MergeService
@@ -638,6 +644,13 @@ func (s *Server) Router() *chi.Mux {
 // SSEHub returns the server's SSE hub.
 func (s *Server) SSEHub() sse.SSEHub {
 	return s.sseHub
+}
+
+// CalendarService returns the phase-one calendar service retained by the
+// composition root. HTTP/provider adapters are intentionally wired in later
+// phases.
+func (s *Server) CalendarService() calendar.Service {
+	return s.calendarSvc
 }
 
 // TransportManager returns the connection manager for transport adapters.
