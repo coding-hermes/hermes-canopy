@@ -127,6 +127,20 @@ create.
    Hermes gateway when one is reachable (`/api/v1/gateway/status`). Without a
    gateway it says so — nothing is faked.
 
+**Gateway request contract.** Canopy's `POST /api/v1/gateway/runs` accepts
+`message` (plus optional `session_id`, `model`, and `node_id`) and translates it
+to the raw gateway `input` field. The gateway's own `POST /v1/runs` requires
+`{"input": "..."}`; a raw `{"message": "..."}` body answers **400 Missing
+'input' field**.
+
+If runs work but `GET /api/v1/gateway/models` reports the flat default with
+`source: unknown_model` and `desired_budget: 8000` for every model, the gateway
+model catalog reports no context window. Declare one with
+`CONTEXT_MODEL_WINDOWS="Hermes Agent=200000"` (comma-separated `model=window`
+pairs); at the default 60%, the observable result becomes
+`context_window: 200000` → `desired_budget: 120000`. See the environment table
+below for the full knob semantics.
+
 Isolated throwaway instance (own DB, port, HOME, file root — nothing shared
 with a live instance): `scripts/scratch-instance.sh` — recipe in
 [docs/SCRATCH_INSTANCE.md](docs/SCRATCH_INSTANCE.md). Full integration guide:

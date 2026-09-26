@@ -3537,6 +3537,16 @@ actual code:
       verbatim and — when `token_budget` is absent — selects the model whose
       context window sizes the default budget (`CONTEXT_BUDGET_PERCENT`,
       default 60%). An explicit `token_budget` always wins, unchanged
+
+    **Gateway contract (raw `/v1/runs`).** The gateway's own `POST /v1/runs`
+    requires `{"input": "..."}` (the `Input` field on
+    `StartRunRequest` in `internal/gateway/client.go`, serialized as
+    `json:"input"`). A raw `{"message": "..."}` body answers **400 Missing
+    'input' field**. This is distinct from Canopy's
+    `POST /api/v1/gateway/runs`, which accepts the documented `message` field
+    (plus optional `session_id`, `model`, and `node_id`) and translates it to
+    upstream `input` when proxying.
+
     - `GET  /api/v1/gateway/runs/{run_id}` — run record with event history
     - `GET  /api/v1/gateway/runs/{run_id}/events` — SSE stream (history
       replay + live fan-out of gateway lifecycle events)
