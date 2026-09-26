@@ -507,3 +507,34 @@ a consumer writing one typed client for "the Canopy API" will trip on it
 repeatedly. The right way: curl the endpoint with the docs' exact body first,
 and treat the response body — not the docs — as the JSON contract of record
 until DF-60 lands.
+
+**A typed-struct HTTP client dies on fields the SERVER owns, not fields you
+added (2026-09-26 gateway round).** canopyd is a client of the live Hermes
+gateway, and its observer died mid-run on `"error": false` — a bool riding a
+field the client had declared as `string` (`RunEvent.Error`,
+internal/gateway/sse.go). Note who owns the mismatch: canopyd's own comment
+block even documents `tool.completed — (tool, duration, error)` from the
+gateway source, and the live gateway (verified 2026-09-26) emits `"error":
+false` on success. The unit-test stub (internal/gateway/service_test.go
+newGatewayStub) only ever sends string errors, so the suite is structurally
+blind to the real shape. Lessons: (1) when a client consumes a LIVE foreign
+service, capture one REAL event stream of each event type and build fixtures
+from the captures — a hand-written stub encodes the client author's
+assumptions, not the peer's contract; (2) decode tolerant, not strict —
+`json.RawMessage` (or a bool-or-string flexible type) for fields like
+`error` whose type the peer is free to vary by outcome; (3) the failure mode
+is nasty precisely because the happy-path tests pass: a tool-less run
+completes perfectly, so "chat works" is demonstrable in a demo while every
+real prompt (agents `ls` before answering) dies. See DF-HERMES-CANOPY-66 for
+the capture (`run_c910ab4bc69547bc8fddbfc3c13df034` raw SSE).
+
+**Run output that never lands in the domain model is demo-visible value
+loss (2026-09-26).** The GAP-096 audit dialog is the best artifact in the
+repo — a visible manifest with hash, budget and included sources before
+send — and the run genuinely completes; but the answer exists only in the
+transient run registry (pruned at maxRuns) because nothing bridges
+`run.completed` into a tree node or node metadata. The conversation DAG
+records the human's message and silently drops the agent's reply. When a
+feature's data flow ends in a side registry, ask "what reads this a week
+from now?" — if the answer is only a pruned list endpoint, the feature is
+half-wired regardless of green tests (DF-HERMES-CANOPY-67).

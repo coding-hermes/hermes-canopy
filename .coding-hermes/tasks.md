@@ -3779,3 +3779,16 @@ decision-bound on owner rulings; QA-HERMES-CANOPY-* remain bunker/fleet-infra ow
 - First attempt sweep SIGKILLed again at the harness cgroup cap (~9 min, 28/31 pkgs green) -> coverage completed in two halves: remaining 4 pkgs (root, testutil, transport, migrations) run separately, exit 0. Golangci-lint 0 issues, gitleaks clean, build/vet/gofmt clean.
 - COMMIT-TIME tier1 guard: PASS (test mode full). Pushed origin + gitlab at 7d41152b, parity 0 both. Off-by-one post-debug submission sub_76664d (go-sse-writetimeout-heartbeat-regression-test-design: the production-constant heartbeat test is unwritable in CI through the real router — pivot to post-boundary broadcast data frames + scaled real-handler heartbeat shape).
 - Tier2 re-run fired on the amended tree (background); verdict + CI on 7d41152b fold via follow-up events 882/883 and the next tick if needed.
+
+## Dogfood Findings (2026-09-26) — live-gateway integration round
+
+Rows filed on the JSONL board (DF-HERMES-CANOPY-66..70); this section is the narrative index.
+
+- [P0] DF-HERMES-CANOPY-66: gateway observer kills any tool-using run — live gateway emits `"error": false` (bool) on tool.completed; RunEvent.Error string (internal/gateway/sse.go) fails to decode → run.observe_error → 'disconnected' while the gateway run still completes. Reproduced 2/2 with raw SSE capture run_c910ab4bc69547bc8fddbfc3c13df034. Fix: flexible decode + regression fixture from the captured payload.
+- [P1] DF-HERMES-CANOPY-67: run output never lands in the tree — GAP-096 audit flow completes (manifest 29/8000, hash d3711be061f8) but the agent's answer exists only in the run registry; nodes' metadata stays {}. No reply node, no card, no metadata link.
+- [P1] DF-HERMES-CANOPY-68: gateway docs don't match the gateway — raw POST /v1/runs wants {"input"} (docs say message; 400 Missing 'input' field on the documented shape); model catalog reports no context window → GAP-080 budget derivation inert without CONTEXT_MODEL_WINDOWS (quickstart doesn't mention it).
+- [P2] DF-HERMES-CANOPY-69: status truth diverges — UI 'running' on a run whose last event is run.stream_closed; 'disconnected' describes canopyd's observer, not the run.
+- [P2] DF-HERMES-CANOPY-70: SKIPPED-install-bunker — bunker-las-03 offline (tailscale 'offline, last seen 8h ago'; ssh connect timeout; ping 100% loss; bunker list deadline_exceeded). CLI ready (0.1.4). Last install-proof 2026-09-24 (compose path, smoke ok).
+- perf: nothing slow enough for PERF rows — runs list 7.3ms±0.5ms warm (hyperfine 20 runs), compile POST 4.4/76/101ms, gateway routes 0.7–2.2ms, SSE first event ~2s.
+
+Verdict: PROMISING-BUT-ROUGH. Artifacts: docs/dogfood/2026-09-26-integration.md, diagnostics.md lessons, dogfood-log.md entry, usage skill re-verified.

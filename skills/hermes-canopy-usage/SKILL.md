@@ -206,6 +206,26 @@ Browser path: `http://localhost:5173/api/v1/gateway/...` proxies identically.
 Dashboard flow: type in the chat composer → real run starts → SSE streams →
 output appears. Zero console errors in the 2026-08-27 probe.
 
+### Gateway round re-verification (2026-09-26, live gateway)
+
+- **P0 live caveat: any tool-using run dies canopy-side** (DF-HERMES-CANOPY-66).
+  The gateway emits `"error": false` (bool) on `tool.completed`; `RunEvent.Error`
+  string in internal/gateway/sse.go can't decode it → run.observe_error → status
+  `disconnected`. Only tool-less prompts ("Reply with exactly: ok") complete
+  end-to-end. Check DF-66's status before trusting chat in the UI.
+- `node_id` on POST runs opts into the context compiler — the 202 response
+  carries the full compiled manifest + `manifestHash`. The tree UI's
+  "Run with context" (GAP-084/096) opens an audit dialog with the same
+  manifest (budget, hash, included sources) before sending. Verified good.
+- Run output is NOT persisted into the tree (DF-HERMES-CANOPY-67): user
+  messages become nodes, agent answers live only in the run registry. Poll
+  `GET /api/v1/gateway/runs/{run_id}` for the output.
+- Raw gateway calls need `{"input": ...}` — canopyd's docs say `message`
+  (P1, DF-HERMES-CANOPY-68). Model catalog reports no window → budget
+  derivation inert unless `CONTEXT_MODEL_WINDOWS` is set.
+- Perf: runs list 7.3 ms ± 0.5 ms warm (hyperfine 20), compile POST 4–101 ms,
+  SSE first event ~2 s. Nothing slow.
+
 ## Verified working flows (2026-08-17 + 2026-08-27)
 
 - **Create tree (API):** `POST /api/v1/trees` body
