@@ -102,6 +102,17 @@ const RUN_DONE = {
   events: [{ event: 'run.completed', run_id: 'run_done', timestamp: 2, output: 'ok' }],
 };
 
+const RUN_DISCONNECTED = {
+  run_id: 'run_disconnected',
+  session_id: '',
+  message: 'stream ended',
+  model: '',
+  status: 'disconnected',
+  created_at: new Date().toISOString(),
+  last_event: 'run.stream_closed',
+  events: [{ event: 'run.stream_closed', run_id: 'run_disconnected', timestamp: 3 }],
+};
+
 // ─── Recent trees fixtures (GAP-094) ───────────────────────────────────
 
 /**
@@ -172,7 +183,7 @@ function routeFetch(url: string): Response {
     if (url.endsWith('/approval')) {
       return jsonResponse({ run_id: 'run_appr', choice: 'once', resolved: true });
     }
-    return jsonResponse({ runs: [RUN_RUNNING, RUN_APPROVAL, RUN_DONE] });
+    return jsonResponse({ runs: [RUN_RUNNING, RUN_APPROVAL, RUN_DONE, RUN_DISCONNECTED] });
   }
   if (url.startsWith('/api/v1/trees')) {
     return jsonResponse({ trees: treeFixtures });
@@ -333,6 +344,15 @@ describe('DashboardPage', () => {
     expect(feed).not.toBeNull();
     const transcript = container.querySelector('[data-testid="transcript"]');
     expect(transcript?.textContent).toBe('Hello');
+  });
+
+  it('treats a disconnected run as terminal and does not offer stop or approval controls', async () => {
+    renderDashboard();
+    await flushPromises();
+
+    expect(container.querySelector('[data-testid="run-status-disconnected"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="stop-run_run_disconnected"]')).toBeNull();
+    expect(container.querySelector('[data-testid="approval-card"]')).toBeNull();
   });
 
   it('stop control POSTs to the stop endpoint', async () => {

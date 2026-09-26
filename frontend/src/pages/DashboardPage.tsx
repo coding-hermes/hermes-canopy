@@ -320,7 +320,7 @@ export default function DashboardPage() {
 
   const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
   const { events, status: feedStatus, transcript } = useRunEventStream(
-    selectedRun?.status && !['completed', 'failed', 'cancelled', 'not_found'].includes(selectedRun.status)
+    selectedRun?.status && !['completed', 'failed', 'cancelled', 'disconnected', 'not_found'].includes(selectedRun.status)
       ? selectedRun.run_id
       : selectedRunId,
   );
@@ -530,7 +530,7 @@ function RunRow({
   onSelect: () => void;
   onStop: () => void;
 }) {
-  const isTerminal = ['completed', 'failed', 'cancelled', 'not_found'].includes(run.status);
+  const isTerminal = ['completed', 'failed', 'cancelled', 'disconnected', 'not_found'].includes(run.status);
   const pendingApproval = run.events.some((ev) => ev.event === 'approval.request');
   return (
     <li>
