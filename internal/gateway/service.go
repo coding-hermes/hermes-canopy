@@ -26,6 +26,20 @@ const maxRuns = 100
 // maxSubscriberBuffer bounds the per-subscriber fan-out channel.
 const maxSubscriberBuffer = 256
 
+// PersistRunOutputInput is the plain-data contract for persisting a completed
+// run's output outside the gateway registry.
+type PersistRunOutputInput struct {
+	RunID        string
+	SourceNodeID string
+	Output       string
+}
+
+// RunOutputSink persists a completed gateway run's output. Implementations must
+// not rely on gateway.Service's mutex being held while this method runs.
+type RunOutputSink interface {
+	PersistRunOutput(ctx context.Context, in PersistRunOutputInput) error
+}
+
 // RunRecord is Canopy's view of one Hermes gateway run: the start request
 // plus everything learned from the SSE event stream.
 type RunRecord struct {
@@ -40,6 +54,9 @@ type RunRecord struct {
 	Error     string         `json:"error,omitempty"`
 	Usage     map[string]any `json:"usage,omitempty"`
 	Events    []RunEvent     `json:"events"`
+	// OutputPersistWarning records a best-effort node-persistence failure. It
+	// never changes the gateway run's terminal status.
+	OutputPersistWarning string `json:"output_persist_warning,omitempty"`
 
 	// Context provenance (GAP-075). All four fields are additive and
 	// omitempty, so a context-free run keeps the pre-GAP-075 JSON shape
@@ -91,6 +108,10 @@ type Service struct {
 	mu   sync.RWMutex
 	runs map[string]*RunRecord
 	subs map[string]map[chan StreamEvent]struct{}
+
+	// outputSink is optional so gateway-only deployments retain their existing
+	// run-registry behavior when node persistence is not wired.
+	outputSink RunOutputSink
 }
 
 // DefaultStateFile returns the path for the persisted gateway run registry,
@@ -171,6 +192,14 @@ func (s *Service) Close() {
 // Client exposes the underlying gateway client (used by the handler for
 // operations the service does not wrap).
 func (s *Service) Client() *Client { return s.client }
+
+// SetRunOutputSink enables best-effort persistence of completed context runs.
+// Passing nil restores the inert gateway-only behavior.
+func (s *Service) SetRunOutputSink(sink RunOutputSink) {
+	s.mu.Lock()
+	s.outputSink = sink
+	s.mu.Unlock()
+}
 
 // Connected probes the gateway health endpoint.
 func (s *Service) Connected(ctx context.Context) error {
@@ -492,11 +521,21 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 	}
 	rec.LastEvent = ev.Event
 	changed := false
+	var outputSink RunOutputSink
+	var outputInput PersistRunOutputInput
 	switch ev.Event {
 	case "run.completed":
 		rec.Status = "completed"
 		rec.Output = ev.Output
 		rec.Usage = ev.Usage
+		if rec.SourceNodeID != "" && s.outputSink != nil {
+			outputSink = s.outputSink
+			outputInput = PersistRunOutputInput{
+				RunID:        rec.RunID,
+				SourceNodeID: rec.SourceNodeID,
+				Output:       rec.Output,
+			}
+		}
 		changed = true
 	case "run.failed":
 		rec.Status = "failed"
@@ -537,6 +576,19 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 		}
 	}
 	s.mu.Unlock()
+	if outputSink != nil {
+		// The sink is deliberately called synchronously after releasing s.mu:
+		// node persistence must complete deterministically before this event is
+		// considered handled, while the sink must never re-enter this lock.
+		if err := outputSink.PersistRunOutput(context.Background(), outputInput); err != nil {
+			log.Warn().Err(err).Str("run_id", runID).Msg("gateway run output persistence failed")
+			s.mu.Lock()
+			if rec, ok := s.runs[runID]; ok {
+				rec.OutputPersistWarning = err.Error()
+			}
+			s.mu.Unlock()
+		}
+	}
 	if changed {
 		s.persist()
 	}

@@ -3563,6 +3563,18 @@ actual code:
     manifest; `token_budget` overrides the default budget for that call only.
     Compilation never falls back to the raw message.
 
+    **Completed context runs are persisted as reply nodes (DF-HERMES-CANOPY-67).**
+    When a run has a `node_id` and completes successfully, canopyd creates one
+    ordinary `reply` node under that source node. The reply is authored by the
+    `dev-hermes` profile, contains the gateway output as its content, and carries
+    `metadata: {"run_id":"<run_id>","origin":"gateway_run"}`. The source node's
+    metadata is merged (existing keys are preserved) with
+    `last_gateway_run: {"run_id":"<run_id>","completed_at":"<RFC3339>"}`.
+    This is best-effort bookkeeping: a persistence failure leaves the gateway
+    run completed and is recorded as a warning on the run record. Runs without
+    a source node, or deployments without the node sink wired, retain the
+    gateway-only behavior.
+
     **Window-derived default budget (GAP-080).** With no `token_budget` the
     default is `CONTEXT_DEFAULT_BUDGET` (8000) unless `model` names a model
     whose context window is known, in which case it

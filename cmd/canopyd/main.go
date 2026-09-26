@@ -595,7 +595,7 @@ func main() {
 		healthProbe{database, coreRelay}, cfg.HTTPAddr, cfg.JWTSecret, treeService, nodeService, exportService, sseHub, syncEngine, approvalSvc,
 		tptAdapter, connMgr, ss,
 		database.TransportConfigs, database.TransportEvents, database.Members, database.Users, profileRouter, mlsHandler, topicSvc, cardSvc, iterationSvc, graphSvc, mergeService, collabSvc, metrics,
-		ctxCompiler, pluginSvc, fileViewerSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg)
+		ctxCompiler, pluginSvc, fileViewerSvc, topicSearchSvc, referenceSvc, federationSvc, relayRegistry, cfg, database.Pool)
 	if natsBus != nil {
 		srv.SetTransportDrain(natsBus.Drain)
 	}

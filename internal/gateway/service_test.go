@@ -136,6 +136,104 @@ func TestServiceStartRunObservesEvents(t *testing.T) {
 	}
 }
 
+type runOutputSinkStub struct {
+	mu     sync.Mutex
+	err    error
+	inputs []PersistRunOutputInput
+}
+
+func (s *runOutputSinkStub) PersistRunOutput(_ context.Context, in PersistRunOutputInput) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inputs = append(s.inputs, in)
+	return s.err
+}
+
+func (s *runOutputSinkStub) snapshot() []PersistRunOutputInput {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]PersistRunOutputInput(nil), s.inputs...)
+}
+
+func TestServiceCompletedRunPersistsOutputOnlyForContextRuns(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourceNode string
+		withSink   bool
+		wantCalls  int
+	}{
+		{name: "context run with sink", sourceNode: "source-node", withSink: true, wantCalls: 1},
+		{name: "context-free run with sink", withSink: true, wantCalls: 0},
+		{name: "context run without sink", sourceNode: "source-node", wantCalls: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newGatewayStub([]string{
+				`{"event":"run.completed","run_id":"run_test","timestamp":1.0,"output":"done"}`,
+			})
+			defer stub.Close()
+			client, err := NewClient(stub.URL, "k")
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := NewService(client)
+			t.Cleanup(svc.Close)
+			sink := &runOutputSinkStub{}
+			if tt.withSink {
+				svc.SetRunOutputSink(sink)
+			}
+
+			_, err = svc.StartRunWithContext(context.Background(), StartRunInput{
+				Message:      "hello",
+				SourceNodeID: tt.sourceNode,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitForStatus(t, svc, "run_test", "completed")
+
+			inputs := sink.snapshot()
+			if len(inputs) != tt.wantCalls {
+				t.Fatalf("sink calls = %d, want %d: %+v", len(inputs), tt.wantCalls, inputs)
+			}
+			if tt.wantCalls == 1 {
+				if inputs[0].RunID != "run_test" || inputs[0].SourceNodeID != tt.sourceNode || inputs[0].Output != "done" {
+					t.Fatalf("unexpected persistence input: %+v", inputs[0])
+				}
+			}
+		})
+	}
+}
+
+func TestServiceOutputSinkFailureKeepsRunCompleted(t *testing.T) {
+	stub := newGatewayStub([]string{
+		`{"event":"run.completed","run_id":"run_test","timestamp":1.0,"output":"done"}`,
+	})
+	defer stub.Close()
+	client, err := NewClient(stub.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(client)
+	t.Cleanup(svc.Close)
+	sink := &runOutputSinkStub{err: errors.New("node store unavailable")}
+	svc.SetRunOutputSink(sink)
+	if _, err := svc.StartRunWithContext(context.Background(), StartRunInput{
+		Message:      "hello",
+		SourceNodeID: "source-node",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus(t, svc, "run_test", "completed")
+	rec, ok := svc.Run("run_test")
+	if !ok || rec.Status != "completed" {
+		t.Fatalf("run status = %q (ok=%v), want completed", rec.Status, ok)
+	}
+	if rec.OutputPersistWarning != "node store unavailable" {
+		t.Fatalf("warning = %q, want sink error", rec.OutputPersistWarning)
+	}
+}
+
 func TestServiceStartRunGatewayDown(t *testing.T) {
 	// Point at a closed port: connection refused.
 	c, _ := NewClient("http://127.0.0.1:1", "k")

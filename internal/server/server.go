@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
@@ -92,6 +93,7 @@ func New(
 	federationSvc federation.FederationService,
 	relayRegistry *relay.RelayRegistry,
 	cfg *config.Config,
+	dbPool *pgxpool.Pool,
 ) *Server {
 	if impl, ok := topicSvc.(*service.TopicServiceImpl); ok {
 		impl.WithContentIndexer(topicSearchSvc)
@@ -128,6 +130,7 @@ func New(
 		federationSvc:   federationSvc,
 		relayRegistry:   relayRegistry,
 		cfg:             cfg,
+		dbPool:          dbPool,
 	}
 	r := newRouter(deps)
 
@@ -192,6 +195,7 @@ type routeDeps struct {
 	federationSvc   federation.FederationService
 	relayRegistry   *relay.RelayRegistry
 	cfg             *config.Config
+	dbPool          *pgxpool.Pool
 }
 
 // newRouter wires middleware and every route exactly as New always has.
@@ -229,6 +233,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	federationSvc := deps.federationSvc
 	relayRegistry := deps.relayRegistry
 	cfg := deps.cfg
+	dbPool := deps.dbPool
 	r := chi.NewRouter()
 
 	// Stale-build visibility (DF-HERMES-CANOPY-1): /health reports the
@@ -572,6 +577,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// gateway that is down or missing endpoints only logs, so canopyd still
 		// boots and the /gateway routes still mount.
 		gatewaySvc := gateway.NewServiceWithState(gwClient, gateway.DefaultStateFile())
+		gatewaySvc.SetRunOutputSink(newGatewayOutputSink(nodeSvc, dbPool))
 		// GAP-075: the compiler is wired into the gateway surface so a
 		// node-scoped run (POST /gateway/runs {node_id}) sends the COMPILED
 		// context to the model and records its manifest. Wiring it here is
