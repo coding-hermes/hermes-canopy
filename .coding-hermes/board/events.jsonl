@@ -923,3 +923,5 @@
 {"actor":"foreman","event_type":"task_completed","task_id":"QA-HERMES-CANOPY-35","id":899,"tick_number":null,"detail":"{\"status\":\"complete\"}","timestamp":"2026-09-26T12:15:52+00:00"}
 {"actor":"foreman","event_type":"task_created","task_id":"INT-CI-003","id":900,"tick_number":null,"detail":"{\"id\":\"INT-CI-003\",\"status\":\"pending\"}","timestamp":"2026-09-26T12:15:52+00:00"}
 {"actor":"foreman","event_type":"task_completed","task_id":"INT-CI-003","id":901,"tick_number":null,"detail":"{\"status\":\"complete\"}","timestamp":"2026-09-26T12:15:52+00:00"}
+{"actor":"foreman","event_type":"task_created","task_id":"INT-CI-004","id":902,"tick_number":null,"detail":"{\"id\":\"INT-CI-004\",\"status\":\"pending\"}","timestamp":"2026-09-26T12:29:51+00:00"}
+{"actor":"foreman","event_type":"task_updated","task_id":"INT-CI-004","id":903,"tick_number":null,"detail":"{\"event_type\":\"ci_followup\",\"run\":36241877230,\"failure\":\"TestServiceStopRunNonTerminal: status=disconnected want stopping\",\"related\":\"INT-CI-003\",\"action\":\"filed_for_next_tick\"}","timestamp":"2026-09-26T12:29:51+00:00"}
