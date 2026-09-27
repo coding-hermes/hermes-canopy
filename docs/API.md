@@ -550,6 +550,25 @@ Tree-scoped and membership-gated like the other tree-scoped write routes
 parents: one `reply` edge from the placement target plus one `synthesis` edge
 per source node, all in a single transaction.
 
+**Authentication and membership failures (verified for this route):** This POST
+requires an HS256 JWT Bearer token and membership in `{tree_id}`. Against an
+isolated server backed by a throwaway database, a POST without an
+`Authorization` header returned **401** (not 405) with exactly:
+
+```json
+{"error":{"code":"TOKEN_MISSING","message":"Authorization Bearer token required"}}
+```
+
+The same POST with a valid JWT whose user was not a member of the target tree
+returned **403** with exactly:
+
+```json
+{"error":{"code":"NOT_TREE_MEMBER","message":"you are not a member of this tree"}}
+```
+
+These observations apply to `POST /api/v1/trees/{tree_id}/merge`; they do not
+make a claim about other routes.
+
 This is the **only** way to create a synthesis node: the ordinary node-create
 and reply/fork routes reject `node_type: "synthesis"` with `400 VALIDATION_ERROR`
 (message `node service: synthesis nodes via merge endpoint only` — the service
