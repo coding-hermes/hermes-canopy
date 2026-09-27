@@ -1227,7 +1227,8 @@ no `topic` wrapper).
 not a valid UUID, `400 INVALID_JSON` for malformed JSON, `404
 TOPIC_PROPOSAL_NOT_FOUND` when the proposal does not exist, `409
 TOPIC_PROPOSAL_EXPIRED` for an expired proposal, `409
-TOPIC_PROPOSAL_ALREADY_RESOLVED` when the proposal is already resolved, and
+TOPIC_PROPOSAL_ALREADY_RESOLVED` when a resolved proposal cannot be
+confirmed (for example, it was dismissed), and
 `400 TOPIC_PROPOSAL_TITLE_TOO_LONG` when `titleOverride` exceeds 200
 characters.
 
