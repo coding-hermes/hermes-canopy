@@ -1122,6 +1122,130 @@ snippets from the topic's earliest nodes, plus preview metadata.
 **Errors:** `INVALID_TOPIC_ID` (400), `TOPIC_NOT_FOUND` (404),
 `INTERNAL_ERROR` (500).
 
+### Topic detection
+
+Topic-detection endpoints require a JWT Bearer token. The configuration
+routes are tree-scoped and are mounted behind tree-membership middleware: the
+caller must be a member of `{tree_id}` in addition to being authenticated.
+The proposal routes are scoped only by `{proposal_id}`. They are not
+mounted under a tree and do not run the tree-membership middleware; the
+handler performs no additional tree-membership or proposal-owner check, so a
+valid JWT is the authorization requirement for these two routes.
+
+All errors use the standard envelope:
+
+```json
+{"error":{"code":"…","message":"…"}}
+```
+
+Tree-scoped middleware can reject a request with `400 INVALID_TREE_ID`, `401
+TOKEN_MISSING` or `TOKEN_INVALID`, `403 NOT_TREE_MEMBER`, `410 TREE_DELETED`,
+or `500 INTERNAL_ERROR` before the handler runs.
+
+#### Get topic-detection configuration
+
+```
+GET /api/v1/trees/{tree_id}/topic-detection
+```
+
+**Response (200):** The complete per-tree configuration. The default values
+are `auto_create: false`, `always_ask: true`, `detection_level: "full"`,
+`min_messages_per_topic: 3`, and `proposal_cooldown: 10`.
+
+```json
+{
+  "auto_create": false,
+  "always_ask": true,
+  "detection_level": "full",
+  "min_messages_per_topic": 3,
+  "proposal_cooldown": 10
+}
+```
+
+**Route-specific error:** `400 INVALID_TREE_ID` when `{tree_id}` is not a
+valid UUID.
+
+#### Update topic-detection configuration
+
+```
+PUT /api/v1/trees/{tree_id}/topic-detection
+```
+
+**Request body:** A partial JSON object. Omitted fields retain their current
+values.
+
+```json
+{
+  "auto_create": true,
+  "always_ask": false,
+  "detection_level": "explicit_only",
+  "min_messages_per_topic": 3,
+  "proposal_cooldown": 10
+}
+```
+
+`detection_level` must be `off`, `explicit_only`, or `full`.
+`min_messages_per_topic` must be at least `1`, and `proposal_cooldown` must
+not be negative.
+
+**Response (200):** The updated complete configuration, using the same JSON
+shape as `GET /api/v1/trees/{tree_id}/topic-detection`.
+
+**Route-specific errors:** `400 INVALID_JSON` for malformed JSON, `400
+TOPIC_DETECTION_INVALID_LEVEL` for an unsupported `detection_level`, and
+`400 TOPIC_DETECTION_INVALID_CONFIG` when `min_messages_per_topic` is below
+`1` or `proposal_cooldown` is negative. If detection is disabled by the
+service, the update returns `409 TOPIC_DETECTION_DISABLED`.
+
+#### Confirm a topic proposal
+
+```
+POST /api/v1/topic-proposals/{proposal_id}/confirm
+```
+
+**Request body:** Optional. An empty body accepts the generated title. To
+provide a replacement title, send:
+
+```json
+{
+  "titleOverride": "Custom topic title"
+}
+```
+
+**Response (201):** The created topic is returned as a bare object (there is
+no `topic` wrapper).
+
+```json
+{
+  "id": "uuid",
+  "title": "Custom topic title",
+  "slug": "custom-topic-title"
+}
+```
+
+**Route-specific errors:** `400 INVALID_PROPOSAL_ID` when `{proposal_id}` is
+not a valid UUID, `400 INVALID_JSON` for malformed JSON, `404
+TOPIC_PROPOSAL_NOT_FOUND` when the proposal does not exist, `409
+TOPIC_PROPOSAL_EXPIRED` for an expired proposal, `409
+TOPIC_PROPOSAL_ALREADY_RESOLVED` when the proposal is already resolved, and
+`400 TOPIC_PROPOSAL_TITLE_TOO_LONG` when `titleOverride` exceeds 200
+characters.
+
+#### Dismiss a topic proposal
+
+```
+POST /api/v1/topic-proposals/{proposal_id}/dismiss
+```
+
+This endpoint has no request body.
+
+**Response (204):** Empty body.
+
+**Route-specific errors:** `400 INVALID_PROPOSAL_ID` when `{proposal_id}` is
+not a valid UUID, `404 TOPIC_PROPOSAL_NOT_FOUND` when the proposal does not
+exist, and `409 TOPIC_PROPOSAL_ALREADY_RESOLVED` when the proposal is no
+longer pending.
+
 ## References
 
 The reference routes are also tree-scoped, authenticated, and membership-gated.
