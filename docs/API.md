@@ -2842,6 +2842,105 @@ error; the next window starts with a fresh allowance.
 
 ---
 
+## Relay Registry
+
+The relay registry API is available in **SaaS mode only**. The server mounts the
+handler at `/api/v1/relays` only when `relayRegistry.DiscoveryAPIEnabled()` is
+true; the route is not mounted in air-gapped or self-hosted modes. All routes
+below require a JWT Bearer token. Error responses use the standard envelope:
+
+```json
+{"error":{"code":"…","message":"…"}}
+```
+
+Discovery is available to an authenticated tenant-scoped caller. Instance
+registration and deletion are admin-only.
+
+### Discover available relays
+
+```
+GET /api/v1/relays/
+```
+
+The JWT must contain a non-zero `tenant_id` claim. The route is not wrapped in
+the admin check.
+
+**Response (200):**
+
+```json
+{
+  "tenant_id": "00000000-0000-0000-0000-000000000001",
+  "relays": [
+    {
+      "instance_id": "00000000-0000-0000-0000-000000000002",
+      "listen_addr": "relay.example.com:443",
+      "load": 0.25,
+      "region": "us-east"
+    }
+  ]
+}
+```
+
+**Errors:** `TOKEN_MISSING` or `TOKEN_INVALID` (401),
+`TENANT_SCOPE_REQUIRED` (403), `INTERNAL_ERROR` (500), and
+`no_available_relays` (503) when the tenant has no available relay nodes.
+
+### Register a relay instance
+
+```
+POST /api/v1/relays/instances
+```
+
+Admin-only. The request must be JSON and must include all of the following
+fields: `tenant_id`, a 32-byte `public_key`, `listen_addr`, `tier`, and
+`provisioning_token`.
+
+**Request body:**
+
+```json
+{
+  "tenant_id": "00000000-0000-0000-0000-000000000001",
+  "public_key": "<base64-encoded 32-byte public key>",
+  "listen_addr": "relay.example.com:443",
+  "tier": "pro",
+  "provisioning_token": "<one-time provisioning JWT>"
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "instance_id": "00000000-0000-0000-0000-000000000002",
+  "relay_secret": "<generated relay secret>",
+  "created_at": "2026-09-26T12:00:00Z"
+}
+```
+
+**Errors:** `TOKEN_MISSING` or `TOKEN_INVALID` (401),
+`PERMISSION_DENIED` (403) when the caller is not an admin,
+`INVALID_REQUEST` (400) for invalid JSON or a missing/invalid required field,
+`PROVISIONING_TOKEN_INVALID` (401), `PROVISIONING_TOKEN_FORBIDDEN` (403), and
+`INTERNAL_ERROR` (500).
+
+### Delete a relay instance
+
+```
+DELETE /api/v1/relays/instances/{instance_id}
+```
+
+Admin-only.
+
+**Response (204):** No content.
+
+**Errors:** `TOKEN_MISSING` or `TOKEN_INVALID` (401),
+`PERMISSION_DENIED` (403) when the caller is not an admin,
+`INVALID_INSTANCE_ID` (400) for a malformed UUID,
+`RELAY_INSTANCE_NOT_FOUND` (404) when the instance does not exist, and
+`INTERNAL_ERROR` (500).
+
+---
+
 ## MLS (Messaging Layer Security)
 
 Mounted at `/api/v1/workspaces/{workspace_id}/mls`. All require auth.
