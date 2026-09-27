@@ -943,3 +943,5 @@
 {"actor":"foreman","event_type":"task_created","task_id":"DOC-7","id":919,"tick_number":null,"detail":"{\"id\":\"DOC-7\",\"status\":\"pending\"}","timestamp":"2026-09-26T20:50:28+00:00"}
 {"actor":"foreman","event_type":"task_completed","task_id":"README-1","id":920,"tick_number":null,"detail":"{\"status\":\"complete\"}","timestamp":"2026-09-26T22:19:53+00:00"}
 {"actor":"foreman","event_type":"task_completed","task_id":"README-1","id":921,"tick_number":null,"detail":"{\"commit\":\"fdd51ad5\",\"guard\":\"PASS\",\"judge\":\"29aa1023\",\"ci\":\"GREEN\",\"files\":[\"README.md\",\".env.example\"]}","timestamp":"2026-09-26T22:19:53+00:00"}
+{"actor":"foreman","event_type":"task_completed","task_id":"DOC-1","id":922,"tick_number":null,"detail":"{\"status\":\"complete\"}","timestamp":"2026-09-27T02:10:31+00:00"}
+{"actor":"foreman","event_type":"task_completed","task_id":"DOC-1","id":923,"tick_number":600,"detail":"{\"commit\":\"3cfcfd0f\",\"guard\":\"PASS\",\"judge\":\"ddfec997\",\"ci\":\"GREEN\",\"resolution\":\"stale pending row closed; content was already landed at HEAD and independently verified\"}","timestamp":"2026-09-27T02:10:31+00:00"}
