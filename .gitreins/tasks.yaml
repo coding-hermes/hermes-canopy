@@ -3813,3 +3813,11 @@ tasks:
   status: complete
   created_at: '2026-09-26T21:58:33.536531+00:00'
   completed_at: '2026-09-26T22:17:13.638199+00:00'
+- id: DOC-3
+  title: Document context inject API contract
+  criteria:
+  - docs/API.md documents POST /api/v1/trees/{tree_id}/context/inject with request
+    fields, actual response/error codes, and membership gating, matching handler behavior.
+  status: complete
+  created_at: '2026-09-27T06:14:03.005963+00:00'
+  completed_at: '2026-09-27T07:53:49.543550+00:00'

@@ -2130,6 +2130,103 @@ invent a digest for a record that carries none.
 **Error codes:** `NODE_NOT_FOUND` (404), `INVALID_BUDGET` (400),
 `SERVICE_UNAVAILABLE` (503), `CONTEXT_COMPILE_ERROR` (500)
 
+### Inject Context from Topics
+
+```text
+POST /api/v1/trees/{tree_id}/context/inject
+```
+
+This route requires a JWT Bearer token and membership in `{tree_id}`. The
+request body is decoded strictly; unknown fields, malformed JSON, and values
+that cannot be decoded into the declared types return `400 INVALID_JSON`.
+
+**Request body:**
+
+```json
+{
+  "topic_ids": ["uuid"],
+  "max_nodes": 500
+}
+```
+
+- `topic_ids` — required UUID array with at least one and at most five topic
+  IDs. An empty array and more than five IDs both return
+  `400 CONTEXT_TOO_MANY_TOPICS`; the more-than-five response also identifies
+  `topic_ids` in its `param` field.
+- `max_nodes` — optional integer limit applied **per topic**. Omitted, zero, or
+  negative values use the default of `500`. Values above `10000` are capped at
+  `10000`; they are not rejected. The compiled injection still has a global
+  hard cap of `5000` nodes across all requested topics.
+
+**Response (200):**
+
+```json
+{
+  "context": {
+    "topics": [
+      {
+        "topic_id": "uuid",
+        "title": "Database schema",
+        "slug": "database-schema",
+        "root_node_id": "uuid",
+        "nodes": [
+          {
+            "id": "uuid",
+            "tree_id": "uuid",
+            "author_id": "uuid",
+            "content": "Node content",
+            "created_at": "RFC3339",
+            "sequence_num": 1
+          }
+        ],
+        "total_nodes": 1,
+        "has_more": false,
+        "context_hash": "64-hex SHA-256"
+      }
+    ],
+    "merged_text": "--- topic boundary: database-schema ...",
+    "total_nodes": 1,
+    "truncated": false
+  },
+  "event_id": "sse-event-id"
+}
+```
+
+`context.topics` contains one entry per requested topic. Each entry reports the
+nodes included in the response, the topic's total node count, whether its
+per-topic limit omitted nodes, and a deterministic SHA-256 hash of the included
+node IDs. `merged_text` is the plain-text, topic-delimited context sent by the
+compiler. The global `5000`-node cap causes `413 CONTEXT_TOO_LARGE` when the
+requested topic totals exceed it; `truncated` describes compiler truncation
+within the merged text.
+
+On a successful request, the handler broadcasts one SSE event to subscribers
+of the tree for each topic. Event names are `context_injected:0`,
+`context_injected:1`, and so on, using the zero-based topic result index. Each
+event carries `topic_id`, `node_count`, `context_hash`, and
+`total_nodes_in_scope`. `event_id` is the ID returned for the last broadcast
+event. It is an empty string when no SSE hub is configured; the HTTP response
+still succeeds.
+
+**Errors:**
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `INVALID_TREE_ID` | `{tree_id}` is not a valid UUID. |
+| 400 | `INVALID_JSON` | The body is malformed, contains an unknown field, or has an invalid field type/value. |
+| 400 | `CONTEXT_TOO_MANY_TOPICS` | `topic_ids` is empty or contains more than five IDs. |
+| 404 | `TOPIC_NOT_FOUND` | A requested topic does not exist. |
+| 409 | `TOPIC_ARCHIVED_INJECTION` | A requested topic is archived. |
+| 410 | `TOPIC_DELETED` | A requested topic is deleted. |
+| 413 | `CONTEXT_TOO_LARGE` | Requested topic totals exceed the global 5000-node cap. |
+| 500 | `CONTEXT_INJECTION_FAILED` | An unexpected context-injection/service error occurs after middleware. |
+
+The authenticated router runs membership middleware before the handler:
+missing authentication returns `401 TOKEN_MISSING`, an invalid or expired JWT
+returns `401 TOKEN_INVALID`, and a non-member returns `403 NOT_TREE_MEMBER`.
+Members of a soft-deleted tree receive `410 TREE_DELETED`. A membership or tree
+state check failure returns `500 INTERNAL_ERROR`.
+
 ---
 
 ## Plugins
