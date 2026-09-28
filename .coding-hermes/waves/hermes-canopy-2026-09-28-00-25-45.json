@@ -1,0 +1,23 @@
+{
+  "tick_id": "hermes-canopy-2026-09-28-00-25-45",
+  "project": "hermes-canopy",
+  "base_sha": "250353ef",
+  "budget": 5,
+  "workers": [
+    {"task_id":"CARTER-CANOPY-001","worktree":"~/worktrees/hermes-canopy-CARTER-CANOPY-001","branch":"wt/CARTER-CANOPY-001","status":"ready-to-merge","commit":"e4257f4daf57cda963927ae80a8a1b12d88009e0"},
+    {"task_id":"CARTER-CANOPY-002","worktree":"~/worktrees/hermes-canopy-CARTER-CANOPY-002","branch":"wt/CARTER-CANOPY-002","status":"ready-to-merge","commit":"00be9a6bace76edd02231b047c22fedd4458e723"},
+    {"task_id":"CARTER-CANOPY-003","worktree":"~/worktrees/hermes-canopy-CARTER-CANOPY-003","branch":"wt/CARTER-CANOPY-003","status":"ready-to-merge","commit":"95015b55f999de8a4f8be732c11a32136b50518f"}
+  ],
+  "deferred": [
+    {"task_id":"RELENG-CANOPY-2026-09-27","reason":"release authorization and clean-tree gates; evidence-only row, not implementation work"},
+    {"task_id":"FTR-06","reason":"depends_on PL-04, which is still in_progress"},
+    {"task_id":"DOC-5","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"DOC-6","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"DOC-7","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"README-2","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"README-3","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"README-4","reason":"lower priority and documentation-only; excluded by wave budget selection"},
+    {"task_id":"DF-HERMES-CANOPY-25","reason":"P5 watch row; not selected over actionable Carter findings"}
+  ],
+  "status":"workers-complete-ready-for-serial-merge"
+}

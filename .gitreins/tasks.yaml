@@ -3821,3 +3821,27 @@ tasks:
   status: complete
   created_at: '2026-09-27T06:14:03.005963+00:00'
   completed_at: '2026-09-27T07:53:49.543550+00:00'
+- id: CARTER-CANOPY-001
+  title: Stamp the documented build target
+  criteria:
+  - make build produces a canopyd binary whose -version output includes non-sentinel
+    version, commit, and build time; make build-embed remains equivalent
+  status: complete
+  created_at: '2026-09-28T00:34:05.777629+00:00'
+  completed_at: '2026-09-28T00:45:21.947575+00:00'
+- id: CARTER-CANOPY-002
+  title: Clarify SQLite runtime documentation
+  criteria:
+  - README and .env.example clearly state SQLite is parity-check-only and full boot
+    is refused until PostgreSQL-only surfaces migrate
+  status: complete
+  created_at: '2026-09-28T00:34:06.857858+00:00'
+  completed_at: '2026-09-28T00:45:31.375242+00:00'
+- id: CARTER-CANOPY-003
+  title: Tighten deploy staleness detection
+  criteria:
+  - staleness check no longer allows a 20-hour-old binary to be treated current solely
+    because the default threshold is 24 hours; tests/docs cover the chosen contract
+  status: complete
+  created_at: '2026-09-28T00:34:10.037131+00:00'
+  completed_at: '2026-09-28T00:45:40.678237+00:00'
