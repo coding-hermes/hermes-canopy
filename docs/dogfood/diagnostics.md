@@ -173,7 +173,7 @@ one never-mounted route**:
   so `/health/relay` 404'd while the board said FTR-05 SPEC COMPLETE. The
   systemic fix is a check, not a memory: a cron/board gate comparing
   `stat -c %Y /home/kara/bin/canopyd` vs `git log -1 --format=%ct -- internal/ cmd/`
-  and flagging staleness >24h. → GAP-067.
+  and flagging staleness >12h (the checker's 43200-second default). → GAP-067.
 
 ### The right way, updated
 

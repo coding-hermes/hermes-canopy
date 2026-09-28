@@ -826,7 +826,7 @@ compares the installed binary's mtime against the newest commit touching
 
 Overrides: `CANOPYD_STALE_REPO_ROOT`, `CANOPYD_STALE_PATH`
 (default `/home/kara/bin/canopyd`), `CANOPYD_STALE_THRESHOLD_S`
-(default `86400`), `CANOPYD_DEPLOY_CMD` (default `make deploy`),
+(default `43200` / 12 hours), `CANOPYD_DEPLOY_CMD` (default `make deploy`),
 `CANOPYD_DEPLOY_DIR`. `--deploy` only invokes the existing atomic
 `make deploy` path when stale, then re-checks and fails if still stale —
 manual `make deploy` behavior is unchanged.
