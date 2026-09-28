@@ -27,6 +27,9 @@
 #      threshold override fires on the first refusal, stale-after-failed-deploy
 #      (deploy command failed / still stale after deploy) alerts with its own
 #      reason, and every exit code is unchanged throughout.
+# 27+. CARTER-CANOPY-003: the 12-hour default rejects a 20-hour-old binary,
+#      while a 6-hour-old control remains CURRENT; explicit threshold
+#      overrides used by the existing cases remain unchanged.
 #
 # Exit 0 only when every scenario passes.
 
@@ -75,6 +78,43 @@ mkrepo() {
 	: >"$repo/.coding-hermes/board/events.jsonl"
 	git -C "$repo" add -A
 	git -C "$repo" commit -q -m init
+}
+
+# make_artifact_age <repo> <path> <age_seconds>: set the artifact mtime to an
+# exact age relative to the newest watched source commit. This keeps boundary
+# tests deterministic without sleeping or depending on wall-clock scheduling.
+make_artifact_age() {
+	local repo="$1" path="$2" age_seconds="$3" source_ts
+	source_ts="$(git -C "$repo" log -1 --format=%ct -- internal cmd migrations go.mod go.sum)"
+	touch -d "@$((source_ts - age_seconds))" "$path"
+}
+
+# run_default_case <name> <want_rc> <repo> <artifact> <evidence...>
+# Run with the threshold environment explicitly removed, plus read-only stubs
+# for the optional service/schema probes, so this boundary battery is hermetic.
+run_default_case() {
+	local name="$1" want_rc="$2" repo="$3" artifact="$4"
+	shift 4
+	local out rc evidence="$*" tok
+	out="$(env -u CANOPYD_STALE_THRESHOLD_S \
+		CANOPYD_STALE_REPO_ROOT="$repo" \
+		CANOPYD_STALE_PATH="$artifact" \
+		CANOPYD_SYSTEMCTL=/bin/true \
+		CANOPYD_SCHEMA_PSQL="$WORK/absent-psql" \
+		CANOPYD_SCHEMA_PROBE_BIN="$WORK/absent-probe" \
+		bash "$CHECKER" 2>&1)"
+	rc=$?
+	if [[ "$rc" != "$want_rc" ]]; then
+		bad "$name (want rc=$want_rc got rc=$rc)" "$out"
+		return
+	fi
+	for tok in $evidence; do
+		if ! grep -q -- "$tok" <<<"$out"; then
+			bad "$name (rc ok, evidence '$tok' missing)" "$out"
+			return
+		fi
+	done
+	ok "$name (rc=$rc)"
 }
 
 # touch_new_commit <repo>: append a watched-path change as a NEW commit so
@@ -154,19 +194,47 @@ CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/cur-canopyd" \
 # on the `lag:` line and SIGPIPE-kill the checker mid-write, flipping rc via
 # pipefail (intermittent red). Captured output cannot race.
 # Assert BOTH the printed threshold (output channel) and the default:
-# unsetting the env var must print exactly the built-in 86400s, proving the
-# DEFAULT (not an inherited env value) is 86400.
-grep -q "threshold 86400s" "$WORK/thresh.out" \
-	&& ok "default threshold is 86400s" \
-	|| bad "default threshold is not 86400s" "missing threshold line"
+# unsetting the env var must print exactly the built-in 43200s, proving the
+# DEFAULT (not an inherited env value) is 12 hours. The explicit 86400s value
+# above remains an override control for the existing scenarios.
+grep -q "threshold 43200s" "$WORK/thresh.out" \
+	&& ok "default threshold is 43200s (12h)" \
+	|| bad "default threshold is not 43200s" "missing threshold line"
 thresh_out="$(env -u CANOPYD_STALE_THRESHOLD_S \
 	CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/cur-canopyd" \
 	bash "$CHECKER" 2>&1)"
-grep -q "threshold 86400s" <<<"$thresh_out" \
-	&& ok "built-in default threshold is 86400s (env unset)" \
-	|| bad "built-in default threshold is not 86400s" "$thresh_out"
+grep -q "threshold 43200s" <<<"$thresh_out" \
+	&& ok "built-in default threshold is 43200s (env unset)" \
+	|| bad "built-in default threshold is not 43200s" "$thresh_out"
 
-# ── 2. Stale artifact → non-zero + STALE evidence ───────────────────────────
+# ── 2. Default boundary: 6h current, 20h stale ─────────────────────────────
+# The mtime is derived from the synthetic repo's source commit timestamp, not
+# from the wall clock, so this is an exact boundary regression. The 20h arm is
+# the failure mode that the old 24h default incorrectly classified CURRENT.
+REPO="$WORK/default-boundary"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/default-boundary-canopyd"
+make_artifact_age "$REPO" "$ART/default-boundary-canopyd" $((6 * 3600))
+run_default_case "default threshold keeps a 6-hour-old binary CURRENT" 0 \
+	"$REPO" "$ART/default-boundary-canopyd" \
+	"lag: 21600s" "threshold 43200s" "CURRENT"
+make_artifact_age "$REPO" "$ART/default-boundary-canopyd" $((20 * 3600))
+run_default_case "default threshold marks a 20-hour-old binary STALE" 1 \
+	"$REPO" "$ART/default-boundary-canopyd" \
+	"lag: 72000s" "threshold 43200s" "STALE"
+# An explicit 24-hour override remains honored: the default is tightened, not
+# the override contract removed.
+run_case "explicit 24-hour override keeps the 20-hour control CURRENT" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/default-boundary-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_SYSTEMCTL=/bin/true \
+	CANOPYD_SCHEMA_PSQL="$WORK/absent-psql" \
+	CANOPYD_SCHEMA_PROBE_BIN="$WORK/absent-probe" \
+	EVIDENCE="lag: 72000s threshold 86400s CURRENT" --
+
+# ── 3. Stale artifact → non-zero + STALE evidence ───────────────────────────
 REPO="$WORK/stale"
 mkrepo "$REPO"
 touch_new_commit "$REPO"

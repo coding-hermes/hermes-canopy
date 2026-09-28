@@ -34,7 +34,9 @@
 #                             (default: this script's repo root)
 #   CANOPYD_STALE_PATH        installed artifact to check
 #                             (default: /home/kara/bin/canopyd)
-#   CANOPYD_STALE_THRESHOLD_S staleness threshold in seconds (default: 86400)
+#   CANOPYD_STALE_THRESHOLD_S staleness threshold in seconds (default: 43200,
+#                             12h — the hourly check tolerates missed timer
+#                             runs without hiding a day-old deployment)
 #   CANOPYD_DEPLOY_CMD        --deploy command (default: make deploy)
 #   CANOPYD_DEPLOY_DIR        working directory for the deploy command
 #                             (default: repo root)
@@ -108,7 +110,7 @@ EXIT_STALE_BLOCKED=2
 EXIT_ERROR=3
 
 WATCH_PATHS=("internal" "cmd" "migrations" "go.mod" "go.sum")
-DEFAULT_THRESHOLD=86400
+DEFAULT_THRESHOLD=43200
 DEFAULT_DEPLOYED_PATH="/home/kara/bin/canopyd"
 DEFAULT_DEPLOY_CMD="make deploy"
 DEFAULT_SCHEMA_DB_URL="postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable"
