@@ -359,8 +359,11 @@ and has **zero importers repo-wide** — it is archived, not a shipped card back
 **2026-09-16 storage ruling.** SQLite boot path is shipped behind
 `CANOPY_DB_DRIVER=sqlite`; it applies core migrations and checks the schema, then
 refuses full server startup because non-core PostgreSQL repositories are not
-substituted. **Full SQLite-only serving is not yet supported.** See
-[docs/SQLITE-RUNTIME.md](docs/SQLITE-RUNTIME.md) for the runtime details. PostgreSQL
+substituted. This is a **SQLite schema-parity self-check, not a serving backend**:
+`canopyd` reports the parity result and then refuses full boot while PostgreSQL-only
+repository surfaces remain, so it does not start an HTTP server. **Full SQLite-only
+serving is not yet supported.** See the authoritative
+[SQLite runtime contract](docs/SQLITE-RUNTIME.md) for the runtime details. PostgreSQL
 remains the default and authoritative graph store.
 
 ## API Reference
@@ -725,8 +728,8 @@ METRICS_ENABLED=true \
 | `CORS_ORIGIN` | `*` | CORS allowed origins |
 | `JWT_SECRET` | `dev-secret-change-me` | HS256 signing secret (set a real value in production) |
 | `CANOPY_DB_URL` | *(unset)* | Override DSN; takes priority over all `DB_*` fields |
-| `CANOPY_DB_DRIVER` | `postgres` (when unset or empty) | Runtime database backend; accepts `postgres` or `sqlite`. Set `CANOPY_DB_DRIVER=sqlite` to use the SQLite boot path |
-| `CANOPY_SQLITE_PATH` | `~/.canopy/canopy.sqlite` | SQLite database path when `CANOPY_DB_DRIVER=sqlite`; unset or empty uses this default |
+| `CANOPY_DB_DRIVER` | `postgres` (when unset or empty) | Runtime database selector; `postgres` uses PostgreSQL for full serving, while `sqlite` runs only the SQLite schema-parity self-check and then refuses full `canopyd` boot while PostgreSQL-only repository surfaces remain. See the authoritative [SQLite runtime contract](docs/SQLITE-RUNTIME.md) |
+| `CANOPY_SQLITE_PATH` | `~/.canopy/canopy.sqlite` | SQLite database path used by the schema-parity self-check when `CANOPY_DB_DRIVER=sqlite`; unset or empty uses this default |
 | `API_SERVER_KEY` | *(unset)* | Optional API key used as the fallback for `HERMES_WEBUI_GATEWAY_API_KEY`; unset or empty means no fallback key |
 | `HERMES_WEBUI_GATEWAY_API_KEY` | *(unset; falls back to `API_SERVER_KEY`)* | API key for the Hermes WebUI gateway; unset or empty uses `API_SERVER_KEY`, if set |
 | `HERMES_WEBUI_GATEWAY_BASE_URL` | `http://127.0.0.1:8642` | Hermes WebUI gateway base URL; unset or empty uses this default |
