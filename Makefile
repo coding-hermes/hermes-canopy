@@ -33,7 +33,7 @@ DB_PORT   ?= 5437
 all: build test vet lint
 
 build:
-	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
+	$(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
 
 # Deploy to the live systemd user service (GAP-052): build from HEAD, install
 # atomically to the unit's exec path, restart, health-poll, gateway smoke.
