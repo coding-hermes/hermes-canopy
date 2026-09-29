@@ -1460,7 +1460,29 @@ repo-wide — it is archived, not the card backend.
 **REST CardSummary compatibility:** list and detail responses use the wire key
 `type` for the card type. Do not rename it to `card_type`: `card_type` remains the
 key used by the SSE envelope, the domain `card.Card`, and card-export JSONL. These
-are intentionally different shapes.
+These are intentionally different shapes.
+
+#### Create — request body
+
+```
+POST /api/v1/cards
+Content-Type: application/json
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `treeId` | UUID | yes | tree the card attaches to |
+| `nodeId` | UUID | yes | node the card attaches to |
+| `appId` | string | yes | identifier of the owning app/plugin |
+| `cardType` | string | yes | one of `compact`, `expanded`, `iteration` |
+| `data` | object | no | free-form card payload; defaults to `null` |
+
+Field keys are **camelCase** and unknown fields are rejected with
+`400 INVALID_JSON` naming the field (the shared strict decoder), so sending
+`tree_id` fails even though the read routes use `tree_id` as a query
+parameter. Error codes on bad input: `INVALID_JSON` (decode failure),
+`MISSING_TREE_ID`, `MISSING_NODE_ID`, `MISSING_APP_ID`, `MISSING_CARD_TYPE`.
+A successful create returns `201` with the bare card object.
 
 ### Iteration Cards (SPEC-PL-04 phase 2)
 
