@@ -3845,3 +3845,14 @@ Verdict: PROMISING-BUT-ROUGH. Artifacts: docs/dogfood/2026-09-26-integration.md,
 - Push: e28e6e58 to origin+gitlab parity 0. Board: row foreman_note phase-4 record + events 908/909 + header ticks_total 597→598 last_commit e28e6e58.
 - Judge: `gitreins task complete PL-04-P4` backgrounded at ~13:00-05 (near-miss watch on the 9M rung after tick 597's 9.09M near-miss). [Outcome recorded in the row after completion.]
 - Pending set after tick: DF-25 (P5 watch), FTR-06 (P3, needs phase split), DF-70 (P2, blocked on offline host). PL-04 umbrella stays in_progress: §8.2 expanded renderer contract remains (phase 5).
+
+
+## Tick 599 (scheduler tick hermes-canopy-2026-09-29-23-17-28) — DF-72 COMPLETE — dead-worker recovery, foreman-direct, commit be79433c (2026-09-29 ~23:20-05)
+
+- Recovery tick, not a fresh dispatch: worktree carried a DEAD worker's residue — gitreins task DF-HERMES-CANOPY-72 in_progress (created 2026-09-29T10:39Z), docs/API.md request-body block written but uncommitted, board row DF-72 still pending, HEAD unmoved since 37ad7221. No live worker pid. Per the dead-worker doctrine: landed the surviving work foreman-direct, did NOT re-dispatch.
+- Premise verification (field-by-field vs HEAD code): cardCreateRequest json tags treeId/nodeId/appId/cardType/data (card_handler.go:83-89); MISSING_TREE_ID/NODE_ID/APP_ID/CARD_TYPE 400s (:197-209); decodeJSON DisallowUnknownFields -> INVALID_JSON naming the field (handler_util.go:38-42); supportedCardTypes/ValidCardTypes = compact|expanded|iteration; 201 bare card. The worker's block was ACCURATE — landed as written. (Residual: validator-side INVALID_CARD_TYPE 400 exists only on list/update paths, not create; block correctly does not claim it.)
+- GitReins: task complete DF-HERMES-CANOPY-72 (was already created+started by the dead tick) — tier1 PASS (test mode full, docs-diff short-circuit expected), tier2 PASS/COMPLETE, verdict fb4f2e2c; judge independently verified the same field map.
+- Commit be79433c (docs/API.md +23/-1, co-author trailer) pushed origin/master, rev-list 0.
+- Board: DF-72 row closed (compact style preserved, surgical 1-line edit; ci pending_on_push), event 939, header ticks_total 591 / last_commit be79433c; board commit 96ca17e8 pushed (rev-list 0).
+- CI: runs on be79433c (in_progress) and 96ca17e8 (queued) pending at tick end; last 3 completed runs GREEN; no pre-existing red to flag.
+- Pending set after tick: DF-71 (P2, session-browse state-backups docs), DF-73 (P2, Go install docs), DF-25 (P5 watch), FTR-06 (P3, needs phase split), README-2/3/4 (P3), PL-05 (P3), DF-70 (P2, blocked on offline bunker host).
