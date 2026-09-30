@@ -3856,3 +3856,14 @@ Verdict: PROMISING-BUT-ROUGH. Artifacts: docs/dogfood/2026-09-26-integration.md,
 - Board: DF-72 row closed (compact style preserved, surgical 1-line edit; ci pending_on_push), event 939, header ticks_total 591 / last_commit be79433c; board commit 96ca17e8 pushed (rev-list 0).
 - CI: runs on be79433c (in_progress) and 96ca17e8 (queued) pending at tick end; last 3 completed runs GREEN; no pre-existing red to flag.
 - Pending set after tick: DF-71 (P2, session-browse state-backups docs), DF-73 (P2, Go install docs), DF-25 (P5 watch), FTR-06 (P3, needs phase split), README-2/3/4 (P3), PL-05 (P3), DF-70 (P2, blocked on offline bunker host).
+
+## Tick hermes-canopy-2026-09-30-16-56-58 (2026-09-30)
+
+- Verdict: WORK. Picked DF-71 (P2, fresh 09-29 dogfood finding) — session browse fails on a fresh machine with an unhelpful "snapshot directory unavailable" error that never explains what populates ~/.hermes/state-backups. Premise re-verified at HEAD: dir absent on this host, ErrSnapshotDir text generic, README session section had zero population guidance. DF-70 skipped with rationale (bunker-las-03 host offline — fleet-infra owned, not a repo fix); DOC-5/6/7 + README-2/3/4 + FTR-06 are P3 feature/docs rows left for later ticks.
+- Dispatch: gpt-5.6-luna @ openai-codex, 1 attempt, brief /tmp/brief-DF-71.md via tool-tracked background process. Worker lived, committed, reported (SWEEP_EXIT=0). No rework needed.
+- Fix (commit 820c4455, pushed origin+gitlab, rev-list 0): shared const session.SnapshotDirGuidance appended to the ErrSnapshotDir wrap in ResolveSnapshot + a printSessionUsage line — names the scheduled Hermes state-backup job (backup-state.sh / backup-tiered.sh), the state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz] filename shape, a manual cp recipe, and the --db one-off alternative. README paragraph before the session examples. Tests: TestSessionBrowseMissingSnapshotFailsLoud + TestSessionUsageDocumentsSnapshotSource extended with the guidance substring set.
+- Foreman verification (independent): go build, go vet, CANOPY_TEST_ALLOW_SHARED_DB=1 go test ./cmd/... ./internal/session/... all green; live probe re-printed the NEW guidance with the dir still absent; falsification control — empty --snapshot-dir still yields ErrNoSnapshot (normal path unchanged); session --help carries the guidance.
+- GitReins: task create+start before dispatch; task complete fired in background after push (verdict pending at entry time — to be attached).
+- Board: DF-71 row closed (compact style preserved, surgical 1-line edit; ci_result pending_on_push -> flip to GREEN on the run for 820c4455), event 942, header ticks_total 592 / last_commit 820c4455.
+- CI: run on 820c4455 in_progress at tick end; last 4 completed runs GREEN; no pre-existing red to flag.
+- Pending set after tick: DF-70 (P2, blocked on offline bunker host), DF-25 (P5 watch), FTR-06 (P3, needs phase split), README-2/3/4, DOC-5/6/7, PL-05.
