@@ -60,6 +60,11 @@ import (
 )
 
 const (
+	// SnapshotDirGuidance is shared by snapshot-resolution errors and the
+	// session command help so every snapshot-backed subcommand explains how
+	// the source is populated and how to use a one-off database instead.
+	SnapshotDirGuidance = "It is populated by a scheduled Hermes state-backup job (typically ~/.hermes/scripts/backup-state.sh or backup-tiered.sh), which writes state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz] snapshots every 6 hours. Run or enable that job, or create the directory and manually place a state.db copy there (for example, cp state.db ~/.hermes/state-backups/state_$(date +%Y%m%d)-$(date +%H%M%S).db). For a one-off read-only read, pass --db <file>."
+
 	// DefaultSnapshotMaxAge is how old the newest snapshot may be before the
 	// snapshot source refuses to use it. Snapshots are produced every 6
 	// hours, so 24h tolerates three consecutive failed backup cycles while
@@ -241,7 +246,7 @@ func ResolveSnapshot(opts SnapshotOptions) (SnapshotSpec, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return SnapshotSpec{}, fmt.Errorf("%w: %s does not exist (use --db to read a specific file read-only)", ErrSnapshotDir, dir)
+			return SnapshotSpec{}, fmt.Errorf("%w: %s does not exist. %s", ErrSnapshotDir, dir, SnapshotDirGuidance)
 		}
 		return SnapshotSpec{}, fmt.Errorf("%w: %s: %w", ErrSnapshotDir, dir, err)
 	}

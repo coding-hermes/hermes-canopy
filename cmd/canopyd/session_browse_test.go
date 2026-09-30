@@ -201,6 +201,11 @@ func TestSessionBrowseMissingSnapshotFailsLoud(t *testing.T) {
 	if !strings.Contains(stderr, "snapshot directory") || !strings.Contains(stderr, "--db") {
 		t.Errorf("stderr = %q, want it to name the snapshot directory and the --db override", stderr)
 	}
+	for _, want := range []string{"populate", "state-backups", "state-backup job", "state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]", "one-off read-only read"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr = %q, want missing-snapshot guidance to contain %q", stderr, want)
+		}
+	}
 	if strings.Contains(stdout, "sess_a") || strings.Contains(stdout, "Sessions:") {
 		t.Errorf("stdout = %q, want nothing read from the live database %s", stdout, livePath)
 	}
@@ -281,7 +286,7 @@ func TestSessionUsageDocumentsSnapshotSource(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("session --help exit = %d, want 0", code)
 	}
-	for _, want := range []string{"browse", "state-backups", "ATTACH", "--db", "--snapshot-dir", "--max-snapshot-age"} {
+	for _, want := range []string{"browse", "state-backups", "ATTACH", "--db", "--snapshot-dir", "--max-snapshot-age", "populate", "state-backup job", "backup-state.sh"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("usage = %q, want it to mention %q", stderr, want)
 		}

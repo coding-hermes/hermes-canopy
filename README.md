@@ -1103,6 +1103,8 @@ live `~/.hermes/state.db`:
   compressed size free under `$TMPDIR` (~17 GB for a ~5.4 GB `.zst`). Point
   `TMPDIR` at a roomy filesystem if `/tmp` is small.
 
+Canopy does not create `~/.hermes/state-backups`; the directory is populated by Hermes' scheduled state-backup job, typically `~/.hermes/scripts/backup-state.sh` or `backup-tiered.sh`, which writes `state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]` snapshots every six hours. Run or enable that job before using the default snapshot mode, or create the directory and place a copy there manually, for example `cp state.db ~/.hermes/state-backups/state_$(date +%Y%m%d)-$(date +%H%M%S).db`. Default snapshot mode requires the directory and at least one matching snapshot; use `--db <file>` for a one-off read-only read instead.
+
 ```bash
 ./bin/canopyd session browse                      # newest snapshot: session list
 ./bin/canopyd session browse --session <id>       # one session's messages

@@ -122,6 +122,7 @@ func printSessionUsage() {
 	fmt.Fprintf(os.Stderr, "Read source: the newest 6-hourly Hermes state snapshot in\n")
 	fmt.Fprintf(os.Stderr, "$HOME/.hermes/state-backups (state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]), read\n")
 	fmt.Fprintf(os.Stderr, "read-only via SQLite ATTACH — the live ~/.hermes/state.db is never opened.\n")
+	fmt.Fprintf(os.Stderr, "If that directory does not exist, %s\n", session.SnapshotDirGuidance)
 	fmt.Fprintf(os.Stderr, "Override with --db <path> (that file only), --snapshot-dir <dir>, or\n")
 	fmt.Fprintf(os.Stderr, "--max-snapshot-age <duration> (0 = no age bound).\n\n")
 	fmt.Fprintf(os.Stderr, "import and associations-backfill write to the PostgreSQL database configured\n")
