@@ -29,7 +29,7 @@ Every Card is a graph node with structured data.
 # Prerequisites
 PostgreSQL 16+
 Node.js 22+ (for frontend development)
-Go 1.25+ (for build-from-source)
+Go 1.25.11+ (for build-from-source) — no-sudo install: "Install Go 1.25+ (no sudo)"
 
 # Clone and build
 git clone https://github.com/coding-hermes/hermes-canopy.git
@@ -99,6 +99,37 @@ open http://localhost:5173  # dev mode (Vite dev server)
 # production build needs a same-origin reverse proxy, NOT "any static server":
 # see the Note under "Production (Manual)" below, or deploy/reference-proxy.py.
 ```
+
+### Install Go 1.25+ (no sudo)
+
+`go.mod` declares `go 1.25.11`, so the toolchain must be **1.25.11 or newer** —
+an older Go refuses to build the module. On Linux (amd64/x86_64 or arm64) it
+installs under your home directory with no root:
+
+```bash
+# 1. Map this machine's arch to the Go archive name
+ARCH=$(case "$(uname -m)" in
+  x86_64)        echo amd64 ;;
+  aarch64|arm64) echo arm64 ;;
+esac)
+
+# 2. Download and unpack into $HOME (every build: https://go.dev/dl/)
+mkdir -p ~/go-toolchain
+curl -fL "https://go.dev/dl/go1.25.11.linux-$ARCH.tar.gz" \
+  | tar -C ~/go-toolchain -xzf -
+
+# 3. Put it on PATH (append the export to ~/.bashrc or ~/.profile to persist)
+export PATH="$HOME/go-toolchain/go/bin:$PATH"
+go version   # go version go1.25.11 linux/amd64
+```
+
+The module cache (`~/go/pkg/mod`) and build cache are user-writable by default,
+so no further setup is needed.
+
+Distro packages (`apt install golang-go`) and
+`go install golang.org/dl/go1.25@latest` are not bootstrap options: distro repos
+usually ship an older Go than `go.mod` requires, and the `golang.org/dl` wrapper
+is itself a Go program, so it needs an existing toolchain first.
 
 ## First 10 minutes (GAP-093)
 
@@ -753,7 +784,7 @@ METRICS_ENABLED=true \
 
 ### Prerequisites
 
-- go 1.25+ (required for build-from-source)
+- go 1.25.11+ (required for build-from-source; see [Install Go 1.25+ (no sudo)](#install-go-125-no-sudo) above)
 - PostgreSQL 16+ (Docker recommended)
 - Node.js 22+ (for frontend development)
 - Make
