@@ -3856,3 +3856,35 @@ tasks:
   status: complete
   created_at: '2026-09-29T10:39:49.388433+00:00'
   completed_at: '2026-09-29T23:19:29.843819+00:00'
+- id: DF-71
+  title: "session browse fails with unhelpful error when ~/.hermes/state-backups is\
+    \ missing \u2014 error text + README must explain how to populate snapshots"
+  criteria:
+  - "Working tree: (1) the ErrSnapshotDir-facing error/help output for  (and sibling\
+    \ session subcommands) no longer just says 'snapshot directory unavailable ...\
+    \ does not exist (use --db)' \u2014 it names HOW the directory gets populated\
+    \ (a scheduled Hermes state-backup job writing state_<YYYYMMDD>-<HHMMSS>.db[.zst|.gz]\
+    \ snapshots) and tells the user to either run that backup job / copy a state.db\
+    \ snapshot there, or pass --db <file> for a one-off read. (2) README.md's session\
+    \ section (around lines 1095-1110) gains a short paragraph before the examples\
+    \ explaining what populates ~/.hermes/state-backups (Hermes' scheduled state backups;\
+    \ snapshots named state_<ts>.db[.zst|.gz]), that the dir must exist for default\
+    \ snapshot mode, and the --db one-off alternative. (3) A test asserts the new\
+    \ guidance text (substring set: populate + state-backups + --db) appears in the\
+    \ browse/help error path, mirroring the existing TestMissingTokenHint pattern\
+    \ in cmd/canopyd/cli_test.go. (4) go build + go vet + go test ./cmd/canopyd/...\
+    \ ./internal/session/... pass."
+  status: complete
+  created_at: '2026-09-30T16:59:29.746927+00:00'
+  completed_at: '2026-09-30T17:10:15.265371+00:00'
+- id: QA-36-CAP
+  title: "Chaos-resource 3G cap FAIL attribution \u2014 not reproducible at HEAD 4dfbb623"
+  criteria:
+  - 'Dev box: full go test ./... -count=1 under ulimit -v 3145728 exits 0 with 33
+    pkgs ok, warm AND cold (fresh GOMODCACHE/GOCACHE/HOME); internal/transport (the
+    09-18 precedent package) passes under the cap; bunker failing package remains
+    unnamed due to harness evidence truncation; row annotated with both green runs
+    and truncation root cause'
+  status: complete
+  created_at: '2026-10-01T00:22:57.054263+00:00'
+  completed_at: '2026-10-01T00:23:02.369827+00:00'

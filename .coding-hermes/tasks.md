@@ -3867,3 +3867,13 @@ Verdict: PROMISING-BUT-ROUGH. Artifacts: docs/dogfood/2026-09-26-integration.md,
 - Board: DF-71 row closed (compact style preserved, surgical 1-line edit; ci_result pending_on_push -> flip to GREEN on the run for 820c4455), event 942, header ticks_total 592 / last_commit 820c4455.
 - CI: run on 820c4455 in_progress at tick end; last 4 completed runs GREEN; no pre-existing red to flag.
 - Pending set after tick: DF-70 (P2, blocked on offline bunker host), DF-25 (P5 watch), FTR-06 (P3, needs phase split), README-2/3/4, DOC-5/6/7, PL-05.
+
+## Tick hermes-canopy-2026-09-30-23-38-12
+
+- **Verdict: OK (evidence-only closure, no code commit).** QA-HERMES-CANOPY-36 closed: 3G cap-fragility NOT reproducible at HEAD 4dfbb623 on the dev box — full `go test ./... -count=1` under `ulimit -v 3145728` rc=0 with 33 pkgs ok warm (/tmp/qa36-cap-repro.log) AND cold fresh GOMODCACHE/GOCACHE/HOME (/tmp/qa36-cold.log); internal/transport (09-18 precedent package) green under the cap standalone.
+
+- **Root cause of un-attributability:** bunker-qa.sh chaos-resource evidence truncation cuts the FAIL package line (mirrored evidence /tmp/bunker-qa-evidence-hermes-canopy-2026-09-30-1257.jsonl shows "ok transport / ok migrations / FAIL" with the package name already gone); agent destroyed pre-harvest. Filed follow-up QA-HERMES-CANOPY-37 (P2) — fix the harness capture; harness script untracked (QA-15/16 precedent).
+
+- GitReins: task QA-36-CAP create+start+complete; tier-1 guard PASS d95a91f7; tier-2 judge PASS/COMPLETE job-924594012da5450789005622c59a55e0 (all sub-claims verified against real artifacts).
+
+- Board: tasks.jsonl QA-36 → complete + review_notes; events 944/945; board.jsonl ticks_total 592→593. Note: the deployed /home/kara/bin/canopyd is now STALE_BLOCKED (deploy alert event 943, ~4d lag) — consistent with RELENG-CANOPY-2026-09-30.
