@@ -564,9 +564,11 @@ Handshake (`$TOKEN` is a dev JWT you sign yourself — see § Authentication
 (dev mode); nothing prints a token at startup, so mint one with the snippet there
 and `export CANOPY_TOKEN=<token>`):
 
+The examples below target the Quick Start host port `:8091`; the raw binary default is `:8080`.
+
 ```bash
 # 1. initialize — negotiate a protocol revision
-curl -s -X POST http://localhost:8080/api/v1/mcp \
+curl -s -X POST http://localhost:8091/api/v1/mcp \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 # 200 {"jsonrpc":"2.0","id":1,"result":{
@@ -575,13 +577,13 @@ curl -s -X POST http://localhost:8080/api/v1/mcp \
 #        "serverInfo":{"name":"canopyd-canopy","version":"<build version>"}}}
 
 # 2. notifications/initialized — a notification: HTTP 202 with an EMPTY body
-curl -s -i -X POST http://localhost:8080/api/v1/mcp \
+curl -s -i -X POST http://localhost:8091/api/v1/mcp \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 # HTTP/1.1 202 Accepted   (no body — a notification never gets an error object)
 
 # 3. tools/list — the 7 tools this server implements
-curl -s -X POST http://localhost:8080/api/v1/mcp \
+curl -s -X POST http://localhost:8091/api/v1/mcp \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
