@@ -1590,6 +1590,24 @@ The stream also emits `heartbeat` frames every 30 seconds. Persistent frames
 carry their committed SQLite sequence in both `id` and the JSON payload; replay
 uses the greater of `after` and `Last-Event-ID`.
 
+**Dismissal forwarding.** When the base card that owns an iteration is dismissed,
+the stream forwards a durable `card_dismissed` frame:
+
+```
+id: 17
+event: card_dismissed
+data: {"cardId":"uuid","eventType":"card_dismissed","data":{},"sequence":17,"createdAt":"2026-09-26T18:15:53Z"}
+```
+
+The base-card service publishes the dismissal only after its lifecycle row has
+committed, so forwarding is durable rather than best-effort. The frame's `id`
+and JSON `sequence` are the sequence from the base card's event log, not the
+iteration card's event log. Those logs have independent sequence watermarks;
+do not mix their cursors when resuming with `after` or `Last-Event-ID`.
+Forwarding is one-shot: after the first `card_dismissed` frame, the forwarding
+subscription is detached and no later base-card lifecycle events are forwarded
+on that stream.
+
 When the registered process crashes, the service first commits an `agent_error`
 event and the card's `interrupted` state, then emits an `iteration_event` for the
 error followed by a `card_snapshot` frame containing the preserved materialized
