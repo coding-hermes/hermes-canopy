@@ -3917,3 +3917,13 @@ tasks:
   status: complete
   created_at: '2026-10-02T05:03:29.973630+00:00'
   completed_at: '2026-10-02T05:03:37.796183+00:00'
+- id: DF-70
+  title: 'Re-prove bunker-las-03 installability: run README Quick Start compose path
+    (clone, cp .env.example .env, docker compose build canopyd, up -d) on the now-online
+    host and verify :8092/health'
+  criteria:
+  - compose build and up succeed on bunker-las-03 from a fresh clone of master and
+    GET /health on :8092 returns 200 with status ok
+  status: complete
+  created_at: '2026-10-02T11:55:08.143445+00:00'
+  completed_at: '2026-10-02T12:03:46.579546+00:00'
