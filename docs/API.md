@@ -3238,6 +3238,25 @@ GET /api/v1/workspaces/{workspace_id}/mls/groups
 POST /api/v1/workspaces/{workspace_id}/mls/groups
 ```
 
+Request body:
+
+```json
+{
+  "workspace_id": "workspace-uuid",
+  "creator_profile_id": "profile-uuid",
+  "admin_public_key": "base64-encoded-32-byte-ed25519-public-key"
+}
+```
+
+`workspace_id` must match the UUID in the route. `creator_profile_id` must be
+an existing Canopy `profiles.id`; this is the ID space of the `profiles` table,
+not a gateway profile mapping. In development, find a usable value by querying
+the `profiles` table. `admin_public_key` is the base64 JSON representation of
+an Ed25519 public key containing exactly 32 bytes.
+
+A successful request returns `201 Created` with the new MLS group object. An
+unknown `creator_profile_id` returns `404 PROFILE_NOT_FOUND`.
+
 ### Join MLS Group
 
 ```

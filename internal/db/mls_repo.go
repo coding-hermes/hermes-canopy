@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -98,6 +99,12 @@ type MLSPendingProposal struct {
 
 // --- PG Implementations ---
 
+// mlsQueryer is the common query surface shared by a pool and a pgx transaction.
+type mlsQueryer interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // PGMLSGroupRepo is the pgx implementation of MLSGroupRepo.
 type PGMLSGroupRepo struct {
 	pool *pgxpool.Pool
@@ -108,6 +115,15 @@ func NewPGMLSGroupRepo(pool *pgxpool.Pool) *PGMLSGroupRepo {
 }
 
 func (r *PGMLSGroupRepo) Create(ctx context.Context, group *MLSGroup) error {
+	return createMLSGroup(ctx, r.pool, group)
+}
+
+// CreateTx inserts a group using the caller's transaction.
+func (r *PGMLSGroupRepo) CreateTx(ctx context.Context, tx pgx.Tx, group *MLSGroup) error {
+	return createMLSGroup(ctx, tx, group)
+}
+
+func createMLSGroup(ctx context.Context, q mlsQueryer, group *MLSGroup) error {
 	var stateJSON []byte
 	if len(group.EncryptedState) == 0 {
 		// CHECK constraint ck_mls_groups_state_object requires
@@ -122,7 +138,7 @@ func (r *PGMLSGroupRepo) Create(ctx context.Context, group *MLSGroup) error {
 		}
 	}
 
-	_, err := r.pool.Exec(ctx,
+	_, err := q.Exec(ctx,
 		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.GroupSecret, group.CreatedAt, group.UpdatedAt)
@@ -220,16 +236,25 @@ func NewPGMLSMemberRepo(pool *pgxpool.Pool) *PGMLSMemberRepo {
 }
 
 func (r *PGMLSMemberRepo) Add(ctx context.Context, groupID []byte, member *MLSGroupMember) error {
+	return addMLSMember(ctx, r.pool, groupID, member)
+}
+
+// AddTx inserts a member using the caller's transaction.
+func (r *PGMLSMemberRepo) AddTx(ctx context.Context, tx pgx.Tx, groupID []byte, member *MLSGroupMember) error {
+	return addMLSMember(ctx, tx, groupID, member)
+}
+
+func addMLSMember(ctx context.Context, q mlsQueryer, groupID []byte, member *MLSGroupMember) error {
 	// Compute next leaf_index: MAX+1 (or 0 for first member).
 	var nextLeaf int
-	err := r.pool.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT COALESCE(MAX(leaf_index), -1) + 1 FROM mls_group_members WHERE group_id = $1`,
 		groupID).Scan(&nextLeaf)
 	if err != nil {
 		return fmt.Errorf("mls_member: next leaf index: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx,
+	_, err = q.Exec(ctx,
 		`INSERT INTO mls_group_members (group_id, profile_id, mls_identity, encryption_pubkey, signature_pubkey, credential_type, leaf_index, added_at, last_active)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		 ON CONFLICT (group_id, profile_id) DO UPDATE SET

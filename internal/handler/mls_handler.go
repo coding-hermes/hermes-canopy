@@ -479,6 +479,8 @@ func writeSSEError(w http.ResponseWriter, code, message string) {
 
 func (h *MLSHandler) writeMLSError(w http.ResponseWriter, r *http.Request, err error, operation string) {
 	switch {
+	case errors.Is(err, mls.ErrCreatorProfileNotFound):
+		writeError(w, http.StatusNotFound, "PROFILE_NOT_FOUND", err.Error())
 	case errors.Is(err, mls.ErrMLSGroupNotFound),
 		errors.Is(err, mls.ErrNotGroupMember),
 		errors.Is(err, mls.ErrMemberNotInGroup),

@@ -6,10 +6,12 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
@@ -19,19 +21,41 @@ import (
 // Cryptographic operations use placeholders until a pure-Go RFC 9420
 // library is selected (SPE-FTR-03 Design Decision 2).
 type MLSServiceImpl struct {
-	pool    *pgxpool.Pool
-	groups  db.MLSGroupRepo
-	members db.MLSMemberRepo
-	kps     db.MLSKeyPackageRepo
-	props   db.MLSPendingProposalRepo
+	pool     *pgxpool.Pool
+	groups   db.MLSGroupRepo
+	members  db.MLSMemberRepo
+	profiles db.ProfileRepo
+	kps      db.MLSKeyPackageRepo
+	props    db.MLSPendingProposalRepo
+}
+
+type mlsGroupTxRepo interface {
+	CreateTx(ctx context.Context, tx pgx.Tx, group *db.MLSGroup) error
+}
+
+type mlsMemberTxRepo interface {
+	AddTx(ctx context.Context, tx pgx.Tx, groupID []byte, member *db.MLSGroupMember) error
 }
 
 // NewMLSService creates a new MLSServiceImpl with the supplied dependencies.
 func NewMLSService(pool *pgxpool.Pool, groups db.MLSGroupRepo, members db.MLSMemberRepo, kps db.MLSKeyPackageRepo, props db.MLSPendingProposalRepo) *MLSServiceImpl {
-	return &MLSServiceImpl{pool: pool, groups: groups, members: members, kps: kps, props: props}
+	var profiles db.ProfileRepo
+	if pool != nil {
+		profiles = db.NewPGProfileRepo(pool)
+	}
+	return &MLSServiceImpl{pool: pool, groups: groups, members: members, profiles: profiles, kps: kps, props: props}
 }
 
 func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorProfileID uuid.UUID, adminKeyPair Ed25519KeyPair) (*MLSGroup, error) {
+	if s.profiles != nil {
+		if _, err := s.profiles.GetByID(ctx, creatorProfileID); err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return nil, ErrCreatorProfileNotFound
+			}
+			return nil, fmt.Errorf("mls: validate creator profile: %w", err)
+		}
+	}
+
 	groupID := make([]byte, 32)
 	if _, err := rand.Read(groupID); err != nil {
 		return nil, err
@@ -53,10 +77,6 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		UpdatedAt:   now,
 	}
 
-	if err := s.groups.Create(ctx, group); err != nil {
-		return nil, err
-	}
-
 	// Derive distinct encryption and signing keys from the admin identity
 	// key pair using domain separation. Until a real MLS library provides
 	// HPKE/DHKEM key material, this ensures cryptographic separation
@@ -75,7 +95,7 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		LastActive:          now,
 	}
 
-	if err := s.members.Add(ctx, groupID, member); err != nil {
+	if err := s.persistGroupAndCreator(ctx, group, member); err != nil {
 		return nil, err
 	}
 
@@ -88,6 +108,49 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}, nil
+}
+
+func (s *MLSServiceImpl) persistGroupAndCreator(ctx context.Context, group *db.MLSGroup, member *db.MLSGroupMember) error {
+	// In-memory service tests use repositories without a transaction handle.
+	// Production wiring supplies the PostgreSQL pool and transaction-aware repos.
+	if s.pool == nil {
+		if err := s.groups.Create(ctx, group); err != nil {
+			return err
+		}
+		return s.members.Add(ctx, group.ID, member)
+	}
+
+	groupRepo, ok := s.groups.(mlsGroupTxRepo)
+	if !ok {
+		return fmt.Errorf("mls: group repository does not support transactions")
+	}
+	memberRepo, ok := s.members.(mlsMemberTxRepo)
+	if !ok {
+		return fmt.Errorf("mls: member repository does not support transactions")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("mls: begin create group: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if err := groupRepo.CreateTx(ctx, tx, group); err != nil {
+		return err
+	}
+	if err := memberRepo.AddTx(ctx, tx, group.ID, member); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("mls: commit create group: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // deriveKey derives a 32-byte key from src material using domain separation.

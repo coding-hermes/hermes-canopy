@@ -15,6 +15,7 @@ func TestErrorSentinelValues(t *testing.T) {
 		msg string
 	}{
 		{ErrMLSGroupNotFound, "mls: group not found"},
+		{ErrCreatorProfileNotFound, "mls: creator profile not found"},
 		{ErrNotGroupMember, "mls: profile is not a group member"},
 		{ErrEpochMismatch, "mls: ciphertext epoch does not match group epoch"},
 		{ErrKeyPackageExpired, "mls: key package is expired"},

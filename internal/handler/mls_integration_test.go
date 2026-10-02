@@ -281,6 +281,53 @@ func TestBE12d_MLSGroupCRUD(t *testing.T) {
 	t.Logf("group state: %d members, epoch=%d", len(state.Members), state.Group.Epoch)
 }
 
+// TestCreateGroup_UnknownCreatorProfileReturns404AndPersistsNothing pins the
+// validation and atomicity contract: a missing creator profile is a client
+// error and cannot leave an orphan mls_groups row behind.
+func TestCreateGroup_UnknownCreatorProfileReturns404AndPersistsNothing(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.NewSharedIntegrationPool(t)
+
+	srv, cleanup := newMLSTestServer(t, pool)
+	defer cleanup()
+
+	workspaceID := uuid.New()
+	ensureWorkspace(t, pool, workspaceID)
+	unknownProfileID := uuid.New()
+	keyPair := generateEd25519KeyPair(t)
+	body := map[string]any{
+		"workspace_id":       workspaceID.String(),
+		"creator_profile_id": unknownProfileID.String(),
+		"admin_public_key":   []byte(keyPair.PublicKey),
+	}
+	path := "/api/v1/workspaces/" + workspaceID.String() + "/mls/groups"
+	resp, err := srv.Client().Do(mlsRequest(t, srv.URL, http.MethodPost, path, body))
+	if err != nil {
+		t.Fatalf("POST groups with unknown creator profile: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+	var errBody apiErrorBody
+	if err := json.NewDecoder(resp.Body).Decode(&errBody); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if errBody.Error.Code != "PROFILE_NOT_FOUND" {
+		t.Fatalf("error code = %q, want PROFILE_NOT_FOUND", errBody.Error.Code)
+	}
+
+	var groupCount int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM mls_groups WHERE workspace_id = $1`, workspaceID).Scan(&groupCount); err != nil {
+		t.Fatalf("count groups after rejected create: %v", err)
+	}
+	if groupCount != 0 {
+		t.Fatalf("mls_groups rows for rejected workspace = %d, want 0", groupCount)
+	}
+}
+
 // TestBE12d_MLSMemberManagement tests join, leave, and remove member
 // flows through HTTP endpoints.
 func TestBE12d_MLSMemberManagement(t *testing.T) {
