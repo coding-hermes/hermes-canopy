@@ -3887,3 +3887,33 @@ tasks:
   status: complete
   created_at: '2026-10-01T11:30:03.130203+00:00'
   completed_at: '2026-10-01T11:41:16.755635+00:00'
+- id: DOC-5
+  title: Operator env-var reference for all CANOPY_*/CONTEXT_*/PLUGIN_* keys
+  criteria:
+  - docs/ENV.md exists covering every env var the server reads (grep of Getenv/LookupEnv
+    across internal/+cmd/), each with purpose, default, and where it is read (file:line);
+    doc committed, builds clean, no secrets included
+  status: complete
+  created_at: '2026-10-01T18:45:53.356384+00:00'
+  completed_at: '2026-10-01T19:03:03.063332+00:00'
+- id: DOC-6
+  title: document durable dismissal forwarding of GET /api/v1/cards/iteration/{card_id}/events
+    in docs/API.md
+  criteria:
+  - 'docs/API.md iteration-events section documents: card_dismissed frame forwarding
+    with envelope fields matching iterationSSEEvent JSON tags; durable post-commit
+    publication; independent base-card vs iteration sequence watermarks; one-shot
+    forwarding stop - each traceable to internal/handler/iteration_card_handler.go'
+  status: complete
+  created_at: '2026-10-02T05:03:22.935031+00:00'
+  completed_at: '2026-10-02T05:03:36.554449+00:00'
+- id: DOC-7
+  title: document the iteration side panel for end users
+  criteria:
+  - 'new docs/ITERATION_PANEL.md covers: how the panel opens/closes, what it shows
+    (states, progress, activity feed), SSE refresh + heartbeat + replay, dismissal
+    semantics incl durable one-shot forwarding - every UI claim traceable to frontend/src
+    component code; no invented UI elements'
+  status: complete
+  created_at: '2026-10-02T05:03:29.973630+00:00'
+  completed_at: '2026-10-02T05:03:37.796183+00:00'

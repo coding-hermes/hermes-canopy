@@ -1,0 +1,11 @@
+{
+  "scheduler_tick": "hermes-canopy-foreman-2026-10-02-04-52-39",
+  "created_at": "2026-10-01T23:55:32-05:00",
+  "finished_at": "2026-10-02T00:20:00Z",
+  "budget": 5,
+  "status": "complete",
+  "tasks": [
+    {"id": "DOC-6", "title": "document the durable dismissal forwarding behavior of GET /api/v1/cards/iteration/{card_id}/events in docs/API.md", "worktree": "/home/kara/worktrees/hermes-canopy-DOC-6", "branch": "wt/DOC-6", "base": "origin/master", "base_sha": "ebc5d5fd", "model": "gpt-5.6-luna", "provider": "openai-codex", "brief": "/tmp/canopy-brief-DOC-6.md", "log": "/tmp/worker-DOC-6.log", "commit": "c3071840", "merge": "0b978414", "judge": "2c5991ef PASS"},
+    {"id": "DOC-7", "title": "document the iteration side panel for end users (what it shows, refresh, dismissal semantics)", "worktree": "/home/kara/worktrees/hermes-canopy-DOC-7", "branch": "wt/DOC-7", "base": "origin/master", "base_sha": "ebc5d5fd", "model": "gpt-5.6-luna", "provider": "openai-codex", "brief": "/tmp/canopy-brief-DOC-7.md", "log": "/tmp/worker-DOC-7.log", "commit": "6fa6b732", "merge": "0bb6035a", "judge": "98547ada PASS"}
+  ]
+}
