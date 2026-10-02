@@ -311,7 +311,16 @@ Short version:
   TABLE rows — no API creates them; seed SQL is in
   `internal/handler/mls_integration_test.go` (`ensureProfile`). The API's
   "profiles" endpoints write `profile_route` (unrelated concept;
-  one-active-per-workspace).
+  one-active-per-workspace). Re-verified 2026-10-02 (11th run): encrypt
+  requires `plaintext_base64` (docs' `plaintext` 400s); decrypt takes the FULL
+  MLSCiphertext object, not a bare base64 string; tampered ciphertext → 500
+  (DF-76). Create-group failure mode is WORSE than DF-35 recorded: a failing
+  create still inserts the group row (non-atomic), so error retries seed
+  orphan groups and GetByWorkspace then returns one at random (DF-75) — after
+  any 500 from `POST …/mls/groups`, check
+  `select group_id from mls_groups where workspace_id='…'` and delete orphans
+  before retrying. Working body: `{"admin_public_key":"<32B ed25519 b64>",
+  "creator_profile_id":"<canopy profiles.id via psql>"}` (DF-78).
 - **Channels (`/api/v1/workspace/channels`):** global `general`/`agents` for
   ANY authenticated user (not workspace-scoped); POST `/{ch}/message` → 202;
   SSE `/{ch}/feed` is LIVE-ONLY (no history replay — connect before sending).

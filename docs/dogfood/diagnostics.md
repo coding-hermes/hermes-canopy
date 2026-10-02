@@ -538,3 +538,36 @@ records the human's message and silently drops the agent's reply. When a
 feature's data flow ends in a side registry, ask "what reads this a week
 from now?" — if the answer is only a pruned list endpoint, the feature is
 half-wired regardless of green tests (DF-HERMES-CANOPY-67).
+
+## 2026-10-02 — MLS surface (11th run; angle untouched by runs 1-10)
+
+**The MLS create-group endpoint is a documented lie — and its failure mode
+corrupts the workspace.** docs/API.md §MLS documents `POST …/mls/groups` with
+NO request body; the live handler demands `admin_public_key` (32-byte Ed25519)
+plus `creator_profile_id` (mls_handler.go:79-97). Send the docs' empty body →
+400 INVALID_KEY_PAIR. Send the key but omit/miss the profile → **500 while the
+group row is STILL INSERTED** (service.CreateGroup inserts the group, then the
+member add fails; no transaction). Three failing calls left three orphan
+`mls_groups` rows, and `GetByWorkspace` (a plain `WHERE workspace_id = $1` with
+no ORDER BY) then returns whichever row Postgres feels like — encrypt then 404s
+"profile is not a group member" against the orphan. Lesson: when an API returns
+500 and you retry, check the DB — a non-atomic create turns error retries into
+poisoned state; and the retry loop is exactly what a real user does (DF-75).
+
+**Encrypt/decrypt itself is real and honest to its wire format.** With the
+profile id right (a canopy `profiles.id`, findable only via psql — DF-78),
+`encrypt` returns a full MLSCiphertext (epoch, content_type, wire_format
+mls_ciphertext_v1) and `decrypt` takes that WHOLE OBJECT back (not a bare
+base64 string — that asymmetry is undocumented and cost a 400 round) and
+recovers the plaintext byte-exact. Warm 1.0ms. The one rough edge: a tampered
+ciphertext returns 500 instead of a 4xx auth failure (DF-76) — a client cannot
+distinguish "wrong bytes" from "server on fire".
+
+**Fresh-box install holds at 131s and the error UX is good — the quickstart
+numbers are not.** Bundle-clone + Go 1.25.3 user-space + `make build` on a bare
+Debian 13 agent → health 200, workspace 201. `canopyd serve` without postgres
+hard-fails with a message that names the exact doc section — rare and worth
+keeping. But the README health example says :8091 while a bare serve binds
+:8080, and the DB password that works is the compose file's `canopy`, not the
+docs' `canopy-dev-password` guess (DF-77). Top-down quickstart on a fresh box
+is still the highest-yield test we run (DF-55 said the same last week).
