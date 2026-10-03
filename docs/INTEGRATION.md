@@ -175,14 +175,18 @@ DB_PORT=5437 ./bin/canopyd
 
 ### Health Check
 
+The health path answers on the port your binary actually bound: `:8080` (raw
+binary default), `:8091` (`make run`), or `:8092` (docker compose). Use the
+port that matches how you started it:
+
 ```bash
-curl http://localhost:8091/health
+curl http://localhost:8080/health
 # → {"status":"ok","service":"canopyd"}
 
-curl http://localhost:8091/healthz
+curl http://localhost:8080/healthz
 # → {"status":"ok","service":"canopyd"}
 
-curl http://localhost:8091/version
+curl http://localhost:8080/version
 # → {"version":"dev"}
 ```
 
@@ -382,8 +386,10 @@ BASE="http://localhost:8091"
 `dev-secret-change-me`, subject `00000000-0000-0000-0000-000000000001`, and
 they expire (24h here; the frontend's fallback token uses a 365-day window).
 If any curl below returns `401 Unauthorized`, your token has expired — just
-re-run the `node -e` mint command above to get a fresh one. Never embed a
-long-lived static token in documentation.
+re-run the `node -e` mint command above to get a fresh one. On a box without
+node, use the equivalent python3/openssl one-liners in
+[README.md](../README.md) §"Authentication (dev mode)" → "Direct API access".
+Never embed a long-lived static token in documentation.
 
 ### Create a Tree
 
