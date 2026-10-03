@@ -486,6 +486,8 @@ func (h *MLSHandler) writeMLSError(w http.ResponseWriter, r *http.Request, err e
 		errors.Is(err, mls.ErrMemberNotInGroup),
 		errors.Is(err, db.ErrNotFound):
 		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+	case errors.Is(err, mls.ErrDecryptionFailed):
+		writeError(w, http.StatusBadRequest, "DECRYPT_FAILED", "ciphertext could not be authenticated or decrypted")
 	case errors.Is(err, mls.ErrKeyPackageExpired),
 		errors.Is(err, mls.ErrEpochMismatch),
 		errors.Is(err, mls.ErrInvalidCredential):

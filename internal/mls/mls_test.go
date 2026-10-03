@@ -493,6 +493,31 @@ func TestEncryptDecryptRoundtrip(t *testing.T) {
 	}
 }
 
+func TestDecrypt_TamperedCiphertextReturnsDecryptionFailed(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	wsID := uuid.New()
+	creatorID := uuid.New()
+
+	if _, err := svc.CreateGroup(ctx, wsID, creatorID, Ed25519KeyPair{PublicKey: []byte("pk")}); err != nil {
+		t.Fatalf("CreateGroup() error = %v", err)
+	}
+	ciphertext, err := svc.Encrypt(ctx, wsID, creatorID, []byte("authenticated plaintext"))
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
+	ciphertext.Ciphertext[len(ciphertext.Ciphertext)-1] ^= 0x01
+
+	if _, err := svc.Decrypt(ctx, wsID, creatorID, ciphertext); !errors.Is(err, ErrDecryptionFailed) {
+		t.Fatalf("Decrypt() error = %v, want ErrDecryptionFailed", err)
+	}
+
+	ciphertext.Ciphertext = []byte{0x01}
+	if _, err := svc.Decrypt(ctx, wsID, creatorID, ciphertext); !errors.Is(err, ErrDecryptionFailed) {
+		t.Fatalf("Decrypt() short ciphertext error = %v, want ErrDecryptionFailed", err)
+	}
+}
+
 func TestMLS_CrossMemberRoundTrip(t *testing.T) {
 	svc := newTestService()
 	ctx := context.Background()

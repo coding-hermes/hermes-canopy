@@ -3281,6 +3281,11 @@ POST /api/v1/workspaces/{workspace_id}/mls/encrypt
 POST /api/v1/workspaces/{workspace_id}/mls/decrypt
 ```
 
+A valid ciphertext returns `200 OK` with the decrypted plaintext. A malformed or
+tampered ciphertext returns `400 DECRYPT_FAILED`; clients should treat this as
+an authentication/decryption failure rather than a server fault. Non-base64
+ciphertext JSON is rejected earlier as `400 INVALID_BODY`.
+
 ### Get MLS State
 
 ```

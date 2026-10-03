@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,5 +93,48 @@ func TestMLSHandler_EpochConflictMapsToConflict(t *testing.T) {
 
 	if resp.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusConflict)
+	}
+}
+
+func TestMLSHandler_DecryptionFailedMapsToBadRequest(t *testing.T) {
+	h := &MLSHandler{}
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+
+	h.writeMLSError(resp, req, fmt.Errorf("gcm open: %w", mls.ErrDecryptionFailed), "decrypt mls message")
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
+	}
+	var body apiErrorBody
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if body.Error.Code != "DECRYPT_FAILED" {
+		t.Fatalf("error code = %q, want DECRYPT_FAILED", body.Error.Code)
+	}
+}
+
+func TestMLSHandler_DecryptRejectsInvalidBase64(t *testing.T) {
+	workspaceID := uuid.New()
+	r := chi.NewRouter()
+	h := &MLSHandler{}
+	r.Post("/api/v1/workspaces/{workspace_id}/mls/decrypt", h.Decrypt)
+
+	body := []byte(`{"workspace_id":"` + workspaceID.String() + `","ciphertext":{"ciphertext":"not-base64"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/"+workspaceID.String()+"/mls/decrypt", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", resp.Code, http.StatusBadRequest, resp.Body.String())
+	}
+	var responseBody apiErrorBody
+	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if responseBody.Error.Code != "INVALID_BODY" {
+		t.Fatalf("error code = %q, want INVALID_BODY", responseBody.Error.Code)
 	}
 }

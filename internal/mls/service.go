@@ -354,8 +354,9 @@ func (s *MLSServiceImpl) Decrypt(ctx context.Context, workspaceID, profileID uui
 	}
 
 	nonceSize := gcm.NonceSize()
-	if len(ciphertext.Ciphertext) < nonceSize {
-		return nil, fmt.Errorf("mls: ciphertext too short: %d bytes, need at least %d", len(ciphertext.Ciphertext), nonceSize)
+	minimumCiphertextSize := nonceSize + gcm.Overhead()
+	if len(ciphertext.Ciphertext) < minimumCiphertextSize {
+		return nil, fmt.Errorf("%w: ciphertext too short: %d bytes, need at least %d", ErrDecryptionFailed, len(ciphertext.Ciphertext), minimumCiphertextSize)
 	}
 
 	nonce, ct := ciphertext.Ciphertext[:nonceSize], ciphertext.Ciphertext[nonceSize:]
@@ -363,7 +364,7 @@ func (s *MLSServiceImpl) Decrypt(ctx context.Context, workspaceID, profileID uui
 	aad := append(grp.ID, byte(grp.Epoch>>24), byte(grp.Epoch>>16), byte(grp.Epoch>>8), byte(grp.Epoch))
 	plaintext, err := gcm.Open(nil, nonce, ct, aad)
 	if err != nil {
-		return nil, fmt.Errorf("mls: gcm open: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrDecryptionFailed, err)
 	}
 
 	return plaintext, nil
