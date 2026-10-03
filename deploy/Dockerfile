@@ -24,8 +24,17 @@ RUN go mod download
 COPY . .
 COPY --from=frontend-builder /src/frontend/dist ./frontend/dist
 
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${VERSION}" \
+# Build identity (R14-03 / GAP-100): stamp the same three ldflags variables
+# `make build` carries, so the containerized binary names its own build exactly
+# like the Makefile path does. `.git` is dockerignored (not reliably present in
+# the build context), so version/commit/build_time come in as build args — see
+# docker-compose.yml and `make docker`, which compute them at build time.
+# Defaults mirror the Makefile's fallbacks (dev / unknown).
+ARG CANOPY_VERSION=dev
+ARG CANOPY_COMMIT=unknown
+ARG CANOPY_BUILD_TIME=unknown
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-X main.version=${CANOPY_VERSION} -X main.commit=${CANOPY_COMMIT} -X main.buildTime=${CANOPY_BUILD_TIME}" \
     -o /build/canopyd ./cmd/canopyd
 
 # Stage 3: Minimal runtime image

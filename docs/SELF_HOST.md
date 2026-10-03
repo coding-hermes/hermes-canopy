@@ -163,6 +163,12 @@ cd hermes-canopy
 # The image carries the migrations embedded at build time, so rebuild after a
 # pull or a schema change: `docker compose up -d` alone can reuse a cached image
 # built from older HEAD, and that stale binary refuses to start with `STALE BUILD`.
+# The image stamps its own build identity (version/commit/build_time) the same
+# way `make build` does. A plain build uses the Makefile fallbacks; to stamp the
+# real git values, export them before building:
+#   CANOPY_COMMIT=$(git rev-parse --short=8 HEAD) \
+#   CANOPY_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose build canopyd
+# or run `make docker`, which computes and passes all three build args.
 docker compose build canopyd
 docker compose up -d
 

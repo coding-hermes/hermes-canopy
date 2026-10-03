@@ -33,6 +33,16 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
+      # Build identity (R14-03 / GAP-100): pass the same version/commit/build
+      # timestamp `make build` stamps. Override via env (compose reads .env):
+      #   CANOPY_COMMIT=$(git rev-parse --short=8 HEAD) \
+      #   CANOPY_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose build canopyd
+      # `make docker` passes all three computed values directly. Defaults match
+      # the Makefile's fallbacks (dev / unknown).
+      args:
+        CANOPY_VERSION: ${CANOPY_VERSION:-dev}
+        CANOPY_COMMIT: ${CANOPY_COMMIT:-unknown}
+        CANOPY_BUILD_TIME: ${CANOPY_BUILD_TIME:-unknown}
     container_name: canopy-server
     ports:
       # :8092 on the host — :8091 is reserved for the host systemd
