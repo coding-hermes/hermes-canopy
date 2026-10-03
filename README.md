@@ -25,6 +25,13 @@ Every Card is a graph node with structured data.
 
 ## Quick Start
 
+> **Ports — read this first.** The bare binary (`./bin/canopyd` with no
+> `HTTP_ADDR`) defaults to **`:8080`** (`internal/config/config.go`). `make run`
+> and the Vite dev proxy use `:8091`; the docker-compose path maps host
+> `:8092`. Every run example below sets `HTTP_ADDR` explicitly, so curl the
+> port your binary actually bound — a fresh `./bin/canopyd` answers on `:8080`,
+> not `:8091`.
+
 ```bash
 # Prerequisites
 PostgreSQL 16+
@@ -59,6 +66,12 @@ fi
 # Run (dev: backend on :8091 to match the Vite dev proxy target)
 DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
   HTTP_ADDR=:8091 ./bin/canopyd
+
+# DB creds: docker-compose sets POSTGRES_USER/PASSWORD/DB = canopy/canopy/canopy.
+# The equivalent single CANOPY_DB_URL (host → compose PostgreSQL, which maps
+# 5437:5432) is:
+#   CANOPY_DB_URL=postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
+# (the bare-binary default DB_PORT is 5432: postgres://canopy:canopy@localhost:5432/canopy?sslmode=disable)
 
 # Frontend (dev mode)
 cd frontend
@@ -199,6 +212,27 @@ Sign your own HS256 JWT with `JWT_SECRET` (default `dev-secret-change-me`), then
 send it as a Bearer token:
 
 ```bash
+# Using python3 (stdlib only — no node required; bare Debian has python3)
+python3 - <<'PY'
+import base64, hashlib, hmac, json, time
+def b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+h = b64(json.dumps({"alg":"HS256","typ":"JWT"}, separators=(",",":")).encode())
+p = b64(json.dumps({
+    "sub":"00000000-0000-0000-0000-000000000001",
+    "iat":int(time.time()),
+    "exp":int(time.time())+86400,
+}, separators=(",",":")).encode())
+s = b64(hmac.new(b"dev-secret-change-me", f"{h}.{p}".encode(), hashlib.sha256).digest())
+print(f"{h}.{p}.{s}")
+PY
+
+# Using openssl (HMAC-SHA256 + base64url; the same HS256 token)
+IAT=$(date +%s); EXP=$((IAT+86400))
+H=$(printf '%s' '{"alg":"HS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+P=$(printf '{"sub":"00000000-0000-0000-0000-000000000001","iat":%s,"exp":%s}' "$IAT" "$EXP" | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+S=$(printf '%s' "$H.$P" | openssl dgst -sha256 -hmac 'dev-secret-change-me' -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+echo "$H.$P.$S"
+
 # Using node (quick one-liner)
 node -e "
 const crypto = require('crypto');
