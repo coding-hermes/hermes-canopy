@@ -1,0 +1,11 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-03-18-31-35",
+  "project": "hermes-canopy",
+  "wave_budget": 3,
+  "base_sha": "733995e8",
+  "workers": [
+    {"task": "DF-74", "worktree": "/home/kara/worktrees/hermes-canopy-DF-74", "branch": "wt/DF-74", "scope": "deploy/Dockerfile"},
+    {"task": "DF-77", "worktree": "/home/kara/worktrees/hermes-canopy-DF-77", "branch": "wt/DF-77", "scope": "README.md"},
+    {"task": "DF-78", "worktree": "/home/kara/worktrees/hermes-canopy-DF-78", "branch": "wt/DF-78", "scope": "specs/ docs/ mls docs"}
+  ]
+}
