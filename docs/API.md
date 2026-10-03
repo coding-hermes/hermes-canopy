@@ -3226,6 +3226,29 @@ Admin-only.
 
 Mounted at `/api/v1/workspaces/{workspace_id}/mls`. All require auth.
 
+### Profile ID space and group membership
+
+Every `profile_id` / `creator_profile_id` in this section is a **Canopy
+`profiles.id`** — the primary key of the `profiles` table — **not** a gateway
+profile-mapping id. The workspace surface
+`/api/v1/workspaces/{workspace_id}/profiles` manages gateway profile *mappings*
+(`profile_name` → gateway token, stored in `profile_route`); those ids never
+appear as an MLS identity. No HTTP endpoint currently lists Canopy profiles
+(the SPEC-API-06 unscoped `GET /api/v1/profiles` routes are not yet mounted),
+so until one ships, obtain a valid id directly from the database — on the dev
+compose stack:
+
+    docker exec canopy-pg psql -c "SELECT id, name, display_name, owner_id FROM profiles WHERE deleted_at IS NULL;"
+
+Group membership is seeded by group creation: `POST .../mls/groups` inserts
+its `creator_profile_id` as the first `mls_group_members` row (leaf 0).
+`.../mls/encrypt` and `.../mls/decrypt` only accept a `profile_id` that is
+already a row in `mls_group_members` for that workspace's group, so a profile
+must first be the `creator_profile_id` of create-group. An unknown id returns
+`404 PROFILE_NOT_FOUND` (create-group) or `404 NOT_FOUND` ("profile is not a
+group member", encrypt/decrypt). Use the `id` from the query above as
+`creator_profile_id` and `profile_id`.
+
 ### Get MLS Group
 
 ```

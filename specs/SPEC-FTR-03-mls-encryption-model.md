@@ -416,6 +416,8 @@ POST   /api/v1/mls/workspaces/{workspace_id}/decrypt         → Decrypt authori
 
 The following four tables are the MLS persistence model. `mls_groups` is the authoritative serialized state boundary; membership and proposals are queryable projections/audit inputs. All private state fields are envelope-encrypted before insertion, using a deployment-managed key that is distinct from MLS exporter secrets.
 
+> **Profile id space:** the `profile_id` column in `mls_group_members` and `mls_key_packages` is a Canopy `profiles.id` (the `profiles` table) — distinct from the workspace `/profiles` gateway-mapping id space.
+
 ### 6.1 MLS Groups
 
 ```sql
