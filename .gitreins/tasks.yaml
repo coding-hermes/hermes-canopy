@@ -3927,3 +3927,25 @@ tasks:
   status: complete
   created_at: '2026-10-02T11:55:08.143445+00:00'
   completed_at: '2026-10-02T12:03:46.579546+00:00'
+- id: DF-75
+  title: MLS create-group non-atomic + unknown creator_profile_id 500s + undocumented
+    body
+  criteria:
+  - POST /api/v1/workspaces/{id}/mls/groups with an unknown creator_profile_id answers
+    4xx (404 PROFILE_NOT_FOUND envelope) and inserts ZERO mls_groups rows; a valid
+    create inserts group+creator member in ONE transaction such that a forced member-insert
+    failure leaves zero group rows; docs/API.md MLS section documents the request
+    body (workspace_id match, creator_profile_id = canopy profiles.id id-space, admin_public_key
+    Ed25519 32B); go build + go vet clean and touched MLS tests PASS (not SKIP) with
+    CANOPY_TEST_ALLOW_SHARED_DB=1
+  status: complete
+  created_at: '2026-10-02T19:25:35.234000+00:00'
+  completed_at: '2026-10-02T20:33:26.962603+00:00'
+- id: DF-76
+  title: MLS tampered-ciphertext decrypt returns 500 instead of 4xx
+  criteria:
+  - Tampered ciphertext decrypt returns 400 DECRYPT_FAILED not 500; happy path 200
+    byte-exact; docs/API.md updated; build+vet+tests green
+  status: complete
+  created_at: '2026-10-03T09:52:07.927843+00:00'
+  completed_at: '2026-10-03T11:25:24.261239+00:00'
