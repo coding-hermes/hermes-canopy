@@ -106,4 +106,7 @@ clean:
 	rm -rf $(BIN_DIR)/
 
 docker:
-	docker build -f deploy/Dockerfile -t hermes-canopy-canopyd .
+	docker build -f deploy/Dockerfile -t hermes-canopy-canopyd \
+		--build-arg CANOPY_VERSION=$(VERSION) \
+		--build-arg CANOPY_COMMIT=$(COMMIT) \
+		--build-arg CANOPY_BUILD_TIME=$(BUILD_TIME) .
