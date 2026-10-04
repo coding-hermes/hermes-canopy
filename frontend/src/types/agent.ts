@@ -207,3 +207,45 @@ export function asAgentCardMetadata(
 ): AgentCardMetadata {
   return metadata as unknown as AgentCardMetadata;
 }
+
+// ─── Iteration events & renderer contract (SPEC-PL-04 §8.2) ────────────
+
+export interface IterationEvent {
+  cardId: string;
+  subtype: IterationSubtype;
+  eventType: string;
+  data: unknown;
+  sequence: number;
+  createdAt?: string;
+}
+
+/** User-to-agent feedback vocabulary from SPEC-PL-04 §7.1. */
+export type IterationFeedbackKind =
+  | 'relevance'
+  | 'correction'
+  | 'steer'
+  | 'cancel'
+  | 'highlight'
+  | 'approve'
+  | 'reject';
+
+/** Payload a renderer submits through the optional `submitFeedback` callback. */
+export interface IterationFeedbackInput {
+  feedbackType: IterationFeedbackKind;
+  target?: Record<string, unknown>;
+  note?: string;
+}
+
+/**
+ * Shared props for every §8.2 subtype renderer. `compact` selects the compact
+ * vs expanded presentation; the outer card frame, header, and expand toggle
+ * are owned by IterationCard / IterationSidePanel, not by the renderer itself.
+ */
+export interface IterationRendererProps<T extends IterationCardSubtypeData = IterationCardSubtypeData> {
+  cardId: string;
+  data: T;
+  compact: boolean;
+  events?: readonly IterationEvent[];
+  submitFeedback?: (input: IterationFeedbackInput) => void | Promise<void>;
+  cancel?: (reason?: string) => void | Promise<void>;
+}

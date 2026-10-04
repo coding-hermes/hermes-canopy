@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileText, Loader2, Search, Terminal, Wrench, X } from 'lucide-react';
 import {
   cancelIterationCard,
@@ -7,12 +7,14 @@ import {
   fetchIterationProgress,
   normalizeIterationCard,
   openIterationEventStream,
+  submitIterationFeedback,
   type EventSourceFactory,
   type IterationCardRecord,
   type IterationEventFrame,
 } from '../../lib/iterationApi.ts';
+import { resolveIterationRenderer } from '../../lib/iterationRenderers.ts';
 import { aggregateHeaderProgress, formatHeaderStatus } from '../../lib/iterationProgress.ts';
-import type { IterationCardSubtypeData, IterationState } from '../../types/agent.ts';
+import type { IterationCardSubtypeData, IterationFeedbackInput, IterationState } from '../../types/agent.ts';
 
 interface IterationSidePanelProps {
   open: boolean;
@@ -104,6 +106,7 @@ function CompactCard({
   onToggle,
   onCancel,
   onDismiss,
+  submitFeedback,
 }: {
   card: IterationCardRecord;
   expanded: boolean;
@@ -115,10 +118,12 @@ function CompactCard({
   onToggle: () => void;
   onCancel: () => void;
   onDismiss: () => void;
+  submitFeedback: (input: IterationFeedbackInput) => void;
 }) {
   const Icon = ICONS[card.data.subtype];
   const label = LABELS[card.data.subtype];
   const interrupted = card.data.state === 'interrupted';
+  const renderer = resolveIterationRenderer(card.data.subtype);
   return (
     <li role="listitem" className="rounded-lg border border-line-subtle bg-surface-panel p-3 shadow-sm" data-card-id={card.id} data-last-heartbeat={lastHeartbeatAt ?? ''}>
       <div className="flex items-start gap-2">
@@ -186,7 +191,11 @@ function CompactCard({
             {events.length === 0 && <li>No committed activity received yet.</li>}
             {events.map((event) => <li key={`${event.sequence}-${event.eventType}`}>{event.eventType.replace(/_/g, ' ')} · sequence {event.sequence}</li>)}
           </ol>
-          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-surface-input p-2">{JSON.stringify(card.data, null, 2)}</pre>
+          {renderer && (
+            <div className="mt-2" data-testid={`iteration-renderer-${card.id}`}>
+              {createElement(renderer, { cardId: card.id, data: card.data, compact: false, events, submitFeedback })}
+            </div>
+          )}
         </div>
       )}
     </li>
@@ -306,6 +315,11 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
     }).catch((dismissError: unknown) => setError(dismissError instanceof Error ? dismissError.message : 'Unable to dismiss card')).finally(() => setDismissing((current) => { const next = new Set(current); next.delete(card.id); return next; }));
   };
 
+  const onSubmitFeedback = (card: IterationCardRecord, input: IterationFeedbackInput) => {
+    void submitIterationFeedback(card.id, card.data.subtype, input, card.data.sessionId)
+      .catch((feedbackError: unknown) => setError(feedbackError instanceof Error ? feedbackError.message : 'Unable to submit feedback'));
+  };
+
   if (!open) return null;
   return (
     <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-line-subtle bg-surface-base shadow-2xl" aria-label="Iteration side panel" data-testid="iteration-side-panel">
@@ -336,6 +350,7 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
               onToggle={() => setExpanded((current) => { const next = new Set(current); if (next.has(card.id)) next.delete(card.id); else next.add(card.id); return next; })}
               onCancel={() => onCancel(card)}
               onDismiss={() => onDismiss(card)}
+              submitFeedback={(input) => onSubmitFeedback(card, input)}
             />
           ))}
         </ul>

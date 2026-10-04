@@ -1,9 +1,10 @@
-import { apiGet, apiUrl, authInit } from './api.ts';
+import { apiGet, apiPost, apiUrl, authInit } from './api.ts';
 import { subscribeSse, type SseSubscription } from './sse.ts';
 import { normalizeProgress } from './iterationProgress.ts';
 import type {
   CardProgress,
   IterationCardSubtypeData,
+  IterationFeedbackInput,
   IterationState,
   IterationSubtype,
   ProgressStatus,
@@ -349,6 +350,26 @@ async function mutation(path: string, init: RequestInit): Promise<void> {
 
 export function cancelIterationCard(cardId: string): Promise<void> {
   return mutation(`/cards/iteration/${encodeURIComponent(cardId)}/cancel`, { method: 'POST' });
+}
+
+/** Submit user feedback for an iteration card (SPEC-PL-04 §6.3 / §7.1). */
+export function submitIterationFeedback(
+  cardId: string,
+  subtype: IterationSubtype,
+  input: IterationFeedbackInput,
+  sessionId?: string,
+): Promise<unknown> {
+  const body: Record<string, unknown> = {
+    cardId,
+    subtype,
+    feedbackType: input.feedbackType,
+    feedbackKind: input.feedbackType,
+    ...(input.target !== undefined ? { target: input.target } : {}),
+    ...(input.note !== undefined ? { note: input.note } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    timestamp: new Date().toISOString(),
+  };
+  return apiPost(`/cards/iteration/${encodeURIComponent(cardId)}/feedback`, body);
 }
 
 /** Dismiss through the base-card lifecycle so the server emits card_dismissed. */
