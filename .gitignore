@@ -70,3 +70,8 @@ Thumbs.db
 dagger.db
 dagger.db-shm
 dagger.db-wal
+
+# GitReins/board runtime artifacts (foreman harness) — not repo content
+.gitreins/logs/
+.gitreins/*.lock
+.coding-hermes/board/.lock
