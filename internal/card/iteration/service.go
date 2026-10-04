@@ -611,23 +611,95 @@ func (s *IterationCardServiceImpl) ListActiveCards(ctx context.Context) ([]card.
 
 // GetProgress reads the current materialized data only; it never replays events.
 func (s *IterationCardServiceImpl) GetProgress(ctx context.Context) ([]CardProgress, error) {
+	records, err := s.activeProgressRecords(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]CardProgress, len(records))
+	for index, record := range records {
+		result[index] = record.progress
+	}
+	return result, nil
+}
+
+// GetCardProgress returns one card's current normalized progress projection.
+func (s *IterationCardServiceImpl) GetCardProgress(ctx context.Context, cardID uuid.UUID) (CardProgress, error) {
+	value, err := s.GetCard(ctx, cardID)
+	if err != nil {
+		return CardProgress{}, err
+	}
+	record, err := progressRecordFromCard(value)
+	if err != nil {
+		return CardProgress{}, err
+	}
+	return record.progress, nil
+}
+
+// AggregateHeader returns the §8.3 header projection for active cards.
+func (s *IterationCardServiceImpl) AggregateHeader(ctx context.Context) (ProgressHeader, error) {
+	records, err := s.activeProgressRecords(ctx)
+	if err != nil {
+		return ProgressHeader{}, err
+	}
+	return aggregateProgressHeader(records), nil
+}
+
+// AggregateCardHeader returns the same projection constrained to one card.
+func (s *IterationCardServiceImpl) AggregateCardHeader(ctx context.Context, cardID uuid.UUID) (ProgressHeader, error) {
+	value, err := s.GetCard(ctx, cardID)
+	if err != nil {
+		return ProgressHeader{}, err
+	}
+	record, err := progressRecordFromCard(value)
+	if err != nil {
+		return ProgressHeader{}, err
+	}
+	return aggregateProgressHeader([]progressRecord{record}), nil
+}
+
+func (s *IterationCardServiceImpl) activeProgressRecords(ctx context.Context) ([]progressRecord, error) {
 	cards, err := s.ListActiveCards(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]CardProgress, 0, len(cards))
+	result := make([]progressRecord, 0, len(cards))
 	for _, value := range cards {
-		var object map[string]json.RawMessage
-		if err := json.Unmarshal(value.Data, &object); err != nil {
+		record, err := progressRecordFromCard(&value)
+		if err != nil {
 			return nil, err
 		}
-		var progress CardProgress
-		if err := json.Unmarshal(object["progress"], &progress); err != nil {
-			return nil, err
-		}
-		result = append(result, progress)
+		result = append(result, record)
 	}
 	return result, nil
+}
+
+func progressRecordFromCard(value *card.Card) (progressRecord, error) {
+	var envelope struct {
+		Progress CardProgress   `json:"progress"`
+		State    IterationState `json:"state"`
+	}
+	if err := json.Unmarshal(value.Data, &envelope); err != nil {
+		return progressRecord{}, err
+	}
+	if envelope.Progress.CardID == uuid.Nil {
+		envelope.Progress.CardID = value.ID
+	}
+	if envelope.Progress.UpdatedAt.IsZero() || value.UpdatedAt.After(envelope.Progress.UpdatedAt) {
+		envelope.Progress.UpdatedAt = value.UpdatedAt
+	}
+	record := progressRecord{progress: envelope.Progress, segmentStatus: segmentStatusFor(envelope.Progress.Status), phaseOrdinal: envelope.Progress.PhaseOrdinal}
+	var raw struct {
+		Progress struct {
+			SegmentStatus ProgressSegmentStatus `json:"segmentStatus"`
+		} `json:"progress"`
+	}
+	if err := json.Unmarshal(value.Data, &raw); err == nil && raw.Progress.SegmentStatus != "" {
+		record.segmentStatus = raw.Progress.SegmentStatus
+	}
+	if envelope.State == IterationStateWaitingForUser {
+		record.segmentStatus = ProgressSegmentWaitingForUser
+	}
+	return record, nil
 }
 
 // SubscribeEvents is the post-commit event fan-out hook.

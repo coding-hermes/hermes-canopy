@@ -118,7 +118,10 @@ type CardProgress struct {
 	Total        int            `json:"total"`
 	Status       ProgressStatus `json:"status"`
 	Phase        string         `json:"phase,omitempty"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
+	// PhaseOrdinal is optional agent-supplied ordering metadata. It is omitted
+	// from the canonical shape unless an agent declares an explicit phase order.
+	PhaseOrdinal *int      `json:"phaseOrdinal,omitempty"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 // SearchBatchItem is one bounded search result.
@@ -296,4 +299,7 @@ type IterationCardService interface {
 	CancelCard(ctx context.Context, cardID uuid.UUID) error
 	ListActiveCards(ctx context.Context) ([]card.Card, error)
 	GetProgress(ctx context.Context) ([]CardProgress, error)
+	GetCardProgress(ctx context.Context, cardID uuid.UUID) (CardProgress, error)
+	AggregateHeader(ctx context.Context) (ProgressHeader, error)
+	AggregateCardHeader(ctx context.Context, cardID uuid.UUID) (ProgressHeader, error)
 }

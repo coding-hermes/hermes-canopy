@@ -31,6 +31,9 @@ func reduceEvent(current json.RawMessage, subtype IterationSubtype, eventType st
 			if state == IterationStateCancelled {
 				progress["status"] = string(ProgressStatusCancelled)
 			}
+			if state == IterationStateCompleted || state == IterationStateFailed || state == IterationStateCancelled {
+				delete(progress, "segmentStatus")
+			}
 		}
 	}
 	setProgress := func(current, total int) {
@@ -104,6 +107,77 @@ func reduceEvent(current json.RawMessage, subtype IterationSubtype, eventType st
 		case EventSearchError:
 			setState(IterationStateFailed)
 		}
+	case IterationSubtypeCodeExec:
+		switch eventType {
+		case EventExecStart, EventExecOutput:
+			setProgress(0, 0)
+			if progress, ok := data["progress"].(map[string]any); ok {
+				progress["status"] = string(ProgressStatusRunning)
+				delete(progress, "segmentStatus")
+			}
+			data["state"] = string(IterationStateRunning)
+		case EventExecComplete:
+			cancelled, _ := event["cancelled"].(bool)
+			exitCode, _ := event["exit_code"].(float64)
+			setProgress(1, 1)
+			if cancelled {
+				setState(IterationStateCancelled)
+			} else if exitCode != 0 {
+				setState(IterationStateFailed)
+			} else {
+				setState(IterationStateCompleted)
+			}
+		case EventExecError:
+			setState(IterationStateFailed)
+		}
+	case IterationSubtypeFileRead:
+		switch eventType {
+		case EventFileReadOpened:
+			setProgress(0, 0)
+			if progress, ok := data["progress"].(map[string]any); ok {
+				progress["status"] = string(ProgressStatusRunning)
+			}
+			data["state"] = string(IterationStateRunning)
+		case EventFileReadContent:
+			start, _ := event["start_line"].(float64)
+			end, _ := event["end_line"].(float64)
+			lineCount, _ := event["line_count"].(float64)
+			visible := int(end - start + 1)
+			if visible < 0 {
+				visible = 0
+			}
+			if lineCount > 0 {
+				setProgress(visible, int(lineCount))
+			} else {
+				setProgress(visible, 0)
+			}
+		case EventFileReadError:
+			setState(IterationStateFailed)
+		}
+	case IterationSubtypeToolCall:
+		switch eventType {
+		case EventToolCallStarted:
+			gated, _ := event["gated"].(bool)
+			setProgress(0, 1)
+			if progress, ok := data["progress"].(map[string]any); ok {
+				progress["status"] = string(ProgressStatusRunning)
+				if gated {
+					progress["segmentStatus"] = string(ProgressSegmentPendingApproval)
+				} else {
+					delete(progress, "segmentStatus")
+				}
+			}
+			if gated {
+				data["state"] = string(IterationStateWaitingForUser)
+			} else {
+				data["state"] = string(IterationStateRunning)
+			}
+		case EventToolCallResult:
+			setProgress(1, 1)
+			setState(IterationStateCompleted)
+		case EventToolCallError:
+			setState(IterationStateFailed)
+		}
 	case IterationSubtypeThinking:
 		steps, _ := data["steps"].([]any)
 		findStep := func(id string) (map[string]any, int) {
@@ -166,9 +240,6 @@ func reduceEvent(current json.RawMessage, subtype IterationSubtype, eventType st
 			data["currentStepId"] = nil
 			setState(IterationStateFailed)
 		}
-	case IterationSubtypeCodeExec, IterationSubtypeFileRead, IterationSubtypeToolCall:
-		// The event remains durable and replayable; subtype materialization lands
-		// in the next phase. The common envelope is left unchanged.
 	}
 
 	if eventType == EventAgentError {
@@ -185,6 +256,17 @@ func reduceEvent(current json.RawMessage, subtype IterationSubtype, eventType st
 	if eventType == EventCardSteered {
 		if _, ok := data["state"]; !ok {
 			setState(IterationStateRunning)
+		}
+	}
+	if progress, ok := data["progress"].(map[string]any); ok {
+		if phase, ok := event["phase"].(string); ok && phase != "" {
+			progress["phase"] = phase
+		}
+		if ordinal, ok := event["phase_ordinal"].(float64); ok && ordinal == float64(int(ordinal)) {
+			progress["phaseOrdinal"] = int(ordinal)
+		}
+		if parentCardID, ok := event["parent_card_id"].(string); ok && parentCardID != "" {
+			progress["parentCardId"] = parentCardID
 		}
 	}
 	updated, err := json.Marshal(data)

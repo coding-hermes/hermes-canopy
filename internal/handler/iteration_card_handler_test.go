@@ -302,6 +302,25 @@ func TestIterationActiveOrderingAndProgressAggregation(t *testing.T) {
 	if response.Summary.Active != 2 || response.Summary.Running != 2 || len(response.Progress) != 2 {
 		t.Fatalf("progress response = %+v", response)
 	}
+	if len(response.Aggregate.Groups) != 1 || response.Aggregate.Groups[0].Name != "Ungrouped" {
+		t.Fatalf("progress aggregate = %+v", response.Aggregate)
+	}
+	if len(response.Aggregate.Segments) != 2 || len(response.Aggregate.AllSegments) != 2 {
+		t.Fatalf("aggregate segments = %d/all = %d", len(response.Aggregate.Segments), len(response.Aggregate.AllSegments))
+	}
+	wireResponse := iterationRequest(t, ts.srv, http.MethodGet, "/api/v1/iteration/progress", "browser", nil, "")
+	defer wireResponse.Body.Close()
+	var wire map[string]any
+	if err := json.NewDecoder(wireResponse.Body).Decode(&wire); err != nil {
+		t.Fatal(err)
+	}
+	aggregateWire, ok := wire["aggregate"].(map[string]any)
+	if !ok {
+		t.Fatalf("aggregate wire = %v", wire["aggregate"])
+	}
+	if _, ok := aggregateWire["allSegments"]; !ok {
+		t.Fatalf("aggregate wire missing allSegments: %v", aggregateWire)
+	}
 }
 
 func TestIterationSSESequenceAndHeartbeat(t *testing.T) {

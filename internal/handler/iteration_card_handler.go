@@ -95,8 +95,9 @@ type iterationFeedbackRequest struct {
 }
 
 type iterationProgressResponse struct {
-	Progress []iteration.CardProgress `json:"progress"`
-	Summary  iterationProgressSummary `json:"summary"`
+	Progress  []iteration.CardProgress `json:"progress"`
+	Summary   iterationProgressSummary `json:"summary"`
+	Aggregate iteration.ProgressHeader `json:"aggregate"`
 }
 
 type iterationProgressSummary struct {
@@ -299,7 +300,12 @@ func (h *IterationCardHandler) Progress(w http.ResponseWriter, r *http.Request) 
 			summary.Cancelled++
 		}
 	}
-	writeJSON(w, http.StatusOK, iterationProgressResponse{Progress: progress, Summary: summary})
+	aggregate, err := h.svc.AggregateHeader(r.Context())
+	if err != nil {
+		h.writeIterationError(w, r, err, "progress aggregate")
+		return
+	}
+	writeJSON(w, http.StatusOK, iterationProgressResponse{Progress: progress, Summary: summary, Aggregate: aggregate})
 }
 
 func (h *IterationCardHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
