@@ -3949,3 +3949,39 @@ tasks:
   status: complete
   created_at: '2026-10-03T09:52:07.927843+00:00'
   completed_at: '2026-10-03T11:25:24.261239+00:00'
+- id: README-2
+  title: README scratch-instance inline block copy-paste-safe DB_NAME
+  criteria:
+  - 'README.md''s illustrative scratch-instance block no longer relies on $(date +%s)
+    command substitution as the only uniqueness mechanism: a fixed example name is
+    shown with a note that it must be unique (or that $(date +%s) is evaluated at
+    paste time), and the block still points at scripts/scratch-instance.sh as the
+    runnable path'
+  status: complete
+  created_at: '2026-10-04T04:14:16.804446+00:00'
+  completed_at: '2026-10-04T04:14:48.295262+00:00'
+- id: PL-04-PHASE5
+  title: "SPEC-PL-04 \xA78.2 per-subtype renderer contract frontend"
+  criteria:
+  - "tsc -b + vitest + oxlint green; five subtype renderers per \xA78.2 table; zero\
+    \ dangerouslySetInnerHTML in touched files; JSON depth+byte cap tested; commit\
+    \ pushed to origin/master"
+  status: complete
+  created_at: '2026-10-04T11:59:44.349387+00:00'
+  completed_at: '2026-10-04T12:18:23.807913+00:00'
+- id: README-5
+  title: Pin README screenshot embeds to default branch master
+  criteria:
+  - README.md image URLs reference the default branch explicitly so GitHub main-branch
+    viewers see no 404s; curl of the new raw URLs returns 200
+  status: complete
+  created_at: '2026-10-04T17:50:08.058358+00:00'
+  completed_at: '2026-10-04T17:50:32.926081+00:00'
+- id: PL-04-83
+  title: "PL-04 \xA78.3 Progress Model + header aggregation"
+  criteria:
+  - "CardProgress normalized shape (type/title/current/total/status + cardId/phase/updatedAt)\
+    \ and the exact \xA78.3 header aggregation algorithm implemented with unit tests;\
+    \ build+vet+go tests green"
+  status: in_progress
+  created_at: '2026-10-04T21:49:13.070528+00:00'
