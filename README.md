@@ -363,8 +363,10 @@ For full auth details (claims, error codes, middleware), see [docs/API.md](docs/
 │  │              Services Layer                      │  │
 │  │  Tree | Node | Edge | Topic | Card | Graph     │  │
 │  │  Approval | Sync | Profile | MLS               │  │
-│  │  Calendar (phase-one, in-process)              │  │
-│  │  IterationCard engine (PL-04, in-process)      │  │
+│  │  Calendar (PL-05 phase-one, in-process;        │  │
+│  │    HTTP surfaces deferred)                     │  │
+│  │  IterationCard engine (PL-04, in-process;      │  │
+│  │    HTTP surfaces deferred)                     │  │
 │  └─────────────────────┬──────────────────────────┘  │
 │                        │                             │
 │  ┌─────────────────────┴──────────────────────────┐  │
