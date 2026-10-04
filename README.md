@@ -1088,9 +1088,15 @@ export CANOPY_TOKEN=your-jwt-token
 # Full walkthrough and the by-hand version: docs/SCRATCH_INSTANCE.md.
 # The shape of it:
 HTTP_ADDR=127.0.0.1:8093 DB_HOST=127.0.0.1 DB_PORT=5437 \
-  DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy_scratch_$(date +%s) \
+  DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy_scratch_1 \
   HOME=/tmp/canopy-scratch/home CANOPY_FILE_ROOT=/tmp/canopy-scratch/files \
   ./bin/canopyd serve &
+
+# Note: `canopy_scratch_1` is a fixed example — pick a name that does not exist
+# yet (or substitute DB_NAME with e.g. canopy_scratch_$(date +%s), which is
+# evaluated by your shell at paste time). Postgres refuses to create a database
+# that already exists, so a reused name fails loudly rather than silently
+# reusing another instance's data.
 
 # Then point the CLI at THAT API explicitly:
 CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
