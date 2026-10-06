@@ -27,8 +27,6 @@ export interface ProgressHeaderProps {
   defaultGroupsExpanded?: boolean;
 }
 
-const MAX_SEGMENTS = 3;
-
 function segmentTone(segment: HeaderSegment): string {
   switch (segment.status) {
     case 'pending_approval':

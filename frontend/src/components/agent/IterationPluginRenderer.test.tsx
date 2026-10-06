@@ -73,7 +73,7 @@ describe('IterationPluginRenderer', () => {
 
   it('notifies the plugin on mount and on status transitions', () => {
     const onEvent = vi.fn();
-    const view = render(<IterationPluginRenderer cardId="card-1" data={searchData()} plugin={plugin} onEvent={onEvent} />);
+    render(<IterationPluginRenderer cardId="card-1" data={searchData()} plugin={plugin} onEvent={onEvent} />);
     // One notification for the initial status.
     const initialCalls = onEvent.mock.calls.length;
     expect(initialCalls).toBeGreaterThan(0);
@@ -94,7 +94,7 @@ describe('IterationPluginRenderer', () => {
     const onDismissed = vi.fn();
     const source = fakeEventSource();
     const view = render(
-      <IterationPluginRenderer cardId="card-1" data={searchData()} plugin={plugin} eventSource={source} onDismissed={onDismissed} />,
+      <IterationPluginRenderer cardId="card-1" data={searchData()} plugin={plugin} eventSource={source as any} onDismissed={onDismissed} />,
     );
     expect(source.hasListener('card_dismissed')).toBe(true);
     act(() => source.emit('card_dismissed'));
@@ -109,7 +109,7 @@ describe('IterationPluginRenderer', () => {
 
   it('does not subscribe to the stream when no plugin is associated', () => {
     const source = fakeEventSource();
-    render(<IterationPluginRenderer cardId="card-1" data={searchData()} eventSource={source} />);
+    render(<IterationPluginRenderer cardId="card-1" data={searchData()} eventSource={source as any} />);
     expect(source.hasListener('card_dismissed')).toBe(false);
   });
 

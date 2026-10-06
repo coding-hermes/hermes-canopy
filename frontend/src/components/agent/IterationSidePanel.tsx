@@ -13,7 +13,6 @@ import {
   type IterationEventFrame,
 } from '../../lib/iterationApi.ts';
 import { resolveIterationRenderer } from '../../lib/iterationRenderers.ts';
-import { aggregateHeaderProgress, formatHeaderStatus } from '../../lib/iterationProgress.ts';
 import ProgressHeader from './ProgressHeader.tsx';
 import type { IterationCardSubtypeData, IterationFeedbackInput, IterationState } from '../../types/agent.ts';
 
@@ -293,9 +292,7 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose, open]);
 
-  const aggregationRecords = useMemo(() => cards.map((card) => ({ ...card.data.progress, cardStatus: card.status, pendingApproval: card.data.subtype === 'iteration_tool_call' && card.data.status === 'pending_approval', waitingForUser: card.data.state === 'waiting_for_user' })), [cards]);
-  const aggregation = useMemo(() => aggregateHeaderProgress(aggregationRecords), [aggregationRecords]);
-  const headerStatus = formatHeaderStatus(aggregation) || 'No active progress';
+  const recordsForHeader = useMemo(() => cards.map((card) => ({ ...card.data.progress, cardStatus: card.status, pendingApproval: card.data.subtype === 'iteration_tool_call' && card.data.status === 'pending_approval', waitingForUser: card.data.state === 'waiting_for_user' })), [cards]);
 
   const onCancel = (card: IterationCardRecord) => {
     setCancelling((current) => new Set(current).add(card.id));
@@ -328,7 +325,7 @@ export default function IterationSidePanel({ open, onClose, eventSourceFactory }
       <header className="flex items-start gap-3 border-b border-line-subtle bg-surface-panel px-4 py-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold text-content-primary">Agent activity</h2>
-          <ProgressHeader records={aggregationRecords} />
+          <ProgressHeader records={recordsForHeader} />
         </div>
         <button type="button" onClick={onClose} className="rounded p-1.5 text-content-muted hover:bg-surface-hover hover:text-content-primary" aria-label="Close agent activity panel">
           <X className="h-4 w-4" aria-hidden="true" />

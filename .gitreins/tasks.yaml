@@ -3977,3 +3977,11 @@ tasks:
   status: complete
   created_at: '2026-10-04T17:50:08.058358+00:00'
   completed_at: '2026-10-04T17:50:32.926081+00:00'
+- id: PL-04-84
+  title: "PL-04 \xA78.3 frontend: ProgressHeader + IterationPluginRenderer"
+  criteria:
+  - ProgressHeader.tsx renders header aggregation; IterationPluginRenderer.tsx bridges
+    cards to plugin sandbox; all tests pass; no regressions
+  status: complete
+  created_at: '2026-10-06T18:43:18.420586+00:00'
+  completed_at: '2026-10-06T18:53:10.540872+00:00'
