@@ -25,10 +25,20 @@ import {
 import type { IterationCardSubtypeData, IterationSubtype } from '../../types/agent.ts';
 import { resolveIterationRenderer } from '../../lib/iterationRenderers.ts';
 import { statusLabel, statusTone } from './iterationShared.tsx';
+import IterationPluginRenderer, { type IterationPlugin, type IterationPluginRendererProps, type IterationSseSource } from './IterationPluginRenderer.tsx';
 
 export interface IterationCardProps {
   data: IterationCardSubtypeData;
   className?: string;
+  /** Plugin associated with the card; when set, content renders in the sandbox. */
+  plugin?: IterationPlugin;
+  /** Card SSE stream; durable card_dismissed frames are forwarded to the plugin. */
+  eventSource?: IterationSseSource;
+  grantedPermissions?: IterationPluginRendererProps['grantedPermissions'];
+  /** Fires for plugin events and card→plugin status notifications. */
+  onPluginEvent?: IterationPluginRendererProps['onEvent'];
+  /** Called when a durable card_dismissed frame arrives on the stream. */
+  onDismissed?: IterationPluginRendererProps['onDismissed'];
 }
 
 interface SubtypeConfig {
@@ -58,11 +68,12 @@ function statusIcon(state: string): React.ReactNode {
   }
 }
 
-function IterationCardComponent({ data, className = '' }: IterationCardProps) {
+function IterationCardComponent({ data, className = '', plugin, eventSource, grantedPermissions, onPluginEvent, onDismissed }: IterationCardProps) {
   const [expanded, setExpanded] = useState(!data._collapsed);
   const config = SUBTYPE_CONFIG[data.subtype] ?? SUBTYPE_CONFIG.iteration_search;
   const renderer = resolveIterationRenderer(data.subtype);
   const cardId = data.progress?.cardId ?? data.title;
+  const pluginAssociated = Boolean(plugin);
 
   return (
     <div className={`rounded-lg border bg-gray-800/90 border-gray-700 shadow-sm min-w-[200px] max-w-[320px] ${config.accent} ${className}`}>
@@ -85,7 +96,21 @@ function IterationCardComponent({ data, className = '' }: IterationCardProps) {
         {expanded ? <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-gray-500" />}
       </button>
 
-      {expanded && renderer && (
+      {expanded && pluginAssociated && (
+        <div id={`iteration-body-${cardId}`} className="border-t border-gray-700/60 px-3 py-2">
+          <IterationPluginRenderer
+            cardId={cardId}
+            data={data}
+            plugin={plugin}
+            eventSource={eventSource}
+            grantedPermissions={grantedPermissions}
+            onEvent={onPluginEvent}
+            onDismissed={onDismissed}
+          />
+        </div>
+      )}
+
+      {expanded && !pluginAssociated && renderer && (
         <div id={`iteration-body-${cardId}`} className="border-t border-gray-700/60 px-3 py-2">
           {createElement(renderer, { cardId, data, compact: false, events: [], submitFeedback: undefined, cancel: undefined })}
         </div>
