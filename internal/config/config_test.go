@@ -196,29 +196,44 @@ func TestContextBudgetPercentDefault(t *testing.T) {
 }
 
 // TestContextBudgetPercentFromEnv pins the parse contract: 0..100 inclusive is
-// taken as given (0 means "window-derived path disabled", never "unset"), and
-// every out-of-range or non-numeric value silently keeps the default 60 —
-// matching the sibling context knobs, which never error at parse time.
+// taken as given (0 means "window-derived path disabled", never "unset"),
+// unset/blank falls back to the default 60, and every malformed or
+// out-of-range value is STRICTLY rejected via Validate() (QA-41) — the field
+// keeps the default, and Validate() names the env var and value.
 func TestContextBudgetPercentFromEnv(t *testing.T) {
 	cases := []struct {
-		name string
-		env  string
-		want int
+		name  string
+		env   string
+		want  int
+		valid bool
 	}{
-		{"unset keeps the default", "", 60},
-		{"explicit 60", "60", 60},
-		{"zero is preserved (window path disabled)", "0", 0},
-		{"100 is the inclusive upper bound", "100", 100},
-		{"above range keeps the default", "150", 60},
-		{"negative keeps the default", "-1", 60},
-		{"non-numeric keeps the default", "abc", 60},
-		{"blank keeps the default", " ", 60},
+		{"unset keeps the default", "", 60, true},
+		{"explicit 60", "60", 60, true},
+		{"zero is preserved (window path disabled)", "0", 0, true},
+		{"100 is the inclusive upper bound", "100", 100, true},
+		{"blank keeps the default", " ", 60, false},
+		{"above range is rejected", "150", 60, false},
+		{"negative is rejected", "-1", 60, false},
+		{"non-numeric is rejected", "abc", 60, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("CONTEXT_BUDGET_PERCENT", tc.env)
-			if got := FromEnv().ContextBudgetPercent; got != tc.want {
+			c := FromEnv()
+			if got := c.ContextBudgetPercent; got != tc.want {
 				t.Fatalf("FromEnv() with CONTEXT_BUDGET_PERCENT=%q = %d, want %d", tc.env, got, tc.want)
+			}
+			err := c.Validate()
+			if tc.valid && err != nil {
+				t.Fatalf("Validate() with CONTEXT_BUDGET_PERCENT=%q = %v, want nil", tc.env, err)
+			}
+			if !tc.valid {
+				if err == nil {
+					t.Fatalf("Validate() with CONTEXT_BUDGET_PERCENT=%q = nil, want error", tc.env)
+				}
+				if !strings.Contains(err.Error(), "CONTEXT_BUDGET_PERCENT") || !strings.Contains(err.Error(), tc.env) {
+					t.Fatalf("Validate() error %q does not name CONTEXT_BUDGET_PERCENT and the raw value %q", err, tc.env)
+				}
 			}
 		})
 	}
@@ -416,25 +431,39 @@ func TestContextRetrievalMaxDefault(t *testing.T) {
 
 func TestFromEnvContextRetrievalMax(t *testing.T) {
 	cases := []struct {
-		name string
-		env  string
-		want int
+		name  string
+		env   string
+		want  int
+		valid bool
 	}{
-		{"unset keeps the default", "", 0},
-		{"zero is accepted (explicitly disabled)", "0", 0},
-		{"one is accepted", "1", 1},
-		{"mid-range is accepted", "25", 25},
-		{"upper bound is accepted", "50", 50},
-		{"above range keeps the default", "51", 0},
-		{"negative keeps the default", "-1", 0},
-		{"non-numeric keeps the default", "abc", 0},
-		{"blank keeps the default", " ", 0},
+		{"unset keeps the default", "", 0, true},
+		{"zero is accepted (explicitly disabled)", "0", 0, true},
+		{"one is accepted", "1", 1, true},
+		{"mid-range is accepted", "25", 25, true},
+		{"upper bound is accepted", "50", 50, true},
+		{"blank keeps the default", " ", 0, false},
+		{"above range is rejected", "51", 0, false},
+		{"negative is rejected", "-1", 0, false},
+		{"non-numeric is rejected", "abc", 0, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("CONTEXT_RETRIEVAL_MAX", tc.env)
-			if got := FromEnv().ContextRetrievalMax; got != tc.want {
+			c := FromEnv()
+			if got := c.ContextRetrievalMax; got != tc.want {
 				t.Fatalf("FromEnv() with CONTEXT_RETRIEVAL_MAX=%q = %d, want %d", tc.env, got, tc.want)
+			}
+			err := c.Validate()
+			if tc.valid && err != nil {
+				t.Fatalf("Validate() with CONTEXT_RETRIEVAL_MAX=%q = %v, want nil", tc.env, err)
+			}
+			if !tc.valid {
+				if err == nil {
+					t.Fatalf("Validate() with CONTEXT_RETRIEVAL_MAX=%q = nil, want error", tc.env)
+				}
+				if !strings.Contains(err.Error(), "CONTEXT_RETRIEVAL_MAX") || !strings.Contains(err.Error(), tc.env) {
+					t.Fatalf("Validate() error %q does not name CONTEXT_RETRIEVAL_MAX and the raw value %q", err, tc.env)
+				}
 			}
 		})
 	}
@@ -500,5 +529,160 @@ func TestSQLiteRequiresPath(t *testing.T) {
 	c.SQLitePath = "  "
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "CANOPY_SQLITE_PATH") {
 		t.Fatalf("Validate(SQLite with blank path) = %v, want a CANOPY_SQLITE_PATH error", err)
+	}
+}
+
+// --- strict numeric env parsing (QA-41) --------------------------------------
+//
+// FromEnv() must fail loud (via Validate()) on a malformed or out-of-range
+// numeric env value instead of silently falling back to the default. The
+// table below drives every newly-strict knob through malformed / out-of-range
+// / set-and-valid / unset states.
+
+func TestStrictNumericEnvFailFast(t *testing.T) {
+	cases := []struct {
+		env string
+		bad string
+		ood string // out-of-range value ("" = no range contract)
+	}{
+		{"DB_PORT", "abc", ""},
+		{"CONTEXT_MAX_ANCESTORS", "abc", "0"},
+		{"CONTEXT_MAX_REFS", "abc", "0"},
+		{"CONTEXT_DEFAULT_BUDGET", "abc", "0"},
+		{"CONTEXT_BUDGET_PERCENT", "abc", "500"},
+		{"CONTEXT_RETRIEVAL_MAX", "abc", "500"},
+		{"PLUGIN_MAX_SIZE", "abc", "-1"},
+	}
+	for _, tc := range cases {
+		for _, name := range []string{"malformed", "out-of-range"} {
+			val := tc.bad
+			if name == "out-of-range" {
+				if tc.ood == "" {
+					continue
+				}
+				val = tc.ood
+			}
+			t.Run(tc.env+"/"+name, func(t *testing.T) {
+				t.Setenv(tc.env, val)
+				c := FromEnv()
+				if err := c.Validate(); err == nil {
+					t.Fatalf("Validate() with %s=%q = nil, want a startup error", tc.env, val)
+				} else {
+					if !strings.Contains(err.Error(), tc.env) {
+						t.Fatalf("Validate() error %q does not name env var %s", err, tc.env)
+					}
+					if !strings.Contains(err.Error(), val) {
+						t.Fatalf("Validate() error %q does not name the bad value %q", err, val)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestStrictNumericEnvValidValues(t *testing.T) {
+	cases := []struct {
+		env  string
+		val  string
+		want int
+	}{
+		{"DB_PORT", "5444", 5444},
+		{"CONTEXT_MAX_ANCESTORS", "10", 10},
+		{"CONTEXT_MAX_REFS", "3", 3},
+		{"CONTEXT_DEFAULT_BUDGET", "12000", 12000},
+		{"CONTEXT_BUDGET_PERCENT", "0", 0}, // 0 = window-derived path disabled
+		{"CONTEXT_BUDGET_PERCENT", "100", 100},
+		{"CONTEXT_RETRIEVAL_MAX", "0", 0}, // 0 = tier disabled
+		{"CONTEXT_RETRIEVAL_MAX", "50", 50},
+		{"PLUGIN_MAX_SIZE", "2097152", 2097152},
+	}
+	for _, tc := range cases {
+		t.Run(tc.env+"="+tc.val, func(t *testing.T) {
+			t.Setenv(tc.env, tc.val)
+			c := FromEnv()
+			if err := c.Validate(); err != nil {
+				t.Fatalf("Validate() with %s=%q = %v, want nil", tc.env, tc.val, err)
+			}
+			var got int
+			switch tc.env {
+			case "DB_PORT":
+				got = c.DBPort
+			case "CONTEXT_MAX_ANCESTORS":
+				got = c.ContextMaxAncestors
+			case "CONTEXT_MAX_REFS":
+				got = c.ContextMaxRefs
+			case "CONTEXT_DEFAULT_BUDGET":
+				got = c.ContextDefaultBudget
+			case "CONTEXT_BUDGET_PERCENT":
+				got = c.ContextBudgetPercent
+			case "CONTEXT_RETRIEVAL_MAX":
+				got = c.ContextRetrievalMax
+			case "PLUGIN_MAX_SIZE":
+				got = c.PluginMaxSize
+			}
+			if got != tc.want {
+				t.Fatalf("%s=%q parsed to %d, want %d", tc.env, tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStrictNumericEnvUnsetFallsBack pins the documented lenient half: unset
+// (or empty) numeric env vars still fall back to the defaults with a clean
+// Validate() — strictness applies only to SET values.
+func TestStrictNumericEnvUnsetFallsBack(t *testing.T) {
+	for _, env := range []string{
+		"DB_PORT", "CONTEXT_MAX_ANCESTORS", "CONTEXT_MAX_REFS",
+		"CONTEXT_DEFAULT_BUDGET", "CONTEXT_BUDGET_PERCENT",
+		"CONTEXT_RETRIEVAL_MAX", "PLUGIN_MAX_SIZE",
+	} {
+		t.Setenv(env, "")
+	}
+	c := FromEnv()
+	d := Default()
+	if c.DBPort != d.DBPort || c.ContextMaxAncestors != d.ContextMaxAncestors ||
+		c.ContextMaxRefs != d.ContextMaxRefs || c.ContextDefaultBudget != d.ContextDefaultBudget ||
+		c.ContextBudgetPercent != d.ContextBudgetPercent || c.ContextRetrievalMax != d.ContextRetrievalMax ||
+		c.PluginMaxSize != d.PluginMaxSize {
+		t.Fatalf("empty numeric env vars did not fall back to defaults: got %+v, want defaults %+v", c, d)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() with all numeric env vars empty = %v, want nil", err)
+	}
+}
+
+// TestValidateReturnsEnvParseError pins the mechanism: FromEnv() records the
+// parse failure on the Config and Validate() surfaces it, so `canopyd serve`
+// exits non-zero with an error naming the env var and the bad value.
+func TestValidateReturnsEnvParseError(t *testing.T) {
+	t.Setenv("CANOPY_HTTP_PORT", "abc") // not a recognized knob; must be inert
+	t.Setenv("DB_PORT", "abc")
+	c := FromEnv()
+	if got := c.DBPort; got != Default().DBPort {
+		t.Fatalf("DBPort = %d after a malformed value, want the default %d", got, Default().DBPort)
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil after a malformed DB_PORT, want an error")
+	}
+	want := "DB_PORT"
+	if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "abc") {
+		t.Fatalf("Validate() error %q does not name %s and the value %q", err, want, "abc")
+	}
+}
+
+// TestUnrecognizedCanopyEnvVarsInert documents the QA-41 premise fix: there
+// is NO CANOPY_CONFIG file knob and no CANOPY_HTTP_PORT — configuration is
+// env-only. Setting an unrecognized CANOPY_* variable must neither error nor
+// change the config.
+func TestUnrecognizedCanopyEnvVarsInert(t *testing.T) {
+	t.Setenv("CANOPY_CONFIG", "/etc/canopy.toml")
+	t.Setenv("CANOPY_HTTP_PORT", "abc")
+	c := FromEnv()
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() with unrecognized CANOPY_CONFIG/CANOPY_HTTP_PORT set = %v, want nil (configuration is env-only; these variables are not recognized)", err)
+	}
+	if got := c.HTTPAddr; got != Default().HTTPAddr {
+		t.Fatalf("HTTPAddr = %q with unrecognized CANOPY_HTTP_PORT set, want the default %q", got, Default().HTTPAddr)
 	}
 }

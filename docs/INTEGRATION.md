@@ -136,7 +136,15 @@ make build-embed
 
 ### Configuration
 
-The backend is configured via environment variables. Defaults are defined in
+The backend is configured **via environment variables only**. There is **no
+config file**: `CANOPY_CONFIG` (and any other `CANOPY_CONFIG_*` file-path
+variable) is **not a recognized variable** — setting it has no effect.
+Recognized variables are exactly those listed below (plus the context-compiler
+knobs documented in the README), as read by `FromEnv()` in
+`internal/config/config.go`. Malformed or out-of-range **numeric** values
+(e.g. `DB_PORT=abc`, `CONTEXT_BUDGET_PERCENT=500`) are a **startup error**:
+`canopyd serve` exits non-zero with an error naming the variable and the bad
+value, never a silent fallback to the default. Defaults are defined in
 `internal/config/config.go`:
 
 | Variable         | Default            | Description                        |

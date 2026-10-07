@@ -103,6 +103,15 @@ type Config struct {
 	// derivation stayed inert.
 	contextModelWindowsErr error
 
+	// envParseErr records the FIRST failure FromEnv() hit while parsing a
+	// strictly-parsed numeric CANOPY_* env value (DB_PORT, CONTEXT_MAX_*,
+	// CONTEXT_DEFAULT_BUDGET, CONTEXT_BUDGET_PERCENT, CONTEXT_RETRIEVAL_MAX,
+	// PLUGIN_MAX_SIZE). A malformed integer — or an out-of-range value the
+	// Validate() contract already rejects for code-built configs — is a
+	// startup error surfaced by Validate(), never a silent fallback to the
+	// default: a typo'd port or budget must be loud, not inert (QA-41).
+	envParseErr error
+
 	// Plugin sandbox (GAP-002 §4.1)
 	PluginMaxSize int // PLUGIN_MAX_SIZE, default 1048576 (1MB)
 
@@ -240,6 +249,36 @@ func parseDBDriver(raw string) string {
 	return raw
 }
 
+// strictEnvInt parses a numeric env value strictly (QA-41): a set value must
+// be a valid integer AND satisfy range, otherwise an error naming the env
+// variable and the raw value is recorded on the Config so Validate() can
+// refuse the startup. An UNSET (or empty) variable is not an error — the
+// caller left the knob alone and the default applies. The fallback is only
+// used when env is empty; a bad set value never silently falls back.
+func strictEnvInt(env string, fallback int, rangeFn func(int) bool) (int, error) {
+	v := os.Getenv(env)
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback, fmt.Errorf("config: %s=%q is not a valid integer", env, v)
+	}
+	if rangeFn != nil && !rangeFn(n) {
+		return fallback, fmt.Errorf("config: %s=%d is out of range", env, n)
+	}
+	return n, nil
+}
+
+// recordEnvErr stores the first env parse failure on the Config (later
+// failures are not reported; the first names the knob and value, which is
+// enough to fix the environment one variable at a time).
+func (c *Config) recordEnvErr(err error) {
+	if err != nil && c.envParseErr == nil {
+		c.envParseErr = err
+	}
+}
+
 // FromEnv loads configuration from environment variables,
 // falling back to Default() values when unset.
 func FromEnv() *Config {
@@ -251,10 +290,10 @@ func FromEnv() *Config {
 	if v := os.Getenv("DB_HOST"); v != "" {
 		c.DBHost = v
 	}
-	if v := os.Getenv("DB_PORT"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil {
-			c.DBPort = p
-		}
+	if p, err := strictEnvInt("DB_PORT", c.DBPort, nil); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.DBPort = p
 	}
 	if v := os.Getenv("DB_USER"); v != "" {
 		c.DBUser = v
@@ -292,39 +331,40 @@ func FromEnv() *Config {
 	if v := os.Getenv("METRICS_ENABLED"); v == "true" || v == "1" {
 		c.MetricsEnabled = true
 	}
-	if v := os.Getenv("CONTEXT_MAX_ANCESTORS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			c.ContextMaxAncestors = n
-		}
+	if p, err := strictEnvInt("CONTEXT_MAX_ANCESTORS", c.ContextMaxAncestors, func(n int) bool { return n > 0 }); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.ContextMaxAncestors = p
 	}
-	if v := os.Getenv("CONTEXT_MAX_REFS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			c.ContextMaxRefs = n
-		}
+	if p, err := strictEnvInt("CONTEXT_MAX_REFS", c.ContextMaxRefs, func(n int) bool { return n > 0 }); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.ContextMaxRefs = p
 	}
-	if v := os.Getenv("CONTEXT_DEFAULT_BUDGET"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			c.ContextDefaultBudget = n
-		}
+	if p, err := strictEnvInt("CONTEXT_DEFAULT_BUDGET", c.ContextDefaultBudget, func(n int) bool { return n > 0 }); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.ContextDefaultBudget = p
 	}
 	// CONTEXT_BUDGET_PERCENT (GAP-080 phase 2a): the window-derived default
 	// budget as a percentage of the selected model's context window. 0..100
 	// inclusive is accepted (0 = disabled, i.e. always the flat default);
-	// anything else keeps the default 60, matching the silent-keep behaviour
-	// of the sibling context knobs above.
-	if v := os.Getenv("CONTEXT_BUDGET_PERCENT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
-			c.ContextBudgetPercent = n
-		}
+	// a malformed or out-of-range value is now a recorded startup error
+	// (QA-41) instead of silently keeping the default 60.
+	if p, err := strictEnvInt("CONTEXT_BUDGET_PERCENT", c.ContextBudgetPercent, func(n int) bool { return n >= 0 && n <= 100 }); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.ContextBudgetPercent = p
 	}
 	// CONTEXT_RETRIEVAL_MAX (GAP-080 phase 4a): max topic-search results the
 	// retrieved tier may fold into a payload. 0..50 inclusive is accepted
-	// (0 = tier disabled); anything else keeps the default 0, matching the
-	// silent-keep behaviour of the sibling context knobs.
-	if v := os.Getenv("CONTEXT_RETRIEVAL_MAX"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 50 {
-			c.ContextRetrievalMax = n
-		}
+	// (0 = tier disabled); a malformed or out-of-range value is now a
+	// recorded startup error (QA-41) instead of silently keeping the
+	// default 0.
+	if p, err := strictEnvInt("CONTEXT_RETRIEVAL_MAX", c.ContextRetrievalMax, func(n int) bool { return n >= 0 && n <= 50 }); err != nil {
+		c.recordEnvErr(err)
+	} else {
+		c.ContextRetrievalMax = p
 	}
 	// CONTEXT_MODEL_WINDOWS (GAP-080 phase 2a follow-up): locally declared
 	// context windows for models the gateway reports no window for. Unset
@@ -336,14 +376,14 @@ func FromEnv() *Config {
 		c.contextModelWindowsErr = err
 		c.ContextModelWindows = windows
 	}
-	if v := os.Getenv("PLUGIN_MAX_SIZE"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			// Negative values are rejected at startup (Validate); zero falls
-			// back to the 1MB default.
-			if n > 0 {
-				c.PluginMaxSize = n
-			}
-		}
+	// PLUGIN_MAX_SIZE (GAP-002 §4.1): a malformed or negative value is now a
+	// recorded startup error (QA-41); zero falls back to the 1MB default.
+	if p, err := strictEnvInt("PLUGIN_MAX_SIZE", c.PluginMaxSize, func(n int) bool { return n >= 0 }); err != nil {
+		c.recordEnvErr(err)
+	} else if p == 0 {
+		// Zero keeps the 1MB default (documented lenient case).
+	} else {
+		c.PluginMaxSize = p
 	}
 
 	// Hermes gateway (GAP-050). base_url defaults to the hermes-webui
@@ -444,9 +484,8 @@ func FromEnv() *Config {
 // Validate checks configuration invariants that must fail fast at startup.
 // A negative PLUGIN_MAX_SIZE is a hard error (GAP-002 §4.1); zero falls back
 // to the 1MB default in FromEnv. A CONTEXT_BUDGET_PERCENT outside 0..100 is
-// likewise a hard error (GAP-080 phase 2a) — FromEnv already ignores an
-// out-of-range env value, so reaching Validate() with one means the Config was
-// built in code. A malformed CONTEXT_MODEL_WINDOWS is a hard error too
+// likewise a hard error (GAP-080 phase 2a). A malformed CONTEXT_MODEL_WINDOWS
+// is a hard error too
 // (GAP-080 phase 2a follow-up): the knob exists to make the window-derived
 // budget activate, so a typo that silently resolved to no overrides would
 // reproduce the very inertness it was added to remove. TrustedProxies entries
@@ -469,9 +508,9 @@ func (c *Config) Validate() error {
 	if c.ContextBudgetPercent < 0 || c.ContextBudgetPercent > 100 {
 		return fmt.Errorf("config: CONTEXT_BUDGET_PERCENT must be between 0 and 100 (got %d)", c.ContextBudgetPercent)
 	}
-	// GAP-080 phase 4a: same posture for CONTEXT_RETRIEVAL_MAX — FromEnv
-	// already ignores an out-of-range env value, so reaching Validate()
-	// with one means the Config was built in code.
+	// GAP-080 phase 4a: same posture for CONTEXT_RETRIEVAL_MAX — an
+	// out-of-range value is a hard error whether the Config was built in
+	// code or via an out-of-range env value (QA-41).
 	if c.ContextRetrievalMax < 0 || c.ContextRetrievalMax > 50 {
 		return fmt.Errorf("config: CONTEXT_RETRIEVAL_MAX must be between 0 and 50 (got %d)", c.ContextRetrievalMax)
 	}
@@ -479,6 +518,13 @@ func (c *Config) Validate() error {
 	// CONTEXT_MODEL_WINDOWS, reported here so the server refuses to start.
 	if c.contextModelWindowsErr != nil {
 		return c.contextModelWindowsErr
+	}
+	// QA-41: a malformed or out-of-range numeric env value (DB_PORT,
+	// CONTEXT_MAX_*, CONTEXT_DEFAULT_BUDGET, CONTEXT_BUDGET_PERCENT,
+	// CONTEXT_RETRIEVAL_MAX, PLUGIN_MAX_SIZE) is a startup error naming the
+	// env var and the raw value — never a silent fallback to the default.
+	if c.envParseErr != nil {
+		return c.envParseErr
 	}
 	// The same knob built in code has no env value to re-parse, so the map
 	// itself is checked. Keys are sorted so a Config with several bad

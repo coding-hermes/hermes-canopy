@@ -789,6 +789,14 @@ METRICS_ENABLED=true \
 
 ### Environment Variables
 
+Configuration is **environment-only** — there is **no config file**.
+`CANOPY_CONFIG` is **not a recognized variable**; setting it has no effect.
+Recognized variables are exactly those listed below (read by `FromEnv()` in
+`internal/config/config.go`). Malformed or out-of-range **numeric** values
+(e.g. `DB_PORT=abc`, `CONTEXT_BUDGET_PERCENT=500`, `PLUGIN_MAX_SIZE=-1`) are
+a **startup error**: `canopyd serve` exits non-zero with an error naming the
+variable and the bad value, never a silent fallback to the default.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HTTP_ADDR` | `:8080` | HTTP listen address |
