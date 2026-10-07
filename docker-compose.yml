@@ -49,8 +49,29 @@ services:
       # canopy-canopyd.service (primary instance). Compose stack is the
       # containerized alternative (GAP-063).
       - "8092:8080"
+    healthcheck:
+      # QA-HERMES-CANOPY-40 readiness gate: a canopyd that crash-loops (bad DB
+      # auth) or never binds its listener still shows the container "Started"
+      # while the published host port answers nothing. Gate readiness on the
+      # public GET /health endpoint canopyd serves on HTTP_ADDR — which the
+      # environment block below pins to :8080, the container side of the
+      # 8092:8080 publish (compose `environment` overrides env_file, so a
+      # user .env cannot move the listener out from under this probe).
+      # wget is busybox's — the alpine runtime image ships no curl. 20
+      # consecutive failures at a 3s interval mark the service unhealthy
+      # after ~60s, so `docker compose up -d --wait` exits non-zero and
+      # `docker compose ps` shows unhealthy instead of a silently dead
+      # publish.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     environment:
       HTTP_ADDR: ":8080"
+      # The password must match POSTGRES_PASSWORD on the postgres service
+      # above (canopy). A placeholder here makes canopyd fail DB auth and
+      # exit inside 60s of boot — the exact "Started but :8092 unreachable"
+      # symptom this readiness gate exists to surface loudly.
       CANOPY_DB_URL: postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable
       CANOPY_DEV: "false"
       METRICS_ENABLED: "true"

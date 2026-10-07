@@ -46,7 +46,22 @@ This starts two services:
   systemd `canopy-canopyd.service` primary instance; compose is the
   containerized alternative and must not fight it for the port
 - Connects to postgres via `CANOPY_DB_URL=postgres://canopy:canopy@postgres:5432/canopy?sslmode=disable`
-- Waits for postgres health check before starting
+  (the password must match `POSTGRES_PASSWORD` on the postgres service — the
+  compose default is `canopy`)
+- Readiness gate (QA-HERMES-CANOPY-40): a container healthcheck polls
+  `GET /health` on the in-container listener every 3s (3s timeout, 20
+  consecutive failures ⇒ unhealthy — a ~60s probe window). `canopyd` that
+  crash-loops on DB auth or never binds its port no longer shows a green
+  "Started" with nothing answering on :8092. `docker compose up -d --wait`
+  exits non-zero when the gate fails; plain `docker compose up -d` returns
+  early — follow it with `docker compose ps` (expect `healthy`) or use
+  `--wait` in scripts
+- Waits for postgres health check before starting (`depends_on:
+  service_healthy`; canopyd itself still exits 1 on an unreachable DB with
+  the §2 pointer message on stderr)
+- Regression coverage for the readiness gate, port agreement and DSN
+  password lives in `scripts/test-compose-readiness.sh` (rendered
+  `docker compose config` where a daemon is reachable, raw scan otherwise)
 - Metrics enabled by default (`METRICS_ENABLED=true`)
 - Built from `deploy/Dockerfile`
 - Gateway integration (GAP-050): reaches the Hermes api_server via
