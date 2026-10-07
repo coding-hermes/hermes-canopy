@@ -11,8 +11,12 @@ CANOPY_SQLITE_PATH=/srv/canopy/canopy.sqlite \
 canopyd serve
 ```
 
-`CANOPY_SQLITE_PATH` is optional; its default is `~/.canopy/canopy.sqlite`. SQLite boot
-opens the file with WAL, foreign keys, a 5-second busy timeout, and `synchronous=NORMAL`.
+`CANOPY_SQLITE_PATH` is optional; its default is `~/.canopy/canopy.sqlite` (see
+`config.DefaultSQLitePath()`). SQLite boot opens the file with WAL, foreign keys, a 5-second
+busy timeout, and `synchronous=NORMAL`, then runs `PRAGMA quick_check`: a truncated or
+otherwise corrupted file is refused at boot with an error naming the path
+(`sqlite: QuickCheck <path>: ...`; see `sqlite.IsCorruptionRefusal`), while a zero-byte file
+is treated as a fresh store and rebuilt cleanly from the embedded migrations.
 It applies the embedded core migrations and checks the live table/column inventory. The
 wave-1 binary then refuses full server startup because non-core PostgreSQL repositories
 are not silently substituted. This refusal is intentional; it protects operators from a
