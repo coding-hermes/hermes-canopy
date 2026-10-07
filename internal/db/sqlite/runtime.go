@@ -12,9 +12,16 @@ import (
 // migration runs, matching canopyd's PostgreSQL stale-build guard.
 const EmbeddedCoreVersion int64 = 10
 
-// OpenRuntime opens a SQLite canopy store, refuses a newer applied migration,
-// applies the embedded core schema, and verifies the live table/column
-// inventory. The caller owns the returned store and must close it.
+// OpenRuntime opens a SQLite canopy store, refuses a database that fails
+// SQLite's quick integrity check, refuses a newer applied migration, applies
+// the embedded core schema, and verifies the live table/column inventory. The
+// caller owns the returned store and must close it.
+//
+// The integrity probe exists because the file header that SQLite's open and
+// ping path reads (page 1) can be intact while interior b-tree pages are
+// garbage: those files open "successfully", pass the migration ledger query,
+// and boot against a silently damaged store (QA-HERMES-CANOPY-42). Refusal
+// names the file so operators can restore it rather than rebuild over it.
 func OpenRuntime(ctx context.Context, path string) (*Store, error) {
 	store, err := Open(path)
 	if err != nil {
@@ -23,6 +30,9 @@ func OpenRuntime(ctx context.Context, path string) (*Store, error) {
 	closeOnError := func(err error) (*Store, error) {
 		_ = store.Close()
 		return nil, err
+	}
+	if err := store.QuickCheck(ctx); err != nil {
+		return closeOnError(err)
 	}
 
 	before, err := store.AppliedMigrations(ctx)

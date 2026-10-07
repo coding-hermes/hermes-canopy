@@ -162,7 +162,7 @@ func Default() *Config {
 		DBSSLMode:            "disable",
 		DBSchema:             "public",
 		DBDriver:             "postgres",
-		SQLitePath:           defaultSQLitePath(),
+		SQLitePath:           DefaultSQLitePath(),
 		HTTPAddr:             ":8080",
 		LogLevel:             "info",
 		LogFormat:            "text",
@@ -229,10 +229,15 @@ func parseContextModelWindows(raw string) (map[string]int, error) {
 	return windows, nil
 }
 
-// defaultSQLitePath returns the conventional canopy runtime database path.
-// It is deliberately derived without consulting CANOPY_SQLITE_PATH so Default
-// remains a stable, side-effect-free baseline for tests and callers.
-func defaultSQLitePath() string {
+// DefaultSQLitePath returns the conventional canopy runtime database path
+// (<user home>/.canopy/canopy.sqlite, falling back to a relative .canopy/
+// canopy.sqlite when the home directory is unknown). It is deliberately
+// derived without consulting CANOPY_SQLITE_PATH so Default remains a stable,
+// side-effect-free baseline for tests and callers; FromEnv still overrides
+// with CANOPY_SQLITE_PATH when set. Exported so the SQLite runtime location
+// (and its corruption behavior, docs/SQLITE-RUNTIME.md) is discoverable from
+// tooling and the chaos battery without duplicating the derivation.
+func DefaultSQLitePath() string {
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {
 		return filepath.Join(home, ".canopy", "canopy.sqlite")
