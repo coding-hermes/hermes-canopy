@@ -1,0 +1,70 @@
+# FTR-06 Phase 1 + Phase 3 (build/publish mechanics) — SPEC-FTR-06
+# Native binary release workflow: cross-build canopyd via Makefile targets,
+# generate sha256 checksums, upload artifacts to a GitHub Release.
+# Triggered on v* tags (and manual dispatch for re-runs).
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for git describe)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build all cross targets
+        run: |
+          make build-embed-linux-amd64
+          make build-embed-linux-arm64
+          make build-embed-darwin-amd64
+          make build-embed-darwin-arm64
+          make build-embed-windows-amd64
+
+      - name: Generate checksums
+        run: |
+          cd bin
+          for f in canopyd_linux_amd64 canopyd_linux_arm64 canopyd_darwin_amd64 canopyd_darwin_arm64 canopyd_windows_amd64.exe; do
+            sha256sum "$f" > "$f.sha256"
+          done
+
+      - name: Generate release notes
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "$(git describe --tags --abbrev=0)^" 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            git log --oneline "$PREV..${GITHUB_REF_NAME}" > release-notes.txt || true
+          else
+            git log --oneline > release-notes.txt || true
+          fi
+          { echo "## Changes"; echo '```'; cat release-notes.txt; echo '```'; } > body.md
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          body_path: body.md
+          files: |
+            bin/canopyd_linux_amd64
+            bin/canopyd_linux_amd64.sha256
+            bin/canopyd_linux_arm64
+            bin/canopyd_linux_arm64.sha256
+            bin/canopyd_darwin_amd64
+            bin/canopyd_darwin_amd64.sha256
+            bin/canopyd_darwin_arm64
+            bin/canopyd_darwin_arm64.sha256
+            bin/canopyd_windows_amd64.exe
+            bin/canopyd_windows_amd64.exe.sha256
