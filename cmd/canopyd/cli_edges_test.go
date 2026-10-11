@@ -104,6 +104,8 @@ func TestServerUsageListsSubcommands(t *testing.T) {
 		"Flags:",
 		"-version",
 		"-relay-mode",
+		"-update-interval",
+		"-channel",
 		"HTTP_ADDR",
 	} {
 		if !strings.Contains(out, want) {
