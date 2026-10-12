@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Canopy
+GenericName=Graph collaboration server
+Comment=Start the Hermes Canopy local web server
+Exec=canopyd serve
+TryExec=canopyd
+Icon=canopy
+Terminal=true
+StartupNotify=false
+Categories=Development;Utility;

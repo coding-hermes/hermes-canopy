@@ -42,6 +42,38 @@ jobs:
             sha256sum "$f" > "$f.sha256"
           done
 
+      - name: Package Linux installers
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          export VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          nfpm package --config deploy/nfpm.yaml --packager deb --target "dist/canopy_${VERSION}_amd64.deb"
+          nfpm package --config deploy/nfpm.yaml --packager rpm --target "dist/canopy-${VERSION}-1.x86_64.rpm"
+
+      - name: Generate signed release manifest
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "${RELEASE_SIGNING_KEY:-}" ]; then
+            echo "::error::RELEASE_SIGNING_KEY is required; refusing to publish unsigned latest.json"
+            exit 1
+          fi
+          export VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets
+          cp bin/canopyd* release-assets/
+          cp dist/*.deb dist/*.rpm release-assets/
+          go run ./cmd/release-tool \
+            --artifacts release-assets \
+            --manifest dist/latest.json \
+            --version "$VERSION" \
+            --channel stable \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+      # macOS and Windows code signing are intentionally deferred until the
+      # owner supplies platform signing credentials and runner-specific jobs.
+      # This workflow makes no claim that the five cross-built binaries are signed.
+
       - name: Generate release notes
         run: |
           PREV=$(git describe --tags --abbrev=0 "$(git describe --tags --abbrev=0)^" 2>/dev/null || echo "")
@@ -68,3 +100,6 @@ jobs:
             bin/canopyd_darwin_arm64.sha256
             bin/canopyd_windows_amd64.exe
             bin/canopyd_windows_amd64.exe.sha256
+            dist/canopy_*.deb
+            dist/canopy-*.rpm
+            dist/latest.json
