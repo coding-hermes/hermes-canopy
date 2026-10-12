@@ -3995,3 +3995,26 @@ tasks:
   status: complete
   created_at: '2026-10-07T10:36:41.374329+00:00'
   completed_at: '2026-10-07T10:37:15.337950+00:00'
+- id: FTR-06-P2
+  title: 'SPEC-FTR-06 Phase 2: internal/updater package (CheckForUpdate, DownloadUpdate,
+    ApplyUpdate, Rollback, Ed25519 verify, CLI flags, serve-goroutine wiring)'
+  criteria:
+  - 'AC1: internal/updater package exists with CheckForUpdate (HTTP+JSON+semver),
+    DownloadUpdate (streaming+SHA-256), ApplyUpdate (atomic rename POSIX + MoveFileEx
+    windows), Rollback, and Ed25519 signature verification in verify.go. AC2: unit
+    tests pass covering the spec update scenarios (go test ./internal/updater/). AC3:
+    --update-interval and --channel CLI flags parsed without breaking existing flag
+    surface. AC4: periodic check goroutine wired into canopyd serve behind config,
+    off by default or behind flag. AC5: go build ./... and go vet ./... clean. AC6:
+    commit lands on worktree branch with co-author trailer.'
+  status: in_progress
+  created_at: '2026-10-10T11:33:15.503000+00:00'
+- id: README-6
+  title: README env table missing CONTEXT_RETRIEVAL_MAX
+  criteria:
+  - 'AC1: README.md Environment Variables table includes a row for CONTEXT_RETRIEVAL_MAX
+    with default 0 and description noting 0..50 inclusive range and startup error
+    on malformed/out-of-range values. AC2: go build/vet clean. AC3: commit with co-author
+    trailer.'
+  status: in_progress
+  created_at: '2026-10-12T04:36:56.531069+00:00'
