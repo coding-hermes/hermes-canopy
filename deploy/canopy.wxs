@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v4 template for the existing native canopyd Windows artifact.
+  Build with:
+    candle -dVersion=1.2.3 \
+      -dBinaryPath=bin/canopyd_windows_amd64.exe \
+      -dIconPath=deploy/canopy.ico deploy/canopy.wxs
+    light canopy.wixobj -o canopy.msi
+  The release workflow does not invoke WiX on Ubuntu; a Windows packaging job
+  can supply these variables when WiX and Windows signing credentials exist.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Canopy"
+           Manufacturer="Hermes Canopy contributors"
+           Version="$(var.Version)"
+           UpgradeCode="{A2AFD1F7-B26F-4AF1-8A68-7F1B1E7D1A06}">
+    <SummaryInformation Description="Hermes Canopy native server" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Canopy is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="CanopyIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="CanopyIcon" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Canopy" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="Canopy" Level="1">
+      <Component Directory="INSTALLFOLDER" Guid="*">
+        <File Id="CanopydExecutable"
+              Source="$(var.BinaryPath)"
+              KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

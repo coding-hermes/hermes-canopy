@@ -1,0 +1,23 @@
+name: canopy
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Hermes Canopy contributors <opensource@coding-hermes.dev>
+description: Graph-native collaboration server with an embedded web UI.
+homepage: https://github.com/coding-hermes/hermes-canopy
+license: Apache-2.0
+contents:
+  - src: ./bin/canopyd_linux_amd64
+    dst: /usr/bin/canopyd
+    file_info:
+      mode: 0755
+  - src: ./deploy/canopy.desktop
+    dst: /usr/share/applications/canopy.desktop
+    file_info:
+      mode: 0644
+  - src: ./deploy/canopy.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/canopy.svg
+    file_info:
+      mode: 0644
