@@ -919,6 +919,8 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "  -relay-tls-key          TLS key file path\n")
 	fmt.Fprintf(os.Stderr, "  -relay-tls-ca           TLS CA certificate file path\n")
 	fmt.Fprintf(os.Stderr, "  -relay-tls-mutual       require mutual TLS\n")
+	fmt.Fprintf(os.Stderr, "  -update-interval        signed update check interval (0 disables update checks)\n")
+	fmt.Fprintf(os.Stderr, "  -channel                update channel: stable, beta, or nightly\n")
 	fmt.Fprintf(os.Stderr, "  -h, --help  print this help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "Key environment variables:\n")
 	fmt.Fprintf(os.Stderr, "  HTTP_ADDR       listen address (default :8080)\n")

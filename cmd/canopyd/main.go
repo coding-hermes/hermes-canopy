@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	stdsync "sync"
 	"syscall"
 	"time"
 
@@ -42,6 +43,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/sync"
 	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
+	"github.com/coding-hermes/hermes-canopy/internal/updater"
 )
 
 // version is injected at build time via -ldflags.
@@ -167,11 +169,20 @@ func main() {
 	relayTLSKey := flag.String("relay-tls-key", "", "TLS key file path")
 	relayTLSCA := flag.String("relay-tls-ca", "", "TLS CA certificate file path")
 	relayTLSMutual := flag.Bool("relay-tls-mutual", false, "require mutual TLS")
+	updateInterval := flag.Duration("update-interval", 0, "signed update check interval (0 disables update checks)")
+	updateChannel := flag.String("channel", string(updater.ChannelStable), "update channel: stable, beta, or nightly")
 	flag.Usage = printServerUsage
 	flag.Parse()
 
 	if *showVersion {
 		os.Exit(versionOutput(os.Stdout))
+	}
+
+	if *updateInterval < 0 {
+		log.Fatal().Msg("invalid configuration: -update-interval must be zero or positive")
+	}
+	if err := updater.ValidateChannel(*updateChannel); err != nil {
+		log.Fatal().Err(err).Msg("invalid update channel")
 	}
 
 	// -print-schema-version (GAP-069): print the max migration version
@@ -220,6 +231,8 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	updateCtx, stopUpdateChecks := context.WithCancel(ctx)
+	var updateWG stdsync.WaitGroup
 
 	// SQLite wave-1 boot: open the core-graph store, apply the embedded
 	// migrations, and fail closed on schema drift before any server surface is
@@ -617,6 +630,30 @@ func main() {
 		}
 	}()
 
+	// Update checks are explicitly opt-in. They only fetch signed release
+	// metadata; applying an update remains a separate, deliberate operation.
+	if *updateInterval > 0 {
+		updateClient := &updater.Updater{
+			CurrentVersion: version,
+			Channel:        updater.ReleaseChannel(*updateChannel),
+			CheckInterval:  *updateInterval,
+			OnStartupCheck: true,
+		}
+		updateWG.Add(1)
+		go func() {
+			defer updateWG.Done()
+			updateClient.RunPeriodicChecks(updateCtx, *updateInterval, func(result updater.UpdateCheckResult) {
+				if result.Error != nil {
+					log.Warn().Err(result.Error).Str("channel", string(updateClient.Channel)).Msg("update check failed")
+					return
+				}
+				if result.Available && result.Artifact != nil {
+					log.Info().Str("version", result.Artifact.Version).Str("channel", string(updateClient.Channel)).Msg("update available")
+				}
+			})
+		}()
+	}
+
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -626,6 +663,11 @@ func main() {
 	// Graceful shutdown with 30s timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer shutdownCancel()
+
+	// Stop update checks before draining the rest of the server. This makes
+	// shutdown deterministic even if a manifest request is in flight.
+	stopUpdateChecks()
+	updateWG.Wait()
 
 	// Relay publishes its draining transition before SSE clients are closed.
 	if err := coreRelay.Shutdown(shutdownCtx); err != nil {
