@@ -31,8 +31,8 @@ func unsetEnv(t *testing.T, name string) {
 
 // TestDefaultStateFileOverride pins the DF-HERMES-CANOPY-9 contract: an
 // explicit CANOPY_GATEWAY_STATE_FILE is returned verbatim — never joined onto
-// $HOME and never cleaned — while an unset or empty value keeps the historical
-// $HOME/.hermes/canopy/gateway/runs.jsonl path.
+// $HOME and never cleaned — while an unset or empty value keeps the per-port
+// default (~/.hermes/canopy/gateway/runs-<port>.jsonl) for the canonical port.
 //
 // The override names the JSONL FILE, not a directory: a test row with no
 // .jsonl suffix is deliberate, because joining "runs.jsonl" (or any filename)
@@ -40,7 +40,7 @@ func unsetEnv(t *testing.T, name string) {
 func TestDefaultStateFileOverride(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	wantDefault := filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl")
+	wantDefault := filepath.Join(home, ".hermes", "canopy", "gateway", "runs-8091.jsonl")
 
 	tests := []struct {
 		name   string
@@ -78,7 +78,7 @@ func TestDefaultStateFileOverride(t *testing.T) {
 			want:   wantDefault,
 		},
 		{
-			name:   "unset override falls back to the HOME registry",
+			name:   "unset override falls back to the per-port HOME registry",
 			setVar: false,
 			want:   wantDefault,
 		},
@@ -91,29 +91,28 @@ func TestDefaultStateFileOverride(t *testing.T) {
 			} else {
 				unsetEnv(t, "CANOPY_GATEWAY_STATE_FILE")
 			}
-			if got := DefaultStateFile(); got != tc.want {
-				t.Fatalf("DefaultStateFile() = %q, want %q", got, tc.want)
+			if got := DefaultStateFile(":8091"); got != tc.want {
+				t.Fatalf("DefaultStateFile(:8091) = %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
 // TestDefaultStateFileTracksHomeAndFallback proves the un-overridden
-// resolution is byte-identical to the pre-override behaviour: it follows
-// $HOME, and with no $HOME at all (os.UserHomeDir errors on Unix) it lands on
-// /tmp.
+// resolution is byte-identical to the per-port default: it follows $HOME, and
+// with no $HOME at all (os.UserHomeDir errors on Unix) it lands on /tmp.
 func TestDefaultStateFileTracksHomeAndFallback(t *testing.T) {
 	unsetEnv(t, "CANOPY_GATEWAY_STATE_FILE")
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	if got, want := DefaultStateFile(), filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl"); got != want {
-		t.Fatalf("DefaultStateFile() with HOME=%q = %q, want %q", home, got, want)
+	if got, want := DefaultStateFile(":8091"), filepath.Join(home, ".hermes", "canopy", "gateway", "runs-8091.jsonl"); got != want {
+		t.Fatalf("DefaultStateFile(:8091) with HOME=%q = %q, want %q", home, got, want)
 	}
 
 	unsetEnv(t, "HOME")
-	if got, want := DefaultStateFile(), filepath.Join("/tmp", ".hermes", "canopy", "gateway", "runs.jsonl"); got != want {
-		t.Fatalf("DefaultStateFile() with HOME unset = %q, want %q", got, want)
+	if got, want := DefaultStateFile(":8091"), filepath.Join("/tmp", ".hermes", "canopy", "gateway", "runs-8091.jsonl"); got != want {
+		t.Fatalf("DefaultStateFile(:8091) with HOME unset = %q, want %q", got, want)
 	}
 }
 
@@ -124,13 +123,13 @@ func TestDefaultStateFileReadsEnvPerCall(t *testing.T) {
 	t.Setenv("HOME", home)
 	unsetEnv(t, "CANOPY_GATEWAY_STATE_FILE")
 
-	if got, want := DefaultStateFile(), filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl"); got != want {
-		t.Fatalf("DefaultStateFile() before override = %q, want %q", got, want)
+	if got, want := DefaultStateFile(":8091"), filepath.Join(home, ".hermes", "canopy", "gateway", "runs-8091.jsonl"); got != want {
+		t.Fatalf("DefaultStateFile(:8091) before override = %q, want %q", got, want)
 	}
 
 	t.Setenv("CANOPY_GATEWAY_STATE_FILE", "/tmp/canopy-scratch-late/runs.jsonl")
-	if got, want := DefaultStateFile(), "/tmp/canopy-scratch-late/runs.jsonl"; got != want {
-		t.Fatalf("DefaultStateFile() after override = %q, want %q", got, want)
+	if got, want := DefaultStateFile(":8091"), "/tmp/canopy-scratch-late/runs.jsonl"; got != want {
+		t.Fatalf("DefaultStateFile(:8091) after override = %q, want %q", got, want)
 	}
 }
 
@@ -144,9 +143,9 @@ func TestDefaultStateFileOverrideKeepsTheStoreOffHome(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("CANOPY_GATEWAY_STATE_FILE", "/tmp/canopy-scratch-9999/gateway/runs.jsonl")
 
-	got := DefaultStateFile()
+	got := DefaultStateFile(":8091")
 	if got == filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl") {
-		t.Fatalf("override ignored: DefaultStateFile() = %q (shared HOME store)", got)
+		t.Fatalf("override ignored: DefaultStateFile(:8091) = %q (shared HOME store)", got)
 	}
 	// A path inside `home` relativises without a ".." prefix; an isolating
 	// override always walks out of it.
@@ -161,7 +160,7 @@ func TestDefaultStateFileOverrideKeepsTheStoreOffHome(t *testing.T) {
 
 // TestGatewayRegistryActuallyReadFromTheOverride is the isolation claim at the
 // STORE level rather than the string level: with CANOPY_GATEWAY_STATE_FILE set,
-// a service built on DefaultStateFile() must restore its registry from the
+// a service built on DefaultStateFile(:8091) must restore its registry from the
 // override path — proving the override reaches the persistence layer, not just
 // the path helper. This is the only test here that would catch a refactor that
 // keeps DefaultStateFile() correct while the service is handed a different path.
@@ -186,7 +185,7 @@ func TestGatewayRegistryActuallyReadFromTheOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	svc := NewServiceWithState(c, DefaultStateFile())
+	svc := NewServiceWithState(c, DefaultStateFile(":8091"))
 	t.Cleanup(svc.Close)
 
 	list := svc.ListRuns(context.Background())
@@ -196,4 +195,109 @@ func TestGatewayRegistryActuallyReadFromTheOverride(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".hermes")); !os.IsNotExist(err) {
 		t.Fatalf("shared HOME store was touched: err=%v", err)
 	}
+}
+
+// TestDefaultStateFileIsPerPort pins the per-instance default: two distinct
+// ports yield two distinct paths, both under ~/.hermes/canopy/gateway/, and the
+// canonical port's path is per-port (runs-8091.jsonl), never the legacy
+// runs.jsonl. A host:port address extracts the same port as the bare :port
+// form.
+func TestDefaultStateFileIsPerPort(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	unsetEnv(t, "CANOPY_GATEWAY_STATE_FILE")
+
+	gatewayDir := filepath.Join(home, ".hermes", "canopy", "gateway")
+
+	a := DefaultStateFile(":8091")
+	b := DefaultStateFile(":8092")
+	if a == b {
+		t.Fatalf("DefaultStateFile(:8091) == DefaultStateFile(:8092) == %q", a)
+	}
+	if want := filepath.Join(gatewayDir, "runs-8091.jsonl"); a != want {
+		t.Fatalf("DefaultStateFile(:8091) = %q, want %q", a, want)
+	}
+	if want := filepath.Join(gatewayDir, "runs-8092.jsonl"); b != want {
+		t.Fatalf("DefaultStateFile(:8092) = %q, want %q", b, want)
+	}
+	if got := DefaultStateFile("127.0.0.1:8092"); got != b {
+		t.Fatalf("DefaultStateFile(127.0.0.1:8092) = %q, want %q", got, b)
+	}
+	// The canonical default is per-port, not the legacy shared file.
+	if want := filepath.Join(gatewayDir, "runs.jsonl"); a == want {
+		t.Fatalf("DefaultStateFile(:8091) = %q (legacy shared path, not per-port)", a)
+	}
+}
+
+// TestMigrateLegacyStateFile pins the one-time migration contract: the legacy
+// runs.jsonl is renamed forward to the per-port target ONLY when the address is
+// the canonical port and the target is absent; a non-default port leaves the
+// legacy file untouched, and the override disables migration entirely.
+func TestMigrateLegacyStateFile(t *testing.T) {
+	unsetEnv(t, "CANOPY_GATEWAY_STATE_FILE")
+
+	// fresh isolates each subtest with its own HOME and a seeded legacy file,
+	// returning the legacy and canonical-target paths.
+	fresh := func(t *testing.T) (legacy, target string) {
+		t.Helper()
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		dir := filepath.Join(home, ".hermes", "canopy", "gateway")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		legacy = filepath.Join(dir, "runs.jsonl")
+		target = filepath.Join(dir, "runs-8091.jsonl")
+		if err := os.WriteFile(legacy, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return legacy, target
+	}
+
+	t.Run("canonical port migrates when target absent", func(t *testing.T) {
+		legacy, target := fresh(t)
+		if err := MigrateLegacyStateFile(":8091"); err != nil {
+			t.Fatalf("MigrateLegacyStateFile(:8091): %v", err)
+		}
+		if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+			t.Fatalf("legacy file still present after migration: %v", err)
+		}
+		if _, err := os.Stat(target); err != nil {
+			t.Fatalf("per-port target missing after migration: %v", err)
+		}
+	})
+
+	t.Run("non-default port leaves legacy alone", func(t *testing.T) {
+		legacy, _ := fresh(t)
+		if err := MigrateLegacyStateFile(":8092"); err != nil {
+			t.Fatalf("MigrateLegacyStateFile(:8092): %v", err)
+		}
+		if _, err := os.Stat(legacy); err != nil {
+			t.Fatalf("legacy file was touched on non-default port: %v", err)
+		}
+	})
+
+	t.Run("canonical port leaves legacy when target already present", func(t *testing.T) {
+		legacy, target := fresh(t)
+		if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := MigrateLegacyStateFile(":8091"); err != nil {
+			t.Fatalf("MigrateLegacyStateFile(:8091): %v", err)
+		}
+		if _, err := os.Stat(legacy); err != nil {
+			t.Fatalf("legacy file was renamed despite an existing target: %v", err)
+		}
+	})
+
+	t.Run("override disables migration", func(t *testing.T) {
+		legacy, _ := fresh(t)
+		t.Setenv("CANOPY_GATEWAY_STATE_FILE", filepath.Join(t.TempDir(), "override.jsonl"))
+		if err := MigrateLegacyStateFile(":8091"); err != nil {
+			t.Fatalf("MigrateLegacyStateFile(:8091) with override: %v", err)
+		}
+		if _, err := os.Stat(legacy); err != nil {
+			t.Fatalf("legacy file was touched despite the override: %v", err)
+		}
+	})
 }

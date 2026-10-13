@@ -90,7 +90,7 @@ Numeric knobs accept an integer; out-of-range or non-numeric values silently kee
 | Variable | Purpose | Default when unset | Read at |
 |---|---|---|---|
 | `CANOPY_FILE_ROOT` | Root directory for uploaded file bytes (SPEC-PL-02 §7.6); objects land at `<root>/files/<aa>/<sha256>`. | `~/.canopy/files` | internal/config/config.go:416 |
-| `CANOPY_GATEWAY_STATE_FILE` | Path of the gateway run-registry JSONL file. The override names the file itself (not a directory), is used verbatim, and is re-resolved on every call. | `~/.hermes/canopy/gateway/runs.jsonl` | internal/gateway/service.go:130 |
+| `CANOPY_GATEWAY_STATE_FILE` | Path of the gateway run-registry JSONL file. The override names the file itself (not a directory), is used verbatim, and is re-resolved on every call. When unset the path is **per-instance**: it derives from the server's own `HTTP_ADDR` port, and on the canonical port `8091` a legacy `runs.jsonl` is migrated forward once at boot. | `~/.hermes/canopy/gateway/runs-<port>.jsonl` (`<port>` from `HTTP_ADDR`) | internal/gateway/service.go:135 |
 
 ## Test infrastructure (not read by the server)
 

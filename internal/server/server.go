@@ -582,7 +582,16 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// against the gateway (GAP-054). NewServiceWithState never fails: a
 		// gateway that is down or missing endpoints only logs, so canopyd still
 		// boots and the /gateway routes still mount.
-		gatewaySvc := gateway.NewServiceWithState(gwClient, gateway.DefaultStateFile())
+		// The registry path is per-instance: it derives from this server's own
+		// HTTP port (RVW2-CANOPY-101), and on the canonical port a legacy
+		// runs.jsonl is migrated forward once so the primary instance keeps its
+		// history. Migrate BEFORE NewServiceWithState so the restore reads the
+		// migrated file.
+		stateFile := gateway.DefaultStateFile(cfg.HTTPAddr)
+		if err := gateway.MigrateLegacyStateFile(cfg.HTTPAddr); err != nil {
+			log.Warn().Err(err).Msg("gateway run-registry legacy migration failed")
+		}
+		gatewaySvc := gateway.NewServiceWithState(gwClient, stateFile)
 		gatewaySvc.SetRunOutputSink(newGatewayOutputSink(nodeSvc, dbPool))
 		// GAP-075: the compiler is wired into the gateway surface so a
 		// node-scoped run (POST /gateway/runs {node_id}) sends the COMPILED

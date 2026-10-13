@@ -24,7 +24,8 @@ import (
 // (DF-HERMES-CANOPY-10). DB-free: services are nil and none of initialize /
 // notifications / ping / tools/list dereference them.
 func TestMCPAdvertisedPathServesTheHandshakeBehindAuth(t *testing.T) {
-	// Hermetic gateway wiring: DefaultStateFile() derives from $HOME (see
+	// Hermetic gateway wiring: DefaultStateFile(cfg.HTTPAddr) derives from
+	// $HOME (and the configured port; see
 	// TestRouteParityDocumentedNodeRoutes).
 	home := t.TempDir()
 	t.Setenv("HOME", home)

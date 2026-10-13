@@ -12,8 +12,9 @@
 # on :8092 with FIXED container names (canopy-server / canopy-pg), so
 # `docker compose -p <name>` alone does NOT isolate a second stack. Running a
 # "scratch" server with the documented values therefore lands next to the live
-# service — and ~/.hermes/canopy/cards, ~/.hermes/canopy/gateway/runs.jsonl and
-# ~/.canopy/files are shared by every instance that runs as the same user.
+# service — and ~/.hermes/canopy/cards, ~/.hermes/canopy/gateway/runs-<port>.jsonl
+# and ~/.canopy/files are shared by every instance that runs as the same user
+# (the gateway run registry is per-port, so it only shares across a SAME port).
 #
 # What isolation requires (all four, verified below):
 #   1. its own PostgreSQL DATABASE   (unique name; never the live `canopy`)
@@ -463,7 +464,7 @@ CARD_DIR="$SCRATCH_HOME/.hermes/canopy/cards"
 CARD_DB_COUNT="$(find "$CARD_DIR" -maxdepth 1 -type f -name '*.db' | wc -l | tr -d ' ')"
 [ "$CARD_DB_COUNT" -ge 1 ] || die "no card SQLite DB under $CARD_DIR"
 say "card create 201; card store is scratch-local: $CARD_DIR ($CARD_DB_COUNT db file(s))"
-say "gateway run registry path for this instance: $SCRATCH_HOME/.hermes/canopy/gateway/runs.jsonl"
+say "gateway run registry path for this instance: $SCRATCH_HOME/.hermes/canopy/gateway/runs-${PORT}.jsonl"
 
 GATEWAY_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 \
 	-H "Authorization: Bearer $TOKEN" "$BASE/api/v1/gateway/status" || echo 000)"

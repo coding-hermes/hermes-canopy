@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -91,7 +93,8 @@ type Service struct {
 	client *Client
 
 	// statePath is the JSONL file the registry is persisted to ("" disables
-	// persistence). Defaults to DefaultStateFile() via NewServiceWithState.
+	// persistence). The server wiring resolves the per-instance default via
+	// DefaultStateFile and passes it to NewServiceWithState.
 	statePath string
 
 	// Background lifecycle (CI-006). ctx is the SERVICE-scoped context every
@@ -117,6 +120,12 @@ type Service struct {
 	outputSink RunOutputSink
 }
 
+// canonicalStatePort is the documented single-instance HTTP port (make run /
+// the quick start). Only an instance bound to this port ever migrates a legacy
+// runs.jsonl forward — scratch instances on any other port must not touch the
+// primary's registry.
+const canonicalStatePort = "8091"
+
 // DefaultStateFile returns the path for the persisted gateway run registry,
 // following the card.DataDir() convention (~/.hermes/canopy/<sub>), unless
 // CANOPY_GATEWAY_STATE_FILE is set and non-empty, in which case that value is
@@ -126,15 +135,86 @@ type Service struct {
 // the JSONL file itself, not a directory — so a scratch instance can keep its
 // run registry off the shared store without a scratch $HOME
 // (DF-HERMES-CANOPY-9). It is resolved on every call, never cached.
-func DefaultStateFile() string {
+//
+// Without an override the path is PER-INSTANCE: it is derived from the
+// instance's own HTTP listen address (addr, in ":8091" or "host:8091" form, a
+// bare "8091" is also accepted), landing at
+// ~/.hermes/canopy/gateway/runs-<port>.jsonl. Two instances bound to different
+// ports therefore never share a run registry, and a scratch or second canopyd
+// no longer reads or writes the primary's history. An empty or unparseable addr
+// falls back to the canonical port for the PATH only; the one-time legacy
+// migration (MigrateLegacyStateFile) is keyed on a real parse of the canonical
+// port, never on that fallback.
+func DefaultStateFile(addr string) string {
 	if path := os.Getenv("CANOPY_GATEWAY_STATE_FILE"); path != "" {
 		return path
 	}
+	return stateFileForPort(addr)
+}
+
+// stateFileForPort derives the per-port default path. An addr whose port cannot
+// be extracted falls back to the canonical port so a bare canopyd still
+// persists somewhere stable.
+func stateFileForPort(addr string) string {
+	port := listenPort(addr)
+	if port == "" {
+		port = canonicalStatePort
+	}
+	return filepath.Join(gatewayStateDir(), "runs-"+port+".jsonl")
+}
+
+// gatewayStateDir returns the shared gateway state directory, following the
+// card.DataDir() convention and falling back to /tmp when the home directory is
+// unknown.
+func gatewayStateDir() string {
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		home = "/tmp"
 	}
-	return filepath.Join(home, ".hermes", "canopy", "gateway", "runs.jsonl")
+	return filepath.Join(home, ".hermes", "canopy", "gateway")
+}
+
+// listenPort extracts the numeric port from a listen address of the form
+// ":8091" or "127.0.0.1:8091"; a bare "8091" is also accepted. It returns ""
+// for an empty or unparseable address.
+func listenPort(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
+		return port
+	}
+	// A bare port ("8091") has no colon, so net.SplitHostPort rejects it.
+	if _, err := strconv.Atoi(addr); err == nil {
+		return addr
+	}
+	return ""
+}
+
+// MigrateLegacyStateFile renames a legacy ~/.hermes/canopy/gateway/runs.jsonl
+// forward to the per-port default for the given listen address, but ONLY when
+// all of these hold: no CANOPY_GATEWAY_STATE_FILE override is set, addr parses
+// to the canonical port (8091), the legacy file exists, and the per-port target
+// does not. It is the one-time migration the primary instance performs on boot
+// so it keeps its history, while every other port leaves the legacy file alone.
+// A missing legacy file or an already-present target is not an error; a real
+// rename failure is returned (and logged by the caller).
+func MigrateLegacyStateFile(addr string) error {
+	if os.Getenv("CANOPY_GATEWAY_STATE_FILE") != "" {
+		return nil
+	}
+	if listenPort(addr) != canonicalStatePort {
+		return nil
+	}
+	legacy := filepath.Join(gatewayStateDir(), "runs.jsonl")
+	if _, err := os.Stat(legacy); err != nil {
+		return nil // nothing to migrate
+	}
+	target := stateFileForPort(addr)
+	if _, err := os.Stat(target); err == nil {
+		return nil // per-port target already present; leave the legacy file alone
+	}
+	return os.Rename(legacy, target)
 }
 
 // NewService builds a gateway Service around a client. The service owns a

@@ -831,7 +831,7 @@ variable and the bad value, never a silent fallback to the default.
 | `PLUGIN_MAX_SIZE` | `1048576` | Max plugin source size in bytes (1 MB) |
 | `CANOPY_FILE_ROOT` | `~/.canopy/files` | Uploaded file bytes (file viewer storage root). Returned **verbatim** — nothing is joined onto it |
 | `CANOPY_CARD_DATA_DIR` | `~/.hermes/canopy/cards` | Card store directory (one SQLite DB per card type). Returned **verbatim**; set it to keep a scratch instance off the shared store without a scratch `HOME` |
-| `CANOPY_GATEWAY_STATE_FILE` | `~/.hermes/canopy/gateway/runs.jsonl` | Gateway run registry. Returned **verbatim**, and it names the **file**, not a directory |
+| `CANOPY_GATEWAY_STATE_FILE` | `~/.hermes/canopy/gateway/runs-<port>.jsonl` | Gateway run registry. Returned **verbatim** when set, and it names the **file**, not a directory. When unset the path is **per-instance**: it derives from the server's own `HTTP_ADDR` port (e.g. `runs-8091.jsonl`), so a scratch/second instance never reads or writes the primary's history. On the canonical port `8091` a legacy `runs.jsonl` is migrated forward once at boot |
 | `CANOPY_SERVER_URL` | `http://localhost:8091` | **CLI only** — API base URL the `tree`/`topic` subcommands call; an explicit value wins over `DB_*`/`HTTP_ADDR`, and a malformed one fails before any request (see "CLI") |
 | `CANOPY_TOKEN` | *(unset)* | **CLI only** — Bearer token sent with each CLI request |
 

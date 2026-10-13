@@ -42,8 +42,9 @@ func normalizeChiPattern(p string) string {
 // If this test ever fails, a documented route lost its production mount —
 // fix the wiring in newRouter, not the test.
 func TestRouteParityDocumentedNodeRoutes(t *testing.T) {
-	// Hermetic gateway wiring: DefaultStateFile() derives from $HOME; point it
-	// at an empty dir so the run-registry restore is a no-op.
+	// Hermetic gateway wiring: DefaultStateFile(cfg.HTTPAddr) derives from
+	// $HOME (and the configured port); point it at an empty dir so the
+	// run-registry restore is a no-op.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, ".hermes", "canopy", "gateway"), 0o755); err != nil {

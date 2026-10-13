@@ -29,7 +29,7 @@ its own root.
 | API port (compose) | `docker-compose.yml` publishes `8092:8080` | `:8092` is already taken by the compose stack, and is *documented* as the compose API |
 | PostgreSQL | Host port `5437` (`canopy` / `canopy` / `canopy`) | Shared on purpose — but a scratch run must not use the `canopy` database |
 | Container names | `canopy-server`, `canopy-pg` are **fixed** in `docker-compose.yml` | `docker compose -p <name>` does **not** isolate a second stack: container names, the published host port and the `pgdata` volume are not namespaced by `-p` for these entries, so `up -d` collides with the running stack |
-| Process HOME | `~/.hermes/canopy/cards`, `~/.hermes/canopy/gateway/runs.jsonl`, `~/.canopy/files` | Every instance running as the same user shares the card SQLite databases, the gateway run registry and uploaded file bytes — a scratch server would read and write the live ones |
+| Process HOME | `~/.hermes/canopy/cards`, `~/.hermes/canopy/gateway/runs-<port>.jsonl`, `~/.canopy/files` | Every instance running as the same user shares the card SQLite databases and uploaded file bytes; the gateway run registry is per-port so a second port no longer shares it (only the canonical `8091` migrates the legacy `runs.jsonl`) |
 | CLI target | `CANOPY_SERVER_URL` (default `http://localhost:8091`) | The CLI is an HTTP **client**: `DB_*` and `HTTP_ADDR` never redirect it, and with any of them set and no `CANOPY_SERVER_URL` it refuses to run instead of guessing |
 
 **`docker compose -p <project>` is not isolation.** For this stack the service
@@ -65,7 +65,7 @@ Plus:
 | Store | Resolution | Code |
 |-------|------------|------|
 | Cards (SQLite per card type) | `$CANOPY_CARD_DATA_DIR`, else `$HOME/.hermes/canopy/cards/<type>.db` | `internal/card/database.go` |
-| Gateway run registry | `$CANOPY_GATEWAY_STATE_FILE`, else `$HOME/.hermes/canopy/gateway/runs.jsonl` | `internal/gateway/service.go` |
+| Gateway run registry | `$CANOPY_GATEWAY_STATE_FILE`, else `$HOME/.hermes/canopy/gateway/runs-<port>.jsonl` (`<port>` from `HTTP_ADDR`) | `internal/gateway/service.go` |
 | File viewer bytes | `$CANOPY_FILE_ROOT`, else `$HOME/.canopy/files` | `internal/config/config.go`, `internal/fileviewer/storage.go` |
 | Graph (authoritative) | PostgreSQL via `DB_*` / `CANOPY_DB_URL` | `internal/db` |
 
