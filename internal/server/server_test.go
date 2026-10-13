@@ -109,4 +109,30 @@ func TestCorsMiddleware(t *testing.T) {
 			t.Errorf("expected Access-Control-Allow-Origin 'http://example.com', got %q", resp.Header.Get("Access-Control-Allow-Origin"))
 		}
 	})
+
+	t.Run("empty origin disables CORS", func(t *testing.T) {
+		// REVIEW-CANOPY-2026-10-13: the default is now empty (CORS
+		// disabled) — no Access-Control-Allow-Origin header may be emitted,
+		// and the request must still reach the handler.
+		noCorsMW := corsMiddleware("")
+		called := false
+		noCorsHandler := noCorsMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		noCorsHandler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if !called {
+			t.Fatal("empty-origin CORS middleware did not call the wrapped handler")
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("expected no Access-Control-Allow-Origin header, got %q", got)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Methods"); got != "" {
+			t.Errorf("expected no Access-Control-Allow-Methods header, got %q", got)
+		}
+	})
 }

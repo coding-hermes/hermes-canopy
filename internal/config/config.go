@@ -31,15 +31,33 @@ type Config struct {
 	// HTTP
 	HTTPAddr string
 
+	// Env names the deployment environment (CANOPY_ENV). It defaults to
+	// "dev". An explicit "production" is one signal for IsProduction(),
+	// which gates the well-known dev secrets (JWT, profile-router key) and
+	// the fail-closed CORS default.
+	Env string
+
 	// Logging
 	LogLevel  string
 	LogFormat string
 
 	// CORS
+	// CORSOrigin is the value of Access-Control-Allow-Origin. Empty (the
+	// default) DISABLES CORS entirely — no header is emitted, so the
+	// browser rejects cross-origin requests. This is the fail-closed
+	// default: /api/v1 accepts bearer auth, so a wildcard origin would let
+	// any site make authenticated requests. Operators opt in explicitly via
+	// CORS_ORIGIN.
 	CORSOrigin string
 
 	// JWT
 	JWTSecret string
+
+	// ProfileRouterSecret is the AES-256 key (exactly 32 bytes) used to
+	// encrypt Hermes profile tokens (SPEC-FTR-07 §3.3). It defaults to a
+	// well-known dev key; production deployments must set
+	// CANOPY_PROFILE_ROUTER_SECRET to a random 32-byte value.
+	ProfileRouterSecret string
 
 	// Multi-message reference model (SPEC-PL-06 §14.1): HMAC secret for
 	// preflight selection tokens. Empty falls back to JWTSecret.
@@ -151,6 +169,13 @@ func (c *Config) DSN() string {
 		"&search_path=" + schema
 }
 
+// DevProfileRouterSecret is the well-known AES-256 (32-byte) key used to
+// encrypt Hermes profile tokens in dev mode. It is a dev-only default: a
+// production deployment must set CANOPY_PROFILE_ROUTER_SECRET to a random
+// 32-byte value, and main() warns loudly when the dev default is still in
+// force outside dev mode.
+const DevProfileRouterSecret = "dev-profile-router-key-32bytes!!"
+
 // Default returns a Config with sensible development defaults.
 func Default() *Config {
 	return &Config{
@@ -164,10 +189,12 @@ func Default() *Config {
 		DBDriver:             "postgres",
 		SQLitePath:           DefaultSQLitePath(),
 		HTTPAddr:             ":8080",
+		Env:                  "dev",
 		LogLevel:             "info",
 		LogFormat:            "text",
-		CORSOrigin:           "*",
+		CORSOrigin:           "",
 		JWTSecret:            "dev-secret-change-me",
+		ProfileRouterSecret:  DevProfileRouterSecret,
 		MetricsEnabled:       false,
 		ContextMaxAncestors:  50,
 		ContextMaxRefs:       5,
@@ -177,6 +204,34 @@ func Default() *Config {
 		PluginMaxSize:        1048576,
 		GatewayBaseURL:       "http://127.0.0.1:8642",
 	}
+}
+
+// IsProduction reports whether this configuration is a non-dev deployment in
+// which the well-known dev defaults (JWT secret, profile-router encryption
+// key, wildcard CORS) must not be silently accepted. Two independent signals,
+// either of which is sufficient:
+//
+//   - CANOPY_ENV is explicitly set to "production";
+//   - HTTP_ADDR binds a non-loopback interface (an explicit 0.0.0.0 / public
+//     IP / hostname). The bare ":8080" wildcard default and any
+//     127.0.0.1 / localhost / ::1 bind stay dev, so the documented quick
+//     start is unaffected.
+func (c *Config) IsProduction() bool {
+	if c.Env == "production" {
+		return true
+	}
+	host, _, err := net.SplitHostPort(c.HTTPAddr)
+	if err != nil {
+		return false
+	}
+	switch host {
+	case "", "localhost", "127.0.0.1", "::1":
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return !ip.IsLoopback()
+	}
+	return true // a non-local hostname
 }
 
 // parseContextModelWindows parses the CONTEXT_MODEL_WINDOWS value: a
@@ -315,6 +370,9 @@ func FromEnv() *Config {
 	if v := os.Getenv("HTTP_ADDR"); v != "" {
 		c.HTTPAddr = v
 	}
+	if v := os.Getenv("CANOPY_ENV"); v != "" {
+		c.Env = v
+	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.LogLevel = v
 	}
@@ -329,6 +387,9 @@ func FromEnv() *Config {
 	}
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		c.JWTSecret = v
+	}
+	if v := os.Getenv("CANOPY_PROFILE_ROUTER_SECRET"); v != "" {
+		c.ProfileRouterSecret = v
 	}
 	if v := os.Getenv("REFERENCE_SELECTION_SECRET"); v != "" {
 		c.ReferenceSelectionSecret = v
@@ -500,6 +561,12 @@ func FromEnv() *Config {
 func (c *Config) Validate() error {
 	if c.DBDriver != "postgres" && c.DBDriver != "sqlite" {
 		return fmt.Errorf("config: CANOPY_DB_DRIVER must be postgres or sqlite (got %q)", c.DBDriver)
+	}
+	// The profile-router encryption key is an AES-256 key and must be exactly
+	// 32 bytes; a wrong-sized value would otherwise surface as an opaque 500
+	// on the first profile-token write (SPEC-FTR-07 §3.3).
+	if len(c.ProfileRouterSecret) != 32 {
+		return fmt.Errorf("config: CANOPY_PROFILE_ROUTER_SECRET must be exactly 32 bytes (got %d)", len(c.ProfileRouterSecret))
 	}
 	if c.DBDriver == "sqlite" && strings.TrimSpace(c.SQLitePath) == "" {
 		return fmt.Errorf("config: CANOPY_SQLITE_PATH must not be empty when CANOPY_DB_DRIVER=sqlite")

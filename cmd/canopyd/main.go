@@ -229,6 +229,27 @@ func main() {
 		Str("db_host", cfg.DBHost).
 		Msg("canopyd starting")
 
+	// Security default guards (REVIEW-CANOPY-2026-10-13): a non-dev
+	// deployment that silently falls back to the well-known dev JWT secret or
+	// the dev profile-router encryption key is a footgun — warn loudly so the
+	// operator cannot miss it. The fail-closed CORS default (empty origin)
+	// needs no warning: cross-origin requests are simply rejected until the
+	// operator opts in via CORS_ORIGIN.
+	if cfg.IsProduction() {
+		if db.IsDevJWTSecret(cfg.JWTSecret) {
+			log.Warn().
+				Str("http_addr", cfg.HTTPAddr).
+				Str("hint", "set JWT_SECRET to a random value").
+				Msg("INSECURE: non-dev deployment is using the well-known dev JWT secret")
+		}
+		if cfg.ProfileRouterSecret == config.DevProfileRouterSecret {
+			log.Warn().
+				Str("http_addr", cfg.HTTPAddr).
+				Str("hint", "set CANOPY_PROFILE_ROUTER_SECRET to a random 32-byte value").
+				Msg("INSECURE: non-dev deployment is using the well-known dev profile-router encryption key")
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	updateCtx, stopUpdateChecks := context.WithCancel(ctx)
@@ -497,9 +518,11 @@ func main() {
 	)
 
 	// Profile router — maps workspaces to Hermes profiles (SPEC-FTR-07 §3.3).
+	// The AES-256 key comes from CANOPY_PROFILE_ROUTER_SECRET (dev default in
+	// config.DevProfileRouterSecret); it is never a hardcoded literal.
 	profileRouter := hermes.NewPGProfileRouter(
 		database.Pool,
-		[]byte("dev-secret-change-me-production!"),
+		[]byte(cfg.ProfileRouterSecret),
 	)
 
 	// Transport adapter layer per SPEC-FTR-04.

@@ -727,10 +727,20 @@ type HealthDB interface {
 // versionHandler lives in buildinfo.go — it serves the ldflags-stamped build
 // identity (version/commit/build_time) shared with /health.
 
-// corsMiddleware provides configurable CORS for local development.
+// corsMiddleware provides configurable CORS for local development. An empty
+// origin DISABLES CORS entirely: no Access-Control-Allow-Origin header is
+// emitted, so the browser rejects cross-origin requests. That is the
+// fail-closed default (config.Default().CORSOrigin is ""), which matters
+// because /api/v1 accepts bearer auth — a wildcard origin would let any site
+// make authenticated requests. Operators opt in explicitly via CORS_ORIGIN
+// (including CORS_ORIGIN=* if they really want it).
 func corsMiddleware(origin string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id")

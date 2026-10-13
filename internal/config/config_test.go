@@ -114,8 +114,11 @@ func TestFromEnvLogFormat(t *testing.T) {
 }
 
 func TestDefaultCORSOrigin(t *testing.T) {
-	if got := Default().CORSOrigin; got != "*" {
-		t.Fatalf("Default().CORSOrigin = %q, want %q", got, "*")
+	// REVIEW-CANOPY-2026-10-13: the default is now empty (CORS disabled),
+	// not "*" — /api/v1 accepts bearer auth, so a wildcard origin would let
+	// any site make authenticated requests.
+	if got := Default().CORSOrigin; got != "" {
+		t.Fatalf("Default().CORSOrigin = %q, want empty (CORS disabled by default)", got)
 	}
 }
 
@@ -684,5 +687,98 @@ func TestUnrecognizedCanopyEnvVarsInert(t *testing.T) {
 	}
 	if got := c.HTTPAddr; got != Default().HTTPAddr {
 		t.Fatalf("HTTPAddr = %q with unrecognized CANOPY_HTTP_PORT set, want the default %q", got, Default().HTTPAddr)
+	}
+}
+
+// --- security defaults (REVIEW-CANOPY-2026-10-13) ---------------------------
+
+func TestDefaultProfileRouterSecret(t *testing.T) {
+	if got := Default().ProfileRouterSecret; got != DevProfileRouterSecret {
+		t.Fatalf("Default().ProfileRouterSecret = %q, want the dev default", got)
+	}
+	if len(DevProfileRouterSecret) != 32 {
+		t.Fatalf("DevProfileRouterSecret is %d bytes, want exactly 32 (AES-256)", len(DevProfileRouterSecret))
+	}
+}
+
+func TestFromEnvProfileRouterSecret(t *testing.T) {
+	t.Setenv("CANOPY_PROFILE_ROUTER_SECRET", "0123456789abcdef0123456789abcdef")
+	c := FromEnv()
+	if c.ProfileRouterSecret != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("FromEnv().ProfileRouterSecret = %q, want the env override", c.ProfileRouterSecret)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() with a 32-byte CANOPY_PROFILE_ROUTER_SECRET = %v, want nil", err)
+	}
+}
+
+func TestDefaultEnvIsDev(t *testing.T) {
+	if got := Default().Env; got != "dev" {
+		t.Fatalf("Default().Env = %q, want %q", got, "dev")
+	}
+}
+
+func TestFromEnvCanopyEnv(t *testing.T) {
+	t.Setenv("CANOPY_ENV", "production")
+	if got := FromEnv().Env; got != "production" {
+		t.Fatalf("FromEnv().Env = %q, want %q", got, "production")
+	}
+}
+
+// TestValidateProfileRouterSecretLength pins the AES-256 key-size contract: a
+// wrong-sized CANOPY_PROFILE_ROUTER_SECRET is a startup error, not an opaque
+// 500 on the first profile-token write.
+func TestValidateProfileRouterSecretLength(t *testing.T) {
+	for _, good := range []string{"0123456789abcdef0123456789abcdef", DevProfileRouterSecret} {
+		c := Default()
+		c.ProfileRouterSecret = good
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate() with a 32-byte key %q = %v, want nil", good, err)
+		}
+	}
+	for _, bad := range []string{"", "too-short", "0123456789abcdef0123456789abcdef-extra"} {
+		c := Default()
+		c.ProfileRouterSecret = bad
+		err := c.Validate()
+		if err == nil {
+			t.Fatalf("Validate() with a %d-byte key = nil, want an error", len(bad))
+		}
+		if !strings.Contains(err.Error(), "CANOPY_PROFILE_ROUTER_SECRET") {
+			t.Fatalf("Validate() error %q does not name CANOPY_PROFILE_ROUTER_SECRET", err)
+		}
+	}
+}
+
+// TestIsProduction pins the dev-vs-production detection that gates the
+// well-known dev secrets. Either signal — an explicit CANOPY_ENV=production
+// or a non-loopback HTTP bind — is sufficient; the bare wildcard default and
+// localhost binds stay dev so the documented quick start is unaffected.
+func TestIsProduction(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     string
+		http    string
+		prod    bool
+	}{
+		{"default config is dev", "dev", ":8080", false},
+		{"unset env + wildcard bind is dev", "", ":8080", false},
+		{"explicit dev env + wildcard bind is dev", "dev", ":8080", false},
+		{"loopback bind is dev", "", "127.0.0.1:8091", false},
+		{"localhost bind is dev", "", "localhost:8091", false},
+		{"explicit production env is prod", "production", "127.0.0.1:8091", true},
+		{"explicit production env + loopback is prod", "production", "localhost:8080", true},
+		{"wildcard bind 0.0.0.0 is prod", "", "0.0.0.0:8080", true},
+		{"public IP bind is prod", "", "203.0.113.5:8080", true},
+		{"hostname bind is prod", "", "canopy.example.com:8080", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Default()
+			c.Env = tc.env
+			c.HTTPAddr = tc.http
+			if got := c.IsProduction(); got != tc.prod {
+				t.Fatalf("IsProduction() with env=%q http=%q = %v, want %v", tc.env, tc.http, got, tc.prod)
+			}
+		})
 	}
 }
