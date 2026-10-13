@@ -4004,3 +4004,11 @@ tasks:
     trailer.'
   status: in_progress
   created_at: '2026-10-12T04:36:56.531069+00:00'
+- id: RVW2-CANOPY-102
+  title: Add boot warning when JWT_SECRET stays at default dev value
+  criteria:
+  - canopyd logs a clear WARNING at boot if JWT_SECRET is unset or equals the default
+    dev-secret-change-me value
+  status: complete
+  created_at: '2026-10-13T05:45:11.853057+00:00'
+  completed_at: '2026-10-13T05:46:36.197305+00:00'
