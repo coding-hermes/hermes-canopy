@@ -161,8 +161,24 @@ func EnsureDevWorkspaceProfile(ctx context.Context, pool *pgxpool.Pool) (inserte
 		return false, fmt.Errorf("db: provision dev profile route: %w", err)
 	}
 
+	// 4. Membership: the dev JWT user IS the owner of the dev workspace.
+	// Without this row every /collab route 403s NOT_WORKSPACE_MEMBER on a
+	// fresh install (DF-HERMES-CANOPY-80) — the normal AddMember path only
+	// runs for POST /collab workspaces. Role 2 = collaboration.RoleAdmin,
+	// matching collaboration_service_impl.go's owner seeding; role here is
+	// an int column so no collaboration import is needed. ON CONFLICT DO
+	// NOTHING keeps a pre-existing row (possibly a different role) intact.
+	memTag, err := tx.Exec(ctx, `
+        INSERT INTO workspace_members (workspace_id, user_id, role)
+        VALUES ($1, $2, 2)
+        ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+		DevWorkspaceID, DevJWTUserID)
+	if err != nil {
+		return false, fmt.Errorf("db: provision dev workspace membership: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("db: provision dev workspace/profile: commit: %w", err)
 	}
-	return wsTag.RowsAffected() > 0 || profileTag.RowsAffected() > 0 || routeTag.RowsAffected() > 0, nil
+	return wsTag.RowsAffected() > 0 || profileTag.RowsAffected() > 0 || routeTag.RowsAffected() > 0 || memTag.RowsAffected() > 0, nil
 }

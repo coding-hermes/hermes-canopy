@@ -106,11 +106,24 @@ func TestGAP071_EnsureDevWorkspaceProfileIsIdempotent(t *testing.T) {
 		t.Fatalf("profile_route = (%q, is_active=%v), want (%q, true)", routeName, routeActive, db.DevProfileName)
 	}
 
+	// Membership row: the dev JWT user is an ADMIN member of the dev
+	// workspace (DF-HERMES-CANOPY-80) — role 2 = collaboration.RoleAdmin,
+	// the same seeding the normal create-workspace path applies to owners.
+	var memRole int
+	if err := pool.QueryRow(ctx, `
+		SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+		wsID, userID).Scan(&memRole); err != nil {
+		t.Fatalf("select workspace_members row: %v", err)
+	}
+	if memRole != 2 {
+		t.Fatalf("workspace_members.role = %d, want 2 (RoleAdmin)", memRole)
+	}
+
 	// Idempotency: the second run must insert nothing and leave the row
 	// count unchanged.
-	counts := func() (int, int, int) {
+	counts := func() (int, int, int, int) {
 		t.Helper()
-		var ws, prof, route int
+		var ws, prof, route, mem int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM workspaces`).Scan(&ws); err != nil {
 			t.Fatalf("count workspaces: %v", err)
 		}
@@ -120,9 +133,12 @@ func TestGAP071_EnsureDevWorkspaceProfileIsIdempotent(t *testing.T) {
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM profile_route`).Scan(&route); err != nil {
 			t.Fatalf("count profile_route: %v", err)
 		}
-		return ws, prof, route
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM workspace_members`).Scan(&mem); err != nil {
+			t.Fatalf("count workspace_members: %v", err)
+		}
+		return ws, prof, route, mem
 	}
-	wsBefore, profBefore, routeBefore := counts()
+	wsBefore, profBefore, routeBefore, memBefore := counts()
 
 	again, err := db.EnsureDevWorkspaceProfile(ctx, pool)
 	if err != nil {
@@ -131,10 +147,10 @@ func TestGAP071_EnsureDevWorkspaceProfileIsIdempotent(t *testing.T) {
 	if again {
 		t.Fatal("EnsureDevWorkspaceProfile inserted = true on the second run, want false (idempotent)")
 	}
-	wsAfter, profAfter, routeAfter := counts()
-	if wsBefore != wsAfter || profBefore != profAfter || routeBefore != routeAfter {
-		t.Fatalf("row counts changed on the second run: workspaces %d→%d, profiles %d→%d, profile_route %d→%d",
-			wsBefore, wsAfter, profBefore, profAfter, routeBefore, routeAfter)
+	wsAfter, profAfter, routeAfter, memAfter := counts()
+	if wsBefore != wsAfter || profBefore != profAfter || routeBefore != routeAfter || memBefore != memAfter {
+		t.Fatalf("row counts changed on the second run: workspaces %d→%d, profiles %d→%d, profile_route %d→%d, workspace_members %d→%d",
+			wsBefore, wsAfter, profBefore, profAfter, routeBefore, routeAfter, memBefore, memAfter)
 	}
 
 	// The profile id must be stable across the two runs (the no-op path
