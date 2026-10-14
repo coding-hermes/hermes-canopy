@@ -4032,3 +4032,12 @@ tasks:
   status: complete
   created_at: '2026-10-14T10:26:44.482765+00:00'
   completed_at: '2026-10-14T10:34:59.964970+00:00'
+- id: RVW2-CANOPY-103
+  title: CORS wildcard hardcoded in sse/workspace/mls handlers bypassing cfg.CORSOrigin
+  criteria:
+  - Handlers use cfg.CORSOrigin (or a shared helper) instead of hardcoded '*' for
+    Access-Control-Allow-Origin; existing CORS behavior/tests pass; go build + relevant
+    go tests green
+  status: complete
+  created_at: '2026-10-14T16:53:11.453030+00:00'
+  completed_at: '2026-10-14T16:59:13.208623+00:00'
