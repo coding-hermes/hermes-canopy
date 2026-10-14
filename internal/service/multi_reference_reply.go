@@ -107,6 +107,10 @@ func (s *NodeServiceImpl) WithReferenceSelection(v ReferenceSelectionVerifier) *
 // successful commit, and a publication failure never rolls back a committed
 // graph (§13.1 step 10).
 func (s *NodeServiceImpl) CreateMultiReferenceReply(ctx context.Context, treeID uuid.UUID, input CreateMultiReferenceReplyInput) (*CreateMultiReferenceReplyResult, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if s.pool == nil {
 		return nil, ErrDatabaseUnavailable
 	}

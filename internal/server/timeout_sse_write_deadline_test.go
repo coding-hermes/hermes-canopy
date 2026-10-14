@@ -407,8 +407,8 @@ func TestTreeSSE_HeartbeatFramesOutlivesServerWriteTimeout(t *testing.T) {
 // SSE tests: TreeMemberChecker only needs IsMember + IsTreeDeleted.
 type memberAllowAllRepo struct{ db.TreeMemberRepo }
 
-func (memberAllowAllRepo) IsMember(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
-	return true, nil
+func (memberAllowAllRepo) IsMember(context.Context, uuid.UUID, uuid.UUID) (string, bool, error) {
+	return db.TreeRoleMember, true, nil
 }
 
 func (memberAllowAllRepo) IsTreeDeleted(context.Context, uuid.UUID) (bool, error) {

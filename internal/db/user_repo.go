@@ -364,8 +364,19 @@ type TreeMemberRepo interface {
 	// table is immutable).
 	Remove(ctx context.Context, id uuid.UUID) error
 
-	// IsMember returns true when the given user is a member of the tree.
-	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
+	// IsMember reports whether the given user is a member of the tree and,
+	// when they are, the role their membership carries (one of the
+	// TreeRole* constants; "" when not a member). DF-HERMES-CANOPY-79:
+	// the role is the enforcement input for the viewer read-only gate —
+	// TreeMembershipMiddleware stores it in the request context and the
+	// service layer rejects viewer writes with ErrViewerReadOnly.
+	IsMember(ctx context.Context, treeID, userID uuid.UUID) (role string, isMember bool, err error)
+
+	// GetRole returns the caller's tree_members role ("owner", "admin",
+	// "member", "viewer") for the tree. Callers invoke it only for known
+	// members. Redundant with IsMember's role return kept as its own
+	// interface method so both consumption shapes compile.
+	GetRole(ctx context.Context, treeID, userID uuid.UUID) (string, error)
 
 	// IsTreeDeleted returns true when the tree exists but is soft-deleted
 	// (deleted_at IS NOT NULL). Backs TreeMembershipMiddleware's deleted-tree
@@ -514,18 +525,24 @@ func (r *PGTreeMemberRepo) Remove(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// IsMember returns true when the specified user has a membership row for the
-// given tree. Both user_id-tree_id combinations are valid (the PK constraint
-// enforces uniqueness, so EXISTS is safe regardless of duplicates).
-func (r *PGTreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error) {
-	var exists bool
+// IsMember reports whether the specified user has a membership row for the
+// given tree, and the role of that membership ("" when not a member). The
+// UNIQUE constraint on (tree_id, user_id) makes the single-row lookup safe;
+// the role and existence are read in one query so the viewer gate cannot
+// observe a torn pair. DF-HERMES-CANOPY-79: the role backs the viewer
+// read-only enforcement in TreeMembershipMiddleware and NodeService.
+func (r *PGTreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUID) (string, bool, error) {
+	var role string
 	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM tree_members WHERE tree_id = $1 AND user_id = $2)`,
-		treeID, userID).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("db: check tree member: %w", err)
+		`SELECT role FROM tree_members WHERE tree_id = $1 AND user_id = $2`,
+		treeID, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
 	}
-	return exists, nil
+	if err != nil {
+		return "", false, fmt.Errorf("db: check tree member: %w", err)
+	}
+	return role, true, nil
 }
 
 // IsTreeDeleted returns true when the tree exists but is soft-deleted
@@ -541,4 +558,19 @@ func (r *PGTreeMemberRepo) IsTreeDeleted(ctx context.Context, treeID uuid.UUID) 
 		return false, fmt.Errorf("db: check tree deleted: %w", err)
 	}
 	return exists, nil
+}
+
+// GetRole returns the caller's tree_members role ("owner", "admin",
+// "member", "viewer") for the tree (DF-HERMES-CANOPY-79). Callers invoke it
+// only for known members; a membership that vanishes between IsMember and
+// GetRole surfaces as the wrapped pgx.ErrNoRows.
+func (r *PGTreeMemberRepo) GetRole(ctx context.Context, treeID, userID uuid.UUID) (string, error) {
+	var role string
+	err := r.pool.QueryRow(ctx,
+		`SELECT role FROM tree_members WHERE tree_id = $1 AND user_id = $2`,
+		treeID, userID).Scan(&role)
+	if err != nil {
+		return "", fmt.Errorf("db: get tree member role: %w", err)
+	}
+	return role, nil
 }

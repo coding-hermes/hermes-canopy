@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
@@ -134,8 +135,11 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 // TreeMemberChecker is the interface TreeMembershipMiddleware needs to verify
 // that a user belongs to a tree and that the tree has not been soft-deleted.
 type TreeMemberChecker interface {
-	// IsMember returns true when the given user is a member of the tree.
-	IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error)
+	// IsMember reports whether the given user is a member of the tree and,
+	// when they are, the role that membership carries (a db.TreeRole*
+	// value; "" when not a member). DF-HERMES-CANOPY-79: the role feeds
+	// the viewer read-only gate — see TreeMembershipMiddleware.
+	IsMember(ctx context.Context, treeID, userID uuid.UUID) (role string, isMember bool, err error)
 
 	// IsTreeDeleted returns true when the tree is soft-deleted
 	// (deleted_at IS NOT NULL). Used by TreeMembershipMiddleware to gate
@@ -205,13 +209,23 @@ func TreeMembershipMiddleware(checker TreeMemberChecker) func(http.Handler) http
 				writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
 				return
 			}
-			member, err := checker.IsMember(r.Context(), treeID, userID)
+			role, isMember, err := checker.IsMember(r.Context(), treeID, userID)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not verify membership")
 				return
 			}
-			if !member {
+			if !isMember {
 				writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER", "you are not a member of this tree")
+				return
+			}
+			// DF-HERMES-CANOPY-79: the viewer role is read-only. The role
+			// is stored on the request context first (downstream services
+			// read it for defence in depth), then non-reading methods are
+			// rejected here — for viewers only.
+			roleCtx := service.WithTreeRole(r.Context(), role)
+			if role == db.TreeRoleViewer && isWriteMethod(r.Method) {
+				writeError(w, http.StatusForbidden, "VIEWER_READ_ONLY",
+					"viewer role is read-only on this tree")
 				return
 			}
 			deleted, err := checker.IsTreeDeleted(r.Context(), treeID)
@@ -225,7 +239,7 @@ func TreeMembershipMiddleware(checker TreeMemberChecker) func(http.Handler) http
 				writeError(w, http.StatusGone, "TREE_DELETED", "tree has been deleted")
 				return
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(roleCtx))
 		})
 	}
 }
@@ -305,17 +319,39 @@ func NodeAccessMiddleware(svc service.NodeService, checker TreeMemberChecker) fu
 				return
 			}
 
-			member, err := checker.IsMember(r.Context(), treeID, userID)
+			role, isMember, err := checker.IsMember(r.Context(), treeID, userID)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not verify membership")
 				return
 			}
-			if !member {
+			if !isMember {
 				writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER", "you are not a member of this tree")
 				return
 			}
-			next.ServeHTTP(w, r)
+			// DF-HERMES-CANOPY-79: mirror TreeMembershipMiddleware's viewer
+			// gate — the flat surface must not reopen the write path the
+			// tree-scoped mount closes. Viewers only.
+			roleCtx := service.WithTreeRole(r.Context(), role)
+			if role == db.TreeRoleViewer && isWriteMethod(r.Method) {
+				writeError(w, http.StatusForbidden, "VIEWER_READ_ONLY",
+					"viewer role is read-only on this tree")
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(roleCtx))
 		})
+	}
+}
+
+// isWriteMethod reports whether an HTTP method mutates server state for the
+// purposes of the viewer read-only gate (DF-HERMES-CANOPY-79). GET, HEAD,
+// and OPTIONS are reads; everything else (POST, PUT, PATCH, DELETE, and
+// future verbs) is treated as a write and rejected for viewers.
+func isWriteMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
 	}
 }
 

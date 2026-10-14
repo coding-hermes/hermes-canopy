@@ -129,7 +129,7 @@ func TestSQLiteIdentityReposWithoutStoreReportErrNoStore(t *testing.T) {
 	if _, err := NewUserRepo(&Store{}).GetByEmail(ctx, "a@b.com"); !errors.Is(err, ErrNoStore) {
 		t.Errorf("UserRepo(empty Store).GetByEmail error = %v, want ErrNoStore", err)
 	}
-	if _, err := NewTreeMemberRepo(&Store{}).IsMember(ctx, uuid.New(), uuid.New()); !errors.Is(err, ErrNoStore) {
+	if _, _, err := NewTreeMemberRepo(&Store{}).IsMember(ctx, uuid.New(), uuid.New()); !errors.Is(err, ErrNoStore) {
 		t.Errorf("TreeMemberRepo(empty Store).IsMember error = %v, want ErrNoStore", err)
 	}
 }
@@ -712,12 +712,13 @@ func TestSQLiteTreeMemberRepoCRUD(t *testing.T) {
 		t.Errorf("GetByUser(profile id) = %v (nil=%v), want an empty non-nil slice", other, other == nil)
 	}
 
-	// IsMember / IsTreeDeleted.
-	if ok, err := members.IsMember(ctx, tree.ID, user.ID); err != nil || !ok {
-		t.Errorf("IsMember = %v (err %v), want true", ok, err)
+	// IsMember / IsTreeDeleted. The user membership was added with no
+	// explicit role, so Add's default (TreeRoleMember) must come back.
+	if role, ok, err := members.IsMember(ctx, tree.ID, user.ID); err != nil || !ok || role != db.TreeRoleMember {
+		t.Errorf("IsMember = %q/%v (err %v), want true + role %q", role, ok, err, db.TreeRoleMember)
 	}
-	if ok, err := members.IsMember(ctx, second.ID, owner.ID); err != nil || ok {
-		t.Errorf("IsMember(non-member) = %v (err %v), want false", ok, err)
+	if role, ok, err := members.IsMember(ctx, second.ID, owner.ID); err != nil || ok || role != "" {
+		t.Errorf("IsMember(non-member) = %q/%v (err %v), want false + empty role", role, ok, err)
 	}
 	if del, err := members.IsTreeDeleted(ctx, tree.ID); err != nil || del {
 		t.Errorf("IsTreeDeleted(live tree) = %v (err %v), want false", del, err)
@@ -768,8 +769,8 @@ func TestSQLiteTreeMemberRepoCRUD(t *testing.T) {
 	if n := countRows(t, ctx, s, `SELECT COUNT(*) FROM tree_members WHERE id = ?`, pm.ID.String()); n != 0 {
 		t.Errorf("removed membership row count = %d, want the row gone (hard delete)", n)
 	}
-	if ok, err := members.IsMember(ctx, tree.ID, user.ID); err != nil || !ok {
-		t.Errorf("IsMember after removing the profile membership = %v (err %v), want true", ok, err)
+	if role, ok, err := members.IsMember(ctx, tree.ID, user.ID); err != nil || !ok || role != db.TreeRoleOwner {
+		t.Errorf("IsMember after removing the profile membership = %q/%v (err %v), want true + role %q", role, ok, err, db.TreeRoleOwner)
 	}
 	if remaining, err := members.GetByTree(ctx, tree.ID); err != nil {
 		t.Fatalf("GetByTree after Remove: %v", err)

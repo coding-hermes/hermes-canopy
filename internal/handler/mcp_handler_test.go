@@ -427,9 +427,9 @@ type mcpCheckerStub struct {
 	deletedCalls int
 }
 
-func (s *mcpCheckerStub) IsMember(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+func (s *mcpCheckerStub) IsMember(context.Context, uuid.UUID, uuid.UUID) (string, bool, error) {
 	s.memberCalls++
-	return s.member, s.memberErr
+	return db.TreeRoleMember, s.member, s.memberErr
 }
 
 func (s *mcpCheckerStub) IsTreeDeleted(context.Context, uuid.UUID) (bool, error) {

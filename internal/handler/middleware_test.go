@@ -13,6 +13,8 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/google/uuid"
+
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 )
 
 // --- BodySizeLimit tests ---------------------------------------------------
@@ -195,8 +197,8 @@ type memberCheckerStub struct {
 	deletedErr error
 }
 
-func (s *memberCheckerStub) IsMember(_ context.Context, _, _ uuid.UUID) (bool, error) {
-	return s.isMember, s.err
+func (s *memberCheckerStub) IsMember(_ context.Context, _, _ uuid.UUID) (string, bool, error) {
+	return db.TreeRoleMember, s.isMember, s.err
 }
 
 func (s *memberCheckerStub) IsTreeDeleted(_ context.Context, _ uuid.UUID) (bool, error) {

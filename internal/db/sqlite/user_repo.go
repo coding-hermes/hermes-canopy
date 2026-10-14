@@ -821,20 +821,48 @@ func (r *TreeMemberRepo) Remove(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// IsMember returns true when the specified user has a membership row for the given tree.
-// The UNIQUE constraint on (tree_id, user_id) makes EXISTS safe regardless of duplicates.
-func (r *TreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUID) (bool, error) {
+// IsMember reports whether the specified user has a membership row for the given tree,
+// and the role of that membership ("" when not a member). The UNIQUE constraint on
+// (tree_id, user_id) makes the single-row lookup safe. DF-HERMES-CANOPY-79: the role
+// backs the viewer read-only enforcement, mirroring the PostgreSQL implementation.
+func (r *TreeMemberRepo) IsMember(ctx context.Context, treeID, userID uuid.UUID) (string, bool, error) {
 	q, err := r.conn()
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
-	found, err := existsInto(ctx, q,
-		`SELECT EXISTS(SELECT 1 FROM tree_members WHERE tree_id = ? AND user_id = ?)`,
-		idArg(treeID), idArg(userID))
+	var role string
+	err = q.QueryRowContext(ctx,
+		`SELECT role FROM tree_members WHERE tree_id = ? AND user_id = ?`,
+		idArg(treeID), idArg(userID)).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
 	if err != nil {
-		return false, fmt.Errorf("db: check tree member: %w", err)
+		return "", false, fmt.Errorf("db: check tree member: %w", err)
 	}
-	return found, nil
+	return role, true, nil
+}
+
+// GetRole returns the caller's tree_members role ("owner", "admin",
+// "member", "viewer") for the tree (DF-HERMES-CANOPY-79), mirroring the
+// PostgreSQL implementation. Callers invoke it only for known members; a
+// membership that vanishes between IsMember and GetRole reports db.ErrNotFound.
+func (r *TreeMemberRepo) GetRole(ctx context.Context, treeID, userID uuid.UUID) (string, error) {
+	q, err := r.conn()
+	if err != nil {
+		return "", err
+	}
+	var role string
+	err = q.QueryRowContext(ctx,
+		`SELECT role FROM tree_members WHERE tree_id = ? AND user_id = ?`,
+		idArg(treeID), idArg(userID)).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", db.ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("db: get tree member role: %w", err)
+	}
+	return role, nil
 }
 
 // IsTreeDeleted returns true when the tree exists but is soft-deleted (deleted_at IS NOT

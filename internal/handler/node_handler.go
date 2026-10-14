@@ -548,6 +548,10 @@ func (h *NodeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, 
 		writeError(w, 503, "SERVICE_UNAVAILABLE", err.Error())
 	case errors.Is(err, service.ErrNodeAuthorRequired):
 		writeError(w, 403, "FORBIDDEN", err.Error())
+	case errors.Is(err, service.ErrViewerReadOnly):
+		// DF-HERMES-CANOPY-79: a viewer attempted a write that slipped past
+		// the middleware gate (e.g. a flat-surface route mounted without it).
+		writeError(w, 403, "VIEWER_READ_ONLY", err.Error())
 	default:
 		log.Ctx(r.Context()).Error().Err(err).Msg("node request failed")
 		writeError(w, 500, "INTERNAL_ERROR", "internal server error")

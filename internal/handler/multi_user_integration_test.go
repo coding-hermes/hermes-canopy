@@ -773,11 +773,11 @@ type stubMemberChecker struct {
 	member uuid.UUID
 }
 
-func (s *stubMemberChecker) IsMember(_ context.Context, treeID, userID uuid.UUID) (bool, error) {
+func (s *stubMemberChecker) IsMember(_ context.Context, treeID, userID uuid.UUID) (string, bool, error) {
 	if treeID != s.treeID {
-		return false, nil
+		return "", false, nil
 	}
-	return userID == s.member, nil
+	return db.TreeRoleMember, userID == s.member, nil
 }
 
 func (s *stubMemberChecker) IsTreeDeleted(_ context.Context, _ uuid.UUID) (bool, error) {

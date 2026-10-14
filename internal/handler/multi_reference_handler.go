@@ -223,7 +223,10 @@ func (h *MultiReferenceHandler) GetReferenceContext(w http.ResponseWriter, r *ht
 	}
 
 	if h.members != nil && result.TreeID != uuid.Nil {
-		member, err := h.members.IsMember(r.Context(), result.TreeID, userID)
+		// DF-HERMES-CANOPY-79: §9.3 reference-context is a read surface —
+		// every member role (viewer included) may read it, so the role is
+		// deliberately not consulted here.
+		_, member, err := h.members.IsMember(r.Context(), result.TreeID, userID)
 		if err != nil {
 			log.Ctx(r.Context()).Error().Err(err).Msg("reference-context membership check failed")
 			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "membership check unavailable")

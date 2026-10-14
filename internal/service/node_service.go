@@ -56,6 +56,10 @@ var (
 	ErrNodeAuthorRequired    = errors.New("node service: user is not the node author")
 	ErrNoUpdateFields        = errors.New("node service: no fields provided for update")
 	ErrForkRequiresChildren  = errors.New("node service: fork requires parent with at least one child")
+	// ErrViewerReadOnly is returned by every node write path when the
+	// requester's tree membership role is viewer (DF-HERMES-CANOPY-79).
+	// Viewers are read-only: the HTTP layer answers 403 VIEWER_READ_ONLY.
+	ErrViewerReadOnly = errors.New("node service: viewer role is read-only on this tree")
 )
 
 // Note: ErrInvalidContentFormat, ErrInvalidNodeType, and
@@ -459,6 +463,11 @@ func classifyNodeInsertError(err error) error {
 // to all subscribers of the tree so connected clients see the new node
 // appear in real time.
 func (s *NodeServiceImpl) Create(ctx context.Context, treeID uuid.UUID, input CreateNodeInput) (*CreateNodeResult, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only. Checked before
+	// validation so authorization is decided before request shape.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if err := validateCreateInput(input); err != nil {
 		return nil, err
 	}
@@ -811,6 +820,10 @@ func (s *NodeServiceImpl) ListByTreePage(ctx context.Context, treeID uuid.UUID, 
 // middleware (BE-07) lands — the MVP uses uuid.Nil as a sentinel so
 // the method works with the current handler wiring.
 func (s *NodeServiceImpl) Update(ctx context.Context, nodeID uuid.UUID, input UpdateNodeInput) (*NodeDetail, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if nodeID == uuid.Nil {
 		return nil, ErrNodeNotFound
 	}
@@ -965,6 +978,10 @@ func (s *NodeServiceImpl) applyUpdate(ctx context.Context, nodeID uuid.UUID, inp
 // privacy, and returns the minimal info for the SSE event payload.
 // Author check is deferred until auth middleware (BE-07) lands.
 func (s *NodeServiceImpl) SoftDelete(ctx context.Context, nodeID uuid.UUID) (*DeleteNodeResult, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if nodeID == uuid.Nil {
 		return nil, ErrNodeNotFound
 	}
@@ -1025,6 +1042,10 @@ func (s *NodeServiceImpl) SoftDelete(ctx context.Context, nodeID uuid.UUID) (*De
 // "reply". The parent's tree_id is resolved internally so the handler
 // only needs the parent ID.
 func (s *NodeServiceImpl) Reply(ctx context.Context, parentNodeID uuid.UUID, input ReplyInput) (*CreateNodeResult, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if parentNodeID == uuid.Nil {
 		return nil, ErrParentNotFound
 	}
@@ -1079,6 +1100,10 @@ func (s *NodeServiceImpl) Reply(ctx context.Context, parentNodeID uuid.UUID, inp
 // one child — forking from a leaf is indistinguishable from a reply
 // (SPEC-API-03 §7.3).
 func (s *NodeServiceImpl) Fork(ctx context.Context, parentNodeID uuid.UUID, input ForkInput) (*CreateNodeResult, error) {
+	// DF-HERMES-CANOPY-79: the viewer role is read-only.
+	if isViewer(ctx) {
+		return nil, ErrViewerReadOnly
+	}
 	if parentNodeID == uuid.Nil {
 		return nil, ErrParentNotFound
 	}

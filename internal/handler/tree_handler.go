@@ -300,7 +300,11 @@ func (h *TreeHandler) canViewTree(ctx context.Context, treeID, userID, ownerID u
 	if h.members == nil {
 		return false, nil
 	}
-	return h.members.IsMember(ctx, treeID, userID)
+	// DF-HERMES-CANOPY-79: this is a READ gate (owner or any active member
+	// may view the tree); the role is irrelevant here and viewers must
+	// still pass, so the role return value is discarded.
+	_, isMember, err := h.members.IsMember(ctx, treeID, userID)
+	return isMember, err
 }
 
 func (h *TreeHandler) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {

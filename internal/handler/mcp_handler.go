@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/service"
 )
 
@@ -405,12 +406,17 @@ func (h *MCPHandler) checkCreateNodeAccess(ctx context.Context, treeID uuid.UUID
 		return nil
 	}
 	userID := UserIDFromContext(ctx)
-	member, err := h.treeChecker.IsMember(ctx, treeID, userID)
+	role, member, err := h.treeChecker.IsMember(ctx, treeID, userID)
 	if err != nil {
 		return errors.New("internal error: could not verify membership")
 	}
 	if !member {
 		return errors.New("tree not found or you are not a member")
+	}
+	// DF-HERMES-CANOPY-79: the viewer role is read-only, so creating a
+	// node through the MCP surface is refused for viewers too.
+	if role == db.TreeRoleViewer {
+		return errors.New("viewer role is read-only on this tree")
 	}
 	deleted, err := h.treeChecker.IsTreeDeleted(ctx, treeID)
 	if err != nil {
