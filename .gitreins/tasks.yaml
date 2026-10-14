@@ -4022,3 +4022,13 @@ tasks:
   status: complete
   created_at: '2026-10-14T00:48:58.719081+00:00'
   completed_at: '2026-10-14T01:11:16.778054+00:00'
+- id: DF-HERMES-CANOPY-80
+  title: dev bootstrap never adds owner to workspace_members; /collab 403s for dev
+    user
+  criteria:
+  - EnsureDevWorkspaceProfile inserts a workspace_members row (DevWorkspaceID, DevJWTUserID,
+    role=int(RoleAdmin)=2) in the same transaction, ON CONFLICT DO NOTHING; fresh-bootstrap
+    test asserts membership row exists; idempotent re-run unchanged
+  status: complete
+  created_at: '2026-10-14T10:26:44.482765+00:00'
+  completed_at: '2026-10-14T10:34:59.964970+00:00'
