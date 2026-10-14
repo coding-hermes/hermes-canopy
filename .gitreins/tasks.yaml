@@ -4019,5 +4019,6 @@ tasks:
     when role=viewer with 403 VIEWER_READ_ONLY; add GetRole method to TreeMemberChecker
     interface and both PG/SQLite implementations; add integration test verifying viewer
     cannot POST nodes but can GET tree
-  status: in_progress
+  status: complete
   created_at: '2026-10-14T00:48:58.719081+00:00'
+  completed_at: '2026-10-14T01:11:16.778054+00:00'
