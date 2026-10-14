@@ -186,7 +186,8 @@ func (h *Handler) HandleTreeEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// CORS is owned by corsMiddleware on the server router (config-driven,
+	// fail-closed when CORSOrigin is empty) — do not set a wildcard here.
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
