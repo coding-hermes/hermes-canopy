@@ -835,6 +835,49 @@ variable and the bad value, never a silent fallback to the default.
 | `CANOPY_SERVER_URL` | `http://localhost:8091` | **CLI only** — API base URL the `tree`/`topic` subcommands call; an explicit value wins over `DB_*`/`HTTP_ADDR`, and a malformed one fails before any request (see "CLI") |
 | `CANOPY_TOKEN` | *(unset)* | **CLI only** — Bearer token sent with each CLI request |
 
+### Signed updates (self-update)
+
+The self-update flow (SPEC-FTR-06) fetches a signed release manifest and verifies
+every artifact against an Ed25519 public key. Both the manifest URL and the
+public key are configurable so the updater is not hard-coded to a single
+endpoint.
+
+**Flags** (server mode; see `canopyd --help`):
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-update-interval` | `0` | Signed update check interval; `0` disables update checks entirely |
+| `-channel` | `stable` | Update channel: `stable`, `beta`, or `nightly` |
+| `-update-manifest-url` | *(unset)* | Override the manifest URL; unset uses `https://releases.canopy.app/<channel>/latest.json` |
+| `-update-public-key-file` | *(unset)* | Path to a hex-encoded Ed25519 public key (64 hex chars); unset uses the embedded key |
+
+**Environment variables** (flag wins over env; env wins over the built-in default):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CANOPY_UPDATE_MANIFEST_URL` | *(unset)* | Manifest URL override, same as `-update-manifest-url` |
+| `CANOPY_UPDATE_PUBLIC_KEY_FILE` | *(unset)* | Public key file override, same as `-update-public-key-file` |
+
+**Embedded key.** The binary embeds an Ed25519 public key at build time
+(`internal/updater/release_public_key.txt`, compiled in via `go:embed`). The key
+committed in this repository is a **placeholder generated for development** — its
+private half is deliberately absent. A production release must generate its own
+keypair and either replace that file before rebuilding or override the key at
+runtime via `-update-public-key-file` / `CANOPY_UPDATE_PUBLIC_KEY_FILE`:
+
+```bash
+# Generate the signing keypair (keep the private key secret — store it as the
+# GitHub Actions secret RELEASE_SIGNING_KEY per SPEC-FTR-06 §49).
+openssl genpkey -algorithm ed25519 -out release-key.pem
+
+# The public key the updater needs is the 32-byte (64 hex chars) key, which is
+# the trailing 32 bytes of the SubjectPublicKeyInfo DER:
+openssl pkey -in release-key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 64
+```
+
+The value passed to `-update-public-key-file` is the 64-hex-character string the
+second command prints (a trailing newline is fine).
+
 ## Development
 
 ### Prerequisites

@@ -921,6 +921,8 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "  -relay-tls-mutual       require mutual TLS\n")
 	fmt.Fprintf(os.Stderr, "  -update-interval        signed update check interval (0 disables update checks)\n")
 	fmt.Fprintf(os.Stderr, "  -channel                update channel: stable, beta, or nightly\n")
+	fmt.Fprintf(os.Stderr, "  -update-manifest-url    signed update manifest URL (env CANOPY_UPDATE_MANIFEST_URL)\n")
+	fmt.Fprintf(os.Stderr, "  -update-public-key-file path to a hex-encoded Ed25519 public key (env CANOPY_UPDATE_PUBLIC_KEY_FILE)\n")
 	fmt.Fprintf(os.Stderr, "  -h, --help  print this help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "Key environment variables:\n")
 	fmt.Fprintf(os.Stderr, "  HTTP_ADDR       listen address (default :8080)\n")
@@ -930,4 +932,6 @@ func printServerUsage() {
 	fmt.Fprintf(os.Stderr, "  DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SCHEMA, DB_SSLMODE\n")
 	fmt.Fprintf(os.Stderr, "  JWT_SECRET      HS256 signing secret (default dev-secret-change-me)\n")
 	fmt.Fprintf(os.Stderr, "  LOG_LEVEL, LOG_FORMAT, METRICS_ENABLED, CORS_ORIGIN\n")
+	fmt.Fprintf(os.Stderr, "  CANOPY_UPDATE_MANIFEST_URL update manifest URL (overrides the built-in default)\n")
+	fmt.Fprintf(os.Stderr, "  CANOPY_UPDATE_PUBLIC_KEY_FILE path to a hex-encoded Ed25519 public key (overrides the embedded key)\n")
 }

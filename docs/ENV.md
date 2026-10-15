@@ -92,6 +92,13 @@ Numeric knobs accept an integer; out-of-range or non-numeric values silently kee
 | `CANOPY_FILE_ROOT` | Root directory for uploaded file bytes (SPEC-PL-02 §7.6); objects land at `<root>/files/<aa>/<sha256>`. | `~/.canopy/files` | internal/config/config.go:416 |
 | `CANOPY_GATEWAY_STATE_FILE` | Path of the gateway run-registry JSONL file. The override names the file itself (not a directory), is used verbatim, and is re-resolved on every call. When unset the path is **per-instance**: it derives from the server's own `HTTP_ADDR` port, and on the canonical port `8091` a legacy `runs.jsonl` is migrated forward once at boot. | `~/.hermes/canopy/gateway/runs-<port>.jsonl` (`<port>` from `HTTP_ADDR`) | internal/gateway/service.go:135 |
 
+## Signed updates
+
+| Variable | Purpose | Default when unset | Read at |
+|---|---|---|---|
+| `CANOPY_UPDATE_MANIFEST_URL` | Override for the signed-update manifest URL (server mode). The `-update-manifest-url` flag wins over this variable; unset uses the updater's built-in per-channel default (`https://releases.canopy.app/<channel>/latest.json`). | unset (built-in default) | cmd/canopyd/main.go:198 |
+| `CANOPY_UPDATE_PUBLIC_KEY_FILE` | Path to a hex-encoded Ed25519 public key (64 hex chars) overriding the key embedded in the binary (SPEC-FTR-06 §49). The `-update-public-key-file` flag wins over this variable; a malformed or unreadable path is a startup error. | unset (embedded key) | cmd/canopyd/main.go:202 |
+
 ## Test infrastructure (not read by the server)
 
 These variables are consumed by the test/benchmark harness (`internal/testutil`) and CI, never by `canopyd` itself.

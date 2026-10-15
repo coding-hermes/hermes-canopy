@@ -171,6 +171,8 @@ func main() {
 	relayTLSMutual := flag.Bool("relay-tls-mutual", false, "require mutual TLS")
 	updateInterval := flag.Duration("update-interval", 0, "signed update check interval (0 disables update checks)")
 	updateChannel := flag.String("channel", string(updater.ChannelStable), "update channel: stable, beta, or nightly")
+	updateManifestURL := flag.String("update-manifest-url", "", "signed update manifest URL (empty uses the built-in per-channel default)")
+	updatePublicKeyFile := flag.String("update-public-key-file", "", "path to a hex-encoded Ed25519 public key (empty uses the embedded release key)")
 	flag.Usage = printServerUsage
 	flag.Parse()
 
@@ -183,6 +185,25 @@ func main() {
 	}
 	if err := updater.ValidateChannel(*updateChannel); err != nil {
 		log.Fatal().Err(err).Msg("invalid update channel")
+	}
+
+	// Resolve the signed-update configuration (DF-HERMES-CANOPY-71). The
+	// manifest URL is the explicit flag, then the environment variable, then
+	// the updater's built-in per-channel default. The public key is a file
+	// override (flag, then environment) falling back to the key embedded in
+	// the binary; a malformed or unreadable override fails startup loudly
+	// rather than silently running with a key the operator did not intend.
+	manifestURL := strings.TrimSpace(*updateManifestURL)
+	if manifestURL == "" {
+		manifestURL = strings.TrimSpace(os.Getenv("CANOPY_UPDATE_MANIFEST_URL"))
+	}
+	publicKeyFile := strings.TrimSpace(*updatePublicKeyFile)
+	if publicKeyFile == "" {
+		publicKeyFile = strings.TrimSpace(os.Getenv("CANOPY_UPDATE_PUBLIC_KEY_FILE"))
+	}
+	updatePublicKey, err := updater.ResolvePublicKey(publicKeyFile)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid update public key configuration")
 	}
 
 	// -print-schema-version (GAP-069): print the max migration version
@@ -659,6 +680,8 @@ func main() {
 		updateClient := &updater.Updater{
 			CurrentVersion: version,
 			Channel:        updater.ReleaseChannel(*updateChannel),
+			ManifestURL:    manifestURL,
+			PublicKey:      updatePublicKey,
 			CheckInterval:  *updateInterval,
 			OnStartupCheck: true,
 		}
