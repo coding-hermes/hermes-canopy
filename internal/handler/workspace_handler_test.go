@@ -673,10 +673,11 @@ func TestWorkspace_ChannelWorkspaceScopeProductionWiring(t *testing.T) {
 		userID     uuid.UUID
 		wantStatus int
 		wantCode   string
+		wantMsg    string
 	}{
 		{name: "member", workspace: workspaceID.String(), userID: memberID, wantStatus: http.StatusOK},
-		{name: "non-member", workspace: workspaceID.String(), userID: nonMemberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
-		{name: "unknown workspace", workspace: uuid.New().String(), userID: memberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND"},
+		{name: "non-member", workspace: workspaceID.String(), userID: nonMemberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND", wantMsg: "workspace not found or you are not a member of it"},
+		{name: "unknown workspace", workspace: uuid.New().String(), userID: memberID, wantStatus: http.StatusForbidden, wantCode: "WORKSPACE_NOT_FOUND", wantMsg: "workspace not found or you are not a member of it"},
 		{name: "invalid workspace", workspace: "not-a-uuid", userID: memberID, wantStatus: http.StatusBadRequest, wantCode: "INVALID_WORKSPACE_ID"},
 	}
 	for _, tc := range cases {
@@ -695,6 +696,9 @@ func TestWorkspace_ChannelWorkspaceScopeProductionWiring(t *testing.T) {
 			}
 			if body.Error.Code != tc.wantCode {
 				t.Fatalf("error code = %q, want %q", body.Error.Code, tc.wantCode)
+			}
+			if tc.wantMsg != "" && body.Error.Message != tc.wantMsg {
+				t.Fatalf("error message = %q, want %q", body.Error.Message, tc.wantMsg)
 			}
 		})
 	}

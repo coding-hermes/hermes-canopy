@@ -156,7 +156,7 @@ func (h *WorkspaceHandler) authorizeWorkspace(w http.ResponseWriter, r *http.Req
 		// legacy unscoped path above remains unchanged. Do not distinguish
 		// a missing workspace from a valid workspace where the caller is not
 		// a member: the channel surface has no existence oracle by design.
-		writeError(w, http.StatusForbidden, "WORKSPACE_NOT_FOUND", "workspace not found")
+		writeError(w, http.StatusForbidden, "WORKSPACE_NOT_FOUND", "workspace not found or you are not a member of it")
 		return false
 	}
 	return true

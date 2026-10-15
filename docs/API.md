@@ -2858,10 +2858,12 @@ routes accept the optional `workspace_id` query parameter:
 
 When `workspace_id` is present, the authenticated caller must be a member. A
 non-member, missing workspace, or soft-deleted workspace receives the same
-`403` envelope to avoid an existence oracle:
+`403` envelope to avoid an existence oracle. The message deliberately names
+membership as one possible cause; the stable error code and status never
+distinguish a missing workspace from a non-member caller:
 
 ```json
-{"error":{"code":"WORKSPACE_NOT_FOUND","message":"workspace not found"}}
+{"error":{"code":"WORKSPACE_NOT_FOUND","message":"workspace not found or you are not a member of it"}}
 ```
 
 A malformed `workspace_id` receives `400`:
