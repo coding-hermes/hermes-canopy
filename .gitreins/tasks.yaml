@@ -4041,3 +4041,12 @@ tasks:
   status: complete
   created_at: '2026-10-14T16:53:11.453030+00:00'
   completed_at: '2026-10-14T16:59:13.208623+00:00'
+- id: DF-HERMES-CANOPY-81
+  title: Scoped channel 403 message must name membership as possible cause
+  criteria:
+  - Handler returns 403/WORKSPACE_NOT_FOUND with a message naming membership as possible
+    cause; tests assert the new message under CANOPY_TEST_ALLOW_SHARED_DB=1; docs/API.md
+    updated; golangci-lint 0 issues; pushed
+  status: complete
+  created_at: '2026-10-15T12:05:15.210324+00:00'
+  completed_at: '2026-10-15T12:13:50.925144+00:00'
