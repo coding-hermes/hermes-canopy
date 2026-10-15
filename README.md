@@ -582,7 +582,7 @@ resolved per node:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/metrics` | Prometheus metrics (if METRICS_ENABLED=true) |
+| `GET` | `/metrics` | Prometheus metrics — **only registered when `METRICS_ENABLED=true`**; when the env var is unset (the bare-binary default is off), the endpoint returns `404 ROUTE_NOT_FOUND` rather than an empty metrics page. Docker Compose sets the flag, so this only bites bare-binary users. |
 
 ### MCP (Model Context Protocol)
 
@@ -809,7 +809,7 @@ variable and the bad value, never a silent fallback to the default.
 | `DB_SSLMODE` | `disable` | PostgreSQL SSL mode |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `LOG_FORMAT` | `text` | Log format (text, json) |
-| `METRICS_ENABLED` | `false` | Enable Prometheus metrics |
+| `METRICS_ENABLED` | `false` | Enable Prometheus metrics. **Unset = endpoint absent**: `/metrics` returns `404 ROUTE_NOT_FOUND` on a bare-binary default boot (see config.go `METRICS_ENABLED` handling); set `METRICS_ENABLED=true` (Docker Compose does) to register the route. |
 | `CORS_ORIGIN` | `*` | CORS allowed origins |
 | `JWT_SECRET` | `dev-secret-change-me` | HS256 signing secret (set a real value in production) |
 | `CANOPY_DB_URL` | *(unset)* | Override DSN; takes priority over all `DB_*` fields |
