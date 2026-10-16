@@ -166,9 +166,10 @@ func WriteManifest(path string, manifest updater.ReleaseManifest) error {
 	return nil
 }
 
-// BuildManifestFromDir discovers the five embed binaries and native installer
-// files in artifactDir, signs every discovered file, and signs the manifest.
-// Unknown files (checksums, notes, and temporary files) are ignored.
+// BuildManifestFromDir discovers embed binaries (canopyd_<os>_<arch>[.exe])
+// and native installer files in artifactDir, signs every discovered file, and
+// signs the manifest. Unknown files (checksums, notes, and temporary files)
+// are ignored.
 func BuildManifestFromDir(metadata Metadata, artifactDir, baseURL string, privateKey ed25519.PrivateKey) (updater.ReleaseManifest, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		return updater.ReleaseManifest{}, errors.New("dist: release asset base URL is required")
@@ -209,7 +210,7 @@ func BuildManifestFromDir(metadata Metadata, artifactDir, baseURL string, privat
 		})
 	}
 	if len(artifacts) == 0 {
-		return updater.ReleaseManifest{}, errors.New("dist: no release artifacts found")
+		return updater.ReleaseManifest{}, fmt.Errorf("dist: no release artifacts found in %s (accepted: %s)", artifactDir, acceptedArtifactNames)
 	}
 	manifest, err := GenerateManifest(metadata, artifacts)
 	if err != nil {
@@ -221,28 +222,70 @@ func BuildManifestFromDir(metadata Metadata, artifactDir, baseURL string, privat
 	return manifest, nil
 }
 
+// acceptedArtifactNames describes the platform-filename contract for embed
+// binaries (SPEC-FTR-06): "canopyd_<os>_<arch>" with an optional ".exe"
+// suffix that is required on windows. os is one of linux, darwin, windows;
+// arch is one of amd64, arm64.
+const acceptedArtifactNames = "canopyd_<os>_<arch>[.exe]"
+
+// platformForFilename maps an embed-binary filename to its target platform.
+// The accepted pattern is canopyd_<os>_<arch> for linux/darwin binaries and
+// canopyd_<os>_<arch>.exe for windows binaries. Rejecting a name here makes
+// BuildManifestFromDir ignore the file (e.g. checksums, notes, temp files).
 func platformForFilename(name string) (updater.TargetPlatform, bool) {
-	switch name {
-	case "canopyd_linux_amd64":
-		return updater.TargetPlatform{OS: "linux", Arch: "amd64", Mode: "embed"}, true
-	case "canopyd_linux_arm64":
-		return updater.TargetPlatform{OS: "linux", Arch: "arm64", Mode: "embed"}, true
-	case "canopyd_darwin_amd64":
-		return updater.TargetPlatform{OS: "darwin", Arch: "amd64", Mode: "embed"}, true
-	case "canopyd_darwin_arm64":
-		return updater.TargetPlatform{OS: "darwin", Arch: "arm64", Mode: "embed"}, true
-	case "canopyd_windows_amd64.exe":
-		return updater.TargetPlatform{OS: "windows", Arch: "amd64", Mode: "embed"}, true
-	}
+	base := name
 	ext := strings.ToLower(filepath.Ext(name))
-	if ext == ".deb" || ext == ".rpm" {
+	hasExe := ext == ".exe"
+	if hasExe {
+		base = name[:len(name)-len(ext)]
+	}
+	parts := strings.Split(base, "_")
+	// Expect exactly "canopyd" _ <os> _ <arch>; windows binaries carry ".exe".
+	if len(parts) != 3 || parts[0] != "canopyd" {
+		// Fall back to native installer package matching below.
+		return installerForFilename(name, ext)
+	}
+	osName, arch := parts[1], parts[2]
+	if !platformOSAllowed(osName) || !platformArchAllowed(arch) {
+		return updater.TargetPlatform{}, false
+	}
+	if osName == "windows" && !hasExe {
+		return updater.TargetPlatform{}, false
+	}
+	if osName != "windows" && hasExe {
+		return updater.TargetPlatform{}, false
+	}
+	return updater.TargetPlatform{OS: osName, Arch: arch, Mode: "embed"}, true
+}
+
+func platformOSAllowed(osName string) bool {
+	switch osName {
+	case "linux", "darwin", "windows":
+		return true
+	}
+	return false
+}
+
+func platformArchAllowed(arch string) bool {
+	switch arch {
+	case "amd64", "arm64":
+		return true
+	}
+	return false
+}
+
+// installerForFilename maps native installer packages (.deb, .rpm, .msi) to
+// their target platforms.
+func installerForFilename(name, lowerExt string) (updater.TargetPlatform, bool) {
+	if lowerExt == ".deb" || lowerExt == ".rpm" {
 		arch := "amd64"
-		if strings.Contains(strings.ToLower(name), "arm64") || strings.Contains(strings.ToLower(name), "aarch64") {
+		lower := strings.ToLower(name)
+		if strings.Contains(lower, "arm64") || strings.Contains(lower, "aarch64") {
 			arch = "arm64"
 		}
 		return updater.TargetPlatform{OS: "linux", Arch: arch, Mode: "installer"}, true
 	}
-	if ext == ".msi" {
+	if lowerExt == ".msi" {
 		return updater.TargetPlatform{OS: "windows", Arch: "amd64", Mode: "installer"}, true
 	}
 	return updater.TargetPlatform{}, false

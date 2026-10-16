@@ -878,6 +878,24 @@ openssl pkey -in release-key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 6
 The value passed to `-update-public-key-file` is the 64-hex-character string the
 second command prints (a trailing newline is fine).
 
+### Release artifacts (release-tool)
+
+`cmd/release-tool` builds the signed release manifest (`latest.json`) from a
+directory of build artifacts (SPEC-FTR-06 §511). It discovers files by name:
+
+- Embed binaries: `canopyd_<os>_<arch>[.exe]` where `<os>` is `linux`,
+  `darwin`, or `windows` and `<arch>` is `amd64` or `arm64`. The `.exe`
+  suffix is required for windows binaries and must not appear on the others.
+  Example: `canopyd_linux_amd64`, `canopyd_darwin_arm64`,
+  `canopyd_windows_amd64.exe`.
+- Native installers: `*.deb` and `*.rpm` (Linux; `arm64`/`aarch64` in the
+  filename selects the arm64 platform) and `*.msi` (Windows).
+
+Any other file in the directory (checksums, notes, temporary files) is ignored.
+If no file matches, the tool fails with
+`dist: no release artifacts found in <dir> (accepted: canopyd_<os>_<arch>[.exe])`
+— rename your build outputs to match the pattern above and re-run.
+
 ## Development
 
 ### Prerequisites
