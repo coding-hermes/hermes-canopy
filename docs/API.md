@@ -359,6 +359,39 @@ case).
 `NOT_IMPLEMENTED` (501 when the server is built without share dependencies),
 `INTERNAL_ERROR` (500).
 
+### Tree Membership
+
+Sharing a tree creates a membership, but the server mounts **no** route to
+list, update, or remove tree memberships. The SPEC-API-06 §9–§11 member
+surface is deferred (not implemented) and is pinned as absent by
+`TestSpecAPI06RequiredRoutesAbsent`; each path below answers a raw chi `404`
+with no error envelope. They are reserved names, not endpoints — do not build
+against them (the SPEC, not this doc, is the contract for the unmounted
+surface, including its polymorphic human/profile membership rows):
+
+```
+GET    /api/v1/trees/{tree_id}/members              (SPEC-API-06 §9 — not mounted)
+PATCH  /api/v1/trees/{tree_id}/members/{member_id}  (SPEC-API-06 §10 — not mounted)
+DELETE /api/v1/trees/{tree_id}/members/{member_id}  (SPEC-API-06 §11 — not mounted)
+```
+
+What a caller can do today:
+
+- **See that access exists:** `GET /api/v1/trees/{tree_id}` (§ Get Tree)
+  returns `member_count` — a count only. The detail response's `members`
+  roster is never populated: no handler sets
+  `GetTreeOptions.IncludeMembers`, and the service returns an empty array
+  even when the option is set (`internal/service/tree_service.go`,
+  `TreeServiceImpl.GetTree`).
+- **Grant access:** `POST /api/v1/trees/{tree_id}/share` (§ Share Tree,
+  owner-only).
+- **See who has access, downgrade, or remove a member:** not possible over
+  HTTP today. The data layer supports it (`db.TreeMemberRepo` exposes
+  `GetByTree`, `UpdateRole`, and `Remove`), and the workspace-scoped
+  collaboration surface (§ Collaboration) ships the full member
+  GET/PATCH/DELETE for `/collab/{workspace_id}` workspaces — but there is no
+  tree-scoped equivalent. Recorded as Spec-vs-Code Drift entry 17.
+
 ---
 
 ## Nodes
@@ -3008,7 +3041,20 @@ PATCH /api/v1/collab/{workspace_id}/members/{user_id}
 ```
 
 **Request body:** `{"role":0|1|2}` where the collaboration roles are viewer,
-editor, and admin respectively.
+editor, and admin respectively. The field is an **integer named `role`** —
+this is not the tree-share permission vocabulary. The handler decodes into
+`updateMemberRoleRequest` (`internal/handler/collab_handler.go:62` — a struct
+whose `Role int` maps to JSON `role`) with strict JSON decoding
+(`DisallowUnknownFields`), so any other field name is rejected outright:
+
+- `{"permission":"admin"}` → `400 INVALID_BODY` ("request body must be valid
+  JSON") — `permission` is not a known field on this endpoint. Send
+  `{"role":2}` instead.
+- A role value outside `0–2` fails the service's range check
+  (`internal/service/collaboration_service_impl.go`) and surfaces as
+  `500 INTERNAL_ERROR`, not a 400.
+- The workspace **owner cannot be retargeted**: changing the owner's role
+  returns `403 PERMISSION_DENIED` before the admin check.
 
 **Response (200):** `{"ok":true}`.
 
@@ -4239,6 +4285,23 @@ actual code:
     `TestRouteParityCollabRoutes`, `TestRouteParityWorkspaceProfileRoutes`,
     and `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
     sides.
+
+17. **Tree membership has no management surface:** `POST
+    /api/v1/trees/{tree_id}/share` creates `tree_members` rows, but the
+    server mounts no route to list, update, or remove tree memberships — the
+    SPEC-API-06 §9–§11 `GET|PATCH|DELETE /trees/{tree_id}/members…` surface
+    is deferred and pinned as absent by `TestSpecAPI06RequiredRoutesAbsent`
+    (§ Tree Membership documents the reserved paths as not mounted). A
+    tree's `member_count` is visible via `GET /api/v1/trees/{tree_id}`, but
+    the detail response's `members` roster is never populated: no handler
+    sets `GetTreeOptions.IncludeMembers`, and the service returns an empty
+    array even when the option is set
+    (`internal/service/tree_service.go`, `TreeServiceImpl.GetTree`). The
+    `db.TreeMemberRepo` data layer supports `GetByTree`, `UpdateRole`, and
+    `Remove`, so management would be handler work only; today a tree owner
+    cannot see who has access, downgrade, or remove a member over HTTP. The
+    workspace-scoped `/collab` surface ships the full member GET/PATCH/DELETE
+    for workspaces, but there is no tree-scoped equivalent.
 
 ## Iteration progress (SPEC-PL-04 phase 2)
 
