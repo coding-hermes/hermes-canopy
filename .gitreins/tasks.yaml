@@ -3846,16 +3846,14 @@ tasks:
   created_at: '2026-09-28T00:34:10.037131+00:00'
   completed_at: '2026-09-28T00:45:40.678237+00:00'
 - id: DF-HERMES-CANOPY-72
-  title: Document POST /api/v1/cards request body schema
+  title: Release workflow manifest at stable URL
   criteria:
-  - "docs/API.md documents the POST /api/v1/cards request body: camelCase keys treeId/nodeId/appId/cardType\
-    \ (all required) plus optional data, valid cardType values compact|expanded|iteration,\
-    \ unknown-field rejection with 400 INVALID_JSON, and the per-field MISSING_* error\
-    \ codes \u2014 matching internal/handler/card_handler.go cardCreateRequest at\
-    \ HEAD."
-  status: complete
-  created_at: '2026-09-29T10:39:49.388433+00:00'
-  completed_at: '2026-09-29T23:19:29.843819+00:00'
+  - "latest.json published by release workflow is only a versioned release asset \u2014\
+    \ add a step to publish it at a fixed URL (gh-pages or raw path) so the updater\
+    \ can poll continuously. Acceptance: 1) release.yml publishes latest.json to stable\
+    \ URL 2) workflow handles missing latest.json gracefully 3) go build ./... passes"
+  status: pending
+  created_at: '2026-10-16T19:31:15.206682+00:00'
 - id: DF-71
   title: "session browse fails with unhelpful error when ~/.hermes/state-backups is\
     \ missing \u2014 error text + README must explain how to populate snapshots"
