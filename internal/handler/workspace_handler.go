@@ -138,12 +138,21 @@ type channelListItem struct {
 	SubscriberCount int       `json:"subscriber_count,omitempty"`
 }
 
-// authorizeWorkspace applies the optional query-parameter workspace scope.
-// An absent parameter deliberately preserves the legacy unscoped route.
+// authorizeWorkspace requires the workspace scope. Every route on this
+// surface is workspace-bound: DF-85 — the previous behavior treated an
+// ABSENT ?workspace_id= as an implicit pass ("legacy unscoped route"),
+// which let ANY authenticated caller read the channel list and post into
+// 'general'/'agents'. Requests must carry ?workspace_id={uuid}. A
+// malformed value is 400 INVALID_WORKSPACE_ID; anything else goes through
+// the membership checker, which answers 403 WORKSPACE_NOT_FOUND for a
+// missing workspace, a soft-deleted workspace, or a non-member caller
+// (single envelope by design — the surface has no existence oracle).
 func (h *WorkspaceHandler) authorizeWorkspace(w http.ResponseWriter, r *http.Request) bool {
 	rawID := r.URL.Query().Get("workspace_id")
 	if rawID == "" {
-		return true
+		writeError(w, http.StatusForbidden, "WORKSPACE_SCOPE_REQUIRED",
+			"workspace_id query parameter is required for workspace channels")
+		return false
 	}
 	workspaceID, err := uuid.Parse(rawID)
 	if err != nil {
@@ -182,6 +191,10 @@ func (h *WorkspaceHandler) ListChannels(w http.ResponseWriter, r *http.Request) 
 // --- SendMessage ------------------------------------------------------------
 
 // sendMessageRequest is the JSON body for POST /{channel_id}/message.
+// SenderID is accepted for wire compatibility but IGNORED (DF-85): it was
+// previously recorded verbatim, so any authenticated caller could forge a
+// message that appeared to come from another user. The recorded sender is
+// always the JWT subject decoded by AuthMiddleware (UserIDFromContext).
 type sendMessageRequest struct {
 	SenderID *uuid.UUID `json:"sender_id,omitempty"`
 	Content  string     `json:"content"`
@@ -234,13 +247,11 @@ func (h *WorkspaceHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sender: explicit body value wins; fall back to authenticated user.
-	var senderID uuid.UUID
-	if req.SenderID != nil {
-		senderID = *req.SenderID
-	} else {
-		senderID = UserIDFromContext(r.Context())
-	}
+	// Sender: the JWT subject, always (DF-85). A client-supplied sender_id
+	// is a spoof vector and is ignored — userID unauthenticated (uuid.Nil)
+	// is already rejected above for scoped workspace writes, and the
+	// workspace wall makes an unauthenticated write unreachable anyway.
+	senderID := UserIDFromContext(r.Context())
 
 	// Message IDs use uuidv7 (time-ordered, lexicographically sortable).
 	msgID, err := uuid.NewV7()

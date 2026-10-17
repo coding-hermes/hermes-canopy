@@ -2848,7 +2848,9 @@ SPEC-API-06. Unless a route says otherwise, failures use the standard
 
 Mounted at `/api/v1/workspace/channels`. The channel registry remains in memory
 and the seeded `general` and `agents` channel IDs are deterministic. All three
-routes accept the optional `workspace_id` query parameter:
+routes REQUIRE the `workspace_id` query parameter (DF-85 — the channel surface
+is workspace-bound; the former "legacy unscoped" fallback let any authenticated
+caller list channels and post into them):
 
 | Method | Path | Success |
 |---|---|---|
@@ -2866,14 +2868,22 @@ distinguish a missing workspace from a non-member caller:
 {"error":{"code":"WORKSPACE_NOT_FOUND","message":"workspace not found or you are not a member of it"}}
 ```
 
-A malformed `workspace_id` receives `400`:
+`POST .../message` records the sender as the authenticated JWT subject; a
+`sender_id` field in the request body is tolerated (ignored) for wire
+compatibility and never overrides the token identity (DF-85). A malformed
+`workspace_id` receives `400`:
 
 ```json
 {"error":{"code":"INVALID_WORKSPACE_ID","message":"workspace_id must be a valid UUID"}}
 ```
 
-Omitting `workspace_id` preserves the legacy unscoped channel behavior. The
-message feed replays the retained, bounded channel history when a client
+Omitting `workspace_id` is rejected with `403`:
+
+```json
+{"error":{"code":"WORKSPACE_SCOPE_REQUIRED","message":"workspace_id query parameter is required for workspace channels"}}
+```
+
+The message feed replays the retained, bounded channel history when a client
 connects without `Last-Event-ID`, in sequence order, and then continues with
 live `channel_message` events. Set `replay=false` to disable replay on a fresh
 connection; reconnects carrying `Last-Event-ID` retain cursor-based replay.
