@@ -413,9 +413,15 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 
 		// Flat node surface (SPEC-API-03 §6) — update/delete/reply/fork by
-		// bare node id. JWT-authenticated via this router; per-node
-		// membership is enforced in the handlers.
-		r.Mount("/nodes", nodeHandler.FlatRoutes())
+		// bare node id. JWT-authenticated via this router. Per-node
+		// membership and the viewer read-only gate are enforced by
+		// NodeAccessMiddleware (DF-HERMES-CANOPY-84): the tree-scoped mount
+		// closes the viewer write path (a831e83d) while the bare-id mount
+		// previously allowed any viewer to PATCH/DELETE/reply/fork any node.
+		flatNodes := chi.NewRouter()
+		flatNodes.Use(handler.NodeAccessMiddleware(nodeSvc, membersRepo))
+		flatNodes.Mount("/", nodeHandler.FlatRoutes())
+		r.Mount("/nodes", flatNodes)
 
 		// Sync endpoints (SPEC-DM-02 §7) — tree-scoped, membership-gated.
 		r.With(membershipMW).Mount("/trees/{tree_id}/sync", handler.NewSyncHandler(syncEngine).Routes())
