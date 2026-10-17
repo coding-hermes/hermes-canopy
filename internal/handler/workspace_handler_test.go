@@ -36,7 +36,7 @@ func newWorkspaceTestServer(t *testing.T, heartbeat time.Duration) (*httptest.Se
 	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
 	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
 
-	h := NewWorkspaceHandler(hub)
+	h := NewWorkspaceHandler(hub, WithWorkspaceAccessChecker(permissiveChecker))
 	// Short heartbeat when a test opts in, so heartbeat arrival is fast.
 	if heartbeat > 0 {
 		// We can't reconfigure the handler's HeartbeatInterval constant, so
@@ -62,7 +62,7 @@ func newWorkspaceTestServerWithAuth(t *testing.T) (*httptest.Server, sse.SSEHub,
 	hub := sse.NewHubWithConfig(sse.HubConfig{PruneInterval: -1})
 	t.Cleanup(func() { _ = hub.Shutdown(context.Background()) })
 
-	h := NewWorkspaceHandler(hub)
+	h := NewWorkspaceHandler(hub, WithWorkspaceAccessChecker(permissiveChecker))
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(AuthMiddleware("canopy-dev-secret"))
@@ -107,6 +107,20 @@ func wsPost(t *testing.T, srv *httptest.Server, path, bearer string, body any) *
 	return resp
 }
 
+// scopeParam returns the required workspace scope query string for the
+// workspace channel routes (DF-85): the ?workspace_id= parameter is now a
+// hard requirement. wsScope is the shared fixture workspace UUID for the
+// pure-unit tests; permissiveChecker admits every (user, workspace) pair.
+var wsScope = uuid.MustParse("a1b2c3d4-0000-0000-0000-00000000000f")
+
+// permissiveChecker is the unit-test stand-in for the production
+// AuthorizeWorkspaceAccess membership check: allow all.
+func permissiveChecker(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+
+func scopeParam() string {
+	return "?workspace_id=" + wsScope.String()
+}
+
 // wsGet issues a GET (optionally authenticated).
 func wsGet(t *testing.T, srv *httptest.Server, path, bearer string) *http.Response {
 	t.Helper()
@@ -131,7 +145,7 @@ func wsGet(t *testing.T, srv *httptest.Server, path, bearer string) *http.Respon
 func TestWorkspace_ListChannels(t *testing.T) {
 	srv, hub, generalID := newWorkspaceTestServer(t, 0)
 	_ = hub
-	resp := wsGet(t, srv, "/api/v1/workspace/channels", "")
+	resp := wsGet(t, srv, "/api/v1/workspace/channels"+scopeParam(), "")
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -171,7 +185,7 @@ func TestWorkspace_ListChannels(t *testing.T) {
 
 func TestWorkspace_SendMessage_EmptyContent(t *testing.T) {
 	srv, _, generalID := newWorkspaceTestServer(t, 0)
-	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message", "",
+	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(), "",
 		map[string]any{"content": ""})
 	defer resp.Body.Close()
 
@@ -192,7 +206,7 @@ func TestWorkspace_SendMessage_EmptyContent(t *testing.T) {
 func TestWorkspace_SendMessage_UnknownChannel(t *testing.T) {
 	srv, _, _ := newWorkspaceTestServer(t, 0)
 	unknown := uuid.New()
-	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+unknown.String()+"/message", "",
+	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+unknown.String()+"/message"+scopeParam(), "",
 		map[string]any{"content": "hello"})
 	defer resp.Body.Close()
 
@@ -212,7 +226,7 @@ func TestWorkspace_SendMessage_UnknownChannel(t *testing.T) {
 
 func TestWorkspace_SendMessage_InvalidChannelID(t *testing.T) {
 	srv, _, _ := newWorkspaceTestServer(t, 0)
-	resp := wsPost(t, srv, "/api/v1/workspace/channels/not-a-uuid/message", "",
+	resp := wsPost(t, srv, "/api/v1/workspace/channels/not-a-uuid/message"+scopeParam(), "",
 		map[string]any{"content": "hello"})
 	defer resp.Body.Close()
 
@@ -223,7 +237,7 @@ func TestWorkspace_SendMessage_InvalidChannelID(t *testing.T) {
 
 func TestWorkspace_SendMessage_Success(t *testing.T) {
 	srv, _, generalID := newWorkspaceTestServer(t, 0)
-	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message", "",
+	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(), "",
 		map[string]any{"content": "hello world"})
 	defer resp.Body.Close()
 
@@ -247,16 +261,17 @@ func TestWorkspace_SendMessage_Success(t *testing.T) {
 	}
 }
 
-func TestWorkspace_SendMessage_SenderFallbackToAuthUser(t *testing.T) {
+func TestWorkspace_SendMessage_SenderIDForgedIsIgnored(t *testing.T) {
 	srv, hub, generalID := newWorkspaceTestServerWithAuth(t)
 	authUser := uuid.New()
+	forgedSender := uuid.New() // DF-85: a client-supplied spoof value.
 
 	// Subscribe a live SSE reader BEFORE posting so we can observe the
 	// broadcast and assert sender_id == auth user.
 	readerDone := make(chan channelMessageData, 1)
 	go func() {
 		req, _ := http.NewRequest(http.MethodGet,
-			srv.URL+"/api/v1/workspace/channels/"+generalID.String()+"/feed?include_heartbeat=false", nil)
+			srv.URL+"/api/v1/workspace/channels/"+generalID.String()+"/feed"+scopeParam()+"&include_heartbeat=false", nil)
 		req.Header.Set("Authorization", wsBearer(t, authUser))
 		client := &http.Client{Timeout: 0}
 		resp, err := client.Do(req)
@@ -293,8 +308,8 @@ func TestWorkspace_SendMessage_SenderFallbackToAuthUser(t *testing.T) {
 	// load-bearing here; a small settle is acceptable for the unit path).
 	time.Sleep(150 * time.Millisecond)
 
-	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message",
-		wsBearer(t, authUser), map[string]any{"content": "auth fallback"})
+	resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(),
+		wsBearer(t, authUser), map[string]any{"content": "auth fallback", "sender_id": forgedSender.String()})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
@@ -304,7 +319,7 @@ func TestWorkspace_SendMessage_SenderFallbackToAuthUser(t *testing.T) {
 	select {
 	case data := <-readerDone:
 		if data.SenderID != authUser {
-			t.Errorf("sender_id = %s, want auth user %s (fallback)", data.SenderID, authUser)
+			t.Errorf("sender_id = %s, want JWT subject %s; forged body value %s must be ignored", data.SenderID, authUser, forgedSender)
 		}
 		if data.Content != "auth fallback" {
 			t.Errorf("content = %q, want %q", data.Content, "auth fallback")
@@ -322,7 +337,7 @@ func TestWorkspace_SendMessage_SenderFallbackToAuthUser(t *testing.T) {
 
 func TestWorkspace_ChannelEvents_InvalidChannelID(t *testing.T) {
 	srv, _, _ := newWorkspaceTestServer(t, 0)
-	resp := wsGet(t, srv, "/api/v1/workspace/channels/not-a-uuid/feed", "")
+	resp := wsGet(t, srv, "/api/v1/workspace/channels/not-a-uuid/feed"+scopeParam(), "")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
@@ -331,7 +346,7 @@ func TestWorkspace_ChannelEvents_InvalidChannelID(t *testing.T) {
 
 func TestWorkspace_ChannelEvents_UnknownChannel(t *testing.T) {
 	srv, _, _ := newWorkspaceTestServer(t, 0)
-	resp := wsGet(t, srv, "/api/v1/workspace/channels/"+uuid.New().String()+"/feed", "")
+	resp := wsGet(t, srv, "/api/v1/workspace/channels/"+uuid.New().String()+"/feed"+scopeParam(), "")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
@@ -341,7 +356,7 @@ func TestWorkspace_ChannelEvents_UnknownChannel(t *testing.T) {
 func TestWorkspace_ChannelEvents_Connect(t *testing.T) {
 	srv, _, generalID := newWorkspaceTestServer(t, 0)
 	req, _ := http.NewRequest(http.MethodGet,
-		srv.URL+"/api/v1/workspace/channels/"+generalID.String()+"/feed?include_heartbeat=false", nil)
+		srv.URL+"/api/v1/workspace/channels/"+generalID.String()+"/feed"+scopeParam()+"&include_heartbeat=false", nil)
 	client := &http.Client{Timeout: 0}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -362,7 +377,7 @@ func TestWorkspace_ChannelEvents_MessageBroadcastAppearsInFeed(t *testing.T) {
 	_ = hub
 
 	// Open an SSE feed with heartbeat disabled for deterministic parsing.
-	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed?include_heartbeat=false"
+	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed" + scopeParam() + "&include_heartbeat=false"
 	req, _ := http.NewRequest(http.MethodGet, feedURL, nil)
 	client := &http.Client{Timeout: 0}
 	resp, err := client.Do(req)
@@ -375,7 +390,7 @@ func TestWorkspace_ChannelEvents_MessageBroadcastAppearsInFeed(t *testing.T) {
 	}
 
 	// POST a message — it must be broadcast to the open feed.
-	postResp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message", "",
+	postResp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(), "",
 		map[string]any{"content": "from-POST"})
 	var postBody sendMessageResponse
 	if json.NewDecoder(postResp.Body).Decode(&postBody) != nil {
@@ -438,7 +453,7 @@ func TestWorkspace_ChannelEvents_HeartbeatPresent(t *testing.T) {
 	srv, hub, generalID := newWorkspaceTestServer(t, 0)
 
 	// Open feed with heartbeat enabled.
-	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed"
+	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed" + scopeParam()
 	req, _ := http.NewRequest(http.MethodGet, feedURL, nil)
 	client := &http.Client{Timeout: 0}
 	resp, err := client.Do(req)
@@ -497,7 +512,7 @@ func TestAPI_WorkspaceChannels_ListViaFullAPI(t *testing.T) {
 	ownerID := ensureTestUser(t, pool)
 
 	// GET /api/v1/workspace/channels via the full router + auth.
-	resp := wsGet(t, srv.Server, "/api/v1/workspace/channels", wsBearer(t, ownerID))
+	resp := wsGet(t, srv.Server, "/api/v1/workspace/channels"+scopeParam(), wsBearer(t, ownerID))
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -525,7 +540,7 @@ func TestAPI_WorkspaceChannels_PostAndFeedViaFullAPI(t *testing.T) {
 	generalID := uuid.NewSHA1(channelNamespace, []byte("general"))
 
 	// Open the feed via the authenticated full-API server.
-	feedURL := fmt.Sprintf("%s/api/v1/workspace/channels/%s/feed?include_heartbeat=false",
+	feedURL := fmt.Sprintf("%s/api/v1/workspace/channels/%s/feed"+scopeParam()+"&include_heartbeat=false",
 		srv.Server.URL, generalID)
 	req, _ := http.NewRequest(http.MethodGet, feedURL, nil)
 	req.Header.Set("Authorization", wsBearer(t, ownerID))
@@ -541,7 +556,7 @@ func TestAPI_WorkspaceChannels_PostAndFeedViaFullAPI(t *testing.T) {
 
 	// POST a message through the authenticated router.
 	postResp := wsPost(t, srv.Server,
-		"/api/v1/workspace/channels/"+generalID.String()+"/message",
+		"/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(),
 		wsBearer(t, ownerID), map[string]any{"content": "integration hello"})
 	if postResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(postResp.Body)
@@ -772,18 +787,43 @@ func TestWorkspace_ChannelWorkspaceScopeGate(t *testing.T) {
 		})
 	}
 
-	var calls int
-	srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error {
-		calls++
-		return nil
-	})
-	resp := wsGet(t, srv, "/api/v1/workspace/channels", "")
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unscoped status = %d, want 200", resp.StatusCode)
-	}
-	if calls != 0 {
-		t.Fatalf("unscoped request invoked workspace checker %d times", calls)
+	// DF-85: absent workspace_id is REQUIRED scope now, not an implicit pass.
+	// 403 WORKSPACE_SCOPE_REQUIRED on all three routes; the checker must not
+	// be consulted (nothing to authorize yet).
+	for _, tc := range routes {
+		t.Run(tc.name+" unscoped required", func(t *testing.T) {
+			srv, _, _ := newScopedWorkspaceTestServer(t, func(context.Context, uuid.UUID, uuid.UUID) error {
+				t.Fatal("checker called for unscoped request")
+				return nil
+			})
+			// Strip the entire query string, not just the scope parameter —
+			// the feed route carries "&include_heartbeat=false" after it.
+			path := tc.path
+			if qi := strings.IndexByte(path, '?'); qi >= 0 {
+				path = path[:qi]
+			}
+			var resp *http.Response
+			if tc.method == http.MethodPost {
+				resp = wsPost(t, srv, path, "", tc.body)
+			} else {
+				resp = wsGet(t, srv, path, "")
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusForbidden {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status = %d, want 403; body=%s", resp.StatusCode, body)
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Code != "WORKSPACE_SCOPE_REQUIRED" {
+				t.Fatalf("error code = %q, want WORKSPACE_SCOPE_REQUIRED", body.Error.Code)
+			}
+			if body.Error.Message != "workspace_id query parameter is required for workspace channels" {
+				t.Fatalf("error message = %q", body.Error.Message)
+			}
+		})
 	}
 
 	for _, tc := range routes {
@@ -843,7 +883,7 @@ func readNextChannelMessage(t *testing.T, br *bufio.Reader) channelMessageData {
 func TestWorkspace_ChannelEvents_ReplayRecentOnFreshConnect(t *testing.T) {
 	srv, _, generalID := newWorkspaceTestServer(t, 0)
 	post := func(content string) sendMessageResponse {
-		resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message", "", map[string]any{"content": content})
+		resp := wsPost(t, srv, "/api/v1/workspace/channels/"+generalID.String()+"/message"+scopeParam(), "", map[string]any{"content": content})
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusAccepted {
 			t.Fatalf("POST status = %d", resp.StatusCode)
@@ -856,7 +896,7 @@ func TestWorkspace_ChannelEvents_ReplayRecentOnFreshConnect(t *testing.T) {
 	}
 
 	before := post("before-connect")
-	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed?include_heartbeat=false"
+	feedURL := srv.URL + "/api/v1/workspace/channels/" + generalID.String() + "/feed" + scopeParam() + "&include_heartbeat=false"
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(feedURL)
 	if err != nil {
 		t.Fatalf("GET feed: %v", err)
