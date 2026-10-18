@@ -4048,3 +4048,32 @@ tasks:
   status: complete
   created_at: '2026-10-15T12:05:15.210324+00:00'
   completed_at: '2026-10-15T12:13:50.925144+00:00'
+- id: DF-84
+  title: 'P0: flat /nodes mount bypasses viewer enforcement'
+  criteria:
+  - 'NodeAccessMiddleware is mounted on tree-scoped routes but NOT on the flat /api/v1/nodes
+    mount in server.go. A viewer can PATCH/DELETE/reply/fork any node via the flat
+    surface. Fix: mount NodeAccessMiddleware on the flat /nodes mount in server.go
+    like the tests do. Acceptance: (1) viewer PATCH /api/v1/nodes/{id} returns 403
+    VIEWER_READ_ONLY, (2) viewer DELETE /api/v1/nodes/{id} returns 403, (3) viewer
+    POST reply/fork returns 403, (4) editor/owner still succeed, (5) go test ./internal/handler/...
+    passes, (6) go build ./... succeeds'
+  status: in_progress
+  created_at: '2026-10-17T04:29:11.862428+00:00'
+- id: DF-HERMES-CANOPY-88
+  title: Fix member_count hardcoded to 1 in tree responses
+  criteria:
+  - member_count returns real count from tree_members table instead of hardcoded 1;
+    all tree API responses (GET /trees, GET /trees/{id}, POST /trees) show accurate
+    member count; TreesPage 'N members' renders truthfully
+  status: in_progress
+  created_at: '2026-10-18T00:23:09.693207+00:00'
+- id: RELEASE-HERMES-CANOPY-2
+  title: Redeploy current canopyd and prove staleness resolved
+  criteria:
+  - After a clean-HEAD deployment, scripts/check-deploy-staleness.sh returns CURRENT
+    (rc 0), the installed binary embeds the exact HEAD commit, /health is healthy,
+    and no release tag is created without owner authorization.
+  status: complete
+  created_at: '2026-10-18T19:36:18.610611+00:00'
+  completed_at: '2026-10-18T19:38:04.611009+00:00'
