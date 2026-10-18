@@ -48,6 +48,12 @@ type TreeRepo interface {
 	// are absent from the map — the caller decides what "no activity"
 	// means (GAP-094).
 	LastActivityByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]time.Time, error)
+	// CountMembersByTreeIDs returns the number of tree_members rows per
+	// tree for the given ids. Trees without memberships are absent from
+	// the map — callers treat the gap as the owner-only default.
+	// DF-HERMES-CANOPY-88: replaces the MemberCount=1 stub in the tree
+	// API responses, the same treatment BUG-041 gave NodeCount.
+	CountMembersByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
 // PGTreeRepo is the pgx-backed TreeRepo implementation.
@@ -239,6 +245,35 @@ func (r *PGTreeRepo) CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUI
 		var n int
 		if err := rows.Scan(&id, &n); err != nil {
 			return nil, fmt.Errorf("db: scan node count: %w", err)
+		}
+		counts[id] = n
+	}
+	return counts, rows.Err()
+}
+
+// CountMembersByTreeIDs returns the tree_members row count per tree for
+// the given ids; trees without memberships are absent from the map — the
+// caller applies the owner-only default. One grouped query per page,
+// same shape as CountNodesByTreeIDs. DF-HERMES-CANOPY-88.
+func (r *PGTreeRepo) CountMembersByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	counts := make(map[uuid.UUID]int, len(treeIDs))
+	if len(treeIDs) == 0 {
+		return counts, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+        SELECT tree_id, count(*)::int
+        FROM tree_members
+        WHERE tree_id = ANY($1)
+        GROUP BY tree_id`, treeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("db: count members by tree ids: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("db: scan member count: %w", err)
 		}
 		counts[id] = n
 	}

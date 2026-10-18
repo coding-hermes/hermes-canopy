@@ -20,6 +20,9 @@ type treeRepoStub struct {
 
 // CountNodesByTreeIDs returns a deterministic fake: every stub tree gets
 // len(trees) nodes so list tests can assert the count plumbing runs.
+// CountMembersByTreeIDs mirrors it for memberships: every stub tree gets
+// the owner-only count (1) — the stub exercises list plumbing, not
+// membership truth, which the PG integration tests cover.
 func (r *treeRepoStub) CountNodesByTreeIDs(_ context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
 	counts := make(map[uuid.UUID]int, len(treeIDs))
 	for _, id := range treeIDs {
@@ -37,6 +40,18 @@ func (r *treeRepoStub) LastActivityByTreeIDs(_ context.Context, treeIDs []uuid.U
 		latest[id] = mustParseTime("2026-07-23T12:00:00Z")
 	}
 	return latest, nil
+}
+
+// CountMembersByTreeIDs mirrors CountNodesByTreeIDs's deterministic fake
+// with the owner-only count (1): the stub exercises list plumbing, not
+// membership truth — the PG integration tests in
+// tree_member_count_test.go cover the real counts.
+func (r *treeRepoStub) CountMembersByTreeIDs(_ context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	counts := make(map[uuid.UUID]int, len(treeIDs))
+	for _, id := range treeIDs {
+		counts[id] = 1
+	}
+	return counts, nil
 }
 
 func (r *treeRepoStub) Create(_ context.Context, tree *db.Tree) (*db.Tree, error) {

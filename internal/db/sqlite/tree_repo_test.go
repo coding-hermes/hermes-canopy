@@ -367,3 +367,37 @@ func TestSQLiteTreeRepoLastActivityByTreeIDs(t *testing.T) {
 		t.Errorf("LastActivityByTreeIDs after soft-deleting the newest node = %v, want the backdated survivor %v", got, newer.CreatedAt.Add(-time.Hour))
 	}
 }
+
+// TestSQLiteTreeRepoCountMembersByTreeIDs mirrors the PG implementation: one grouped query
+// returns the tree_members row count per tree; trees without memberships are absent from
+// the map (owner-only default is the caller's), and an empty input never queries.
+// DF-HERMES-CANOPY-88.
+func TestSQLiteTreeRepoCountMembersByTreeIDs(t *testing.T) {
+	_, trees, users, profiles, members := newIdentityRepos(t)
+	ctx := context.Background()
+
+	populated := mustTree(t, ctx, trees, "members populated")
+	empty := mustTree(t, ctx, trees, "members empty")
+
+	if emptyCounts, err := trees.CountMembersByTreeIDs(ctx, nil); err != nil || len(emptyCounts) != 0 {
+		t.Errorf("CountMembersByTreeIDs(nil) = %v (err %v), want an empty map without a query", emptyCounts, err)
+	}
+
+	// Two members on `populated` (a user-backed share plus a profile row —
+	// both are tree_members rows and both count), none on `empty`.
+	owner := mustUser(t, ctx, users, "df88-owner", "DF-88 Owner")
+	profile := mustProfile(t, ctx, profiles, owner.ID, "df88-profile")
+	addMember(t, ctx, members, &db.TreeMember{TreeID: populated.ID, UserID: &owner.ID, IsVisible: true})
+	addMember(t, ctx, members, &db.TreeMember{TreeID: populated.ID, ProfileID: &profile.ID, IsVisible: true})
+
+	counts, err := trees.CountMembersByTreeIDs(ctx, []uuid.UUID{populated.ID, empty.ID})
+	if err != nil {
+		t.Fatalf("CountMembersByTreeIDs: %v", err)
+	}
+	if got := counts[populated.ID]; got != 2 {
+		t.Errorf("CountMembersByTreeIDs[populated] = %d, want 2 (user + profile rows)", got)
+	}
+	if _, ok := counts[empty.ID]; ok {
+		t.Errorf("tree %s present in %v, want absent (no memberships)", empty.ID, counts)
+	}
+}

@@ -269,6 +269,54 @@ func (r *TreeRepo) CountNodesByTreeIDs(ctx context.Context, treeIDs []uuid.UUID)
 	return counts, nil
 }
 
+// CountMembersByTreeIDs returns the tree_members row count per tree for the given ids; trees
+// without memberships are absent from the map — the caller applies the owner-only default.
+// PostgreSQL's `tree_id = ANY($1)` becomes an expanded IN list, since SQLite has no array
+// type. An empty input returns an empty map without querying, as the PostgreSQL
+// implementation does. DF-HERMES-CANOPY-88.
+func (r *TreeRepo) CountMembersByTreeIDs(ctx context.Context, treeIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	counts := make(map[uuid.UUID]int, len(treeIDs))
+	if len(treeIDs) == 0 {
+		return counts, nil
+	}
+	q, err := r.conn()
+	if err != nil {
+		return nil, err
+	}
+	args := make([]any, 0, len(treeIDs))
+	for _, id := range treeIDs {
+		args = append(args, idArg(id))
+	}
+	rows, err := q.QueryContext(ctx, `
+        SELECT tree_id, COUNT(*)
+        FROM tree_members
+        WHERE tree_id IN (`+placeholders(len(args))+`)
+        GROUP BY tree_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: count members by tree ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			treeID string
+			n      int
+		)
+		if err := rows.Scan(&treeID, &n); err != nil {
+			return nil, fmt.Errorf("db: scan member count: %w", err)
+		}
+		id, err := uuid.Parse(treeID)
+		if err != nil {
+			return nil, fmt.Errorf("db: scan member count: tree_members.tree_id %q: %w", treeID, err)
+		}
+		counts[id] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("db: count members by tree ids: %w", err)
+	}
+	return counts, nil
+}
+
 // LastActivityByTreeIDs returns the most recent live (non-soft-deleted) node created_at
 // per tree for the given ids. The canonical-text timestamps sort correctly as TEXT, so
 // MAX(created_at) keeps PG parity with LastActivityByTreeIDs; trees without live nodes

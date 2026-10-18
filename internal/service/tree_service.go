@@ -513,7 +513,7 @@ func (s *TreeServiceImpl) CreateTree(ctx context.Context, p CreateTreeParams) (*
 		OwnerID:     created.OwnerID,
 		RootNodeID:  rootID,
 		NodeCount:   1,
-		MemberCount: 1,
+		MemberCount: 1, // owner only — the owner membership row was just inserted
 		CreatedAt:   created.CreatedAt,
 		UpdatedAt:   coalesceTime(created.EditedAt, created.CreatedAt),
 		Role:        RoleOwner,
@@ -653,6 +653,7 @@ func (s *TreeServiceImpl) ListTrees(ctx context.Context, p ListTreesParams) (*Li
 		summaries = append(summaries, treeToSummary(t))
 	}
 	s.fillNodeCounts(ctx, summaries)
+	s.fillMemberCounts(ctx, summaries)
 
 	var next *uuid.UUID
 	if hasMore && len(summaries) > 0 {
@@ -700,6 +701,7 @@ func (s *TreeServiceImpl) listTreesKeyset(ctx context.Context, p ListTreesParams
 		summaries = append(summaries, treeToSummary(t))
 	}
 	s.fillNodeCounts(ctx, summaries)
+	s.fillMemberCounts(ctx, summaries)
 
 	var next *uuid.UUID
 	if hasMore && len(summaries) > 0 {
@@ -737,6 +739,30 @@ func (s *TreeServiceImpl) fillNodeCounts(ctx context.Context, summaries []TreeSu
 		}
 	}
 	s.fillLastActivity(ctx, summaries)
+}
+
+// fillMemberCounts replaces the old MemberCount=1 stub with real
+// tree_members counts for a page of summaries (DF-HERMES-CANOPY-88 —
+// the TreesPage "N members" badge never moved after shares). Cosmetic
+// like fillNodeCounts: a repo failure never fails the list; trees
+// without memberships keep the owner-only default (1).
+func (s *TreeServiceImpl) fillMemberCounts(ctx context.Context, summaries []TreeSummary) {
+	if len(summaries) == 0 {
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(summaries))
+	for _, t := range summaries {
+		ids = append(ids, t.ID)
+	}
+	counts, err := s.treeRepo.CountMembersByTreeIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for i := range summaries {
+		if n, ok := counts[summaries[i].ID]; ok {
+			summaries[i].MemberCount = n
+		}
+	}
 }
 
 // fillLastActivity stamps each summary with MAX(nodes.created_at) over the
@@ -810,13 +836,16 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
 		detail.Stats = stats
 		// Keep the top-level summary in sync with the graph statistics.
 		detail.NodeCount = stats.NodeCount
+		detail.MemberCount = stats.MemberCount
 	} else {
 		// Detail responses without stats still expose the real active-node
 		// count. Reuse the list path's count semantics for this one tree;
 		// count failures remain cosmetic, as they are for list summaries.
 		summaries := []TreeSummary{detail.TreeSummary}
 		s.fillNodeCounts(ctx, summaries)
+		s.fillMemberCounts(ctx, summaries)
 		detail.NodeCount = summaries[0].NodeCount
+		detail.MemberCount = summaries[0].MemberCount
 	}
 
 	if opts.IncludeMembers {
@@ -1004,13 +1033,25 @@ func (s *TreeServiceImpl) UpdateTree(ctx context.Context, treeID uuid.UUID, titl
 		Description: updated.Description,
 		OwnerID:     updated.OwnerID,
 		NodeCount:   1,
-		MemberCount: 1,
 		CreatedAt:   updated.CreatedAt,
 		UpdatedAt:   coalesceTime(updated.EditedAt, updated.CreatedAt),
 		Role:        RoleOwner,
 	}
 	if updated.RootNodeID != nil {
 		svcTree.RootNodeID = *updated.RootNodeID
+	}
+	// Real member count from tree_members (DF-HERMES-CANOPY-88 —
+	// replaces the MemberCount=1 stub). Cosmetic like the list fill: a
+	// failure here keeps the owner-only default rather than failing the
+	// update, which only mutated title/description.
+	if s.pool != nil {
+		if err := s.pool.QueryRow(ctx,
+			`SELECT COUNT(*)::int FROM tree_members WHERE tree_id = $1`, updated.ID,
+		).Scan(&svcTree.MemberCount); err != nil {
+			svcTree.MemberCount = 1
+		}
+	} else {
+		svcTree.MemberCount = 1
 	}
 	return svcTree, nil
 }
@@ -1153,7 +1194,7 @@ func validateListTrees(p ListTreesParams) error {
 func (s *TreeServiceImpl) computeStats(ctx context.Context, treeID uuid.UUID, tree db.Tree) (*TreeStats, error) {
 	stats := &TreeStats{
 		NodeCount:        1, // root node counts as one
-		MemberCount:      1, // owner counts as one
+		MemberCount:      1, // default; the tree_members query below replaces it
 		BranchCount:      0,
 		MaxDepth:         1,
 		PendingApprovals: 0,
@@ -1166,6 +1207,17 @@ func (s *TreeServiceImpl) computeStats(ctx context.Context, treeID uuid.UUID, tr
         WHERE tree_id = $1 AND deleted_at IS NULL`, treeID,
 	).Scan(&stats.NodeCount); err != nil {
 		return nil, fmt.Errorf("count nodes: %w", err)
+	}
+
+	// Member count straight from tree_members (DF-HERMES-CANOPY-88 —
+	// replaces the "owner counts as one" stub so the detail stats and
+	// the share endpoints agree).
+	if err := s.pool.QueryRow(ctx, `
+        SELECT COUNT(*)::int
+        FROM tree_members
+        WHERE tree_id = $1`, treeID,
+	).Scan(&stats.MemberCount); err != nil {
+		return nil, fmt.Errorf("count members: %w", err)
 	}
 
 	// Branch count: distinct parents that have at least one child node.
@@ -1265,7 +1317,7 @@ func treeToSummary(t db.Tree) TreeSummary {
 		Description: t.Description,
 		OwnerID:     t.OwnerID,
 		NodeCount:   1, // default; list and detail paths replace it with the active count
-		MemberCount: 1, // owner only
+		MemberCount: 1, // default; fillMemberCounts replaces it with the tree_members count
 		CreatedAt:   t.CreatedAt,
 		UpdatedAt:   coalesceTime(t.EditedAt, t.CreatedAt),
 		Role:        RoleOwner,
