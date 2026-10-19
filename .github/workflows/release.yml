@@ -74,6 +74,9 @@ jobs:
             --channel stable \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
 
+      - name: Validate release manifest publication contract
+        run: make validate-release-manifest-publication
+
       - name: Publish signed manifest to GitHub Pages
         env:
           GITHUB_TOKEN: ${{ github.token }}

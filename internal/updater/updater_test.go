@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,54 @@ import (
 	"testing"
 	"time"
 )
+
+func TestDefaultManifestURL(t *testing.T) {
+	manifest := ReleaseManifest{
+		Channel: ChannelBeta,
+		Artifacts: []ReleaseArtifact{{
+			Version:  "0.2.0",
+			Platform: TargetPlatform{OS: runtime.GOOS, Arch: runtime.GOARCH, Mode: "embed"},
+			Channel:  ChannelBeta,
+		}},
+	}
+	var requestedURL string
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestedURL = req.URL.String()
+		body, err := json.Marshal(manifest)
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(bytes.NewReader(body)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	u := &Updater{
+		CurrentVersion: "0.1.0",
+		Channel:        ChannelBeta,
+		HTTPClient:     client,
+	}
+	artifact, available, err := u.CheckForUpdate(context.Background())
+	if err != nil {
+		t.Fatalf("CheckForUpdate: %v", err)
+	}
+	if !available || artifact == nil {
+		t.Fatalf("available=%v artifact=%v, want an update", available, artifact)
+	}
+	if want := "https://releases.canopy.app/beta/latest.json"; requestedURL != want {
+		t.Fatalf("requested URL = %q, want %q", requestedURL, want)
+	}
+}
+
+// roundTripFunc lets the default URL test observe the request without network I/O.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestCheckForUpdateSelectsNewerArtifactForPlatform(t *testing.T) {
 	manifest := ReleaseManifest{

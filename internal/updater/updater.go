@@ -26,6 +26,8 @@ const (
 	ChannelStable  ReleaseChannel = "stable"
 	ChannelBeta    ReleaseChannel = "beta"
 	ChannelNightly ReleaseChannel = "nightly"
+
+	defaultManifestURLBase = "https://releases.canopy.app"
 )
 
 // Valid reports whether c is a supported release channel.
@@ -140,7 +142,7 @@ func (u *Updater) CheckForUpdate(ctx context.Context) (*ReleaseArtifact, bool, e
 	}
 	url := u.ManifestURL
 	if url == "" {
-		url = fmt.Sprintf("https://releases.canopy.app/%s/latest.json", channel)
+		url = defaultManifestURL(channel)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -350,6 +352,10 @@ func (u *Updater) RunPeriodicChecks(ctx context.Context, interval time.Duration,
 			check()
 		}
 	}
+}
+
+func defaultManifestURL(channel ReleaseChannel) string {
+	return fmt.Sprintf("%s/%s/latest.json", defaultManifestURLBase, channel)
 }
 
 func (u *Updater) channel() ReleaseChannel {

@@ -848,6 +848,12 @@ versioned GitHub Release asset and at the stable channel URL
 The `v0.1.0` release remains historical and predates this manifest publication;
 no release is retroactively claimed here.
 
+Release publication traceability is load-bearing in
+`scripts/validate-release-manifest-publication.py` and is rechecked by the
+workflow before the gh-pages publish step. The rework resolves the prior
+independent verdict's missing traceability and pipeline wiring:
+`ch:trace row=DF-HERMES-CANOPY-72 spec=specs/SPEC-FTR-06.md#48 wave=none:serial test=internal/updater/updater_test.go::TestDefaultManifestURL doc=README.md prompt=/tmp/hermes-canopy-2026-10-19-22-09-14-DF-HERMES-CANOPY-72-rework.txt evidence=scripts/validate-release-manifest-publication.py witness=none:worker-local-unpublished verdict=verdict:a44b1cc7:prior-incomplete commit=see-final-worker-report memory=/project/hermes-canopy/foreman-tick-2026-10-19`
+
 **Flags** (server mode; see `canopyd --help`):
 
 | Flag | Default | Description |

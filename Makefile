@@ -29,7 +29,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X mai
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -107,6 +107,11 @@ test-chaos-disconnect: test-short
 # refusals. python3 stdlib only — no pytest, no pip.
 test-proxy:
 	python3 -m unittest discover -s deploy/tests -v
+
+# Offline release publication contract: checks updater defaults, workflow paths,
+# override plumbing, and the stable gh-pages byte-copy contract.
+validate-release-manifest-publication:
+	python3 scripts/validate-release-manifest-publication.py
 
 vet:
 	$(GO) vet ./...

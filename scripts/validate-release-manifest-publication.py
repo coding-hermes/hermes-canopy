@@ -4,6 +4,13 @@
 This is intentionally a source-level check: GitHub Actions is not contacted and
 no release or tag is created. It catches drift between the updater default,
 the workflow's gh-pages path, the override plumbing, and the release asset.
+
+Traceability: ch:trace row=DF-HERMES-CANOPY-72 spec=specs/SPEC-FTR-06.md#48
+wave=none:serial test=internal/updater/updater_test.go::TestDefaultManifestURL
+ doc=README.md prompt=/tmp/hermes-canopy-2026-10-19-22-09-14-DF-HERMES-CANOPY-72-rework.txt
+ evidence=scripts/validate-release-manifest-publication.py
+ witness=none:worker-local-unpublished verdict=verdict:a44b1cc7:prior-incomplete
+ commit=see-final-worker-report memory=/project/hermes-canopy/foreman-tick-2026-10-19
 """
 
 from __future__ import annotations
@@ -45,7 +52,8 @@ def main() -> int:
     updater_path = root / "internal/updater/updater.go"
     main_path = root / "cmd/canopyd/main.go"
     readme_path = root / "README.md"
-    for path in (workflow_path, updater_path, main_path, readme_path):
+    makefile_path = root / "Makefile"
+    for path in (workflow_path, updater_path, main_path, readme_path, makefile_path):
         if not path.is_file():
             fail(f"required file does not exist: {path}")
 
@@ -53,13 +61,16 @@ def main() -> int:
     updater = updater_path.read_text(encoding="utf-8")
     canopyd = main_path.read_text(encoding="utf-8")
     readme = readme_path.read_text(encoding="utf-8")
+    makefile = makefile_path.read_text(encoding="utf-8")
 
     default_match = re.search(
-        r'url = fmt\.Sprintf\("(https://[^" ]+)/%s/latest\.json", channel\)',
+        r'defaultManifestURLBase = "(https://[^" ]+)"',
         updater,
     )
     if not default_match:
-        fail("could not find the updater's channel-scoped default URL")
+        fail("could not find the updater's default manifest URL base")
+    if 'return fmt.Sprintf("%s/%s/latest.json", defaultManifestURLBase, channel)' not in updater:
+        fail("updater default URL helper does not preserve channel/latest.json path")
     default_url = f"{default_match.group(1)}/%s/latest.json"
     if default_url != DEFAULT_URL:
         fail(f"updater default URL is {default_url!r}, want {DEFAULT_URL!r}")
@@ -69,6 +80,17 @@ def main() -> int:
     require(canopyd, 'manifestURL := strings.TrimSpace(*updateManifestURL)', "flag override plumbing")
     require(canopyd, 'os.Getenv("CANOPY_UPDATE_MANIFEST_URL")', "environment override plumbing")
     require(canopyd, "ManifestURL:    manifestURL", "resolved override passed to updater")
+
+    require(
+        makefile,
+        "validate-release-manifest-publication:\n\tpython3 scripts/validate-release-manifest-publication.py",
+        "Makefile release publication validator target",
+    )
+    require(workflow, "run: make validate-release-manifest-publication", "workflow validator invocation")
+    validate_step = workflow.index("- name: Validate release manifest publication contract")
+    publish_step = workflow.index("- name: Publish signed manifest to GitHub Pages")
+    if validate_step > publish_step:
+        fail("release manifest validator must run before stable publication")
 
     require(workflow, "channel=stable", "stable publication channel")
     require(
@@ -95,6 +117,7 @@ def main() -> int:
 
     require(readme, "https://releases.canopy.app/<channel>/latest.json", "documented stable URL")
     require(readme, "`v0.1.0` release remains historical", "historical-release note")
+    require(readme, "ch:trace row=DF-HERMES-CANOPY-72", "release publication traceability marker")
 
     # Exercise the exact byte-copy invariant with bytes that include whitespace
     # and a NUL. This stays network-free and proves the validator is checking
