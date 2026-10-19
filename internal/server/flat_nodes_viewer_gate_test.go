@@ -228,6 +228,47 @@ func TestRouteParityFlatNodeWritesCarryMembershipGate(t *testing.T) {
 	}
 }
 
+// TestFlatNodesMalformedIDsReturnJSONContractOnProductionRouter exercises
+// the same newRouter seam over HTTP. Both flat write methods must normalize a
+// malformed node UUID to the documented JSON error instead of chi's raw 404.
+func TestFlatNodesMalformedIDsReturnJSONContractOnProductionRouter(t *testing.T) {
+	user := uuid.MustParse("df840000-0000-0000-0000-0000000000a5")
+	members := &df84MemberStub{roles: map[df84MembershipKey]string{
+		{df84TreeID, user}: db.TreeRoleMember,
+	}}
+	srv := httptest.NewServer(df84Router(t, &df84NodeStub{}, members))
+	defer srv.Close()
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequest(method, srv.URL+"/api/v1/nodes/not-a-uuid", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+df84Token(t, user))
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d (raw chi 404 must not leak)", resp.StatusCode, http.StatusBadRequest)
+			}
+			if got := resp.Header.Get("Content-Type"); got != "application/json" {
+				t.Fatalf("Content-Type = %q, want application/json", got)
+			}
+			var shape apiErrorShape
+			if err := json.NewDecoder(resp.Body).Decode(&shape); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if shape.Error.Code != "INVALID_NODE_ID" {
+				t.Fatalf("error.code = %q, want INVALID_NODE_ID", shape.Error.Code)
+			}
+		})
+	}
+}
+
 // TestFlatNodesViewerGateIsEnforcedOnProductionRouter probes the REAL
 // production router over HTTP: viewer writes → 403 VIEWER_READ_ONLY with the
 // service untouched; non-member writes → 403 NOT_TREE_MEMBER; member and
