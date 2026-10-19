@@ -1162,3 +1162,4 @@
 {"id":1121,"timestamp":"2026-10-19T00:59:10Z","event_type":"task_created","task_id":"README-9","actor":"foreman","detail":"{\"id\":\"README-9\",\"status\":\"pending\"}"}
 {"id":1122,"timestamp":"2026-10-19T00:59:17Z","event_type":"task_created","task_id":"README-10","actor":"foreman","detail":"{\"id\":\"README-10\",\"status\":\"pending\"}"}
 {"id":1123,"timestamp":"2026-10-19T00:59:17Z","event_type":"task_created","task_id":"README-11","actor":"foreman","detail":"{\"id\":\"README-11\",\"status\":\"pending\"}"}
+{"id": 1124, "task_id": "DF-HERMES-CANOPY-88", "actor": "foreman-tick-hermes-canopy-2026-10-19-04-18-56", "detail": "Reconciliation close: commit 334c5a6e landed 2026-10-17, pushed, guard DEGRADED-PASS. Row status flipped pending->complete. Duplicate worker dispatch killed.", "timestamp": "2026-10-19T04:30:00Z", "event_type": "task_close", "tick_number": null}
