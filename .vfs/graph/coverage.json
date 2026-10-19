@@ -1,10 +1,10 @@
 {
-  "contributes": 26,
-  "discovered_files": 32,
-  "no_imports": 6,
+  "contributes": 0,
+  "discovered_files": 2,
+  "no_imports": 2,
   "package_facades": 0,
   "schema": 1,
-  "unique_edge_sources": 26,
+  "unique_edge_sources": 0,
   "unreadable": 0,
   "unsupported_extension": 0
 }
