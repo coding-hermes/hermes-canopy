@@ -4077,3 +4077,23 @@ tasks:
   status: complete
   created_at: '2026-10-18T19:36:18.610611+00:00'
   completed_at: '2026-10-18T19:38:04.611009+00:00'
+- id: UI-SPA-1
+  title: Serve the SPA from canopyd (single binary)
+  criteria:
+  - go:embed of frontend/dist behind build tag embedui; plain make build unchanged;
+    SPA history fallback serves index.html for non-API paths; /api/* unknown returns
+    JSON 404 not HTML; no directory listing; /health,/healthz,/version,/metrics,/ws,/mcp
+    never shadowed; Makefile target builds frontend+binary with -tags embedui; Go
+    tests cover static serve, fallback, JSON 404, no-shadowing
+  status: complete
+  created_at: '2026-10-19T20:07:24.996586+00:00'
+  completed_at: '2026-10-19T20:07:38.838635+00:00'
+- id: UI-POLISH-1
+  title: Fix count pluralization outside countLabel
+  criteria:
+  - TreesPage uses countLabel for node/member counts; regression test asserts 1 node/1
+    member singular and 6 nodes/2 members plural; no layout/class/copy changes beyond
+    inflection; npx tsc -b clean and vitest pass
+  status: complete
+  created_at: '2026-10-19T20:07:25.716922+00:00'
+  completed_at: '2026-10-19T20:07:39.073403+00:00'
