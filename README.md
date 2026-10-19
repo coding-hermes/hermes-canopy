@@ -842,6 +842,12 @@ every artifact against an Ed25519 public key. Both the manifest URL and the
 public key are configurable so the updater is not hard-coded to a single
 endpoint.
 
+Release tags publish the exact signed `dist/latest.json` bytes both as the
+versioned GitHub Release asset and at the stable channel URL
+`https://releases.canopy.app/stable/latest.json` through the `gh-pages` branch.
+The `v0.1.0` release remains historical and predates this manifest publication;
+no release is retroactively claimed here.
+
 **Flags** (server mode; see `canopyd --help`):
 
 | Flag | Default | Description |

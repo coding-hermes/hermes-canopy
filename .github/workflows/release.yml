@@ -10,6 +10,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+concurrency:
+  group: release-manifest-publication
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -69,6 +73,41 @@ jobs:
             --version "$VERSION" \
             --channel stable \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+      - name: Publish signed manifest to GitHub Pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          channel=stable
+          pages_dir="${RUNNER_TEMP}/canopy-pages"
+          rm -rf "$pages_dir"
+
+          # Keep the publication branch independent from the tag checkout. The
+          # first release creates it; later releases update the existing tree.
+          if git fetch origin "refs/heads/gh-pages:refs/remotes/origin/gh-pages"; then
+            git worktree add --detach "$pages_dir" origin/gh-pages
+          else
+            git init "$pages_dir"
+            git -C "$pages_dir" checkout --orphan gh-pages
+          fi
+          git -C "$pages_dir" config user.name "github-actions[bot]"
+          git -C "$pages_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$pages_dir" remote remove origin 2>/dev/null || true
+          git -C "$pages_dir" remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          mkdir -p "$pages_dir/$channel"
+          cp -- dist/latest.json "$pages_dir/$channel/latest.json"
+          # Never publish a re-encoded or regenerated manifest.
+          cmp --silent dist/latest.json "$pages_dir/$channel/latest.json"
+          printf '%s\n' 'releases.canopy.app' > "$pages_dir/CNAME"
+          git -C "$pages_dir" add -- "$channel/latest.json" CNAME
+          if git -C "$pages_dir" diff --cached --quiet; then
+            echo "GitHub Pages already contains the signed $channel manifest"
+          else
+            git -C "$pages_dir" commit -m "chore: publish $channel manifest for ${GITHUB_REF_NAME}"
+          fi
+          git -C "$pages_dir" push origin HEAD:gh-pages
 
       # macOS and Windows code signing are intentionally deferred until the
       # owner supplies platform signing credentials and runner-specific jobs.
