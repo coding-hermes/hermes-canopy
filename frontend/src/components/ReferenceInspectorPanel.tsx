@@ -38,6 +38,7 @@ import type {
 import { buildReferenceInspectorModel } from '../lib/multiReference.ts';
 import { useReferenceContext } from '../hooks/useReferenceContext.ts';
 import ReferenceSourceList from './ReferenceSourceList.tsx';
+import { pluralize } from '../lib/pluralize.ts';
 import { token } from '../theme.ts';
 
 // ─── Props ─────────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ export default function ReferenceInspectorPanel({
               <p data-testid="reference-truncation-note" className="text-status-warning">
                 {model.truncatedCount} source{model.truncatedCount === 1 ? '' : 's'} truncated
                 {model.omittedTokens > 0
-                  ? ` · ${formatTokenCount(model.omittedTokens)} tokens omitted`
+                  ? ` · ${formatTokenCount(model.omittedTokens)} ${pluralize(model.omittedTokens, 'token')} omitted`
                   : ''}
               </p>
             )}

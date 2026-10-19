@@ -42,6 +42,7 @@ import {
   storeTreeId,
 } from '../lib/activeTree';
 import { DetectionSettings } from './DetectionSettings';
+import { countLabel } from '../lib/pluralize';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ function TopicPill({
       type="button"
       onClick={onSelect}
       aria-current={active ? 'true' : undefined}
-      title={`${topic.title} — ${count} nodes`}
+      title={`${topic.title} — ${countLabel(count, 'node')}`}
       className={[
         'group w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors text-left',
         active
@@ -105,7 +106,7 @@ function TopicPill({
         {topic.title}
       </span>
       <span
-        aria-label={`${count} nodes`}
+        aria-label={`${countLabel(count, 'node')}`}
         className={[
           'shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-inset',
           active
@@ -434,7 +435,7 @@ export default function TopicsRail() {
           />
         </button>
         <span className="ml-auto text-[11px] tabular-nums text-content-muted">
-          {visible.length}/{topics.length} topics
+          {visible.length}/{countLabel(topics.length, 'topic')}
         </span>
       </div>
     </section>

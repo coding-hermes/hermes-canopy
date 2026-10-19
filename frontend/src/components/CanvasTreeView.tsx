@@ -44,6 +44,7 @@ import {
   zoomAtPoint,
   type ViewTransform,
 } from '../lib/canvasRenderer.ts';
+import { countLabel } from '../lib/pluralize.ts';
 
 /** Wheel steps multiply the scale by this factor per ~100px of delta. */
 const WHEEL_ZOOM_FACTOR = 1.15;
@@ -272,7 +273,7 @@ export default function CanvasTreeView({
       ref={containerRef}
       className="h-full w-full relative bg-surface-base touch-none"
       role="application"
-      aria-label={`Tree canvas (performance mode): ${treeTitle || 'Untitled'} — ${nodeCount} nodes`}
+      aria-label={`Tree canvas (performance mode): ${treeTitle || 'Untitled'} — ${countLabel(nodeCount, 'node')}`}
       aria-roledescription="Interactive tree visualization"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -288,7 +289,7 @@ export default function CanvasTreeView({
       {/* Performance-mode banner — mirrors TreeCanvas' large-tree notice */}
       {shouldUseCanvas(nodeCount) && (
         <div className="glass absolute top-2 left-1/2 -translate-x-1/2 z-10 rounded-lg px-4 py-1.5 text-sm text-status-warning ring-1 ring-inset ring-amber-400/30">
-          ⚠️ Large tree ({nodeCount} nodes) — performance mode active
+          ⚠️ Large tree ({countLabel(nodeCount, 'node')}) — performance mode active
           (canvas renderer, threshold {CANVAS_THRESHOLD})
         </div>
       )}

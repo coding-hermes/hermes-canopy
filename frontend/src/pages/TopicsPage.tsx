@@ -23,6 +23,7 @@ import { apiGet, apiPost, apiDelete } from '../lib/api';
 import type { TopicSummary, TreeSummary } from '../types/topic';
 import type { TreeDetail } from '../types/tree';
 import { readStoredTreeId, storeTreeId, notifyTopicsChanged, resolveDemoAliasSync } from '../lib/activeTree';
+import { countLabel } from '../lib/pluralize';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -278,7 +279,7 @@ function TopicCard({
           <div className="flex items-center gap-3 mt-2 text-[11px] text-content-faint">
             <span className="flex items-center gap-1">
               <Hash className="w-3 h-3" />
-              {topic.node_count} nodes
+              {countLabel(topic.node_count, 'node')}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -550,7 +551,7 @@ export default function TopicsPage() {
             )}
           </div>
           <span className="text-xs text-content-muted">
-            {filteredTopics.length} topics
+            {countLabel(filteredTopics.length, 'topic')}
           </span>
         </div>
       )}

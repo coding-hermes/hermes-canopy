@@ -12,6 +12,7 @@ import { Hash } from 'lucide-react';
 import type { TreeNodeCardData } from '../../types/tree.ts';
 import { palette } from '../../theme.ts';
 import { previewText } from '../../lib/nodeCard.ts';
+import { countLabel } from '../../lib/pluralize.ts';
 import {
   CollapseChevron,
   NodeAvatar,
@@ -64,7 +65,7 @@ function TopicNodeComponent({ data, selected }: NodeProps<TopicNodeType>) {
       <div className="px-2.5 pt-1.5">
         <p className="line-clamp-2 text-xs leading-snug break-words whitespace-pre-wrap text-content-secondary">
           {previewText(d.content, 100) ||
-            (replyCount > 0 ? `Topic with ${replyCount} nodes` : 'Empty topic')}
+            (replyCount > 0 ? `Topic with ${countLabel(replyCount, 'node')}` : 'Empty topic')}
         </p>
       </div>
 

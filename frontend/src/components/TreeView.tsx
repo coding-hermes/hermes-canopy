@@ -73,6 +73,7 @@ import {
   buildSendMetadata,
   composerPlaceholder,
 } from '../lib/composer.ts';
+import { countLabel } from '../lib/pluralize.ts';
 import { GitMerge } from 'lucide-react';
 
 /**
@@ -913,7 +914,7 @@ export default function TreeView() {
           🌳 {tree.treeTitle || 'Tree View'}
         </span>
         <span className="text-xs text-content-muted">
-          {tree.nodes.length} nodes · {tree.edges.length} edges
+          {countLabel(tree.nodes.length, 'node')} · {countLabel(tree.edges.length, 'edge')}
         </span>
         {!tree.isReady && (
           <span className="text-xs text-status-warning animate-pulse ml-auto">

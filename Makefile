@@ -3,6 +3,7 @@
 # Targets:
 #   build              — Build the canopyd binary
 #   build-embed        — Build with ldflags version injection
+#   build-ui           — Build the SPA + canopyd with the UI embedded (-tags embedui)
 #   test               — Run tests
 #   test-short         — Run tests skipping integration
 #   test-chaos-disconnect — QA chaos-disconnect probe (runs test-short)
@@ -28,7 +29,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X mai
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed test test-short test-chaos-disconnect test-proxy vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -54,6 +55,20 @@ run: build
 
 build-embed:
 	$(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
+
+# Single-process UI + API build: one binary serves the built Hermes Canopy SPA
+# and the API on the same port. The SPA is compiled in under `-tags embedui`
+# (internal/webui/spa_embed.go). go:embed cannot reference a path outside its
+# own package directory, so the Vite output is staged at internal/webui/dist
+# for the compile and removed again afterwards; a plain `make build` above is
+# untouched, API-only and fast.
+build-ui:
+	npm --prefix frontend run build
+	rm -rf internal/webui/dist
+	mkdir -p $(BIN_DIR)
+	cp -R frontend/dist internal/webui/dist
+	$(GO) build $(LDFLAGS) -tags embedui -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY); \
+		status=$$?; rm -rf internal/webui/dist; exit $$status
 
 build-embed-linux-amd64:
 	GOOS=linux GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)_linux_amd64 ./cmd/$(BINARY)

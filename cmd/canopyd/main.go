@@ -44,6 +44,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
 	"github.com/coding-hermes/hermes-canopy/internal/updater"
+	"github.com/coding-hermes/hermes-canopy/internal/webui"
 )
 
 // version is injected at build time via -ldflags.
@@ -249,6 +250,21 @@ func main() {
 		Str("http_addr", cfg.HTTPAddr).
 		Str("db_host", cfg.DBHost).
 		Msg("canopyd starting")
+
+	// Single-process SPA serving: the built UI is compiled in only under
+	// -tags embedui (make build-ui). When it is present the server's catch-all
+	// route serves index.html for application routes on this same port, after
+	// every API route; when it is not, the process is API-only exactly as
+	// before. Logged at startup so an operator can tell which binary is
+	// running without probing GET /.
+	if webui.Embedded() {
+		log.Info().
+			Str("http_addr", cfg.HTTPAddr).
+			Msg("embedded web UI enabled: serving the built SPA on the API port")
+	} else {
+		log.Info().
+			Msg("web UI not embedded — API only (build with `make build-ui` for one binary serving UI + API)")
+	}
 
 	// Security default guards (REVIEW-CANOPY-2026-10-13): a non-dev
 	// deployment that silently falls back to the well-known dev JWT secret or

@@ -38,6 +38,7 @@ import type {
   TopicSearchResult,
   TopicPreview,
 } from '../types/topic-search';
+import { countLabel } from '../lib/pluralize';
 
 // ── Relative time formatter ──────────────────────────────────────────────
 
@@ -400,13 +401,13 @@ export default function TopicSearchPanel() {
             <div className="flex items-center gap-1.5 text-xs text-yellow-500 mb-1.5">
               <AlertTriangle className="w-3 h-3" />
               <span>
-                ~{totalSelectedNodes} nodes — context may truncate
+                ~{countLabel(totalSelectedNodes, 'node')} — context may truncate
               </span>
             </div>
           )}
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted">
-              {selected.size} selected (~{totalSelectedNodes} nodes)
+              {selected.size} selected (~{countLabel(totalSelectedNodes, 'node')})
             </span>
             <button
               onClick={handleInject}

@@ -23,6 +23,7 @@ import { GitBranch, Scissors } from 'lucide-react';
 import type { ReferenceInspectorSource } from '../lib/multiReference.ts';
 import { formatNodeTime } from '../lib/nodeCard.ts';
 import { shortNodeId } from '../lib/nodeShortId.ts';
+import { countLabel } from '../lib/pluralize.ts';
 import { token, alpha } from '../theme.ts';
 
 // ─── Props ─────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ function SourceRow({
             data-testid="reference-truncated"
             title={
               source.omittedTokens > 0
-                ? `${source.omittedTokens} tokens omitted from ${source.label}`
+                ? `${countLabel(source.omittedTokens, 'token')} omitted from ${source.label}`
                 : `truncated in ${source.label}`
             }
           >

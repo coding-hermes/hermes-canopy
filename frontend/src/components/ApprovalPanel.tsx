@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { ApprovalItem, TreeDiff, DiffField, AuditEntry } from '../types/approval.ts';
 import { apiUrl, authInit } from '../lib/api.ts';
+import { countLabel } from '../lib/pluralize.ts';
 import ApprovalDiff from './ApprovalDiff.tsx';
 import AuditTrail from './AuditTrail.tsx';
 
@@ -637,7 +638,7 @@ export default function ApprovalPanel({ className = '' }: ApprovalPanelProps) {
       >
         {acting ? `Processing ${confirmAction?.action}...` : ''}
         {!acting && items.length > 0
-          ? `${items.filter((i) => i.status === 'pending').length} pending approvals`
+          ? `${countLabel(items.filter((i) => i.status === 'pending').length, 'pending approval')}`
           : ''}
       </div>
     </div>

@@ -12,6 +12,7 @@
 
 import { memo } from 'react';
 import { FileCode2, GitBranch } from 'lucide-react';
+import { countLabel } from '../../lib/pluralize.ts';
 
 interface BlastRadiusVizProps {
   files: string[];
@@ -60,7 +61,7 @@ export const BlastRadiusViz = memo(function BlastRadiusViz({
             height="160"
             viewBox="0 0 160 160"
             role="img"
-            aria-label={`Blast radius: ${fileCount} files, ${dependents} dependents`}
+            aria-label={`Blast radius: ${countLabel(fileCount, 'file')}, ${countLabel(dependents, 'dependent')}`}
           >
             {/* Edges */}
             {nodes.map((n, i) => (

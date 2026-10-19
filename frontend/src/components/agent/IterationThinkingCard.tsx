@@ -13,6 +13,7 @@ import { memo, useState } from 'react';
 import { Brain, CheckCircle2, ChevronDown, ChevronRight, Circle, Loader2, XCircle } from 'lucide-react';
 import type { IterationRendererProps, ThinkingData, ThoughtStep } from '../../types/agent.ts';
 import { formatDurationMs } from '../../lib/iterationFormat.ts';
+import { countLabel } from '../../lib/pluralize.ts';
 import { IterationLiveRegion, statusLabel } from './iterationShared.tsx';
 
 export type IterationThinkingCardProps = IterationRendererProps<ThinkingData>;
@@ -30,7 +31,7 @@ function ThinkingCard({ cardId, data, compact }: IterationThinkingCardProps) {
 
   const active = steps.find((step) => step.id === data.currentStepId) ?? steps.find((step) => step.status === 'active');
   const completed = steps.filter((step) => step.status === 'completed').length;
-  const liveMessage = `${data.title}: ${statusLabel(data.state)}; ${active ? `active step ${active.title}` : `${completed}/${steps.length} steps`}`;
+  const liveMessage = `${data.title}: ${statusLabel(data.state)}; ${active ? `active step ${active.title}` : `${completed}/${countLabel(steps.length, 'step')}`}`;
 
   const toggle = (id: string) => setExpandedSteps((current) => {
     const next = new Set(current);
@@ -46,7 +47,7 @@ function ThinkingCard({ cardId, data, compact }: IterationThinkingCardProps) {
       {compact ? (
         <p className="text-xs text-content-secondary">
           <Brain className="mr-1 inline h-3 w-3" aria-hidden="true" />
-          <span className="text-content-primary">{active ? active.title : `${completed}/${steps.length} steps`}</span>
+          <span className="text-content-primary">{active ? active.title : `${completed}/${countLabel(steps.length, 'step')}`}</span>
           <span className="ml-2 text-content-muted">· {data.progress.current}/{data.progress.total}</span>
         </p>
       ) : steps.length === 0 ? (

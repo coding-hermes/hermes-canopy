@@ -357,6 +357,23 @@ type shareResponse struct {
 	MemberID   string `json:"memberId"`
 }
 
+// inviteeNotRegisteredMessage explains the DF-HERMES-CANOPY-87 condition: the
+// share target has no users row on this instance, so there is nothing to grant
+// membership to yet. The invitee is named (user_id wins, matching resolution
+// order) and the message states the remedy, because a bare "user not found"
+// reads like the tree or route is missing rather than an unprovisioned person.
+func inviteeNotRegisteredMessage(req shareRequestBody) string {
+	who := "the requested invitee"
+	switch {
+	case req.UserID != "":
+		who = "user_id " + req.UserID
+	case req.Email != "":
+		who = strconv.Quote(req.Email)
+	}
+	return "no account is registered for " + who + " on this Canopy instance; " +
+		"the invitee must sign in to the instance once before they can be shared with"
+}
+
 // ShareTree grants a user access to a tree by creating a tree_members row.
 // Only the tree owner may share. The invitee is resolved by user_id (UUID) or
 // email. Permission maps to a tree_role: viewer→viewer, editor→member,
@@ -416,8 +433,12 @@ func (h *TreeHandler) ShareTree(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "USER_NOT_FOUND",
-				"no user matches the provided email or user_id")
+			// DF-HERMES-CANOPY-87: a bare USER_NOT_FOUND here reads like the
+			// tree or the route is missing. The real condition is that the
+			// invitee has no users row on this instance yet, so the code names
+			// that condition and the message says how to unblock it.
+			writeError(w, http.StatusNotFound, "INVITEE_NOT_REGISTERED",
+				inviteeNotRegisteredMessage(req))
 			return
 		}
 		log.Ctx(r.Context()).Error().Err(err).Msg("share: resolve invitee failed")

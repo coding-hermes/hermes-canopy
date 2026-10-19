@@ -36,6 +36,7 @@ import (
 	"github.com/coding-hermes/hermes-canopy/internal/sync"
 	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
+	"github.com/coding-hermes/hermes-canopy/internal/webui"
 	"github.com/google/uuid"
 )
 
@@ -299,7 +300,12 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	}
 
 	// Keep unmatched public routes on the same JSON error contract as handlers.
-	r.NotFound(handler.NotFoundHandler)
+	// With -tags embedui this catch-all also serves the built SPA on the API
+	// port: application routes get index.html, while /api, /health, /healthz,
+	// /version, /metrics, /ws and /mcp still fall through to the API's own
+	// JSON 404. Without the tag webui.NotFound returns the handler unchanged.
+	catchAll := webui.NotFound(http.HandlerFunc(handler.NotFoundHandler))
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) { catchAll.ServeHTTP(w, req) })
 
 	// Health and version endpoints (public — no auth).
 	r.Get("/health", healthHandler)

@@ -329,9 +329,32 @@ share record (not wrapped in `{"share": ...}`):
 `user_id` is resolved before `email`, and a successful share creates the tree
 membership immediately; there is no separate tree invite-token response.
 
+**Unknown invitee (`INVITEE_NOT_REGISTERED`, 404).** Sharing requires the
+invitee to already have an account row (`users`) on this instance. A person who
+has never made an authenticated call has none, so the endpoint answers 404 with
+a code that names the condition rather than a generic `USER_NOT_FOUND`:
+
+```json
+{
+  "error": {
+    "code": "INVITEE_NOT_REGISTERED",
+    "message": "no account is registered for \"friend@example.com\" on this Canopy instance; the invitee must sign in to the instance once before they can be shared with"
+  }
+}
+```
+
+The remedy is on the invitee's side: sign in to the instance once (which
+provisions the `users` row on dev-secret deployments; on production-secret
+deployments an operator must provision the row), then retry the share. `user_id`
+and email are never implicitly provisioned by the share route. The status code
+is unchanged (404, the invitee resource does not exist); only the `code` string
+became specific — clients that branched on `USER_NOT_FOUND` for this route must
+accept `INVITEE_NOT_REGISTERED` (compare the status, or the message, for the old
+case).
+
 **Error codes:** `INVALID_TREE_ID` (400), `INVALID_BODY` (400),
 `INVALID_USER_ID` (400), `VALIDATION_ERROR` (400), `TOKEN_MISSING` (401),
-`NOT_TREE_OWNER` (403), `TREE_NOT_FOUND` (404), `USER_NOT_FOUND` (404),
+`NOT_TREE_OWNER` (403), `TREE_NOT_FOUND` (404), `INVITEE_NOT_REGISTERED` (404),
 `TREE_DELETED` (410), `ALREADY_MEMBER` (409), `SERVICE_UNAVAILABLE` (503),
 `NOT_IMPLEMENTED` (501 when the server is built without share dependencies),
 `INTERNAL_ERROR` (500).

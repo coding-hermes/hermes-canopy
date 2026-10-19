@@ -69,7 +69,7 @@ import {
   type Manifest,
   type ManifestItem,
 } from '../lib/contextManifest.ts';
-import { countLabel } from '../lib/pluralize.ts';
+import { countLabel, pluralize } from '../lib/pluralize.ts';
 import { token } from '../theme.ts';
 
 // ─── Props ─────────────────────────────────────────────────────────────
@@ -544,7 +544,7 @@ export default function ContextManifestPanel({
                     data-testid="context-section-summarized-tokens"
                     className="font-mono text-[10px] font-normal normal-case text-content-muted"
                   >
-                    ({formatTokenCount(manifest.summaryTokenCount)} tokens)
+                    ({formatTokenCount(manifest.summaryTokenCount)} {pluralize(manifest.summaryTokenCount, 'token')})
                   </span>
                 )}
               </h4>

@@ -17,6 +17,7 @@ import type {
   SearchBatchItem,
   SearchCardSubtypeData,
 } from '../../types/agent.ts';
+import { countLabel } from '../../lib/pluralize.ts';
 import { IterationLiveRegion, IterationStatusBadge, statusLabel } from './iterationShared.tsx';
 
 export type IterationSearchCardProps = IterationRendererProps<SearchCardSubtypeData>;
@@ -91,7 +92,7 @@ function SearchCard({ cardId, data, compact, submitFeedback }: IterationSearchCa
   const focusUrls = new Set(data.focusUrls ?? []);
   const url = currentUrl(data);
 
-  const liveMessage = `${data.title}: ${statusLabel(data.state)}; ${retrieved} of ${total} results`;
+  const liveMessage = `${data.title}: ${statusLabel(data.state)}; ${retrieved} of ${countLabel(total, 'result')}`;
   const toggleHighlight = (result: SearchBatchItem) => {
     const key = resultKey(result);
     setHighlighted((current) => {

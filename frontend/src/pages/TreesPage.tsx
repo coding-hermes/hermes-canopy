@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
+import { countLabel, pluralize } from '../lib/pluralize';
 import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { useGatewayRuns } from '../hooks/useGatewayRuns';
 import {
@@ -92,7 +93,7 @@ function LiveHermesStrip() {
         {status?.connected ? (
           <>
             Live Hermes: <span data-testid="live-active-count">{active.length}</span> active ·{' '}
-            <span data-testid="live-total-count">{runs.length}</span> total runs
+            <span data-testid="live-total-count">{runs.length}</span> total {pluralize(runs.length, 'run')}
           </>
         ) : (
           <>Hermes gateway offline{status?.error ? ` — ${status.error}` : ''}</>
@@ -391,11 +392,11 @@ function TreeCard({
           <div className="flex items-center gap-3 mt-2 text-[11px] text-content-faint">
             <span className="flex items-center gap-1">
               <Hash className="w-3 h-3" />
-              {tree.node_count} nodes
+              {countLabel(tree.node_count, 'node')}
             </span>
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />
-              {tree.member_count} members
+              {countLabel(tree.member_count, 'member')}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -568,7 +569,7 @@ export default function TreesPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-content-primary">Trees</h1>
           <p className="text-sm text-content-muted mt-1">
-            {pagination ? `${pagination.total} conversation trees` : 'Manage conversation trees'}
+            {pagination ? `${countLabel(pagination.total, 'conversation tree')}` : 'Manage conversation trees'}
           </p>
         </div>
         <div className="flex items-center gap-2">

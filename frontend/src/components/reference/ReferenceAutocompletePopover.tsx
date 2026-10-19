@@ -22,6 +22,7 @@ import { Loader2, Hash, MessageSquare } from 'lucide-react';
 import { autocompleteReferences } from '../../lib/referenceApi';
 import { getActiveReferencePrefix } from '../../lib/topic-reference';
 import { readStoredTreeId, resolveDemoAliasSync } from '../../lib/activeTree';
+import { countLabel } from '../../lib/pluralize';
 import { token, palette, alpha } from '../../theme';
 import type { ReferenceAutocompleteResult } from '../../types/reference';
 
@@ -200,7 +201,7 @@ export default function ReferenceAutocompletePopover({
                 className="text-xs truncate"
                 style={{ color: token.contentMuted }}
               >
-                #{result.slug} · {result.node_count} nodes
+                #{result.slug} · {countLabel(result.node_count, 'node')}
               </div>
             </div>
           </button>

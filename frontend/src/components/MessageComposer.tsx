@@ -50,6 +50,7 @@ import {
 import { Send, Paperclip, Pin, X, AtSign, Hash, Smile, Sparkles } from 'lucide-react';
 import { token, palette, alpha, nodeTypeColor } from '../theme.ts';
 import { referenceSourceLabel, referenceStroke } from '../lib/multiReference.ts';
+import { countLabel } from '../lib/pluralize.ts';
 import {
   DEFAULT_PLACEHOLDER,
   describeSendError,
@@ -341,7 +342,7 @@ export function MultiReferenceComposer({
         data-testid="multi-reference-content"
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}
-        placeholder={`Reply from ${sources.length} selected sources…`}
+        placeholder={`Reply from ${countLabel(sources.length, 'selected source')}…`}
         rows={3}
         disabled={submitting}
         className="w-full rounded-lg bg-surface-base text-content-primary text-sm p-2 border border-line-subtle focus:outline-none focus:border-accent3"
@@ -378,7 +379,7 @@ export function MultiReferenceComposer({
           Cancel
         </button>
         <span className="text-[11px] text-content-muted">
-          {sources.length} sources · order is used for R labels
+          {countLabel(sources.length, 'source')} · order is used for R labels
         </span>
       </div>
       {error && (
@@ -920,7 +921,7 @@ export default function MessageComposer({
           {readOnly
             ? '🔒 View-only mode'
             : charCount > 0
-              ? `${charCount} chars · ~${tokenEstimate} tokens`
+              ? `${countLabel(charCount, 'char')} · ~${countLabel(tokenEstimate, 'token')}`
               : 'Ready'}
         </span>
         <span className="flex items-center gap-1">

@@ -92,6 +92,7 @@ import { ReplyEdge } from './edges/ReplyEdge.tsx';
 import { ForkEdge } from './edges/ForkEdge.tsx';
 import { SynthesisEdge } from './edges/SynthesisEdge.tsx';
 import { ReferenceEdge } from './edges/ReferenceEdge.tsx';
+import { countLabel } from '../lib/pluralize.ts';
 
 // ─── Registries ───────────────────────────────────────────────────────
 
@@ -746,13 +747,13 @@ function TreeCanvasInner({
       className="h-full w-full relative bg-surface-base"
       onMouseMove={handleMouseMove}
       role="application"
-      aria-label={`Tree canvas: ${treeTitle || 'Untitled'} — ${totalCount} nodes`}
+      aria-label={`Tree canvas: ${treeTitle || 'Untitled'} — ${countLabel(totalCount, 'node')}`}
       aria-roledescription="Interactive tree visualization"
     >
       {/* Large tree warning banner */}
       {isLargeTree && (
         <div className="glass absolute top-2 left-1/2 -translate-x-1/2 z-10 rounded-lg px-4 py-1.5 text-sm text-status-warning ring-1 ring-inset ring-amber-400/30">
-          ⚠️ Large tree ({totalCount} nodes) — simplified rendering active
+          ⚠️ Large tree ({countLabel(totalCount, 'node')}) — simplified rendering active
         </div>
       )}
 

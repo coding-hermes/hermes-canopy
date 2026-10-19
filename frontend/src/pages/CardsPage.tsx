@@ -28,6 +28,7 @@ import {
 } from '../types/card';
 import { Link } from 'react-router-dom';
 import CardActivityPanel from '../components/CardActivityPanel';
+import { countLabel } from '../lib/pluralize';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -631,7 +632,7 @@ export default function CardsPage() {
             ))}
           </div>
 
-          <span className="text-xs text-content-muted">{filteredCards.length} cards</span>
+          <span className="text-xs text-content-muted">{countLabel(filteredCards.length, 'card')}</span>
         </div>
       )}
 
