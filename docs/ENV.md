@@ -13,6 +13,7 @@ Every variable below is read exactly once by the listed site. Test-only variable
 | `LOG_FORMAT` | Log encoding. `json` = structured JSON on stderr; any other value = human-friendly console output. | `text` (console) | internal/config/config.go:277 |
 | `CORS_ORIGIN` | Value for the `Access-Control-Allow-Origin` middleware. | `*` | internal/config/config.go:280 |
 | `METRICS_ENABLED` | Enable the metrics endpoint. Truthy values are exactly `true` or `1`; anything else keeps metrics off. | `false` (off) | internal/config/config.go:292 |
+| `CANOPY_ENV` | Deployment environment name. Set to `production` to select the production posture: `IsProduction()` warns when well-known development secrets remain in use and keeps the fail-closed CORS behavior. When unset, `Default()` supplies the `dev` behavior. | unset | internal/config/config.go: `FromEnv()` (reads it); `IsProduction()` |
 | `CANOPY_TRUSTED_PROXIES` | Comma-separated CIDR prefixes of reverse proxies whose `X-Forwarded-For` header may be trusted for client IP resolution. Empty = trust no proxy (fail-closed). Entries are validated at startup; a malformed entry is a hard error. | unset (no proxy trusted) | internal/config/config.go:431 |
 
 ## Database
@@ -39,6 +40,7 @@ Precedence: when `CANOPY_DB_URL` is set (and parses as a `postgres://` URL), its
 |---|---|---|---|
 | `JWT_SECRET` | HS256 signing secret for dev-mode JWTs. **The default is a public dev value — set a real secret before exposing the server.** | `dev-secret-change-me` (dev only) | internal/config/config.go:286 |
 | `REFERENCE_SELECTION_SECRET` | HMAC secret for preflight reference-selection tokens (SPEC-PL-06 §14.1). Empty falls back to `JWT_SECRET`. | falls back to `JWT_SECRET` | internal/config/config.go:289 |
+| `CANOPY_PROFILE_ROUTER_SECRET` | AES-256 key used to encrypt Hermes profile-router tokens (SPEC-FTR-07 §3.3). Production deployments must set a random value; the well-known development default is unsafe outside development. The value must be exactly 32 bytes or startup validation fails. | unset (uses the well-known development key from `Default()`; production must override) | internal/config/config.go: `FromEnv()` (reads it), `(*Config).Validate()` (enforces 32 bytes); cmd/canopyd/main.go: `main()` (passes it as profile-router key material) |
 | `CANOPY_OWNER_ID` | Owner UUID used by `canopyd session` import/update commands. Must parse as a UUID; an invalid value exits with an error. | `00000000-0000-0000-0000-000000000001` (dev user) | cmd/canopyd/session_cmd.go:158, cmd/canopyd/session_cmd.go:267 |
 | `CANOPY_TOKEN` | Bearer token the `canopyd` CLI attaches as `Authorization: Bearer <token>` on API requests. Server-side JWTs are minted per the README "Authentication (dev mode)" section. | unset (CLI proceeds without auth and prints a warning) | cmd/canopyd/cli.go:350 |
 | `CANOPY_SERVER_URL` | API base URL the `canopyd` CLI targets (absolute `http(s)://host:port`). An invalid value is refused; if any server-only variable (`HTTP_ADDR`, `CANOPY_DB_URL`, `DB_*`) is set without it, the CLI refuses to guess the target. | `http://localhost:8091` | cmd/canopyd/cli.go:270 |
