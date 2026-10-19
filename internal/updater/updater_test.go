@@ -19,6 +19,7 @@ import (
 	"time"
 )
 
+// ch:trace row=DF-HERMES-CANOPY-72 spec=specs/SPEC-FTR-06.md#48 wave=none:serial test=internal/updater/updater_test.go::TestDefaultManifestURL doc=README.md prompt=/tmp/hermes-canopy-2026-10-19-22-09-14-DF-HERMES-CANOPY-72-rework.txt evidence=scripts/validate-release-manifest-publication.py witness=none:worker-local-unpublished verdict=verdict:a44b1cc7:prior-incomplete commit=1f86a0ce memory=/project/hermes-canopy/foreman-tick-2026-10-19
 func TestDefaultManifestURL(t *testing.T) {
 	manifest := ReleaseManifest{
 		Channel: ChannelBeta,
