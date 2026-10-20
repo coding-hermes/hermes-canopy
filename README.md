@@ -35,13 +35,18 @@ Every Card is a graph node with structured data.
 ```bash
 # Prerequisites
 PostgreSQL 16+
-Node.js 22+ (for frontend development)
+Node.js 22+ and npm (for frontend development and `make build-ui`)
 Go 1.25.11+ (for build-from-source) — no-sudo install: "Install Go 1.25+ (no sudo)"
 
 # Clone and build
 git clone https://github.com/coding-hermes/hermes-canopy.git
 cd hermes-canopy
-make build
+make build                 # default API-only binary
+
+# Optional: build the frontend and embed the SPA in the same canopyd binary.
+# This runs the frontend build, stages frontend/dist at internal/webui/dist,
+# and builds with -tags embedui.
+make build-ui
 
 # Cards are stored in per-type SQLite databases (modernc.org/sqlite), pure Go.
 # internal/card/duckdb (go-duckdb) is ARCHIVED: cgo-only, build-tagged
@@ -108,9 +113,11 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
-# The canopyd binary is API-only in MVP — the PWA is served separately, and a
-# production build needs a same-origin reverse proxy, NOT "any static server":
-# see the Note under "Production (Manual)" below, or deploy/reference-proxy.py.
+# Plain `make build` produces the API-only default binary. `make build-ui`
+# builds the frontend and embeds the SPA into the same canopyd binary; that
+# build-time path requires Node.js and npm. The embedded SPA is served by
+# canopyd at runtime on the API port. For the separate Vite frontend, see the
+# same-origin reverse-proxy guidance under "Production (Manual)" below.
 ```
 
 ### Install Go 1.25+ (no sudo)
@@ -286,9 +293,23 @@ never mints users, workspaces or profiles. Provisioning is what makes the
 `dev-secret-change-me` must never leave the dev environment (see the comment in
 `frontend/vite.config.ts`).
 
+**Canopyd has two build profiles.** Plain `make build` produces the default
+**API-only** binary. In that profile the PWA is a separate frontend and a
+production deployment must put it behind a **same-origin reverse proxy**, not
+an arbitrary static server: the proxy must forward `/api/` and the other API
+routes to canopyd instead of answering them with the SPA shell.
+
+The opt-in `make build-ui` target is the **single-binary embedded SPA** path. It
+requires Node.js and npm at build time, runs the frontend build, stages
+`frontend/dist` at `internal/webui/dist`, and builds canopyd with `-tags embedui`.
+Run the resulting binary with `./bin/canopyd serve`; it serves the embedded SPA
+and API on the same API port. The embedded handler preserves the API-reserved
+prefixes `/api`, `/health`, `/healthz`, `/version`, `/metrics`, `/ws`, and
+`/mcp`; an unknown `/api/*` remains a JSON 404 rather than an HTML SPA fallback.
+
 **The PWA has no login flow** (multi-user auth is deferred post-MVP — there is no
 `/api/v1/auth/register|login` endpoint), and the Vite **dev** proxy is the only
-component that injects a JWT today. A production static build therefore
+component that injects a JWT today. A production frontend build therefore
 authenticates in exactly one of these ways:
 
 1. **The browser carries the token.** Build the PWA with
@@ -737,11 +758,11 @@ METRICS_ENABLED=true \
   ./bin/canopyd
 ```
 
-> **Note:** `canopyd` is **API-only** in MVP — it does not serve the PWA.
-> The binary exposes the REST/SSE API on `HTTP_ADDR` (`:8091` via `make run`
-> and compose; the raw binary defaults to `:8080`);
-> the frontend must be served separately, and it must be served by a SAME-ORIGIN
-> reverse proxy — **not** by "any static server":
+> **Build profiles:** plain `make build` produces the default **API-only**
+> binary. The REST/SSE API listens on `HTTP_ADDR` (`:8091` via `make run` and
+> compose; the raw binary defaults to `:8080`). For this profile the frontend
+> must be served separately through a SAME-ORIGIN reverse proxy — **not** by
+> "any static server":
 >
 > ```bash
 > cd frontend && npm ci && npm run build   # produces frontend/dist/ (NOT frontend/frontend/dist)
@@ -751,15 +772,24 @@ METRICS_ENABLED=true \
 > # → http://localhost:3000
 > ```
 >
-> **Why a plain static server does not work.** An SPA fallback (`npx serve -s`,
-> CDN "SPA mode") answers *every* unknown path with `index.html` — including
-> `GET /api/v1/trees`. The app then runs `res.json()` over `<!doctype html>` and
-> fails with `Unexpected token '<', "<!doctype "... is not valid JSON` while the
-> UI reports "Backend: unreachable". The fallback is only for app routes
-> (`/trees`, `/tree/<id>`, so `BrowserRouter` deep links survive a refresh);
-> `/api/` and `/health` must always reach canopyd. For a real deployment use
-> `deploy/nginx.canopy.conf` (`proxy_buffering off`) or `deploy/Caddyfile`
-> (`flush_interval -1`) — both implement that split plus SSE-safe streaming.
+> The opt-in `make build-ui` target is the **single-binary embedded SPA** path.
+> It requires Node.js and npm at build time, stages `frontend/dist` at
+> `internal/webui/dist`, and builds with `-tags embedui`. Run it with
+> `./bin/canopyd serve`; the embedded SPA and API share the same API port. The
+> embedded handler preserves the API-reserved prefixes `/api`, `/health`,
+> `/healthz`, `/version`, `/metrics`, `/ws`, and `/mcp`; unknown `/api/*` remains
+> a JSON 404 rather than an HTML SPA fallback.
+>
+> **Why a plain static server does not work for the separate API-only profile.**
+> An SPA fallback (`npx serve -s`, CDN "SPA mode") answers *every* unknown path
+> with `index.html` — including `GET /api/v1/trees`. The app then runs
+> `res.json()` over `<!doctype html>` and fails with `Unexpected token '<',
+> "<!doctype "... is not valid JSON` while the UI reports "Backend: unreachable".
+> The fallback is only for app routes (`/trees`, `/tree/<id>`, so `BrowserRouter`
+> deep links survive a refresh); `/api/` and `/health` must always reach canopyd.
+> For a real deployment use `deploy/nginx.canopy.conf` (`proxy_buffering off`)
+> or `deploy/Caddyfile` (`flush_interval -1`) — both implement that split plus
+> SSE-safe streaming.
 >
 > **The example port is not reserved.** `:3000` is a convention, not a
 > guarantee — it is occupied on plenty of hosts. Set `--port` (or the nginx/Caddy

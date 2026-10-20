@@ -2,7 +2,7 @@
 
 A practical guide to deploying and operating Canopy OS on your own infrastructure.
 
-Canopy is a graph-native collaboration surface for human-agent work. It ships as a single Go binary (`canopyd`) that bundles the HTTP API server, SSE event hub, Prometheus metrics, and database migrations — all in one process backed by PostgreSQL. The React PWA frontend is **served separately** (see [Quick Start](#quick-start)).
+Canopy is a graph-native collaboration surface for human-agent work. It ships as a single Go binary (`canopyd`) that bundles the HTTP API server, SSE event hub, Prometheus metrics, and database migrations — all in one process backed by PostgreSQL. The React PWA frontend can be served separately through the API-only build profile or embedded in the same binary with `make build-ui` (see [Quick Start](#quick-start)).
 
 ---
 
@@ -59,30 +59,51 @@ curl http://localhost:8091/health
 
 The server auto-runs database migrations on startup, so the schema is created automatically the first time it connects.
 
-**Serving the frontend:** `canopyd` is **API-only** in MVP — it does not embed or serve the PWA. The React frontend must be served separately, and in production it must be served by a **same-origin reverse proxy** — a plain static server does *not* work:
+**Serving the frontend:** `canopyd` has two build profiles:
+
+- Plain `make build` produces the default **API-only** binary. The React
+  frontend is separate in this profile and, in production, must be served
+  through a **same-origin reverse proxy**. A plain static server is not safe for
+  this profile because its SPA fallback can answer API requests with HTML.
+- `make build-ui` is the **single-binary embedded SPA** path. It requires
+  Node.js and npm at build time, builds the frontend, stages `frontend/dist` at
+  `internal/webui/dist`, and builds with `-tags embedui`. Run the resulting
+  binary with `./bin/canopyd serve`; it serves the SPA and API on the same API
+  port.
 
 ```bash
 # Development: Vite dev server (proxies /api to :8091 by default)
 cd frontend && npm install && npm run dev
 # → http://localhost:5173
 
-# Production: build, then serve dist/ through a same-origin reverse proxy
+# Production, default API-only build: build the separate frontend and serve
+# it through a same-origin reverse proxy.
 cd frontend && npm ci && npm run build    # produces frontend/dist/ (NOT frontend/frontend/dist)
 cd ..                                     # run the proxy from the repo root
 python3 deploy/reference-proxy.py --dist frontend/dist --port 3000 \
     --api http://127.0.0.1:8091
 # → http://localhost:3000
+
+# Production, single-binary embedded SPA build:
+# From the repository root:
+make build-ui                             # requires Node.js and npm
+./bin/canopyd serve                        # SPA + API on the API port
 ```
 
-**Why not `npx serve -s` (or any other SPA-mode static server).** The SPA fallback
-those servers enable answers *every* unknown path with `index.html` — including
-`GET /api/v1/trees`. The app then tries to `JSON.parse("<!doctype html>")` and
-fails with `Unexpected token '<', "<!doctype "... is not valid JSON`, while the UI
-reports "Backend: unreachable". The `BrowserRouter` fallback is only needed for
-**app routes** (`/trees`, `/tree/<id>` — so deep links survive a refresh);
-`/api/` and `/health` must always be reverse-proxied to canopyd. `:3000` is a
-convention, not a reserved port — it is often already taken, and
-`deploy/reference-proxy.py` refuses to start on a busy port, so pick a free one.
+With the embedded profile, the handler preserves the API-reserved prefixes
+`/api`, `/health`, `/healthz`, `/version`, `/metrics`, `/ws`, and `/mcp`; an
+unknown `/api/*` remains a JSON 404 rather than an HTML SPA fallback.
+
+**Why not `npx serve -s` (or any other SPA-mode static server) for the separate
+API-only profile.** The SPA fallback those servers enable answers *every*
+unknown path with `index.html` — including `GET /api/v1/trees`. The app then
+tries to `JSON.parse("<!doctype html>")` and fails with `Unexpected token '<',
+"<!doctype "... is not valid JSON`, while the UI reports "Backend: unreachable".
+The `BrowserRouter` fallback is only needed for **app routes** (`/trees`,
+`/tree/<id>` — so deep links survive a refresh); `/api/` and `/health` must
+always be reverse-proxied to canopyd. `:3000` is a convention, not a reserved
+port — it is often already taken, and `deploy/reference-proxy.py` refuses to
+start on a busy port, so pick a free one.
 
 For a real deployment use one of the shipped reference configs, which implement
 the same split plus SSE-safe streaming (no response buffering):
@@ -850,5 +871,5 @@ For context while operating the server:
 - **Storage direction (2026-09-16 ruling):** PostgreSQL contradicts the product vision (single binary, no Docker, no PostgreSQL, no external dependencies) and the SQLite-native Hermes ecosystem. The owner ruling is **SQLite-first** — `modernc.org/sqlite` (pure Go, WAL) as the authoritative graph store inside one zero-external-dependency binary. **Status: declared direction, NOT landed** — tracked as board row **GAP-076**; PostgreSQL stays authoritative until it does.
 - **SSE Hub:** In-memory ring buffer per tree, 10K connection cap, 1-hour event retention.
 - **Cards:** per-type **SQLite** databases (`modernc.org/sqlite`, CGo-free, pure Go) under `~/.hermes/canopy/cards/`, overridable with `CANOPY_CARD_DATA_DIR`. Each card type is one `<dir>/<card-type>.db` file opened with `_journal_mode=WAL` (`internal/card/database.go`); there is no JSONL path for cards. The `internal/card/duckdb/` package is cgo-only and ARCHIVED — zero importers repo-wide, and no shipped build selects it.
-- **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. Built to `frontend/dist/` as a release artifact and served separately — `canopyd` is API-only in MVP and does not embed it (see [Quick Start](#quick-start)).
+- **Frontend:** React PWA with Service Worker and Yjs/IndexedDB for local-first sync. The default `make build` produces the API-only binary and serves the PWA separately; `make build-ui` instead embeds the built `frontend/dist/` SPA in the same `canopyd` binary (see [Quick Start](#quick-start)).
 - **Graceful shutdown:** 30 seconds — drains SSE connections, then shuts down HTTP.
