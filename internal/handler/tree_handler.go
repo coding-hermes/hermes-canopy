@@ -370,8 +370,17 @@ func inviteeNotRegisteredMessage(req shareRequestBody) string {
 	case req.Email != "":
 		who = strconv.Quote(req.Email)
 	}
-	return "no account is registered for " + who + " on this Canopy instance; " +
+	msg := "no account is registered for " + who + " on this Canopy instance; " +
 		"the invitee must sign in to the instance once before they can be shared with"
+	if req.UserID == "" && req.Email != "" {
+		// DF-HERMES-CANOPY-89: signing in is exactly what provisions the
+		// account, and dev-mode provisioning records no email, so obeying the
+		// instruction above still leaves an email invite unresolvable. Name the
+		// resolution path that works instead of leaving the caller in a loop.
+		msg += "; that account is created without an email, so share by the " +
+			"account's user UUID instead"
+	}
+	return msg
 }
 
 // ShareTree grants a user access to a tree by creating a tree_members row.

@@ -59,6 +59,7 @@ import { usePresence } from '../hooks/usePresence.ts';
 import type {
   PermissionLevel,
   ShareInvitePayload,
+  ShareInviteResult,
 } from '../types/multiUser.ts';
 import { getColorForUser } from '../types/multiUser.ts';
 import { token, palette, alpha } from '../theme.ts';
@@ -857,18 +858,29 @@ export default function TreeView() {
   // ── Share dialog handlers ─────────────────────────────────────────
 
   const handleInvite = useCallback(
-    (payload: ShareInvitePayload) => {
-      console.log('[TreeView] Invite sent:', payload);
-      // Add the invited user to local members (placeholder)
-      const mockUserId = `mock_${Date.now()}`;
+    (payload: ShareInvitePayload, result?: ShareInviteResult) => {
+      console.log('[TreeView] Invite sent:', payload, result);
+      // The 201 body is authoritative when present; the payload is the fallback.
+      // A user-ID invite (DF-HERMES-CANOPY-89) carries no email, so the name
+      // falls back to a short form of the UUID instead of inventing an address.
+      const userId = result?.userId ?? payload.user_id ?? `mock_${Date.now()}`;
+      const email = result?.email ?? payload.email ?? '';
+      const userName = email
+        ? (email.split('@')[0] || email)
+        : `User ${userId.slice(0, 8)}`;
       const newMember: Member = {
-        userId: mockUserId,
-        userName: payload.email.split('@')[0] ?? payload.email,
-        email: payload.email,
-        permission: payload.permission,
-        avatarColor: getColorForUser(mockUserId),
+        userId,
+        userName,
+        email,
+        permission: result?.permission ?? payload.permission,
+        avatarColor: getColorForUser(userId),
       };
-      setMembers((prev) => [...prev, newMember]);
+      // Re-inviting the same user replaces their row rather than duplicating it.
+      setMembers((prev) =>
+        prev.some((m) => m.userId === userId)
+          ? prev.map((m) => (m.userId === userId ? newMember : m))
+          : [...prev, newMember],
+      );
     },
     [],
   );

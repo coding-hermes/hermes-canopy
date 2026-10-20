@@ -327,7 +327,10 @@ share record (not wrapped in `{"share": ...}`):
 ```
 
 `user_id` is resolved before `email`, and a successful share creates the tree
-membership immediately; there is no separate tree invite-token response.
+membership immediately; there is no separate tree invite-token response. In the
+201 record, `email` is **omitted** (not `null`) when the invitee has no address
+on record — the normal state of an account created by signing in on a
+dev-secret deployment, which can therefore only be reached by `user_id`.
 
 **Unknown invitee (`INVITEE_NOT_REGISTERED`, 404).** Sharing requires the
 invitee to already have an account row (`users`) on this instance. A person who
@@ -338,7 +341,7 @@ a code that names the condition rather than a generic `USER_NOT_FOUND`:
 {
   "error": {
     "code": "INVITEE_NOT_REGISTERED",
-    "message": "no account is registered for \"friend@example.com\" on this Canopy instance; the invitee must sign in to the instance once before they can be shared with"
+    "message": "no account is registered for \"friend@example.com\" on this Canopy instance; the invitee must sign in to the instance once before they can be shared with; that account is created without an email, so share by the account's user UUID instead"
   }
 }
 ```
@@ -351,6 +354,16 @@ is unchanged (404, the invitee resource does not exist); only the `code` string
 became specific — clients that branched on `USER_NOT_FOUND` for this route must
 accept `INVITEE_NOT_REGISTERED` (compare the status, or the message, for the old
 case).
+
+**An email invite cannot reach a signed-in account.** On a dev-secret
+deployment, provisioning inserts only `id`, `hermes_user_id`, `display_name` and
+`is_active` (`PGUserRepo.EnsureByID`) — no email — and no shipped API or CLI sets
+one afterwards. Obeying the 404's own instruction ("sign in once") therefore
+still leaves an email invite unresolvable, which is why the email-path message
+now names the alternative: share by the account's **user UUID** (`users.id`, equal
+to the JWT subject and to `hermes_user_id`). The Share dialog sends `user_id`
+automatically whenever the typed value parses as a UUID, and treats anything else
+as an email address.
 
 **Error codes:** `INVALID_TREE_ID` (400), `INVALID_BODY` (400),
 `INVALID_USER_ID` (400), `VALIDATION_ERROR` (400), `TOKEN_MISSING` (401),

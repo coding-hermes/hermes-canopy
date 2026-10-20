@@ -55,10 +55,35 @@ export type LocalPresence = Omit<UserPresence, 'lastSeen'>;
 
 // ─── Share Dialog ───────────────────────────────────────────────────
 
+/**
+ * The invite request the dialog hands to `onInvite`. Exactly one of `email` or
+ * `user_id` is set, matching what POST /trees/{id}/share accepts.
+ *
+ * `user_id` is the path that works on a fresh instance: dev-mode provisioning
+ * creates every account WITHOUT an email, so an invitee who signed in can only
+ * be found by their UUID (DF-HERMES-CANOPY-89). The email path stays for users
+ * that do have an address on record.
+ */
 export interface ShareInvitePayload {
-  email: string;
+  /** Invitee email — the email path. */
+  email?: string;
+  /** Invitee user UUID — the user-ID path (email-less provisioned accounts). */
+  user_id?: string;
   permission: PermissionLevel;
   message?: string;
+}
+
+/**
+ * The 201 body POST /trees/{id}/share answers with (`shareResponse` in
+ * internal/handler/tree_handler.go). `email` is ABSENT when the invitee has no
+ * email on record, so every consumer must treat it as optional.
+ */
+export interface ShareInviteResult {
+  treeId: string;
+  userId: string;
+  email?: string;
+  permission: PermissionLevel;
+  memberId: string;
 }
 
 // ─── Presence store event types ─────────────────────────────────────

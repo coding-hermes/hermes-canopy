@@ -2,17 +2,27 @@
  * Hermes Canopy — Share Dialog
  *
  * Modal dialog for sharing a tree with other users.
- *   - Email input + permission dropdown → send invite
+ *   - Invitee input (email OR user UUID) + permission dropdown → send invite
  *   - List of existing members with permission change + remove
  *
  * WIRE-004 / BUG-024: POSTs to the real /api/v1/trees/:id/share endpoint.
+ *
+ * DF-HERMES-CANOPY-89: a value that parses as a UUID is sent as `user_id`
+ * instead of `email`. Dev-mode provisioning creates the account without an
+ * email, so `user_id` is the only path that can complete an invite for a user
+ * who has signed in; the email path still works for users that have one.
  */
 
 import { useState, useCallback } from 'react';
 import { X, Mail, Shield, Trash2, Loader2 } from 'lucide-react';
 import { token } from '../theme.ts';
 import { apiUrl, authInit } from '../lib/api.ts';
-import type { PermissionLevel, ShareInvitePayload } from '../types/multiUser.ts';
+import { isUuidLike } from '../lib/nodeMeta.ts';
+import type {
+  PermissionLevel,
+  ShareInvitePayload,
+  ShareInviteResult,
+} from '../types/multiUser.ts';
 import {
   getPermissionLabel,
   getPermissionStyle,
@@ -45,8 +55,11 @@ export interface ShareDialogProps {
   onPermissionChange: (userId: string, permission: PermissionLevel) => void;
   /** Called when a member is removed */
   onRemoveMember: (userId: string) => void;
-  /** Called when an invite is sent (Placeholder) */
-  onInvite: (payload: ShareInvitePayload) => void;
+  /**
+   * Called when an invite succeeds, with the request payload and — when the
+   * server answered a parseable 201 body — the created share record.
+   */
+  onInvite: (payload: ShareInvitePayload, result?: ShareInviteResult) => void;
 }
 
 // ─── Permission options ────────────────────────────────────────────────
@@ -71,7 +84,7 @@ export default function ShareDialog({
   onRemoveMember,
   onInvite,
 }: ShareDialogProps) {
-  const [email, setEmail] = useState('');
+  const [invitee, setInvitee] = useState('');
   const [permission, setPermission] = useState<PermissionLevel>('editor');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -80,7 +93,7 @@ export default function ShareDialog({
 
   // ── Reset on close ────────────────────────────────────────────────
   const handleClose = useCallback(() => {
-    setEmail('');
+    setInvitee('');
     setPermission('editor');
     setMessage('');
     setStatus('idle');
@@ -90,17 +103,19 @@ export default function ShareDialog({
 
   // ── Send invite (real POST to /api/v1/trees/:id/share) ────────────
   const handleSendInvite = useCallback(async () => {
-    if (!email.trim()) return;
+    const target = invitee.trim();
+    if (!target) return;
 
     setSending(true);
     setStatus('idle');
     setStatusText('');
 
-    const payload: ShareInvitePayload = {
-      email: email.trim(),
-      permission,
-      message: message.trim() || undefined,
-    };
+    // DF-HERMES-CANOPY-89: a UUID is the user_id path — the only one that can
+    // reach an account provisioned by signing in (those have no email). Any
+    // other value is the email path. The backend resolves user_id first.
+    const payload: ShareInvitePayload = isUuidLike(target)
+      ? { user_id: target, permission, message: message.trim() || undefined }
+      : { email: target, permission, message: message.trim() || undefined };
 
     try {
       const response = await fetch(apiUrl(`/trees/${encodeURIComponent(treeId)}/share`), authInit({
@@ -127,10 +142,19 @@ export default function ShareDialog({
         return;
       }
 
+      // The 201 body names the membership that was created. Best-effort: a 2xx
+      // with an unparseable body still succeeded, so it never fails the invite.
+      let result: ShareInviteResult | undefined;
+      try {
+        result = (await response.json()) as ShareInviteResult;
+      } catch {
+        result = undefined;
+      }
+
       setStatus('success');
-      setStatusText(`Invitation sent to ${payload.email}`);
-      onInvite(payload);
-      setEmail('');
+      setStatusText(`Invitation sent to ${result?.email || target}`);
+      onInvite(payload, result);
+      setInvitee('');
       setMessage('');
     } catch (err) {
       // Network error / API down.
@@ -141,7 +165,7 @@ export default function ShareDialog({
     } finally {
       setSending(false);
     }
-  }, [email, permission, message, treeId, onInvite]);
+  }, [invitee, permission, message, treeId, onInvite]);
 
   if (!open) return null;
 
@@ -188,10 +212,10 @@ export default function ShareDialog({
             {/* ── Invite form ──────────────────────────────────────── */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium" style={{ color: token.contentMuted }}>
-                Invite by email
+                Invite by email or user ID
               </h3>
 
-              {/* Email input */}
+              {/* Invitee input — accepts an email address or a user UUID */}
               <div className="relative">
                 <Mail
                   className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
@@ -199,11 +223,11 @@ export default function ShareDialog({
                   aria-hidden="true"
                 />
                 <input
-                  type="email"
+                  type="text"
                   id="share-invite-email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="colleague@example.com"
+                  value={invitee}
+                  onChange={(e) => setInvitee(e.target.value)}
+                  placeholder="colleague@example.com or user UUID"
                   className="w-full pl-10 pr-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-1 focus:ring-accent"
                   style={{
                     backgroundColor: token.surfaceInput,
@@ -214,8 +238,21 @@ export default function ShareDialog({
                     if (e.key === 'Enter') void handleSendInvite();
                   }}
                   aria-required="true"
+                  aria-describedby="share-invite-hint"
                 />
               </div>
+
+              {/* Why a UUID is offered: an account created by signing in carries
+                  no email, so an email invite can never resolve it. */}
+              <p
+                id="share-invite-hint"
+                className="text-xs leading-snug"
+                style={{ color: token.contentFaint }}
+              >
+                They must have signed in to this instance once. Accounts created
+                that way have no email on record — invite those by their user
+                UUID.
+              </p>
 
               {/* Permission select */}
               <label htmlFor="share-invite-permission" className="sr-only">Permission level</label>
@@ -273,14 +310,14 @@ export default function ShareDialog({
               {/* Send button */}
               <button
                 onClick={() => void handleSendInvite()}
-                disabled={!email.trim() || sending}
+                disabled={!invitee.trim() || sending}
                 className="w-full py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
                 style={{
-                  backgroundColor: email.trim()
+                  backgroundColor: invitee.trim()
                     ? 'var(--color-accent-2-600)'
                     : token.lineSubtle,
-                  color: email.trim() ? '#ffffff' : token.contentFaint,
-                  cursor: email.trim() ? 'pointer' : 'not-allowed',
+                  color: invitee.trim() ? '#ffffff' : token.contentFaint,
+                  cursor: invitee.trim() ? 'pointer' : 'not-allowed',
                   opacity: sending ? 0.7 : 1,
                 }}
               >
