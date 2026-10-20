@@ -7,8 +7,8 @@ description: >-
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
   Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
-  09-22, 09-23 and 09-24 deep dogfood runs.
-version: 2.7.0
+  09-22, 09-23, 09-24 and 10-20 deep dogfood runs.
+version: 2.8.0
 category: software-development
 ---
 
@@ -137,11 +137,68 @@ also omits topics (DF-54).
 
 | Entry | How | Notes |
 |---|---|---|
-| PWA | `cd frontend && npm run dev` → http://localhost:5173 | Vite proxy → `:8091`, auto-injects dev JWT — zero auth |
-| API | `curl :8091/api/v1/...` with `Authorization: Bearer <dev-jwt>` | JWT: HS256, secret `dev-secret-change-me`, sub `00000000-0000-0000-0000-000000000001` (README one-liner) |
+| PWA (dev) | `cd frontend && npm run dev` → http://localhost:5173 | Vite proxy → `:8091`, auto-injects dev JWT — zero auth |
+| PWA (single binary) | `make build-ui` → `./bin/canopyd serve` → open `http://localhost:8091/` | the SPA is embedded (`-tags embedui`); needs Node 22+ at BUILD time only; see the next section |
+| API | `curl :8091/api/v1/...` with `Authorization: Bearer <dev-jwt>| JWT: HS256, secret `dev-secret-change-me`, sub `00000000-0000-0000-0000-000000000001` (README one-liner)|
 | CLI | `CANOPY_SERVER_URL=http://localhost:8091 CANOPY_TOKEN=<jwt> ./bin/canopyd tree list` | server default :8080 — set the env vars! |
 | MCP | `POST /api/v1/mcp` JSON-RPC 2.0 | `tools/list` → list_trees, get_tree, create_node, list_topics, get_graph_stats, list_approvals, list_cards — **see the MCP section below before wiring a real client** |
 | Gateway | `GET /api/v1/gateway/status` etc. | canopyd proxies the live Hermes gateway; key held server-side |
+
+## Embedded single-binary SPA (verified 2026-10-20, HEAD 7eecdfac, run 17)
+
+`make build-ui` (Makefile:65-71) builds the Vite SPA, stages it at
+`internal/webui/dist`, and compiles it in with `-tags embedui`
+(`internal/webui/spa_embed.go`). Result: ONE process serves the app and the API
+on the same port — no Vite dev server, no reverse proxy, no second static host.
+Build cost measured: 14.5 s wall on a load-15 box (frontend 1.38 s).
+
+```
+make build-ui && DB_* HTTP_ADDR=127.0.0.1:8093 ./bin/canopyd serve
+# boot log says it plainly:
+#   INF embedded web UI enabled: serving the built SPA on the API port
+```
+
+- **Plain `make build` is still API-only** — `spa.go` returns the API-only
+  fallback when the embed is absent, so a binary without `-tags embedui`
+  answers `404 ROUTE_NOT_FOUND` on `/`. If the UI 404s, you built the wrong target.
+- **What it serves on the API port** (all verified live): `/` `/trees`
+  `/tree/<uuid>` → the 688 B index shell (history fallback, so a deep link
+  survives a refresh); `/assets/index-*.js` (1.03 MB single bundle) +
+  `/assets/index-*.css` + `/sw.js` + `/manifest.webmanifest`; `/health`
+  `/healthz` `/version` are never shadowed; `/metrics` 404s unless
+  `METRICS_ENABLED=true` (unchanged); `/ws` and `/mcp` are reserved prefixes;
+  unknown `/api/*` → JSON 404 envelope (never HTML); traversal paths
+  (`/../../etc/passwd`, `/assets/../..`) return the shell, never a file, and
+  there is no directory listing.
+- **Auth in the embedded SPA:** the production bundle reads
+  `localStorage['canopy.token']` (or a build-time `VITE_API_TOKEN`);
+  there is no dev-proxy injector in this path. Paste a minted dev JWT into
+  `localStorage['canopy.token']` and reload — that is the whole login.
+- **Orphan-root trap (DF-HERMES-CANOPY-93):** with a node SELECTED, the
+  composer's **Send** still creates a NEW ROOT (`parentId: null`) — selection
+  only feeds "Run with context" and the context panel. Branching happens only
+  through the canvas ghost slot labelled **Add reply** (placeholder flips from
+  `Message…` to `Reply…`). Three Sends with a node selected = three roots, no
+  edges. Check the header (`N nodes · M edges`) or `GET …/nodes` before trusting
+  what you typed where.
+- **Share-by-email is a dead end on a fresh instance (DF-HERMES-CANOPY-89):**
+  the dialog only sends `email`; dev-mode provisioning
+  (`internal/db/user_repo.go:101-113`) inserts users with `email = NULL` and
+  nothing in the repo ever sets it, so every invitee 404s
+  `INVITEE_NOT_REGISTERED` — even after they "sign in once" as the message
+  instructs. The working path is API-only:
+  `POST /api/v1/trees/{id}/share -d '{"user_id":"<uuid>","permission":"viewer"}'`
+  → 201. Use that to build a real viewer for permission tests (a viewer is
+  blocked with `403 VIEWER_READ_ONLY` on flat `/nodes` PATCH/DELETE/reply/fork —
+  DF-84 holds).
+- **An invitee can be created without any register/login route:** mint a JWT
+  with a new `sub`, make one authenticated call, and the user row appears
+  (display_name `Hermes user <uuid>`). Useful for multi-user probes.
+- **The README contradicts this** (twice: Quick Start note + Production note
+  say "API-only … does not serve the PWA" and send you to
+  `deploy/reference-proxy.py`). `grep -rn 'build-ui' --include=*.md .` finds
+  nothing — the docs leg of UI-SPA-1 was never written (DF-HERMES-CANOPY-90).
+  Trust the binary and this section over README §Production for the local case.
 
 ## MCP surface (verified 2026-09-22, HEAD 027f3b1b)
 
