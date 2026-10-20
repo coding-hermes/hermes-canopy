@@ -1178,3 +1178,6 @@
 {"id":1137,"timestamp":"2026-10-19T23:31:47Z","event_type":"task_created","task_id":"DOC-13","actor":"foreman","detail":"{\"id\":\"DOC-13\",\"status\":\"pending\"}","tick_number":null}
 {"id":1138,"timestamp":"2026-10-20T07:08:51Z","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-86","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
 {"id":1139,"timestamp":"2026-10-20T07:09:00Z","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-86","actor":"foreman","detail":"{\"tick\":\"hermes-canopy-foreman-2026-10-20-06-54-46\",\"resolution\":\"recovered worker worktree, rebased, pushed, merged fast-forward\",\"commit\":\"fba87e31\",\"guard\":\"PASS (tier1 DEGRADED-PASS, tier2 PASS)\",\"verdict\":\"COMPLETE\"}","tick_number":null}
+{"id":1140,"timestamp":"2026-10-20T07:15:20Z","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-87","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":1141,"timestamp":"2026-10-20T07:15:45Z","event_type":"task_completed","task_id":"QA-HERMES-CANOPY-39","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":1142,"timestamp":"2026-10-20T07:15:50Z","event_type":"task_completed","task_id":"RELENG-CANOPY-2026-10-11","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
