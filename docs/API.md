@@ -168,9 +168,9 @@ Authorization: Bearer <token>
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check → `{"status":"ok","service":"canopyd"}` |
+| `GET` | `/health` | Health check → `{"status":"ok","service":"canopyd","schema_version":48,"embedded_migrations":48,"relay":{"mode":"air_gapped","status":"disabled","sessions":0},"version":"v0.1.0","commit":"<hash>","build_time":"<ISO8601>"}` (relay sub-object omitted when no relay configured) |
 | `GET` | `/healthz` | Same as `/health` |
-| `GET` | `/version` | Version → `{"version":"dev"}` |
+| `GET` | `/version` | Version → `{"version":"v0.1.0","commit":"<hash>","build_time":"<ISO8601>"}` |
 | `GET` | `/metrics` | Prometheus metrics (if `METRICS_ENABLED=true`) |
 
 ---
