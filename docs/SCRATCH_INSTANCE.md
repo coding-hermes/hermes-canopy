@@ -121,7 +121,8 @@ trap 'kill -TERM "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; \
 #    binary predates the schema; rebuild instead).
 for i in $(seq 1 60); do curl -sf "http://127.0.0.1:$PORT/health" && break; sleep 1; done
 curl -s "http://127.0.0.1:$PORT/health"
-# → {"status":"ok",…,"schema_version":47,"embedded_migrations":47,…}
+# → {"status":"ok",…,"schema_version":N,"embedded_migrations":N,…}
+#   N is the migration count shipped in *your* binary.
 #   schema_version MUST equal embedded_migrations. If it does not, the process
 #   exits with `STALE BUILD` and the fix is a rebuild, not a flag.
 
