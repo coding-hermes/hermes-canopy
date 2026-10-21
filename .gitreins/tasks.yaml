@@ -4108,3 +4108,16 @@ tasks:
   status: complete
   created_at: '2026-10-21T03:54:09.137915+00:00'
   completed_at: '2026-10-21T04:33:51.901702+00:00'
+- id: RVW2-CANOPY-104
+  title: "MLS create-group creator_profile_id not obtainable via API \u2014 profiles.id\
+    \ only via SQL/CLI; API.md documents constraint but not the path"
+  criteria:
+  - "Tier 1: build passes, no secrets, lint clean | Tier 2: (1) reproduction probe\
+    \ shows the problem (POST /groups without a valid creator_profile_id or with unknown\
+    \ ID returns 404 PROFILE_NOT_FOUND), (2) fix committed and passes local gate (POST\
+    \ with a known creator_profile_id returns 201 and the response includes creator_profile_id;\
+    \ GET /groups/<id> shows it), (3) integration test covers the full create\u2192\
+    read cycle \u2014 verify: returns 201 and shows creator_profile_id in response,\
+    \ still returns 404 for unknown profile, documented body returns 201"
+  status: in_progress
+  created_at: '2026-10-21T10:11:03.430571+00:00'
