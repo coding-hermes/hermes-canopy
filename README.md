@@ -174,6 +174,16 @@ create.
 2. **First node.** Open the new tree — the Tree View canvas has a message
    composer at the bottom (`button[aria-label="Send message"]`). Type and
    send: your message appears on the canvas immediately.
+
+   **Reply or new root — the composer shows which.** With a node selected on
+   the canvas, the composer shows a "Replying to selected …" chip and its
+   button reads **Send reply**: the message is filed under that node. With
+   nothing selected there is no chip and the button reads **Send**: the
+   message becomes a new root. The canvas ghost slot's **Add reply** arms the
+   same reply path explicitly (it survives until you send or click the empty
+   canvas, even if you then select a different node). "Run with context" is
+   unchanged — it always runs the selected node's compiled context and never
+   writes a node.
 3. **First agent run (optional).** The Dashboard (`/`) posts to the live
    Hermes gateway when one is reachable (`/api/v1/gateway/status`). Without a
    gateway it says so — nothing is faked.

@@ -140,11 +140,25 @@ export default function TreeView() {
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
 
   /**
-   * Node the composer will reply to, set by activating a ghost slot on the
-   * canvas (UI-04). Kept as state rather than written straight to the graph
+   * Explicit reply target, armed ONLY by the canvas ghost slot (UI-04
+   * "Add reply"). Kept as state rather than written straight to the graph
    * so the affordance never creates an empty node behind the user's back.
+   *
+   * DF-HERMES-CANOPY-93: the composer's Send now replies to the plain
+   * canvas selection (replyToSelected) when no ghost target is armed.
+   * This field therefore means "the ghost slot overrode the selection":
+   * set on ghost activation, cleared on send and on canvas deselect, so
+   * deselection falls back to the selection reply path (and selection of
+   * the same node via a ghost stays sticky where the user clicked it).
    */
   const [replyToNodeId, setReplyToNodeId] = useState<string | null>(null);
+
+  /**
+   * DF-HERMES-CANOPY-93 — where Send files the message. Precedence:
+   * ghost reply target (UI-04) > canvas selection > new root, so the
+   * ghost affordance keeps winning while `replyToNodeId` is armed.
+   */
+  const effectiveReplyTarget = replyToNodeId ?? selectedNodeId;
 
   // Share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -379,11 +393,6 @@ export default function TreeView() {
   } = usePresence(providerRef.current, 'You');
 
   // ── Handlers ──────────────────────────────────────────────────────
-
-  // Handle selection change from canvas
-  const handleSelectionChange = useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
-  }, []);
 
   // Handle navigate-to-node from NavigationBar
   const handleNavigateToNode = useCallback((nodeId: string) => {
@@ -817,17 +826,19 @@ export default function TreeView() {
 
   // Handle message send from MessageComposer — creates a real node.
   //
-  // Snake_case body per internal/handler/node_handler.go; an armed ghost
-  // slot (UI-04) becomes `parent_id`, otherwise the message is a root.
-  // Errors are re-thrown so the composer keeps the user's text and shows
-  // the server's own message inline.
+  // Snake_case body per internal/handler/node_handler.go; the write files
+  // under `effectiveReplyTarget` (DF-HERMES-CANOPY-93): a ghost-armed
+  // reply slot (UI-04) wins, otherwise the canvas selection is the reply
+  // parent, otherwise the message is a root. Errors are re-thrown so the
+  // composer keeps the user's text and shows the server's own message
+  // inline.
   const handleSendMessage = useCallback(
     async (message: string, files: File[], pinned: PinnedNode[]) => {
       if (!treeId) throw new Error('No tree selected.');
 
       const body = buildCreateNodeBody({
         content: message,
-        parentId: replyToNodeId,
+        parentId: effectiveReplyTarget,
         metadata:
           buildSendMetadata({
             files,
@@ -835,7 +846,7 @@ export default function TreeView() {
           }) ?? undefined,
       });
 
-      const created = await apiPost<{ node: BackendNodePayload }>(
+      const created = await apiPost<{ node: BackendNodePayload; edge?: unknown }>(
         `/trees/${treeId}/nodes`,
         body,
       );
@@ -848,12 +859,31 @@ export default function TreeView() {
       if (created?.node?.id && docRef.current) {
         mergeBackendNodes(docRef.current, [created.node]);
       }
+      // DF-HERMES-CANOPY-93: the 201 also carries the persisted reply edge
+      // (CreateNodeResult.Edge). Without mirroring it the replica waits for
+      // the next full hydration before the new edge — the header count
+      // included in this milestone's acceptance — is correct.
+      if (created?.edge && docRef.current) {
+        mergeBackendEdges(docRef.current, toEdgePayloads([created.edge]));
+      }
 
-      // Sending clears the armed reply target (UI-04 ghost slot).
+      // Sending clears the armed reply target (UI-04 ghost slot), so a
+      // later Send files under the canvas selection — or roots again.
       setReplyToNodeId(null);
     },
-    [treeId, replyToNodeId],
+    [treeId, effectiveReplyTarget],
   );
+
+  /**
+   * DF-HERMES-CANOPY-93 — a canvas deselect (click on empty canvas) drops a
+   * ghost-armed target too: the user's click is the newest statement about
+   * where they are, so the composer falls back to "new root" instead of
+   * silently filing under a slot they walked away from.
+   */
+  const handleSelectionChange = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId === null) setReplyToNodeId(null);
+  }, []);
 
   // ── Share dialog handlers ─────────────────────────────────────────
 
@@ -925,7 +955,7 @@ export default function TreeView() {
         <span className="text-sm font-medium text-content-primary">
           🌳 {tree.treeTitle || 'Tree View'}
         </span>
-        <span className="text-xs text-content-muted">
+        <span className="text-xs text-content-muted" data-testid="tree-counts">
           {countLabel(tree.nodes.length, 'node')} · {countLabel(tree.edges.length, 'edge')}
         </span>
         {!tree.isReady && (
@@ -1190,8 +1220,19 @@ export default function TreeView() {
         runWithContextDisabled={selectedNodeId === null || !tree.isReady || isViewer}
         placeholder={composerPlaceholder({
           readOnly: isViewer,
-          isReply: replyToNodeId !== null,
+          isReply: effectiveReplyTarget !== null,
         })}
+        replyTarget={
+          effectiveReplyTarget !== null
+            ? {
+                id: effectiveReplyTarget,
+                label:
+                  tree.nodes.find((n) => n.id === effectiveReplyTarget)?.data
+                    .label || effectiveReplyTarget,
+                ghost: replyToNodeId !== null,
+              }
+            : null
+        }
       />
 
       {/* Share dialog */}
