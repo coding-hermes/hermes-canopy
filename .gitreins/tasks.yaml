@@ -4097,11 +4097,14 @@ tasks:
   status: complete
   created_at: '2026-10-19T20:07:25.716922+00:00'
   completed_at: '2026-10-19T20:07:39.073403+00:00'
-- id: DF-HERMES-CANOPY-91
-  title: Fix Trees page header count stale after create
+- id: DF-HERMES-CANOPY-92
+  title: flat /nodes MethodNotAllowed returns empty body
   criteria:
-  - '1. Create a tree from empty state via UI. 2. Header count matches tree-card count
-    immediately (no reload). 3. Create second tree: header and card count both increment
-    without reload. 4. Full reload does not change counts.'
-  status: in_progress
-  created_at: '2026-10-21T02:27:08.573611+00:00'
+  - '1. GET /api/v1/nodes/<uuid> returns 405 with Content-Type: application/json.
+    2. Body is parseable JSON with error.code=METHOD_NOT_ALLOWED. 3. 405 includes
+    Allow header. 4. Existing tree-scoped routes unaffected. 5. go build + go vet
+    clean. 6. New table test sweeps flat mount error shapes (bad uuid, unknown subpath,
+    wrong method).'
+  status: complete
+  created_at: '2026-10-21T03:54:09.137915+00:00'
+  completed_at: '2026-10-21T04:33:51.901702+00:00'
