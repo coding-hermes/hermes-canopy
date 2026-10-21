@@ -1,0 +1,22 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-21-06-04-00",
+  "project": "hermes-canopy",
+  "budget": 2,
+  "base": "237ea876f1462e0637c01fdf74085396b7a52014",
+  "workers": [
+    {
+      "task": "DF-HERMES-CANOPY-95",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-95",
+      "branch": "wt/DF-HERMES-CANOPY-95",
+      "scope": ["internal/server/server.go", "internal/server/tree_nodes_error_envelope_test.go"]
+    },
+    {
+      "task": "DF-HERMES-CANOPY-93",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-93",
+      "branch": "wt/DF-HERMES-CANOPY-93",
+      "scope": ["frontend/src/components/TreeView.tsx", "frontend/src/components/MessageComposer.tsx", "frontend/src/components/__tests__/"]
+    }
+  ],
+  "independence": "DF-95 edits Go server routing + Go tests; DF-93 edits React composer component + vitest tests. No shared files, no depends_on edges on either row (both verified empty at census).",
+  "dispatched_at": "2026-10-21T06:20:00-05:00"
+}
