@@ -150,6 +150,28 @@ func FlatNodeMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 	writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 }
 
+// TreeNodeMethodNotAllowed answers the tree-scoped /trees/{tree_id}/nodes
+// mount's method-mismatch (405) with the same documented error envelope as
+// the flat surface (docs/API.md — every error body is
+// {"error":{"code","message"}}) plus the RFC 9110 §15.5.5 Allow header. It
+// replaces chi's default 405 responder, which writes an EMPTY body with no
+// Content-Type (DF-HERMES-CANOPY-95 — the tree-scoped mount previously had
+// no MethodNotAllowed wrapper, unlike the flat mount fixed in
+// DF-HERMES-CANOPY-92).
+//
+// The Allow list is the tree-scoped surface's full method set — GET/POST on
+// / and GET/PATCH/DELETE on /{node_id}, POST on /{node_id}/reply and
+// /{node_id}/fork (TreeRoutes, SPEC-API-03) — so it is wider than the flat
+// surface's: the tree mount also serves GET (list and get-by-id). Stated
+// statically rather than derived from the request for the same reason as
+// FlatNodeMethodNotAllowed: chi records the allowed methods only when a
+// route node actually matched, and a wrong-method probe of an unknown
+// subpath matches no node at all, which would yield an empty Allow header.
+func TreeNodeMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Allow", "GET, POST, PATCH, DELETE")
+	writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+}
+
 // --- URL parameter helpers --------------------------------------------------
 
 // parseTreeID reads and validates the {tree_id} chi URL parameter.

@@ -164,7 +164,7 @@ func wantStatusFor(code string) int {
 		return http.StatusMethodNotAllowed
 	case "ROUTE_NOT_FOUND":
 		return http.StatusNotFound
-	case "INVALID_NODE_ID":
+	case "INVALID_NODE_ID", "INVALID_TREE_ID":
 		return http.StatusBadRequest
 	default:
 		return 0
