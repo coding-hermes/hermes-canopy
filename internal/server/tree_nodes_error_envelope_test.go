@@ -18,6 +18,9 @@
 //     TreeMembershipMiddleware, which runs inside the subrouter before
 //     chi's method dispatch;
 //   - malformed node UUID → 400 INVALID_NODE_ID from parseNodeID.
+//
+// ch:trace row=DF-HERMES-CANOPY-95 spec=docs/API.md#response-envelopes-per-route wave=hermes-canopy-foreman-2026-10-21-06-04-00#DF-HERMES-CANOPY-95 test=internal/server/tree_nodes_error_envelope_test.go::TestTreeNodeErrorLadderIsEnvelopedOnProductionRouter doc=docs/API.md prompt=/tmp/hermes-canopy-foreman-2026-10-21-06-04-00-DF-HERMES-CANOPY-95-brief.txt evidence=internal/server/tree_nodes_error_envelope_test.go witness=none:in-process-httptest-no-persistent-live-surface verdict=none:judge-verdict-lives-on-board-row-DF-HERMES-CANOPY-95 commit=f16fa535e85718ad9c5b9dc74715a36a0bf5a6b5 memory=none:duckbrain-write-not-verified-this-tick
+
 package server
 
 import (
