@@ -186,7 +186,7 @@ function Layout() {
         <TopicsRail />
 
         <div className="p-4 border-t border-line-subtle">
-          <p className="text-xs text-content-faint">Hermes Canopy v0.1.0</p>
+          <p className="text-xs text-content-faint">Hermes Canopy v0.2.0</p>
         </div>
       </aside>
 

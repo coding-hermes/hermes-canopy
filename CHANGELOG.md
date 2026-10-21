@@ -1,5 +1,75 @@
 # Changelog
 
+## [v0.2.0] - 2026-10-21
+
+Range: `v0.1.0`..`v0.2.0` — 368 non-merge commits (22 `feat`, 56 `fix`,
+33 `docs`, 15 `test`, 6 `chore`, plus 195 board and dogfood/qa/gitreins
+bookkeeping). No `BREAKING CHANGE` footer and no `!` type token in the range;
+semver minor.
+
+### Added
+
+- **Iteration cards (SPEC-PL-04)** — engine core (`d7f68c90`), HTTP/SSE surface
+  (`d9329ad6`), live side panel exposing progress and agent activity
+  (`e28e6e58`), §8.3 progress model with header aggregation (`2500594d`,
+  `3a84f02e`) and the §8.3 frontend ProgressHeader + IterationPluginRenderer
+  (`eec5217f`), plus interrupt-safe crash recovery (`0a4f451b`).
+- **Cards (SPEC-PL-03)** — renderer dispatch and the card-action invoke path
+  (`515777eb`), lifecycle state machine with `If-Match` optimistic concurrency
+  (`1f5f3d41`), §6.4 graph attachment via `#card` references (`ee6bb0a2`), and
+  node picker / lifecycle controls on the Cards page (`b6e52aff`).
+- **Calendar phase one** — event store wired in-process (`2e049dc0`); no HTTP
+  surface yet by design.
+- **FTR-06 release and update channel** — tag-triggered release workflow
+  cross-building five targets with checksums (`9040c059`), signed updater
+  (`ce30fb8d`), release packaging with a signed manifest and the
+  `cmd/release-tool` packager (`c40d7b14`), and stable manifest publication at a
+  well-known URL (`1db1cdec`, validated by `1f86a0ce`).
+- **Single-binary SPA** — the built UI is embedded and served by `canopyd`
+  (`b2669538`).
+- **Build identity** — `canopyd` stamps and serves its own version, commit and
+  build time through `-version`, `GET /version` and `GET /health` (`3c5bb29c`).
+- **Context compiler (GAP-080)** — multi-reference audit with invalidation
+  (`b3b601c5`), budget-dropped node summaries (`d42b4d40`), and the retrieved
+  tier rendered in the run indicator (`939216ed`); multi-reference composer
+  selection flow (`a2127b73`).
+- **Gateway** — run output persisted as a reply node on the source node
+  (`e41dcd21`).
+
+### Fixed
+
+- **Security defaults** — viewer read-only permission enforced on shared trees
+  with the RED sabotage removed (`3ec76422`, `a831e83d`), hardcoded CORS wildcard
+  dropped from the SSE handlers (`bf84f40c`), workspace scope required and the
+  client-supplied `sender_id` no longer trusted (`f18c0182`), and three insecure
+  defaults hardened (`da92d72a`).
+- `NodeAccessMiddleware` mounted on the flat `/nodes` surface (`6c9a2188`) and
+  the flat node error contract normalised (`fba87e31`).
+- Tree `member_count` returns the real value instead of a hardcoded 1
+  (`334c5a6e`); the Share dialog sends `user_id` as a UUID so an invite completes
+  on a fresh instance (`a4f5c69e`); `pagination.total` stays in sync with the
+  tree list on create/delete (`67946293`).
+- MLS: atomic group creation with creator-profile validation (`4c8d61f0`) and
+  tampered ciphertext mapped to `400 DECRYPT_FAILED` (`18569ab0`).
+- Deploy: compose readiness gate + port wiring (`a05333c6`), version/commit/build
+  time stamped in the Docker build (`93539949`), and the staleness threshold
+  tightened from 24h to 12h so the live binary cannot lag HEAD for a full day
+  (`160d2cbb`).
+- Config fails fast on malformed numeric `CANOPY_*` values (`0e9214be`); session
+  browse guides users to populate `~/.hermes/state-backups` when it is missing
+  (`820c4455`).
+- Gateway stream termination treated as terminal truth in both the API and the UI
+  (`c69c1e9a`, `32f8fb79`, `cda13edc`); per-instance gateway run registry default
+  (`7118ae6c`).
+
+### Notes
+
+- Gates at the tag point: `go build ./...` and `go vet ./...` exit 0;
+  `go test -short -count=1 ./...` all packages `ok` (37 packages with tests, 0
+  failures).
+- The deployed `/home/kara/bin/canopyd` is NOT part of this cut; redeploying it is
+  a separate step.
+
 ## [v0.1.0] - 2026-09-21
 
 ### App Card stream — client half (SPEC-PL-03 §5, §5.3, §6.1, §9)
