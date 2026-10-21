@@ -415,6 +415,18 @@ func newRouter(deps *routeDeps) *chi.Mux {
 			WithReferences(referenceSvc, sseHub)
 		treeNodes := chi.NewRouter()
 		treeNodes.Use(membershipMW)
+		// The subrouter's own MethodNotAllowed wrapper keeps the mux-level
+		// 405 inside the documented error envelope, mirroring the flat mount
+		// (DF-HERMES-CANOPY-92). Without it chi answered an unsupported
+		// method on a valid tree-scoped node path with an EMPTY body and no
+		// Content-Type (DF-HERMES-CANOPY-95). The Allow list is the
+		// tree-scoped surface's full method set (TreeRoutes — it also serves
+		// GET, unlike the flat mount): see
+		// handler.TreeNodeMethodNotAllowed. NotFound needs no equivalent
+		// here: chi propagates the root router's enveloped NotFoundHandler
+		// down at Mount time, so unknown subpaths already answer
+		// ROUTE_NOT_FOUND.
+		treeNodes.MethodNotAllowed(handler.TreeNodeMethodNotAllowed)
 		treeNodes.Mount("/", nodeHandler.TreeRoutes())
 		r.Mount("/trees/{tree_id}/nodes", treeNodes)
 
