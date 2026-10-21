@@ -133,6 +133,23 @@ func NotFoundHandler(w http.ResponseWriter, _ *http.Request) {
 	writeError(w, http.StatusNotFound, "ROUTE_NOT_FOUND", "route not found")
 }
 
+// FlatNodeMethodNotAllowed answers the flat /nodes mount's method-mismatch
+// (405) with the documented error envelope (docs/API.md — every error body is
+// {"error":{"code","message"}}) plus the RFC 9110 §15.5.5 Allow header. It
+// replaces chi's default 405 responder, which writes an EMPTY body with no
+// Content-Type (DF-HERMES-CANOPY-92).
+//
+// The Allow list is the flat surface's full method set — PATCH/DELETE on
+// /{node_id} and POST on /{node_id}/reply and /{node_id}/fork (FlatRoutes,
+// SPEC-API-03 §6) — stated statically rather than derived from the request:
+// chi records the allowed methods only when a route node actually matched,
+// and a wrong-method probe of an unknown subpath (e.g. GET /{uuid}/nope)
+// matches no node at all, which would yield an empty Allow header.
+func FlatNodeMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Allow", "PATCH, DELETE, POST")
+	writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+}
+
 // --- URL parameter helpers --------------------------------------------------
 
 // parseTreeID reads and validates the {tree_id} chi URL parameter.

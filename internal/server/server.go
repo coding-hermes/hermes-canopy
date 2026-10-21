@@ -426,6 +426,16 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// previously allowed any viewer to PATCH/DELETE/reply/fork any node.
 		flatNodes := chi.NewRouter()
 		flatNodes.Use(handler.NodeAccessMiddleware(nodeSvc, membersRepo))
+		// The subrouter's own MethodNotAllowed wrapper keeps the mux-level
+		// 405 inside the documented error envelope (docs/API.md — every
+		// error is {"error":{"code","message"}}). The bare /nodes surface
+		// accepts only PATCH/DELETE/POST (update, soft-delete, reply, fork
+		// — SPEC-API-03 §6), so GET /api/v1/nodes/{uuid} used to leak
+		// chi's empty-bodied 405 with no Content-Type
+		// (DF-HERMES-CANOPY-92). NotFound needs no equivalent here: chi
+		// propagates the root router's enveloped NotFoundHandler down at
+		// Mount time, so unknown subpaths already answer ROUTE_NOT_FOUND.
+		flatNodes.MethodNotAllowed(handler.FlatNodeMethodNotAllowed)
 		flatNodes.Mount("/", nodeHandler.FlatRoutes())
 		r.Mount("/nodes", flatNodes)
 
