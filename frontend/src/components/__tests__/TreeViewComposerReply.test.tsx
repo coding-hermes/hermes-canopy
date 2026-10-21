@@ -16,6 +16,8 @@
  * SSE provider or a browser canvas to exist at all. Everything the row
  * touches — selection wiring, composer chip, POST body, header counts,
  * replica merge — is real.
+ *
+ * ch:trace row=DF-HERMES-CANOPY-93 spec=README.md#quick-start wave=hermes-canopy-foreman-2026-10-21-06-04-00#DF-HERMES-CANOPY-93 test=frontend/src/components/__tests__/TreeViewComposerReply.test.tsx::selection+Send+POSTs+parent_id=selected+node+id doc=README.md prompt=/tmp/hermes-canopy-foreman-2026-10-21-06-04-00-DF-HERMES-CANOPY-93-brief.txt evidence=frontend/src/components/__tests__/TreeViewComposerReply.test.tsx witness=none:component-harness-stubs-fetch-no-live-browser-this-tick verdict=none:judge-verdict-lives-on-board-row-DF-HERMES-CANOPY-93 commit=b8b422ed1199cde6b65df009735aa78954f483b1 memory=none:duckbrain-write-not-verified-this-tick
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
