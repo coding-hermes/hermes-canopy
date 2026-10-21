@@ -52,15 +52,18 @@ type MLSPendingProposalRepo interface {
 
 // MLSGroup mirrors internal/mls.MLSGroup for the data layer.
 type MLSGroup struct {
-	ID             []byte    `db:"group_id"`
-	WorkspaceID    uuid.UUID `db:"workspace_id"`
-	CipherSuite    string    `db:"cipher_suite"`
-	Epoch          uint64    `db:"epoch"`
-	TreeHash       []byte    `db:"tree_hash_bytes"`
-	EncryptedState []byte    `db:"encrypted_state"`
-	GroupSecret    []byte    `db:"group_secret"`
-	CreatedAt      time.Time `db:"created_at"`
-	UpdatedAt      time.Time `db:"updated_at"`
+	ID               []byte    `db:"group_id"`
+	WorkspaceID      uuid.UUID `db:"workspace_id"`
+	CipherSuite      string    `db:"cipher_suite"`
+	Epoch            uint64    `db:"epoch"`
+	TreeHash         []byte    `db:"tree_hash_bytes"`
+	EncryptedState   []byte    `db:"encrypted_state"`
+	GroupSecret      []byte    `db:"group_secret"`
+	// CreatorProfileID is the profile that created the group (leaf 0 of
+	// mls_group_members). Nullable: groups created before 000049 have NULL.
+	CreatorProfileID *uuid.UUID `db:"creator_profile_id"`
+	CreatedAt        time.Time  `db:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at"`
 }
 
 // MLSGroupMember mirrors internal/mls.MLSGroupMember for the data layer.
@@ -139,9 +142,9 @@ func createMLSGroup(ctx context.Context, q mlsQueryer, group *MLSGroup) error {
 	}
 
 	_, err := q.Exec(ctx,
-		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.GroupSecret, group.CreatedAt, group.UpdatedAt)
+		`INSERT INTO mls_groups (group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, creator_profile_id, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		group.ID, group.WorkspaceID, group.CipherSuite, group.Epoch, group.TreeHash, stateJSON, group.GroupSecret, group.CreatorProfileID, group.CreatedAt, group.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("mls_group: create: %w", err)
 	}
@@ -152,9 +155,9 @@ func (r *PGMLSGroupRepo) GetByWorkspace(ctx context.Context, workspaceID uuid.UU
 	var stateJSON []byte
 	g := &MLSGroup{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, created_at, updated_at
+		`SELECT group_id, workspace_id, cipher_suite, epoch, tree_hash_bytes, encrypted_state, group_secret, creator_profile_id, created_at, updated_at
 		 FROM mls_groups WHERE workspace_id = $1`, workspaceID).
-		Scan(&g.ID, &g.WorkspaceID, &g.CipherSuite, &g.Epoch, &g.TreeHash, &stateJSON, &g.GroupSecret, &g.CreatedAt, &g.UpdatedAt)
+		Scan(&g.ID, &g.WorkspaceID, &g.CipherSuite, &g.Epoch, &g.TreeHash, &stateJSON, &g.GroupSecret, &g.CreatorProfileID, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("mls_group: %w", ErrNotFound)

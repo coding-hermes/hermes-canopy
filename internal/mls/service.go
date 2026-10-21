@@ -67,14 +67,15 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 		return nil, err
 	}
 	group := &db.MLSGroup{
-		ID:          groupID,
-		WorkspaceID: workspaceID,
-		CipherSuite: "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
-		Epoch:       0,
-		TreeHash:    groupID,
-		GroupSecret: groupSecret,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:               groupID,
+		WorkspaceID:      workspaceID,
+		CipherSuite:      "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+		Epoch:            0,
+		TreeHash:         groupID,
+		GroupSecret:      groupSecret,
+		CreatorProfileID: &creatorProfileID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	// Derive distinct encryption and signing keys from the admin identity
@@ -100,13 +101,14 @@ func (s *MLSServiceImpl) CreateGroup(ctx context.Context, workspaceID, creatorPr
 	}
 
 	return &MLSGroup{
-		ID:          groupID,
-		WorkspaceID: workspaceID,
-		CipherSuite: group.CipherSuite,
-		Epoch:       0,
-		TreeHash:    groupID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:               groupID,
+		WorkspaceID:      workspaceID,
+		CipherSuite:      group.CipherSuite,
+		Epoch:            0,
+		TreeHash:         groupID,
+		CreatorProfileID: &creatorProfileID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}, nil
 }
 
@@ -438,13 +440,14 @@ func (s *MLSServiceImpl) GetGroupState(ctx context.Context, workspaceID uuid.UUI
 
 	return &MLSGroupState{
 		Group: MLSGroup{
-			ID:          grp.ID,
-			WorkspaceID: grp.WorkspaceID,
-			CipherSuite: grp.CipherSuite,
-			Epoch:       grp.Epoch,
-			TreeHash:    grp.TreeHash,
-			CreatedAt:   grp.CreatedAt,
-			UpdatedAt:   grp.UpdatedAt,
+			ID:               grp.ID,
+			WorkspaceID:      grp.WorkspaceID,
+			CipherSuite:      grp.CipherSuite,
+			Epoch:            grp.Epoch,
+			TreeHash:         grp.TreeHash,
+			CreatorProfileID: grp.CreatorProfileID,
+			CreatedAt:        grp.CreatedAt,
+			UpdatedAt:        grp.UpdatedAt,
 		},
 		Members: domainMembers,
 	}, nil

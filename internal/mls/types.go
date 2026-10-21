@@ -36,6 +36,10 @@ type MLSGroup struct {
 	TreeHash    []byte    `json:"tree_hash"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// CreatorProfileID is the Canopy profiles.id used as creator_profile_id
+	// at group creation (also seeded as member leaf 0). Nil for pre-000049
+	// groups created before the column was recorded.
+	CreatorProfileID *uuid.UUID `json:"creator_profile_id"`
 }
 
 // MLSGroupState contains encrypted state required to resume an MLS group.

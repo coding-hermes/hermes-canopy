@@ -109,7 +109,7 @@ func TestMLSGroup_JSONTags(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	expectedFields := []string{"id", "workspace_id", "cipher_suite", "epoch", "tree_hash", "created_at", "updated_at"}
+	expectedFields := []string{"id", "workspace_id", "cipher_suite", "epoch", "tree_hash", "created_at", "updated_at", "creator_profile_id"}
 	for _, f := range expectedFields {
 		if _, exists := raw[f]; !exists {
 			t.Errorf("MLSGroup missing JSON field %q", f)
@@ -119,7 +119,7 @@ func TestMLSGroup_JSONTags(t *testing.T) {
 	// Verify no Go-exported names leak
 	for key := range raw {
 		switch key {
-		case "id", "workspace_id", "cipher_suite", "epoch", "tree_hash", "created_at", "updated_at":
+		case "id", "workspace_id", "cipher_suite", "epoch", "tree_hash", "created_at", "updated_at", "creator_profile_id":
 			// ok
 		default:
 			t.Errorf("unexpected JSON key %q", key)
