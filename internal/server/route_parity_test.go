@@ -746,7 +746,6 @@ func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 		"PATCH /api/v1/trees/{}/members/{}",
 		"DELETE /api/v1/trees/{}/members/{}",
 		"GET /api/v1/profiles",
-		"POST /api/v1/profiles",
 		"PATCH /api/v1/profiles/{}",
 		"PATCH /api/v1/trees/{}/profiles/{}/visibility",
 	}

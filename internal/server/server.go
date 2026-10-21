@@ -465,6 +465,11 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Mount("/workspaces/{workspace_id}/profiles",
 			handler.NewProfileHandler(profileRouter).Routes()) // ProfileRouter passed via main.go wiring
 
+		// Unscoped profile creation (SPEC-API-06 §12.2). Returns a profile id
+		// usable as creator_profile_id for MLS create-group (SPEC-FTR-03).
+		r.Mount("/profiles",
+			handler.NewProfileHandler(profileRouter).WithProfileRepo(db.NewPGProfileRepo(dbPool)).UnscopedRoutes())
+
 		// Topic endpoints (BE-14 — real CRUD). Spec: SPEC-TM-01, SPEC-TM-03, SPEC-TM-05.
 		r.Mount("/topics", handler.NewTopicHandler(topicSvc).Routes())
 
