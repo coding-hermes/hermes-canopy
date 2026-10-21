@@ -47,7 +47,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { Send, Paperclip, Pin, X, AtSign, Hash, Smile, Sparkles } from 'lucide-react';
+import { Send, Paperclip, Pin, X, AtSign, Hash, Smile, Sparkles, CornerDownRight } from 'lucide-react';
 import { token, palette, alpha, nodeTypeColor } from '../theme.ts';
 import { referenceSourceLabel, referenceStroke } from '../lib/multiReference.ts';
 import { countLabel } from '../lib/pluralize.ts';
@@ -56,6 +56,21 @@ import {
   describeSendError,
   insertAtCursor,
 } from '../lib/composer.ts';
+
+// ─── Reply target chip ─────────────────────────────────────────────────
+
+/** Where Send files the message (DF-HERMES-CANOPY-93). */
+export interface ComposerReplyTarget {
+  /** The node id that will travel as `parent_id`. */
+  id: string;
+  /** Short label shown in the chip (node label or a truncated id). */
+  label: string;
+  /**
+   * True when the target was armed explicitly (UI-04 ghost slot) rather
+   * than being the plain canvas selection.
+   */
+  ghost?: boolean;
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -95,6 +110,12 @@ export interface MessageComposerProps {
    * capability is discoverable — disabled, with the reason as its title.
    */
   runWithContextDisabled?: boolean;
+  /**
+   * DF-HERMES-CANOPY-93: where Send will file the message, rendered as a
+   * visible chip above the input. Absent/null means "no target — Send
+   * creates a new root". Optional and additive.
+   */
+  replyTarget?: ComposerReplyTarget | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -400,6 +421,7 @@ export default function MessageComposer({
   placeholder = DEFAULT_PLACEHOLDER,
   onRunWithContext,
   runWithContextDisabled = false,
+  replyTarget = null,
 }: MessageComposerProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -710,6 +732,30 @@ export default function MessageComposer({
           </div>
         )}
 
+        {/* ── Reply target (DF-HERMES-CANOPY-93) ───────────────────── */}
+        {replyTarget && (
+          <div
+            className="flex items-center gap-1.5 px-3 pt-2.5"
+            data-testid="composer-reply-target"
+            title={`This message will be filed as a reply to ${replyTarget.label} (${replyTarget.id})`}
+          >
+            <CornerDownRight className="w-3.5 h-3.5 flex-shrink-0 text-accent-2" aria-hidden="true" />
+            <span className="text-xs text-content-muted">
+              {replyTarget.ghost ? 'Replying to' : 'Replying to selected'}
+            </span>
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border max-w-[240px]"
+              style={{
+                backgroundColor: alpha(palette.accent2, 0.1),
+                borderColor: alpha(palette.accent2, 0.27),
+                color: token.accent2,
+              }}
+            >
+              <span className="truncate">{replyTarget.label}</span>
+            </span>
+          </div>
+        )}
+
         {/* ── File previews ────────────────────────────────────────── */}
         {files.length > 0 && (
           <div className="flex items-center gap-2 px-3 pt-2.5 flex-wrap">
@@ -870,13 +916,23 @@ export default function MessageComposer({
               className="ml-1 flex items-center gap-1.5 pl-3 pr-2 h-8 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
               style={sendStyle}
               title={
-                canSend ? 'Send message (⌘↵)' : 'Type a message to send'
+                replyTarget
+                  ? `Send reply to ${replyTarget.label} (⌘↵)`
+                  : canSend
+                    ? 'Send message (⌘↵)'
+                    : 'Type a message to send'
               }
               aria-label="Send message"
               aria-keyshortcuts="Meta+Enter Control+Enter"
             >
               <Send className="w-4 h-4" aria-hidden="true" />
-              <span>{isSending ? 'Sending' : 'Send'}</span>
+              <span data-testid="composer-send-label">
+                {isSending
+                  ? 'Sending'
+                  : replyTarget
+                    ? 'Send reply'
+                    : 'Send'}
+              </span>
               <kbd
                 aria-hidden="true"
                 className="px-1 py-0.5 rounded-xs text-[10px] font-mono leading-none"
