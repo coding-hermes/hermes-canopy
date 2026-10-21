@@ -164,7 +164,7 @@ func TestGAP071SetActiveProfileValidationUnchanged(t *testing.T) {
 // WORKSPACE_NOT_FOUND instead of the decode-path 400 — the INVALID_BODY code
 // in those arms is itself proof the decode path ran.
 //
-// ch:trace row=DF-HERMES-CANOPY-94 spec=docs/API.md#profiles-POST wave=none:serial test=internal/handler/profile_handler_workspace_test.go::TestDF94ProfileBodyErrorMessages doc=none:no-doc-change prompt=/tmp/hermes-canopy-DF-HERMES-CANOPY-94-brief.txt evidence=internal/handler/profile_handler_workspace_test.go witness=none:local-pg-integration verdict=none:pending-judge commit=none:pending-foreman-trace memory=none:not-written
+// ch:trace row=DF-HERMES-CANOPY-94 spec=docs/API.md#profiles-POST wave=none:serial test=internal/handler/profile_handler_workspace_test.go::TestDF94ProfileBodyErrorMessages doc=none:no-doc-change prompt=/tmp/hermes-canopy-DF-HERMES-CANOPY-94-brief.txt evidence=internal/handler/profile_handler_workspace_test.go witness=none:local-pg-integration verdict=none:pending-judge commit=2b2bc573 memory=none:not-written
 func TestDF94ProfileBodyErrorMessages(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.NewSharedIntegrationPool(t)
