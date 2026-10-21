@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -66,7 +67,7 @@ func (h *ProfileHandler) SetActiveProfile(w http.ResponseWriter, r *http.Request
 		ModelPreference string `json:"model_preference,omitempty"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", invalidBodyMessage(err))
 		return
 	}
 
@@ -135,6 +136,22 @@ func profileMappingResponseFrom(mapping hermes.ProfileMapping) profileMappingRes
 		MappedAt:        mapping.MappedAt.Format(time.RFC3339Nano),
 		LastUsedAt:      mapping.LastUsedAt.Format(time.RFC3339Nano),
 	}
+}
+
+// invalidBodyMessage converts a decodeJSON error into a client-facing
+// INVALID_BODY message. Unknown-field errors name the offending field
+// (the AC: "clear 'unknown field X' error, not 'must be valid JSON'");
+// malformed JSON keeps the generic validity message.
+func invalidBodyMessage(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "unknown field") {
+		return "request body contains an " + strings.TrimPrefix(msg, "json: ")
+	}
+	var ute *json.UnmarshalTypeError
+	if errors.As(err, &ute) {
+		return "request body has an invalid value for field " + ute.Field
+	}
+	return "request body must be valid JSON"
 }
 
 func (h *ProfileHandler) writeRouterError(w http.ResponseWriter, r *http.Request, workspaceID uuid.UUID, err error, operation string) {
