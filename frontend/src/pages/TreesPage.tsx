@@ -550,6 +550,7 @@ export default function TreesPage() {
     try {
       await apiDelete(`/trees/${deleteTarget.id}`);
       setTrees((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      setPagination((prev) => prev ? { ...prev, total: Math.max(0, prev.total - 1) } : prev);
       setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete tree');
@@ -559,6 +560,7 @@ export default function TreesPage() {
 
   const handleCreated = (tree: TreeDetail) => {
     setTrees((prev) => [tree, ...prev]);
+    setPagination((prev) => prev ? { ...prev, total: prev.total + 1 } : prev);
     setShowCreate(false);
   };
 
