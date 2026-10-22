@@ -74,8 +74,13 @@ mkrepo() {
 	# it is tracked here too: the checker's own alert file must not be what
 	# makes a scenario's worktree dirty, or a clean-tree scenario could never
 	# reach the deploy gate.
-	mkdir -p "$repo/.coding-hermes/board"
+	mkdir -p "$repo/.coding-hermes/board" "$repo/.gitreins" "$repo/.vfs/graph"
 	: >"$repo/.coding-hermes/board/events.jsonl"
+	# DEPLOY-STALE-2: gitreins' task ledger and the hilo symbols cache are
+	# tracked bookkeeping in production too, and both are rewritten by the same
+	# hourly tooling — seed them as tracked so the exclusion is exercised.
+	: >"$repo/.gitreins/tasks.yaml"
+	printf '{"schema":1}\n' >"$repo/.vfs/graph/.symbols_cache.json"
 	git -C "$repo" add -A
 	git -C "$repo" commit -q -m init
 }
@@ -340,6 +345,68 @@ run_case "ledger-only dirt print names the ignored ledger path" 0 \
 	CANOPYD_DEPLOY_CMD="touch $ART/ledger-note-canopyd" \
 	CANOPYD_DEPLOY_DIR="$WORK" \
 	EVIDENCE="only in .coding-hermes/board/events.jsonl" -- --deploy
+
+# ── DEPLOY-STALE-2: the other tracked hourly bookkeeping is not deploy dirt ─
+# gitreins rewrites .gitreins/tasks.yaml on every task lifecycle and the hilo
+# graph refreshes .vfs/graph/.symbols_cache.json; both are TRACKED, so a live
+# hourly run is routinely dirty in them. Same rule: those paths only.
+
+# e. dirty ONLY in the gitreins task ledger -> deploy IS invoked, reaches CURRENT
+REPO="$WORK/gitreins-dirty"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/gitreins-canopyd"
+make_stale "$ART/gitreins-canopyd"
+printf -- '- id: T-1\n  status: complete\n' >>"$REPO/.gitreins/tasks.yaml"
+run_case "gitreins-ledger-only dirt + --deploy still deploys (rc 0)" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/gitreins-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/gitreins-canopyd && touch $WORK/gitreins-invoked" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="CURRENT .gitreins/tasks.yaml" -- --deploy
+[[ -f "$WORK/gitreins-invoked" ]] \
+	&& ok "deploy invoked despite gitreins-ledger-only dirt" \
+	|| bad "gitreins ledger still suppressed the deploy" ""
+
+# f. dirty ONLY in the hilo symbols cache -> deploy IS invoked
+REPO="$WORK/symbols-dirty"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/symbols-canopyd"
+make_stale "$ART/symbols-canopyd"
+printf '{"schema":1,"contributes":7}\n' >"$REPO/.vfs/graph/.symbols_cache.json"
+run_case "symbols-cache-only dirt + --deploy still deploys (rc 0)" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/symbols-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/symbols-canopyd && touch $WORK/symbols-invoked" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="CURRENT .vfs/graph/.symbols_cache.json" -- --deploy
+[[ -f "$WORK/symbols-invoked" ]] \
+	&& ok "deploy invoked despite symbols-cache-only dirt" \
+	|| bad "symbols cache still suppressed the deploy" ""
+
+# g. bookkeeping dirt PLUS a real source change -> still STALE_BLOCKED (the
+#    exclusion must not have widened into a general "ignore my own dirs" rule)
+REPO="$WORK/bookkeeping-plus-source"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/bk-source-canopyd"
+make_stale "$ART/bk-source-canopyd"
+printf -- '- id: T-2\n' >>"$REPO/.gitreins/tasks.yaml"
+printf '{"schema":1,"contributes":9}\n' >"$REPO/.vfs/graph/.symbols_cache.json"
+echo "half-written worker code" >"$REPO/internal/x/wip.go"
+run_case "all bookkeeping dirt + a tracked source change still blocks (rc 2)" 2 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/bk-source-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/bk-source-canopyd && touch $WORK/bk-invoked" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="STALE_BLOCKED" -- --deploy
+[[ -f "$WORK/bk-invoked" ]] \
+	&& bad "source dirt still triggered a deploy" "" \
+	|| ok "deploy NOT invoked when a tracked source file is dirty too"
 
 # b. ledger dirt PLUS a tracked source change -> still STALE_BLOCKED, rc 2
 REPO="$WORK/ledger-plus-source"

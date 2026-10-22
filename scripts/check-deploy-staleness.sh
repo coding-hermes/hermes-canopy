@@ -550,12 +550,23 @@ if [[ "$MODE" != "deploy" ]]; then
 fi
 
 # ── Safety gate: never auto-deploy a tracked-dirty worktree ─────────────────
-# The checker itself appends board alerts to .coding-hermes/board/events.jsonl
-# (a git-TRACKED ledger of non-deployable bookkeeping), so the raw porcelain
-# status is always dirty on an hourly timer run and the gate would deadlock
-# against its own writes (stale_blocked_streak=45 observed). Ignore ONLY that
-# ledger path; every other tracked/untracked change still blocks. DEPLOY-STALE-1.
-STATUS_PORCELAIN="$(git -C "$REPO_ROOT" status --porcelain -- . ':(exclude).coding-hermes/board/events.jsonl' 2>/dev/null)"
+# The tooling that runs every hour leaves GIT-TRACKED bookkeeping dirty: this
+# checker appends board alerts, gitreins rewrites its task ledger, and the hilo
+# graph refreshes a symbols cache. Because those files are tracked, the raw
+# porcelain status is always dirty on an hourly run and the gate deadlocks
+# against its own side-writes (stale_blocked_streak=45 observed, DEPLOY-STALE-1).
+# Ignore ONLY these three bookkeeping paths — they are never deployable content;
+# every other tracked/untracked change still blocks (DEPLOY-STALE-2).
+IGNORED_DEPLOY_BOOKKEEPING=(
+	".coding-hermes/board/events.jsonl"
+	".gitreins/tasks.yaml"
+	".vfs/graph/.symbols_cache.json"
+)
+GATE_EXCLUDES=()
+for ignored_path in "${IGNORED_DEPLOY_BOOKKEEPING[@]}"; do
+	GATE_EXCLUDES+=(":(exclude)$ignored_path")
+done
+STATUS_PORCELAIN="$(git -C "$REPO_ROOT" status --porcelain -- . "${GATE_EXCLUDES[@]}" 2>/dev/null)"
 if [[ -n "$STATUS_PORCELAIN" ]]; then
 	echo "STALE_BLOCKED: worktree has tracked/untracked changes; refusing to auto-deploy" >&2
 	echo "STALE_BLOCKED: commit or stash, then re-run $0 --deploy" >&2
@@ -566,10 +577,11 @@ if [[ -n "$STATUS_PORCELAIN" ]]; then
 	# below is unchanged (still EXIT_STALE_BLOCKED).
 	check_stale_blocked "STALE_BLOCKED" "$LAG"
 	exit "$EXIT_STALE_BLOCKED"
-elif [[ -n "$(git -C "$REPO_ROOT" status --porcelain -- .coding-hermes/board/events.jsonl 2>/dev/null)" ]]; then
-	# The excluded ledger was the only dirt: say so, so an operator can tell
+elif [[ -n "$(git -C "$REPO_ROOT" status --porcelain -- "${IGNORED_DEPLOY_BOOKKEEPING[@]}" 2>/dev/null)" ]]; then
+	# Only ignored bookkeeping was dirty: name it, so an operator can tell
 	# "clean except bookkeeping" from a genuinely clean tree.
-	echo "NOTE: worktree dirty only in .coding-hermes/board/events.jsonl (checker's own board ledger, ignored for deploy safety — DEPLOY-STALE-1)"
+	DIRTY_BOOKKEEPING="$(git -C "$REPO_ROOT" status --porcelain -- "${IGNORED_DEPLOY_BOOKKEEPING[@]}" 2>/dev/null | awk '{print $2}' | paste -sd, -)"
+	echo "NOTE: worktree dirty only in ${DIRTY_BOOKKEEPING} (deploy-irrelevant bookkeeping, ignored for deploy safety — DEPLOY-STALE-1/DEPLOY-STALE-2)"
 fi
 
 # ── Deploy via the existing atomic path ─────────────────────────────────────
