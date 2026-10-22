@@ -550,7 +550,13 @@ if [[ "$MODE" != "deploy" ]]; then
 fi
 
 # ── Safety gate: never auto-deploy a tracked-dirty worktree ─────────────────
-if [[ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]]; then
+# The checker itself appends board alerts to .coding-hermes/board/events.jsonl
+# (a git-TRACKED ledger of non-deployable bookkeeping), so the raw porcelain
+# status is always dirty on an hourly timer run and the gate would deadlock
+# against its own writes (stale_blocked_streak=45 observed). Ignore ONLY that
+# ledger path; every other tracked/untracked change still blocks. DEPLOY-STALE-1.
+STATUS_PORCELAIN="$(git -C "$REPO_ROOT" status --porcelain -- . ':(exclude).coding-hermes/board/events.jsonl' 2>/dev/null)"
+if [[ -n "$STATUS_PORCELAIN" ]]; then
 	echo "STALE_BLOCKED: worktree has tracked/untracked changes; refusing to auto-deploy" >&2
 	echo "STALE_BLOCKED: commit or stash, then re-run $0 --deploy" >&2
 	echo "STALE_BLOCKED: deploy command NOT invoked" >&2
@@ -560,6 +566,10 @@ if [[ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]]; then
 	# below is unchanged (still EXIT_STALE_BLOCKED).
 	check_stale_blocked "STALE_BLOCKED" "$LAG"
 	exit "$EXIT_STALE_BLOCKED"
+elif [[ -n "$(git -C "$REPO_ROOT" status --porcelain -- .coding-hermes/board/events.jsonl 2>/dev/null)" ]]; then
+	# The excluded ledger was the only dirt: say so, so an operator can tell
+	# "clean except bookkeeping" from a genuinely clean tree.
+	echo "NOTE: worktree dirty only in .coding-hermes/board/events.jsonl (checker's own board ledger, ignored for deploy safety — DEPLOY-STALE-1)"
 fi
 
 # ── Deploy via the existing atomic path ─────────────────────────────────────
