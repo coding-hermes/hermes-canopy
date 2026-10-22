@@ -1245,6 +1245,20 @@ CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
 > `card export` is the other exception: it reads the local per-type card stores
 > directly (`CANOPY_CARD_DATA_DIR`, default `~/.hermes/canopy/cards`) and never
 > touches the API or PostgreSQL — see [docs/CARD_EXPORT.md](docs/CARD_EXPORT.md).
+>
+> `db export-sqlite` is the last exception: it runs in-process against
+> PostgreSQL (reads `DB_*` / `CANOPY_DB_URL` directly, never the API) and copies
+> the core graph tables (`users`, `trees`, `nodes`, `edges`) into a **new**
+> SQLite file:
+>
+> ```bash
+> DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=canopy DB_PASSWORD=… DB_NAME=canopy \
+>   ./bin/canopyd db export-sqlite --sqlite-path /srv/canopy/canopy.sqlite
+> ```
+>
+> The exporter refuses a destination that already contains data instead of
+> merging or overwriting it — see [docs/SQLITE-RUNTIME.md](docs/SQLITE-RUNTIME.md)
+> for verification details and exit codes.
 
 ### Hermes session source (GAP-077)
 
