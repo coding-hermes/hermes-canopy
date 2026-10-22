@@ -957,11 +957,12 @@ cd frontend && npm run test:integration
 
 ### 8.1 Deployed-binary staleness check (GAP-067)
 
-The deployed artifact (`/home/kara/bin/canopyd`) can silently lag repo HEAD.
-That absolute path is load-bearing: it is the `ExecStart=` path of the systemd
+The deployed artifact (`$HOME/bin/canopyd`) can silently lag repo HEAD.
+That path is load-bearing: it is the `ExecStart=` path of the systemd
 unit (`deploy/systemd/canopy-canopyd.service`), which `scripts/deploy-canopyd.sh`
 syncs verbatim to `~/.config/systemd/user/canopy-canopyd.service`. It is correct
-only for the reference install — on other hosts set `CANOPYD_INSTALL_PATH` when
+for the reference install (a single-user deployment whose install root is that
+home directory) — on other hosts set `CANOPYD_INSTALL_PATH` when
 running `scripts/deploy-canopyd.sh` and edit the unit's `ExecStart=` to match;
 the deploy script installs the binary where `CANOPYD_INSTALL_PATH` points but
 never rewrites the unit's paths.
