@@ -168,7 +168,7 @@ repo rule, applying it is Bane-only; this doc proposes and does not apply.
 Measured on the working tree at commit `0397d6c8`, 2026-09-25.
 
     # LOC incl. and excl. tests (second number = excl. tests)
-    cd /home/kara/hermes-canopy
+    cd ~/hermes-canopy   # your hermes-canopy checkout
     for p in federation transport relay mls; do
       find internal/$p -name '*.go' | xargs wc -l | tail -1
       find internal/$p -name '*.go' ! -name '*_test.go' | xargs wc -l | tail -1

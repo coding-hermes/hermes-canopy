@@ -11,7 +11,7 @@ The source mockups are not copied into this repository. They remain available at
 - `/tmp/mockups/mockup-2.png`
 - `/tmp/mockups/mockup-3.png`
 - `/tmp/mockups/mockup-4.png`
-- `/home/kara/hermes-canopy/vision-brief.html` (the same images embedded as base64)
+- `vision-brief.html` at the repository root (the same images embedded as base64)
 
 ## Capture and comparison harness
 
@@ -38,7 +38,7 @@ Pair construction is browser-only: the mockup PNG is loaded into a Playwright pa
 ## Reproducible prerequisites and state
 
 1. Run the existing Canopy stack without restarting it: `canopyd` on `:8091`, PostgreSQL on `:5437`, and Vite on `:5173`.
-2. Run commands from `/home/kara/hermes-canopy/frontend`. The Vite proxy supplies the dev JWT automatically; no token should be hard-coded in the test.
+2. Run commands from the repository's `frontend/` directory (`<repo-root>/frontend`). The Vite proxy supplies the dev JWT automatically; no token should be hard-coded in the test.
 3. Keep `/tmp/mockups/mockup-{1..4}.png` and `vision-brief.html` available.
 4. The graph route reuses the same browser-side `__canopySeedDemoTree()` mechanism as `frontend/tests/tree-rendering.test.ts`; it seeds only an empty Yjs document.
 5. The `/nodes` and `/topics` captures select the first tree returned by the live backend tree selector, exactly like the existing CRUD integration test. They do not create fake nodes or topics. If no backend tree is available, the harness captures and documents the real empty state with a warning.
