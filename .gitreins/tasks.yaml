@@ -4118,3 +4118,13 @@ tasks:
     ch:trace marker bound to the implementation commit.
   status: in_progress
   created_at: '2026-10-21T22:10:48.078257+00:00'
+- id: DEPLOY-STALE-1
+  title: Deploy safety gate must ignore the checker's own board ledger (self-inflicted
+    STALE_BLOCKED)
+  criteria:
+  - bash scripts/test-check-deploy-staleness.sh exits 0 with 55+ scenarios, including
+    ledger-only-dirt deploys and tracked-dirt/untracked-dirt still refused; scripts/check-deploy-staleness.sh
+    gate excludes ONLY .coding-hermes/board/events.jsonl and never weakens to --untracked-files=no
+  status: complete
+  created_at: '2026-10-22T12:25:41.127464+00:00'
+  completed_at: '2026-10-22T12:28:34.126591+00:00'
