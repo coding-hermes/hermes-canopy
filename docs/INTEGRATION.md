@@ -633,7 +633,7 @@ provisions the dev user, the dev workspace
 ```
 INF dev JWT user provisioned user_id=00000000-0000-0000-0000-000000000001
 INF dev workspace + profile provisioned owner_id=00000000-0000-0000-0000-000000000001 profile_name=dev-hermes workspace_id=00000000-0000-0000-0000-000000000010
-INF file viewer storage ready file_root=/home/kara/.canopy/files
+INF file viewer storage ready file_root=$HOME/.canopy/files
 ```
 
 Without that provisioning every `/files` call below answers
@@ -958,6 +958,13 @@ cd frontend && npm run test:integration
 ### 8.1 Deployed-binary staleness check (GAP-067)
 
 The deployed artifact (`/home/kara/bin/canopyd`) can silently lag repo HEAD.
+That absolute path is load-bearing: it is the `ExecStart=` path of the systemd
+unit (`deploy/systemd/canopy-canopyd.service`), which `scripts/deploy-canopyd.sh`
+syncs verbatim to `~/.config/systemd/user/canopy-canopyd.service`. It is correct
+only for the reference install — on other hosts set `CANOPYD_INSTALL_PATH` when
+running `scripts/deploy-canopyd.sh` and edit the unit's `ExecStart=` to match;
+the deploy script installs the binary where `CANOPYD_INSTALL_PATH` points but
+never rewrites the unit's paths.
 Hermetic regression coverage lives in
 `scripts/test-check-deploy-staleness.sh` (synthetic git repo + fake deploy
 command; never touches the real service):
