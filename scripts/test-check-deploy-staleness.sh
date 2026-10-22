@@ -304,6 +304,81 @@ run_case "untracked-only dirt also blocks --deploy" 2 \
 	&& bad "untracked dirt still triggered deploy" "" \
 	|| ok "deploy NOT invoked on untracked-only dirt"
 
+# ── DEPLOY-STALE-1: the checker's own board ledger is not deploy dirt ───────
+# The gate ignores ONLY .coding-hermes/board/events.jsonl (self-appended by
+# append_stale_event; never deployable content). Everything else still blocks.
+
+# a. dirty ONLY in the excluded ledger -> deploy IS invoked, run reaches CURRENT
+REPO="$WORK/ledger-dirty"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/ledger-canopyd"
+make_stale "$ART/ledger-canopyd"
+echo '{"event_type":"deploy_stale_alert"}' >>"$REPO/.coding-hermes/board/events.jsonl"
+run_case "ledger-only dirt + --deploy still deploys to CURRENT (rc 0)" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/ledger-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/ledger-canopyd && touch $WORK/deploy-invoked" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="CURRENT" -- --deploy
+[[ -f "$WORK/deploy-invoked" ]] \
+	&& ok "deploy invoked despite ledger-only dirt" \
+	|| bad "ledger-only dirt still suppressed the deploy" ""
+
+# d. the ledger-only case names the ignored path in the output
+REPO="$WORK/ledger-note"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/ledger-note-canopyd"
+make_stale "$ART/ledger-note-canopyd"
+echo '{"event_type":"deploy_stale_alert"}' >>"$REPO/.coding-hermes/board/events.jsonl"
+run_case "ledger-only dirt print names the ignored ledger path" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/ledger-note-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/ledger-note-canopyd" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="only in .coding-hermes/board/events.jsonl" -- --deploy
+
+# b. ledger dirt PLUS a tracked source change -> still STALE_BLOCKED, rc 2
+REPO="$WORK/ledger-plus-source"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/ledger-source-canopyd"
+make_stale "$ART/ledger-source-canopyd"
+echo "half-written worker code" >"$REPO/internal/x/wip.go"
+echo '{"event_type":"deploy_stale_alert"}' >>"$REPO/.coding-hermes/board/events.jsonl"
+run_case "tracked source dirt blocks --deploy even with ledger dirt too" 2 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/ledger-source-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/ledger-source-canopyd" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="STALE_BLOCKED NOT invoked" -- --deploy
+[[ -f "$WORK/deploy-invoked" ]] \
+	&& bad "deploy invoked despite tracked source dirt" "" \
+	|| ok "deploy NOT invoked with source + ledger dirt"
+
+# c. ledger dirt PLUS an untracked file -> still STALE_BLOCKED
+REPO="$WORK/ledger-plus-untracked"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/ledger-untracked-canopyd"
+make_stale "$ART/ledger-untracked-canopyd"
+echo "stray" >"$REPO/internal/x/stray.txt"
+echo '{"event_type":"deploy_stale_alert"}' >>"$REPO/.coding-hermes/board/events.jsonl"
+run_case "untracked file blocks --deploy even with ledger dirt too" 2 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" \
+	CANOPYD_STALE_PATH="$ART/ledger-untracked-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 \
+	CANOPYD_DEPLOY_CMD="touch $ART/ledger-untracked-canopyd" \
+	CANOPYD_DEPLOY_DIR="$WORK" \
+	EVIDENCE="STALE_BLOCKED NOT invoked" -- --deploy
+[[ -f "$WORK/deploy-invoked" ]] \
+	&& bad "deploy invoked despite untracked dirt" "" \
+	|| ok "deploy NOT invoked with untracked + ledger dirt"
+
 # ── 6. Deploy that does not fix staleness → fail ────────────────────────────
 REPO="$WORK/stillstale"
 mkrepo "$REPO"
