@@ -1,0 +1,35 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-22-11-57-29",
+  "project": "hermes-canopy",
+  "budget": 8,
+  "base": "46f198af6a69b64a8ab92f3bd8926392bef087b7",
+  "mode": "wave->serial (1 fresh dispatch + 2 reconciliation merges)",
+  "workers": [
+    {
+      "task": "DEPLOY-STALE-1",
+      "kind": "fresh-dispatch",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DEPLOY-STALE-1",
+      "branch": "wt/DEPLOY-STALE-1",
+      "model": "glm-5.3-flash",
+      "provider": "opencode-go",
+      "scope": ["scripts/check-deploy-staleness.sh", "scripts/test-check-deploy-staleness.sh"],
+      "lane_probe": "zai-glm 429 (agent.log 20261022_070635_38417c fallback chain), opencode-go answered model=glm-5.3-flash provider=opencode-go no fallback (20261022_070815_d45779)"
+    }
+  ],
+  "reconciliation": [
+    {
+      "task": "DOC-13",
+      "branch": "wt/DOC-13",
+      "commits": ["bb32f32c", "1860e80d"],
+      "state": "unmerged work from an earlier tick; verified against row ACs this tick (only the load-bearing /home path remains, now annotated with CANOPYD_INSTALL_PATH override)"
+    },
+    {
+      "task": "README-10",
+      "branch": "wt/README-10",
+      "commits": ["f4d1e09d"],
+      "state": "unmerged work from an earlier tick; verified: README gains the db export-sqlite bullet with --sqlite-path example matching cmd/canopyd/db_cmd.go:38-54"
+    }
+  ],
+  "independence": "DEPLOY-STALE-1 = scripts/; DOC-13 = docs/INTEGRATION.md+scope-honesty.md+screenshots README; README-10 = README.md. No shared files, no depends_on edges. merge-tree dry runs: wt/DOC-13 rc=0, wt/README-10 rc=0 against master.",
+  "notes": "README-11 (docs-check in CI) NOT dispatched: its AC requires a .github/workflows edit, and origin's OAuth token lacks workflow scope (persistent repo blocker). INT-CI-005 stays pending: owner-side secret (RELEASE_SIGNING_KEY), never dispatchable to a worker. DF-HERMES-CANOPY-83 stays pending: bunker host offline, not project-owned."
+}
