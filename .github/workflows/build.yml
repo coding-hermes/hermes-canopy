@@ -44,7 +44,10 @@ jobs:
         run: go mod tidy && git diff --exit-code go.mod go.sum
 
       - name: Build
-        run: go build -o /dev/null ./cmd/canopyd
+        run: make build
+
+      - name: README docs drift check
+        run: make docs-check
 
       - name: Vet
         run: go vet ./...

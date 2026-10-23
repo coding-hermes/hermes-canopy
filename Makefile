@@ -29,12 +29,18 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X mai
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication docs-check docs-check-test vet lint tidy clean run docker
 
 all: build test vet lint
 
 build:
 	$(GO) build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/$(BINARY)
+
+docs-check:
+	bash scripts/docs-check.sh
+
+docs-check-test:
+	bash scripts/docs-check-test.sh
 
 # Deploy to the live systemd user service (GAP-052): build from HEAD, install
 # atomically to the unit's exec path, restart, health-poll, gateway smoke.
