@@ -1,0 +1,44 @@
+# canopyd db export-sqlite — documented contract probes (docs/SQLITE-RUNTIME.md 'Exit codes')
+# source: scratch PG 127.0.0.1:5478, binary HEAD bcf6edd2
+
+--- refuse-nonempty
+DB target: postgres host=127.0.0.1 port=5478 database=canopy (from DB_* / CANOPY_DB_URL)
+Error: sqlite export: refusing non-empty target "/tmp/hcdf23/out/run1.sqlite"; choose a new path
+
+--- zero-byte-ok
+DB target: postgres host=127.0.0.1 port=5478 database=canopy (from DB_* / CANOPY_DB_URL)
+SQLite export complete: /tmp/hcdf23/out/zero.sqlite
+
+--- missing-flag
+Error: --sqlite-path is required
+Usage: canopyd db export-sqlite --sqlite-path <file>
+
+Copies the core graph tables (users, trees, nodes, edges) from the
+
+--- dsn-alias
+DB target: postgres host=127.0.0.1 port=5478 database=canopy (from DB_* / CANOPY_DB_URL)
+SQLite export complete: /tmp/hcdf23/out/alias.sqlite
+
+--- flags-disagree
+Error: --sqlite-path and --dsn disagree
+
+--- unreachable-postgres
+(no transcript)
+
+--- new-dir
+DB target: postgres host=127.0.0.1 port=5478 database=canopy (from DB_* / CANOPY_DB_URL)
+SQLite export complete: /tmp/hcdf23/out/deep/nested/dir/ok.sqlite
+
+--- help
+Usage: canopyd db export-sqlite --sqlite-path <file>
+
+Copies the core graph tables (users, trees, nodes, edges) from the
+configured PostgreSQL database into a new SQLite file.
+
+--- unknown db subcommand
+unknown db subcommand: frobnicate
+Usage: canopyd db export-sqlite --sqlite-path <file>
+
+
+--- leftover temp files in the output dir after all probes
+0

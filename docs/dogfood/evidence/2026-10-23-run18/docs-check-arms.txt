@@ -1,0 +1,31 @@
+# docs-check fail-open arm matrix — hermes-canopy HEAD bcf6edd2, binary built from that HEAD
+# fixture: pristine README.md + docs/ copy per arm, ONE drift applied, checker pointed at it
+# command: python3 scripts/docs-check.py --readme <arm>/README.md --docs-dir <arm>/docs --binary ./bin/canopyd
+# arms A1/A2 are controls that MUST fail; A3-A6 are the probe arms.
+
+a0-control             rc=0
+    docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 37 environment variables)
+a1-bad-flag            rc=1
+    docs-check: FAIL: README:1309: documented flag '--limitt' is absent from canopyd session import --help
+a2-ghost-env           rc=1
+    docs-check: FAIL: README Environment Variables table lists 'GHOST_VAR_XYZ' with no production read site
+a3-env-prefix          rc=0
+    docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 38 environment variables)
+a4-broken-link         rc=0
+    docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 37 environment variables)
+a5-bad-subcommand      rc=0
+    docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 37 environment variables)
+a6-blockquoted-flag    rc=0
+    docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 37 environment variables)
+
+# runtime truth for the two drift strings the checker accepted:
+tree lst          rc=1  unknown tree subcommand: lst
+export --sqlite-out rc=2  flag provided but not defined: -sqlite-out
+
+# control: the shipped checker on the unmodified tree, and its self-test
+docs-check: PASS (14 docs pages, 12 canopyd commands, 11 Makefile targets, 37 environment variables)
+docs-check-test: clean PASS
+docs-check-test: missing indexed page FAIL (expected)
+docs-check-test: clean PASS after page restore
+docs-check-test: missing README link FAIL (expected)
+docs-check-test: clean PASS after README restore

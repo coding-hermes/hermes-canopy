@@ -7,8 +7,8 @@ description: >-
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
   Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
-  09-22, 09-23, 09-24 and 10-20 deep dogfood runs.
-version: 2.8.0
+  09-22, 09-23, 09-24, 10-20 and 10-23 deep dogfood runs.
+version: 2.9.0
 category: software-development
 ---
 
@@ -480,6 +480,53 @@ Short version:
 - Don't restart the running stack during foreman ticks; the E2E loop owns it.
 - Clean up scratch trees/topics via API DELETE (204).
 - The demo tree is E2E-only (GAP-051); the live DB should show real Hermes data.
+
+## Operator verbs: docs-drift check + `db export-sqlite` (verified 2026-10-23, HEAD bcf6edd2, run 18)
+
+Two operator surfaces a maintainer meets before any product feature. Both are real; both
+have a trap that costs a full retry ladder if you trust the green.
+
+### `make docs-check` (scripts/docs-check.py) — trust it for what it does, not for "docs are true"
+
+Green on an unmodified tree (`PASS (14 docs pages, 12 canopyd commands, 11 Makefile
+targets, 37 environment variables)`, 0.3 s). It genuinely FAILs on: a documented flag the
+binary does not list, an Environment Variables row with no read site, a missing docs-index
+row, and a README missing its single `docs/README.md` link. It does **not** catch
+(`DF-HERMES-CANOPY-96`): a documented verb that does not exist (`canopyd tree lst` passes —
+the checker resolves the longest *prefix* and then only compares flags), a variable that is
+merely a substring of a real one (`CANOPY_DB` passes off `os.Getenv("CANOPY_DB_DRIVER")`),
+a relative link to a docs page that does not exist, or any `canopyd` example written in a
+**blockquoted fence** (`> ```bash`) — which is how the README documents `card export` and
+`db export-sqlite`, the two newest CLI exceptions.
+
+What to do: before claiming docs are verified, ALSO run the documented command itself
+(`./bin/canopyd <verb> --help`, then the command with a scratch arg) — the help surface is
+what the checker compares against, so a green check plus a stale `bin/canopyd` proves
+nothing. Write new `canopyd` examples in a line-leading ```` ```bash ```` fence, or they
+will never be validated.
+
+### `canopyd db export-sqlite --sqlite-path <new file>` — faithful, fast, and only for a QUIET instance
+
+- **Faithful**: independent comparison at 50,337 nodes / 337 edges — every column of every
+  row equal to PostgreSQL, `sha256(content) == content_hash` for all rows, `integrity_check`
+  ok, `foreign_key_check` clean, 60 KB and unicode payloads byte-intact.
+- **Contract**: rc=0 success · rc=1 export failure (non-empty target, unreachable PG) ·
+  rc=2 usage (missing `--sqlite-path`, unknown `db` subcommand, `--sqlite-path` vs `--dsn`
+  disagreeing). `--dsn` is a working alias. A zero-byte target is accepted; a non-empty one
+  is refused by name; the target directory is created; no temp files survive.
+- 🚨 **It cannot run against a LIVE instance**: the exporter reads the four tables in four
+  independent statements with no source-side snapshot (`internal/db/sqlite/export.go:74-93`),
+  so with writes in flight it fails 24/24 in this run — `insert edges: … FOREIGN KEY
+  constraint failed (787)` or `row count mismatch for nodes: PostgreSQL=N SQLite=N-1`. Those
+  messages mean *the graph changed mid-export*, NOT corruption. **Quiesce writes (or stop the
+  service) first**, or expect to retry forever (`DF-HERMES-CANOPY-97`). It never published a
+  torn file — every failure was loud.
+- **Cost**: ~51k-node graph = 2.5 s warm (4.5–4.9 s first run, cold page cache); 5.3k = 0.3 s;
+  29 nodes = 0.15 s. One transaction, so the destination medium barely matters (tmpfs 2.3 s
+  vs NVMe 2.5 s, same user CPU).
+- The exported file is an artifact for inspection/migration, not a server: `CANOPY_DB_DRIVER=sqlite`
+  still refuses full startup by design (GAP-097). Verify a backup by comparing it against the
+  source per-column, never by trust in the "SQLite export complete" line.
 
 ## Docs truthfulness ranking
 

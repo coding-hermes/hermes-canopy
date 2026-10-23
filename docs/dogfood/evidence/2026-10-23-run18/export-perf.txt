@@ -1,0 +1,11 @@
+nodes: 50337
+=== disk (nvme) ===
+  disk1 real=2.55s user=2.03s sys=0.32s rss=37052kB
+  disk2 real=2.58s user=2.08s sys=0.32s rss=37640kB
+  disk3 real=2.52s user=2.01s sys=0.30s rss=37100kB
+=== tmpfs ===
+  shm1  real=2.40s user=2.13s sys=0.27s rss=37524kB
+  shm2  real=2.25s user=1.98s sys=0.25s rss=38232kB
+  shm3  real=2.38s user=2.07s sys=0.29s rss=37348kB
+40857600 /dev/shm/perf1.sqlite
+40857600 /tmp/hcdf23/out/perf1.sqlite

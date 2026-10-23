@@ -1,0 +1,3 @@
+DB target: postgres host=127.0.0.1 port=5478 database=canopy (from DB_* / CANOPY_DB_URL)
+SQLite export complete: /tmp/hcdf23/out/final-quiesced.sqlite
+export rc=0

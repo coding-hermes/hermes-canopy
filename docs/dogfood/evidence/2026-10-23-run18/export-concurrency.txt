@@ -1,0 +1,39 @@
+# canopyd db export-sqlite against a LIVE instance — two independent samples, same tick
+# setup: scratch canopyd :8099 + PG :5478 (HEAD bcf6edd2); a python thread POSTs nodes at ~50/s
+#        to /api/v1/trees/<id>/nodes while the documented export command runs
+#
+# SAMPLE 1 (12 export attempts): rc=1 on 12/12. 308 nodes written during the loop.
+#   8x  Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)
+#   4x  Error: sqlite export: row count mismatch for nodes: PostgreSQL=N SQLite=N-1
+#   (raw rows, sample 1)
+#   {"i":0,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":42}
+#   {"i":1,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=96 SQLite=95","written_during":67}
+#   {"i":2,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":89}
+#   {"i":3,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":113}
+#   {"i":4,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":136}
+#   {"i":5,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=187 SQLite=186","written_during":158}
+#   {"i":6,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=209 SQLite=208","written_during":180}
+#   {"i":7,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":202}
+#   {"i":8,"rc":1,"msg":"...FOREIGN KEY constraint failed (787)","written_during":225}
+#   {"i":9,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=276 SQLite=275","written_during":247}
+#   {"i":10,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=298 SQLite=297","written_during":269}
+#   {"i":11,"rc":1,"msg":"...row count mismatch for nodes: PostgreSQL=320 SQLite=319","written_during":291}
+#   rc=0 files with referential damage: 0   (no silent torn snapshot was produced)
+#
+# SAMPLE 2 (immediately below): 12 export attempts, all rc=1, all FOREIGN KEY mode.
+#
+nodes written by the concurrent writer: 45
+exports: 12  rc=0: 0  rc!=0: 12
+rc=0 files with referential damage: 0
+{"i": 0, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 3}
+{"i": 1, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 7}
+{"i": 2, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 11}
+{"i": 3, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 14}
+{"i": 4, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 18}
+{"i": 5, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 22}
+{"i": 6, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 25}
+{"i": 7, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 29}
+{"i": 8, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 33}
+{"i": 9, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 36}
+{"i": 10, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 40}
+{"i": 11, "rc": 1, "msg": "Error: sqlite export: insert edges: constraint failed: FOREIGN KEY constraint failed (787)", "written_during": 43}

@@ -571,3 +571,57 @@ keeping. But the README health example says :8091 while a bare serve binds
 :8080, and the DB password that works is the compose file's `canopy`, not the
 docs' `canopy-dev-password` guess (DF-77). Top-down quickstart on a fresh box
 is still the highest-yield test we run (DF-55 said the same last week).
+
+## 2026-10-23 — operator surfaces: a guard that fails open, an export that needs a quiet instance (18th run)
+
+**Why this section exists.** Runs 1-17 explored the collaboration product. This run walked
+the two things a maintainer/operator touches BEFORE the product: the README-vs-code drift
+check that shipped today (`README-11`, `c6686a5c`) and the `canopyd db export-sqlite` verb
+documented yesterday (`README-10`). Both are "trust me" surfaces — one says docs match code,
+the other says here is your data — and both are exactly where a false green costs the most.
+
+**How the drift check was graded (and how to grade any checker the same way).** Never read
+the checker's source for a verdict and never run it only on the happy tree. Materialise a
+pristine copy of the two inputs (README + docs), apply ONE realistic drift per arm, and point
+the checker at the copy with its own override flags (`--readme`, `--docs-dir`, `--binary`) so
+the repo is untouched. Include at least two CONTROL arms that must fail — without them a
+checker that passes everything reads identical to one that works. Then confirm each drift's
+runtime consequence separately (`canopyd tree lst` → rc=1; `db export-sqlite --sqlite-out` →
+rc=2): a drift the checker accepts is only a finding if a user would actually hit it.
+
+The two arms that fired proved the shape is sound — flag comparison against `--help` and the
+env read-site scan work. The four that did not are all *narrow matchers*, not design failures:
+a fence regex that cannot see a blockquoted fence (so the README's own newest examples are
+invisible), a help resolver that stops at the longest matching prefix (so an unknown trailing
+verb never resolves), a substring env test (so `CANOPY_DB` rides on `CANOPY_DB_DRIVER`), and
+no relative-link validation at all. Fixture order matters: the first version of this probe
+inserted an env row before the next heading and mutated a blockquoted command, so every arm
+"passed" — including the controls. Seeing the controls PASS is what caught it; always look at
+the control arm first.
+
+**How the export was graded.** Seed a scratch instance THROUGH ITS API (not with SQL) so the
+rows carry whatever the product really writes, export, then compare in the other direction
+from the exporter's own check: psql `json_agg` on one side, stdlib `sqlite3` on the other,
+every column of every row, plus an independent `sha256(content)` recomputation. The first
+version of that verifier split psql text output on newlines and reported `pg=35 sqlite=29` on
+a 29-node corpus — a six-row "mismatch" that was pure fixture damage from multi-line node
+content. Reading PG as JSON is the fix, and the lesson generalises: **a verifier that reports
+a mismatch must first prove it can read the source without loss.**
+
+The live-instance result is the interesting one. The exporter's counts and hash checks are
+real, but the four table reads are not in one source transaction, so any write between them
+trips the target's foreign keys or moves the count the post-write check re-reads. 24/24
+attempts failed; ZERO torn files were published, which is the difference between "unusable
+while busy" and "dangerous". The error text is what needs fixing as much as the code: a
+`FOREIGN KEY constraint failed (787)` says nothing about concurrency, and a migrating operator
+is running this against a live service by definition.
+
+**Cost.** Nothing here is slow: 50k-node export 2.5 s warm / 4.5-4.9 s cold-cache, 5.3k 0.3 s,
+29 nodes 0.15 s, `make docs-check` 0.3 s. The tmpfs A/B (2.3 s vs 2.5 s, identical user CPU)
+also cleared the usual "loader without a transaction" suspect — the export does wrap its
+writes in one transaction.
+
+**The right way, in one line each.** Docs: write `canopyd` examples in a line-leading fenced
+block, and treat `make docs-check` as "the spellings I listed exist", not "the docs are true".
+Data: `canopyd db export-sqlite --sqlite-path <new>` against a QUIET instance, then verify the
+result per-column before you delete anything.
