@@ -34,13 +34,27 @@ canopyd db export-sqlite --sqlite-path /srv/canopy/canopy.sqlite
 
 `--dsn` is accepted as an alias for `--sqlite-path` for compatibility with the original
 operator proposal. The exporter copies `users`, `trees`, `nodes`, and `edges` in foreign-key
-safe order, checks source/target row counts, and verifies SHA-256 content hashes for every
-node. It refuses a non-empty destination instead of merging or overwriting it.
+safe order, checks source/target row counts, verifies SHA-256 content hashes for every
+node, and refuses a non-empty destination instead of merging or overwriting it.
+
+**Snapshot consistency (DF-HERMES-CANOPY-97).** Every source read — the four table
+copies, the row-count checks, and the hash verification — runs inside one PostgreSQL
+transaction at `REPEATABLE READ` isolation, so all reads observe the same snapshot even
+while a writer keeps committing. This means a run against a live instance publishes
+either a complete, referentially closed snapshot (the exporter re-checks
+`PRAGMA foreign_key_check` and orphan parent/edge counts before renaming the file into
+place) or fails with an error naming concurrent source writes as the cause
+(`source changed due to concurrent PostgreSQL writes`); it never surfaces the old bare
+`FOREIGN KEY constraint failed` / `row count mismatch` symptoms. Quiescing the source
+(a write-stop during the export) remains the recommended operational practice for a
+production migration; the snapshot guarantee makes a live export safe to attempt, and
+a fidelity comparison against PostgreSQL after the fact assumes a quiesced source.
 
 Exit codes:
 
 * `0` — export completed and verification passed.
-* `1` — PostgreSQL, SQLite, migration, row-count, or content-hash failure.
+* `1` — PostgreSQL, SQLite, migration, row-count, content-hash, referential-integrity,
+  or concurrent-source-write failure.
 * `2` — command-line misuse or invalid configuration.
 
 The exporter does not set `CANOPY_DB_DRIVER`; it always reads PostgreSQL as its source.

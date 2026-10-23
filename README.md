@@ -1265,8 +1265,10 @@ CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
 > ```
 >
 > The exporter refuses a destination that already contains data instead of
-> merging or overwriting it — see [docs/SQLITE-RUNTIME.md](docs/SQLITE-RUNTIME.md)
-> for verification details and exit codes.
+> merging or overwriting it, and reads the entire source inside one
+> `REPEATABLE READ` snapshot so a live writer cannot tear the export — see
+> [docs/SQLITE-RUNTIME.md § One-time PostgreSQL export](docs/SQLITE-RUNTIME.md#one-time-postgresql-export)
+> for the source-quiescence/snapshot statement, verification details, and exit codes.
 
 ### Hermes session source (GAP-077)
 
