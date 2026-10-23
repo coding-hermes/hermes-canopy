@@ -1,0 +1,27 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-23-05-27-03",
+  "project": "hermes-canopy",
+  "budget": 12,
+  "base": "fe0fb884307b83b1cd3904a4bf836ca2b40b37f0",
+  "mode": "serial (1 implementation row; no second file-disjoint pending row)",
+  "workers": [
+    {
+      "task": "README-11",
+      "kind": "fresh-dispatch",
+      "worktree": "/home/kara/hermes-canopy (main tree — worker scoped to Makefile/scripts/.github only, verified clean before dispatch)",
+      "branch": "master",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "scope": ["Makefile", "scripts/docs-check.py", "scripts/docs-check.sh", "scripts/docs-check-test.sh", ".github/workflows/build.yml"],
+      "lane_probe": "probe session 20261023_005108_59e93e API call #1 model=gpt-5.6-luna provider=openai-codex, no Fallback line (20261023_005108, agent.log)",
+      "commit": "c6686a5c3e0a1214ba4466e7f72f3a91764bccbd",
+      "verdict": "tier2 PASS .gitreins/history/2026-10-23/e7747d68",
+      "push": "origin+gitlab parity 0 both"
+    }
+  ],
+  "reconciliation": [],
+  "independence": "wave not composed: only one implementation-eligible pending row (README-11). INT-CI-005 = owner-side secret, never dispatchable. DF-HERMES-CANOPY-83 = external host state, record-only. DF-HERMES-CANOPY-25 = P5 watch, already satisfied by tier2 observation. DOC-9/DOC-11 = docs-severity P5 backlog per Bane 2026-09-30 ruling. FTR-06 remaining phases blocked on origin push workflow-scope.",
+  "started_at": "2026-10-23T05:27:03Z",
+  "closed_at": "2026-10-23T06:10:00Z",
+  "notes": "Deploy drift resolved: live :8091 binary already rebuilt to 535a957b/2026-10-22T12:28Z vs watched source 6e74db0f (2026-10-21) — lag -50790s CURRENT, staleness streak reset (tick 10-22 close). Judge residual (bogus tree SUBcommand uncaught by command-help fallback) recorded on the row as a non-blocking watch, not a row."
+}
