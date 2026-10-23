@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_README = ROOT / "README.md"
 DEFAULT_BINARY = ROOT / "bin" / "canopyd"
+DEFAULT_DOCS_DIR = ROOT / "docs"
 
 
 class CheckFailure(RuntimeError):
@@ -189,6 +190,77 @@ def normalized_flags(flags: set[str]) -> set[str]:
     return {flag.lstrip("-") for flag in flags}
 
 
+def check_docs_index(readme: str, docs_dir: Path) -> int:
+    """Require one canonical, one-line entry for every top-level docs page."""
+    if not docs_dir.is_dir():
+        fail(f"documentation directory not found: {docs_dir}")
+
+    index = docs_dir / "README.md"
+    compatibility = docs_dir / "_index.md"
+    if not index.is_file():
+        fail(f"canonical documentation index not found: {index}")
+    if not compatibility.is_file():
+        fail(f"documentation compatibility index not found: {compatibility}")
+
+    expected = sorted(
+        path.name
+        for path in docs_dir.glob("*.md")
+        if path.name not in {"README.md", "_index.md"}
+    )
+    if not expected:
+        fail(f"no top-level documentation pages found in {docs_dir}")
+
+    rows: list[tuple[str, str, int]] = []
+    row_re = re.compile(r"^\s*-\s+\[[^]]+\]\(([^)]+)\)\s+—\s+(.+?)\s*$")
+    for lineno, line in enumerate(index.read_text(encoding="utf-8").splitlines(), 1):
+        match = row_re.match(line)
+        if match:
+            rows.append((match.group(1), match.group(2), lineno))
+
+    targets = [target for target, _, _ in rows]
+    if len(rows) != len(expected) or sorted(targets) != expected:
+        missing = sorted(set(expected) - set(targets))
+        extra = sorted(set(targets) - set(expected))
+        duplicates = sorted({target for target in targets if targets.count(target) > 1})
+        details = []
+        if missing:
+            details.append(f"missing={missing}")
+        if extra:
+            details.append(f"extra={extra}")
+        if duplicates:
+            details.append(f"duplicates={duplicates}")
+        fail(
+            f"{index} must list each top-level docs page exactly once with a one-line purpose"
+            + (f" ({'; '.join(details)})" if details else "")
+        )
+
+    for target, purpose, lineno in rows:
+        if not purpose.strip():
+            fail(f"{index}:{lineno}: documentation purpose is empty for {target!r}")
+        target_path = docs_dir / target
+        if target_path.parent != docs_dir or not target_path.is_file():
+            fail(f"{index}:{lineno}: indexed documentation page is missing: {target}")
+
+    readme_index_links = re.findall(r"\]\(docs/README\.md(?:#[^)]+)?\)", readme)
+    if len(readme_index_links) != 1:
+        fail(
+            "README.md must link the canonical documentation index exactly once "
+            f"(found {len(readme_index_links)})"
+        )
+
+    compatibility_text = compatibility.read_text(encoding="utf-8")
+    compatibility_links = re.findall(r"\]\(README\.md\)", compatibility_text)
+    if len(compatibility_links) != 1:
+        fail(
+            f"{compatibility} must contain exactly one link to the canonical README.md "
+            f"(found {len(compatibility_links)})"
+        )
+    if row_re.search(compatibility_text):
+        fail(f"{compatibility} must remain a short compatibility link, not a duplicate index")
+
+    return len(expected)
+
+
 def check_cli(readme: str, binary: Path) -> int:
     commands = shell_commands(readme)
     checked = 0
@@ -278,18 +350,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="check README claims against canopyd and source")
     parser.add_argument("--readme", type=Path, default=Path(os.environ.get("DOCS_CHECK_README", DEFAULT_README)))
     parser.add_argument("--binary", type=Path, default=Path(os.environ.get("CANOPYD_BIN", DEFAULT_BINARY)))
+    parser.add_argument("--docs-dir", type=Path, default=Path(os.environ.get("DOCS_CHECK_DOCS_DIR", DEFAULT_DOCS_DIR)))
     args = parser.parse_args()
     readme = args.readme if args.readme.is_absolute() else ROOT / args.readme
     binary = args.binary if args.binary.is_absolute() else ROOT / args.binary
+    docs_dir = args.docs_dir if args.docs_dir.is_absolute() else ROOT / args.docs_dir
     if not readme.is_file():
         fail(f"README file not found: {readme}")
     if not binary.is_file() or not os.access(binary, os.X_OK):
         fail(f"built/current canopyd binary is missing or not executable: {binary} (run make build)")
 
     readme_text = readme.read_text(encoding="utf-8")
+    docs_count = check_docs_index(readme_text, docs_dir)
     command_count = check_cli(readme_text, binary)
     target_count, env_count = check_tables(readme_text)
-    print(f"docs-check: PASS ({command_count} canopyd commands, {target_count} Makefile targets, {env_count} environment variables)")
+    print(
+        f"docs-check: PASS ({docs_count} docs pages, {command_count} canopyd commands, "
+        f"{target_count} Makefile targets, {env_count} environment variables)"
+    )
     return 0
 
 

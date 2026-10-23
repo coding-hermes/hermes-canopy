@@ -470,6 +470,10 @@ serving is not yet supported.** See the authoritative
 [SQLite runtime contract](docs/SQLITE-RUNTIME.md) for the runtime details. PostgreSQL
 remains the default and authoritative graph store.
 
+## Documentation
+
+The complete, canonical index of top-level guides and references is [docs/README.md](docs/README.md).
+
 ## API Reference
 
 > **Canonical reference: [docs/API.md](docs/API.md)** — this table is a
