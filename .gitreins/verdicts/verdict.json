@@ -1,0 +1,70 @@
+{
+  "branch": "master",
+  "commit": "9aaf7c27c6f43d888680c0d176180ac7404081bd",
+  "items": [],
+  "passed": true,
+  "stages": {
+    "tier1": {
+      "any_failed": false,
+      "id": "tier1",
+      "passed": true,
+      "steps": [
+        {
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/hermes-canopy/.gitreins/logs/guard-20261025T141406.415452Z.log"
+          },
+          "error": "",
+          "id": "guard",
+          "output": "Tier 1: DEGRADED PASS (skips: go_build=No Go files staged, go_lint=No Go files staged, go_tests=No Go files staged)  (test mode: full)\n  \u2713 secrets \u2014 clean (gitleaks + builtin cross-check); scanners: nice=nice -n 10\n  ~ go_build \u2014 skipped (No Go files staged)\n  ~ go_lint \u2014 skipped (No Go files staged)\n  ~ go_tests \u2014 skipped (No Go files staged)\n  guard log: /home/kara/hermes-canopy/.gitreins/logs/guard-20261025T141406.415452Z.log\n",
+          "passed": true,
+          "type": "script"
+        }
+      ],
+      "summary": "  \u2713 guard: Tier 1: DEGRADED PASS (skips: go_build=No Go files staged, go_lint=No Go files staged, go_tests=No G"
+    },
+    "tier2": {
+      "any_failed": false,
+      "api_key_source": "GITREINS_LLM_API_KEY",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "id": "tier2",
+      "model": "deepseek-v4-flash",
+      "passed": true,
+      "steps": [
+        {
+          "data": {
+            "items": [
+              {
+                "cited_path": "scripts/docs-check.py, scripts/docs-check-test.sh",
+                "criterion": "On canonical HEAD, verify the exact blockquoted README command with CANOPY_GHOST_FENCE makes scripts/docs-check.py exit nonzero and name CANOPY_GHOST_FENCE; verify make docs-check and bash scripts/docs-check-test.sh pass; verify the fix is in scripts/docs-check.py and scripts/docs-check-test.sh.",
+                "detail": "HEAD is 9aaf7c27 (merge of 26a93e45 'fix: close blockquoted ghost-env docs drift'). (1) Exact blockquoted command: inserted \"> ```bash\\n>   CANOPY_GHOST_FENCE=1 ./bin/canopyd tree list\\n> ```\" into a README copy and ran `python3 scripts/docs-check.py` -> stderr \"docs-check: FAIL: README:13: documented environment assignment 'CANOPY_GHOST_FENCE' has no production environment read\", EXIT=1 (nonzero, names CANOPY_GHOST_FENCE). (2) `make docs-check` -> \"docs-check: PASS (14 docs pages, 13 canopyd commands, 11 Makefile targets, 37 environment variables)\", exit 0. (3) `bash scripts/docs-check-test.sh` -> EXIT=0, output includes \"docs-check-test: blockquoted ghost env FAIL names CANOPY_GHOST_FENCE (expected)\" and \"docs-check-test: clean PASS after all negative arms\". (4) Fix is in scripts/docs-check.py: fence_re now accepts an optional \"> \" prefix (line ~70), normalized_line strips blockquote markers before invoke_re matching, and check_cli validates each documented env assignment via has_real_env_read against production Go sources; scripts/docs-check-test.sh lines ~97-123 add the load-bearing blockquoted ghost-env regression arm. `git show --stat 26a93e45` confirms both files changed (67 insertions, 5 deletions). [resolution 0.10; scripts/docs-check.py, scripts/docs-check-test.sh]",
+                "resolution_probability": 0.1,
+                "status": "PASS"
+              }
+            ],
+            "provenance": {
+              "api_key_source": "GITREINS_LLM_API_KEY",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "model": "deepseek-v4-flash"
+            },
+            "summary": "Verified on canonical HEAD 9aaf7c27: the blockquoted CANOPY_GHOST_FENCE README command makes docs-check exit 1 naming the variable, while make docs-check and scripts/docs-check-test.sh both pass, with the fix committed in both scripts.",
+            "verdict": "COMPLETE"
+          },
+          "error": "",
+          "id": "tier2",
+          "output": "COMPLETE\n  \u2713 On canonical HEAD, verify the exact blockquoted README command with CANOPY_GHOST_FENCE makes scripts/docs-check.py exit nonzero and name CANOPY_GHOST_FENCE; verify make docs-check and bash scripts/docs-check-test.sh pass; verify the fix is in scripts/docs-check.py and scripts/docs-check-test.sh.: HEAD is 9aaf7c27 (merge of 26a93e45 'fix: close blockquoted ghost-env docs drift'). (1) Exact blockquoted command: inserted \"> ```bash\\n>   CANOPY_GHOST_FENCE=1 ./bin/canopyd tree list\\n> ```\" into a README copy and ran `python3 scripts/docs-check.py` -> stderr \"docs-check: FAIL: README:13: documented environment assignment 'CANOPY_GHOST_FENCE' has no production environment read\", EXIT=1 (nonzero, names CANOPY_GHOST_FENCE). (2) `make docs-check` -> \"docs-check: PASS (14 docs pages, 13 canopyd commands, 11 Makefile targets, 37 environment variables)\", exit 0. (3) `bash scripts/docs-check-test.sh` -> EXIT=0, output includes \"docs-check-test: blockquoted ghost env FAIL names CANOPY_GHOST_FENCE (expected)\" and \"docs-check-test: clean PASS after all negative arms\". (4) Fix is in scripts/docs-check.py: fence_re now accepts an optional \"> \" prefix (line ~70), normalized_line strips blockquote markers before invoke_re matching, and check_cli validates each documented env assignment via has_real_env_read against production Go sources; scripts/docs-check-test.sh lines ~97-123 add the load-bearing blockquoted ghost-env regression arm. `git show --stat 26a93e45` confirms both files changed (67 insertions, 5 deletions). [resolution 0.10; scripts/docs-check.py, scripts/docs-check-test.sh]\nVerified on canonical HEAD 9aaf7c27: the blockquoted CANOPY_GHOST_FENCE README command makes docs-check exit 1 naming the variable, while make docs-check and scripts/docs-check-test.sh both pass, with the fix committed in both scripts.",
+          "passed": true,
+          "type": "ai_eval"
+        }
+      ],
+      "summary": "COMPLETE\n  \u2713 On canonical HEAD, verify the exact blockquoted README command with CANOPY_GHOST_FENCE makes scripts/docs-check.py exit nonzero and name CANOPY_GHOST_FENCE; verify make docs-check and bash scripts/docs-check-test.sh pass; verify the fix is in scripts/docs-check.py and scripts/docs-check-test.sh.: HEAD is 9aaf7c27 (merge of 26a93e45 'fix: close blockquoted ghost-env docs drift'). (1) Exact blockquoted command: inserted \"> ```bash\\n>   CANOPY_GHOST_FENCE=1 ./bin/canopyd tree list\\n> ```\" into a README copy and ran `python3 scripts/docs-check.py` -> stderr \"docs-check: FAIL: README:13: documented environment assignment 'CANOPY_GHOST_FENCE' has no production environment read\", EXIT=1 (nonzero, names CANOPY_GHOST_FENCE). (2) `make docs-check` -> \"docs-check: PASS (14 docs pages, 13 canopyd commands, 11 Makefile targets, 37 environment variables)\", exit 0. (3) `bash scripts/docs-check-test.sh` -> EXIT=0, output includes \"docs-check-test: blockquoted ghost env FAIL names CANOPY_GHOST_FENCE (expected)\" and \"docs-check-test: clean PASS after all negative arms\". (4) Fix is in scripts/docs-check.py: fence_re now accepts an optional \"> \" prefix (line ~70), normalized_line strips blockquote markers before invoke_re matching, and check_cli validates each documented env assignment via has_real_env_read against production Go sources; scripts/docs-check-test.sh lines ~97-123 add the load-bearing blockquoted ghost-env regression arm. `git show --stat 26a93e45` confirms both files changed (67 insertions, 5 deletions). [resolution 0.10; scripts/docs-check.py, scripts/docs-check-test.sh]\nVerified on canonical HEAD 9aaf7c27: the blockquoted CANOPY_GHOST_FENCE README command makes docs-check exit 1 naming the variable, while make docs-check and scripts/docs-check-test.sh both pass, with the fix committed in both scripts."
+    }
+  },
+  "summary": "Judge Result: ephemeral:verify-df-hermes-canopy-96-rework-on-canonical-h\n\nStage tier1: PASS\n    \u2713 guard: Tier 1: DEGRADED PASS (skips: go_build=No Go files staged, go_lint=No Go files staged, go_tests=No G\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 On canonical HEAD, verify the exact blockquoted README command with CANOPY_GHOST_FENCE makes scripts/docs-check.py exit nonzero and name CANOPY_GHOST_FENCE; verify make docs-check and bash scripts/docs-check-test.sh pass; verify the fix is in scripts/docs-check.py and scripts/docs-check-test.sh.: HEAD is 9aaf7c27 (merge of 26a93e45 'fix: close blockquoted ghost-env docs drift'). (1) Exact blockquoted command: inserted \"> ```bash\\n>   CANOPY_GHOST_FENCE=1 ./bin/canopyd tree list\\n> ```\" into a README copy and ran `python3 scripts/docs-check.py` -> stderr \"docs-check: FAIL: README:13: documented environment assignment 'CANOPY_GHOST_FENCE' has no production environment read\", EXIT=1 (nonzero, names CANOPY_GHOST_FENCE). (2) `make docs-check` -> \"docs-check: PASS (14 docs pages, 13 canopyd commands, 11 Makefile targets, 37 environment variables)\", exit 0. (3) `bash scripts/docs-check-test.sh` -> EXIT=0, output includes \"docs-check-test: blockquoted ghost env FAIL names CANOPY_GHOST_FENCE (expected)\" and \"docs-check-test: clean PASS after all negative arms\". (4) Fix is in scripts/docs-check.py: fence_re now accepts an optional \"> \" prefix (line ~70), normalized_line strips blockquote markers before invoke_re matching, and check_cli validates each documented env assignment via has_real_env_read against production Go sources; scripts/docs-check-test.sh lines ~97-123 add the load-bearing blockquoted ghost-env regression arm. `git show --stat 26a93e45` confirms both files changed (67 insertions, 5 deletions). [resolution 0.10; scripts/docs-check.py, scripts/docs-check-test.sh]\nVerified on canonical HEAD 9aaf7c27: the blockquoted CANOPY_GHOST_FENCE README command makes docs-check exit 1 naming the variable, while make docs-check and scripts/docs-check-test.sh both pass, with the fix committed in both scripts.\n\nOverall: PASS \u2713",
+  "task_criteria": [
+    "On canonical HEAD, verify the exact blockquoted README command with CANOPY_GHOST_FENCE makes scripts/docs-check.py exit nonzero and name CANOPY_GHOST_FENCE; verify make docs-check and bash scripts/docs-check-test.sh pass; verify the fix is in scripts/docs-check.py and scripts/docs-check-test.sh."
+  ],
+  "task_id": "ephemeral:verify-df-hermes-canopy-96-rework-on-canonical-h",
+  "task_title": "Verify DF-HERMES-CANOPY-96 rework on canonical HEAD",
+  "worktree": "/home/kara/hermes-canopy"
+}

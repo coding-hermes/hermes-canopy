@@ -4155,3 +4155,32 @@ tasks:
   status: complete
   created_at: '2026-10-25T04:27:45.753176+00:00'
   completed_at: '2026-10-25T11:05:48.259465+00:00'
+- id: DF-HERMES-CANOPY-96-VERIFY-20261025-1347
+  title: Verify DF-HERMES-CANOPY-96 on merged HEAD
+  criteria:
+  - 'Against current canonical HEAD, independently verify the four docs-check false-negative
+    fixes and all six acceptance criteria: blockquoted fences, full subcommand chain,
+    exact env matching, all relative README links, regression arms, and clean docs-check
+    counts. Bind the verdict to the current committed implementation.'
+  status: complete
+  created_at: '2026-10-25T13:53:08.332512+00:00'
+  completed_at: '2026-10-25T13:53:24.889793+00:00'
+- id: DF-HERMES-CANOPY-96-REWORK-20261025-1347
+  title: Fix DF-HERMES-CANOPY-96 blockquoted ghost-env regression
+  criteria:
+  - 'Fix the remaining blockquoted-fence false negative on the canonical DF-HERMES-CANOPY-96
+    implementation: a README copy containing a blockquoted shell fence with CANOPY_GHOST_FENCE=1
+    must make docs-check exit 1 and name CANOPY_GHOST_FENCE; add a load-bearing regression
+    arm; preserve the other three fixes and clean-tree counts.'
+  status: complete
+  created_at: '2026-10-25T13:58:17.180934+00:00'
+  completed_at: '2026-10-25T14:09:37.463215+00:00'
+- id: DF-HERMES-CANOPY-96-REWORK-VERIFY2
+  title: Verify blockquoted ghost-env fix on merged HEAD
+  criteria:
+  - 'At canonical HEAD 9aaf7c27, verify DF-HERMES-CANOPY-96 rework: exact blockquoted
+    CANOPY_GHOST_FENCE assignment fails naming the variable, docs-check clean path
+    and regression script pass, and the fix commit is present. Judge the merged tree.'
+  status: complete
+  created_at: '2026-10-25T14:12:12.190892+00:00'
+  completed_at: '2026-10-25T14:12:13.688391+00:00'
