@@ -94,6 +94,33 @@ else
 fi
 cp "$README" "$WORK/README.md"
 
+# DF-HERMES-CANOPY-96 ghost-env arm: a documented env assignment on a
+# blockquoted command must correspond to a real production environment read;
+# a ghost variable (e.g. CANOPY_GHOST_FENCE) must be named in the failure.
+python3 - "$WORK/README.md" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+marker = "## "
+insert = ("> ```bash\n"
+          ">   CANOPY_GHOST_FENCE=1 ./bin/canopyd tree list\n"
+          "> ```\n\n")
+pos = s.index(marker)
+p.write_text(s[:pos] + insert + s[pos:])
+PY
+if output=$(run_check 2>&1); then
+  printf '%s\n' 'docs-check-test: blockquoted ghost env assignment unexpectedly PASSed' >&2
+  exit 1
+elif grep -q 'CANOPY_GHOST_FENCE' <<<"$output"; then
+  printf '%s\n' 'docs-check-test: blockquoted ghost env FAIL names CANOPY_GHOST_FENCE (expected)'
+else
+  printf '%s\n' "$output" >&2
+  printf '%s\n' 'docs-check-test: blockquoted ghost env failure omitted CANOPY_GHOST_FENCE' >&2
+  exit 1
+fi
+cp "$README" "$WORK/README.md"
+
 # Prefix-like environment names must not satisfy an exact table row.
 python3 - "$WORK/README.md" <<'PY'
 from pathlib import Path
