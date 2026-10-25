@@ -160,7 +160,8 @@ def command_help(binary: Path, tokens: list[str], lineno: int) -> tuple[list[str
         if token.startswith("<") or token.startswith("[") or token.startswith("-"):
             break
         fixed_usage.append(token)
-    if positional[:len(fixed_usage) - 1] != fixed_usage[1:]:
+    requested_path = positional[:len(fixed_usage) - 1]
+    if requested_path != fixed_usage[1:]:
         fail(
             f"README:{lineno}: documented canopyd command has no matching help "
             f"surface: {' '.join(['canopyd', *positional])}"
