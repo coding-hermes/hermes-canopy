@@ -1,0 +1,33 @@
+Hermes Canopy owner-block verification: REVIEW-CANOPY-2026-10-13-REL
+Captured: 2026-10-25 scheduler tick hermes-canopy-foreman-2026-10-25-20-56-36
+Repository: coding-hermes/hermes-canopy; HEAD:
+3fa9454819798565331bee61447952af6bf46a82
+
+## gh secret list -R coding-hermes/hermes-canopy
+exit=0; RELEASE_SIGNING_KEY is absent from the listing
+
+## release workflow run 39539678215
+{"conclusion":"failure","createdAt":"2026-10-21T03:38:24Z","headSha":"65663f2c9551528f6fa2d32bc849da0bc6c1ff15","jobs":[{"completedAt":"2026-10-21T03:40:52Z","conclusion":"failure","databaseId":119024305248,"name":"release","startedAt":"2026-10-21T03:38:27Z","status":"completed","steps":[{"conclusion":"success","name":"Set up job","number":1,"status":"completed"},{"conclusion":"success","name":"Checkout (full history for git describe)","number":2,"status":"completed"},{"conclusion":"success","name":"Set up Go","number":3,"status":"completed"},{"conclusion":"success","name":"Build all cross targets","number":4,"status":"completed"},{"conclusion":"success","name":"Generate checksums","number":5,"status":"completed"},{"conclusion":"success","name":"Package Linux installers","number":6,"status":"completed"},{"conclusion":"failure","name":"Generate signed release manifest","number":7,"status":"completed"},{"conclusion":"skipped","name":"Validate release manifest publication contract","number":8,"status":"completed"},{"conclusion":"skipped","name":"Publish signed manifest to GitHub Pages","number":9,"status":"completed"},{"conclusion":"skipped","name":"Generate release notes","number":10,"status":"completed"},{"conclusion":"skipped","name":"Upload release artifacts","number":11,"status":"completed"},{"conclusion":"skipped","name":"Post Set up Go","number":21,"status":"completed"},{"conclusion":"success","name":"Post Checkout (full history for git describe)","number":22,"status":"completed"},{"conclusion":"success","name":"Complete job","number":23,"status":"completed"}],"url":"https://github.com/coding-hermes/hermes-canopy/actions/runs/39539678215/job/119024305248"}]}
+
+## release tags
+8a5fbaa86c0551a5f1d6a4c2571b80c76ba0b444	refs/tags/v0.2.0
+65663f2c9551528f6fa2d32bc849da0bc6c1ff15	refs/tags/v0.2.0^{}
+
+## public stable manifest
+
+curl_exit=22
+
+## repository validator
+python3 scripts/validate-release-manifest-publication.py
+PASS: updater default, flag/env overrides, gh-pages stable path, versioned asset, and byte-copy invariant agree
+
+## deployed version
+{"version":"v0.2.0-59-g0078aaee","commit":"0078aaee","build_time":"2026-10-23T21:00:01Z"}
+
+## deploy staleness
+crash-loop: canopy-canopyd restarts 0 -> 0 (delta 0 < threshold 50) — no alert
+deployed: /home/kara/bin/canopyd (2026-10-23T21:00:38Z)
+source:   864db455c6eb7400b9e9f73ccd8a602274cfc612 (2026-10-23T20:23:29Z)
+watched:  internal cmd migrations go.mod go.sum
+lag:      -2229s (threshold 43200s)
+CURRENT: deployed canopyd is up to date
