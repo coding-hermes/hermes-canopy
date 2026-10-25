@@ -65,13 +65,16 @@ def make_targets(makefile: str) -> set[str]:
     }
 
 
-def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
-    commands: list[tuple[int, list[str]]] = []
+def shell_commands(readme: str) -> list[tuple[int, list[str], list[str]]]:
+    command_typed: list[tuple[int, list[str], list[str]]] = []
     in_shell_fence = False
     fence_re = re.compile(r"^\s*(?:>\s*)?```\s*([A-Za-z0-9_-]*)\s*$")
     invoke_re = re.compile(
         r"(?:^|[;&|])\s*(?:(?:[A-Z][A-Z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S+))\s+)*"
         r"(?P<binary>(?:\./)?(?:bin/)?canopyd)(?P<rest>.*)$"
+    )
+    assignment_re = re.compile(
+        r"(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]*)=(?:'[^']*'|\"[^\"]*\"|\S+)"
     )
     for lineno, line in enumerate(readme.splitlines(), 1):
         normalized_line = re.sub(r"^\s*>\s?", "", line)
@@ -88,6 +91,19 @@ def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
         match = invoke_re.search(normalized_line)
         if not match:
             continue
+        # The part of the line before the binary invocation is the env-assignment
+        # prefix the user is told to set.  It is documented shell behavior, so it
+        # must correspond to a real production environment read (checked in
+        # check_cli).  $VAR / ${VAR} defaults and --variable=... are not
+        # assignments; the leading-uppercase shape keeps this narrow.
+        prefix = normalized_line.find(match.group("binary"))
+        assignments = [
+            name
+            for name, *_ in (
+                assignment_match.groups()
+                for assignment_match in assignment_re.finditer(normalized_line[:prefix])
+            )
+        ]
         raw = match.group("rest").strip()
         # Shell continuations and operators are not part of the CLI claim.
         raw = re.split(r"\s+(?:&&|\|\||[|;&])\s*", raw, maxsplit=1)[0]
@@ -97,8 +113,8 @@ def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
         except ValueError as exc:
             fail(f"README:{lineno}: cannot parse canopyd command: {exc}")
         if tokens:
-            commands.append((lineno, tokens))
-    return commands
+            command_typed.append((lineno, tokens, assignments))
+    return command_typed
 
 
 def run_help(binary: Path, args: list[str]) -> tuple[str, str, int]:
@@ -281,8 +297,19 @@ def check_docs_index(readme: str, docs_dir: Path) -> int:
 
 def check_cli(readme: str, binary: Path) -> int:
     commands = shell_commands(readme)
+    sources = [(path, path.read_text(encoding="utf-8")) for path in production_go_sources()]
+    verified_env: set[str] = set()
     checked = 0
-    for lineno, tokens in commands:
+    for lineno, tokens, assignments in commands:
+        for variable in assignments:
+            if variable in verified_env:
+                continue
+            if not has_real_env_read(variable, sources):
+                fail(
+                    f"README:{lineno}: documented environment assignment {variable!r} "
+                    "has no production environment read"
+                )
+            verified_env.add(variable)
         prefix, output = command_help(binary, tokens, lineno)
         available = normalized_flags(help_flags(output))
         for flag in command_flags(tokens):
@@ -323,6 +350,14 @@ def production_go_sources() -> list[Path]:
 
 
 def has_real_env_read(variable: str, sources: list[tuple[Path, str]]) -> bool:
+    # Accept direct os.Getenv/os.LookupEnv reads, the config helper that
+    # receives the variable name (strictEnvInt), and os.UserHomeDir — the
+    # documented $HOME scratch-HOME isolation is read via UserHomeDir keys.
+    if variable == "HOME":
+        for _, text in sources:
+            if re.search(r"\bos\.(?:UserHomeDir|Getenv)\s*\(\s*[\"']HOME[\"']", text):
+                return True
+        return False
     # Accept direct os.Getenv/os.LookupEnv reads and the config helper that
     # receives the variable name (strictEnvInt).  A comment-only mention is not
     # enough: at least one production source file must also contain a runtime
