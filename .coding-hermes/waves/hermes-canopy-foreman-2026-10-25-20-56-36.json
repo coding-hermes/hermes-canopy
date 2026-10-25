@@ -1,0 +1,23 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-25-20-56-36",
+  "project": "hermes-canopy",
+  "budget": 1,
+  "base": "3fa9454819798565331bee61447952af6bf46a82",
+  "mode": "verification-only (owner-controlled release block; no implementation worker)",
+  "workers": [],
+  "reconciliation": [
+    {
+      "task": "REVIEW-CANOPY-2026-10-13-REL",
+      "kind": "owner-block-verification",
+      "worker": "none:owner-controlled RELEASE_SIGNING_KEY/tag/publication block",
+      "evidence": ".coding-hermes/board/evidence/REVIEW-CANOPY-2026-10-13-REL-2026-10-25.txt",
+      "verdict": ".gitreins/history/2026-10-25/e1586125/verdict.json",
+      "passed": true,
+      "row_remains": "pending"
+    }
+  ],
+  "independence": "No implementation wave: the highest-priority P2 release row is blocked on an owner repository secret and public release publication. INT-CI-005 is the existing owner-side blocker and was not duplicated. DF-HERMES-CANOPY-83 is external host state; remaining rows are lower-priority watch/docs work.",
+  "started_at": "2026-10-25T20:56:36Z",
+  "closed_at": "2026-10-25T21:06:30Z",
+  "notes": "Tracked probe captured absent RELEASE_SIGNING_KEY, failed release run 39539678215 at Generate signed release manifest, no v0.2.1 tag, unavailable stable manifest, passing repository validator, and CURRENT deployed staleness check. GitReins verification passed. No DuckBrain token was available for memory read/write."
+}
