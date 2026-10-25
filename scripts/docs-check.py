@@ -68,7 +68,7 @@ def make_targets(makefile: str) -> set[str]:
 def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
     commands: list[tuple[int, list[str]]] = []
     in_shell_fence = False
-    fence_re = re.compile(r"^\s*```\s*([A-Za-z0-9_-]*)\s*$")
+    fence_re = re.compile(r"^\s*(?:>\s*)?```\s*([A-Za-z0-9_-]*)\s*$")
     invoke_re = re.compile(
         r"(?:^|[;&|])\s*(?:(?:[A-Z][A-Z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S+))\s+)*"
         r"(?P<binary>(?:\./)?(?:bin/)?canopyd)(?P<rest>.*)$"
