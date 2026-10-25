@@ -74,7 +74,8 @@ def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
         r"(?P<binary>(?:\./)?(?:bin/)?canopyd)(?P<rest>.*)$"
     )
     for lineno, line in enumerate(readme.splitlines(), 1):
-        fence = fence_re.match(line)
+        normalized_line = re.sub(r"^\s*>\s?", "", line)
+        fence = fence_re.match(line) or fence_re.match(normalized_line)
         if fence:
             language = fence.group(1).lower()
             if not in_shell_fence:
@@ -82,9 +83,9 @@ def shell_commands(readme: str) -> list[tuple[int, list[str]]]:
             else:
                 in_shell_fence = False
             continue
-        if not in_shell_fence or line.lstrip().startswith("#"):
+        if not in_shell_fence or normalized_line.lstrip().startswith("#"):
             continue
-        match = invoke_re.search(line)
+        match = invoke_re.search(normalized_line)
         if not match:
             continue
         raw = match.group("rest").strip()
@@ -138,33 +139,33 @@ def usage_tokens(output: str) -> list[str]:
 
 
 def command_help(binary: Path, tokens: list[str], lineno: int) -> tuple[list[str], str]:
-    # Try progressively longer prefixes.  The binary always appends a canonical
-    # Usage line, so positional arguments (tree names, ids, paths) cannot become
-    # command names merely because ``--help`` was appended to the probe.
-    prefix_candidates: list[list[str]] = [[]]
+    # Resolve every documented positional token as part of the command path.
+    # Trying only prefixes lets an unknown trailing verb pass as a valid parent.
     positional: list[str] = []
     for token in tokens:
         if token == "--" or token.startswith("-"):
             break
         positional.append(token)
-    for size in range(1, min(4, len(positional)) + 1):
-        prefix_candidates.append(positional[:size])
-
-    best: tuple[list[str], str] | None = None
-    for prefix in prefix_candidates:
-        output, _, _ = run_help(binary, prefix)
-        actual_usage = usage_tokens(output)
-        if not actual_usage:
-            continue
-        expected = ["canopyd", *prefix]
-        if actual_usage[: len(expected)] == expected:
-            best = (prefix, output)
-    if best is None:
+    output, _, code = run_help(binary, positional)
+    if not usage_tokens(output) or (code != 0 and not re.search(r"(?m)^Usage(?::| of )", output)):
         fail(
             f"README:{lineno}: documented canopyd command has no successful help "
             f"surface: {' '.join(['canopyd', *positional])}"
         )
-    return best
+    actual_usage = usage_tokens(output)
+    # Usage metavariables and options mark the end of the fixed command path;
+    # later documented values are arguments, not additional verbs.
+    fixed_usage: list[str] = []
+    for token in actual_usage:
+        if token.startswith("<") or token.startswith("[") or token.startswith("-"):
+            break
+        fixed_usage.append(token)
+    if positional[:len(fixed_usage) - 1] != fixed_usage[1:]:
+        fail(
+            f"README:{lineno}: documented canopyd command has no matching help "
+            f"surface: {' '.join(['canopyd', *positional])}"
+        )
+    return positional, output
 
 
 def help_flags(help_output: str) -> set[str]:
@@ -241,6 +242,22 @@ def check_docs_index(readme: str, docs_dir: Path) -> int:
         if target_path.parent != docs_dir or not target_path.is_file():
             fail(f"{index}:{lineno}: indexed documentation page is missing: {target}")
 
+    # Validate every local relative Markdown link in README.md. Links to the
+    # repository root are resolved from the supplied README's directory; links
+    # under docs/ are resolved from the supplied docs directory.
+    link_re = re.compile(r"!?(?:\[[^]]*\])\(([^)]+)\)")
+    for target in link_re.findall(readme):
+        target = target.split(" ", 1)[0].strip()
+        if not target or target.startswith(("#", "/")) or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target):
+            continue
+        relative = target.split("#", 1)[0]
+        if relative.startswith("docs/"):
+            target_path = (docs_dir / relative.removeprefix("docs/")).resolve()
+        else:
+            target_path = (DEFAULT_README.parent / relative).resolve()
+        if not target_path.is_file():
+            fail(f"README contains missing relative link: {target}")
+
     readme_index_links = re.findall(r"\]\(docs/README\.md(?:#[^)]+)?\)", readme)
     if len(readme_index_links) != 1:
         fail(
@@ -311,7 +328,7 @@ def has_real_env_read(variable: str, sources: list[tuple[Path, str]]) -> bool:
     # environment-read call.
     for _, text in sources:
         for line in text.splitlines():
-            if variable not in line:
+            if not re.search(rf"(?<![A-Z0-9_]){re.escape(variable)}(?![A-Z0-9_])", line):
                 continue
             if re.search(r"\bos\.(?:Getenv|LookupEnv)\s*\(", line):
                 return True
