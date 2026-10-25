@@ -864,7 +864,7 @@ variable and the bad value, never a silent fallback to the default.
 | `CANOPY_DB_DRIVER` | `postgres` (when unset or empty) | Runtime database selector; `postgres` uses PostgreSQL for full serving, while `sqlite` runs only the SQLite schema-parity self-check and then refuses full `canopyd` boot while PostgreSQL-only repository surfaces remain. See the authoritative [SQLite runtime contract](docs/SQLITE-RUNTIME.md) |
 | `CANOPY_SQLITE_PATH` | `~/.canopy/canopy.sqlite` | SQLite database path used by the schema-parity self-check when `CANOPY_DB_DRIVER=sqlite`; unset or empty uses this default |
 | `CANOPY_ENV` | `development` | Deployment environment (`development`, `staging`, `production`); gates well-known dev secrets and behavior at startup |
-| `CANOPY_PROFILE_ROUTER_SECRET` | `dev-profile-router-key-32bytes!!` | AES-256 encryption key for the profile router; must be exactly 32 bytes and rotated per deployment — see [profile router docs](docs/PROFILE-ROUTER.md) |
+| `CANOPY_PROFILE_ROUTER_SECRET` | `dev-profile-router-key-32bytes!!` | AES-256 encryption key for the profile router; must be exactly 32 bytes and rotated per deployment — see [profile router configuration](docs/ENV.md) |
 | `API_SERVER_KEY` | *(unset)* | Optional API key used as the fallback for `HERMES_WEBUI_GATEWAY_API_KEY`; unset or empty means no fallback key |
 | `HERMES_WEBUI_GATEWAY_API_KEY` | *(unset; falls back to `API_SERVER_KEY`)* | API key for the Hermes WebUI gateway; unset or empty uses `API_SERVER_KEY`, if set |
 | `HERMES_WEBUI_GATEWAY_BASE_URL` | `http://127.0.0.1:8642` | Hermes WebUI gateway base URL; unset or empty uses this default |
