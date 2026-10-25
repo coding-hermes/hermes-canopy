@@ -4141,3 +4141,17 @@ tasks:
   status: complete
   created_at: '2026-10-23T05:48:08.792698+00:00'
   completed_at: '2026-10-23T06:03:33.341491+00:00'
+- id: DF-HERMES-CANOPY-96
+  title: 'Fix docs-check.py false negatives: blockquoted fences, subcommand chain,
+    exact env match, link validation'
+  criteria:
+  - 1. scripts/docs-check.py fence_re accepts '> ```bash' lines (blockquoted fences).
+    2. command_help() resolves the full positional chain before comparing usage, so
+    'canopyd tree lst' fails when 'lst' is unknown. 3. has_real_env_read() matches
+    env var names exactly (not substring), so CANOPY_DB does not satisfy CANOPY_DB_DRIVER.
+    4. check_docs_index() validates every relative docs link in README.md, not just
+    the one to docs/README.md. 5. scripts/docs-check-test.sh gains arms for all 4
+    fixes and passes.
+  status: complete
+  created_at: '2026-10-25T04:27:45.753176+00:00'
+  completed_at: '2026-10-25T11:05:48.259465+00:00'
