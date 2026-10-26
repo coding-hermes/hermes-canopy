@@ -1270,10 +1270,28 @@ CANOPY_SERVER_URL=http://127.0.0.1:8093 CANOPY_TOKEN=$TOKEN \
 > ([docs/SCRATCH_INSTANCE.md](docs/SCRATCH_INSTANCE.md)). Do not use `:8091`
 > (the native/live default) or `:8092` (the compose API) for a scratch server.
 
-> `session import` and `session associations-backfill` are the exception: they run
-> in-process against PostgreSQL (they read `DB_*` / `CANOPY_DB_URL` directly), so
-> they are configured like a server rather than like an HTTP client. See
-> [Hermes session source](#hermes-session-source-gap-077) for what they read.
+<!-- ch:trace row=README-16 spec=none:no-feature-spec wave=none:serial-worktree-hermes-canopy-2026-10-26-06-37-35 test=Makefile:docs-check+docs-check-test;cmd/canopyd/context_accuracy_cmd.go::runContextAccuracyCmd doc=README.md prompt=/tmp/hermes-canopy-2026-10-26-06-37-35-README-16-brief.txt evidence=README.md witness=path@origin:README.md verdict=none:post-merge-rejudge-pending commit=9d9396d5efe16ff925fc77e91d2aa99314d2cf8b memory=none:not-written -->
+<!-- STATUS: complete -->
+<!-- TIER: T3; exact CLI help, README grep, make build, docs-check, docs-check-test observed -->
+<!-- EVIDENCE: README.md; docs-check output; docs-check-test output -->
+> `context-accuracy` is an in-process PostgreSQL measurement command, not an
+> HTTP client: it opens the database from `DB_*` / `CANOPY_DB_URL` directly to
+> compare ancestry and topic selection with a graph-derived golden set. Its
+> built-in database default is `localhost:5432`; the project's development
+> compose stack is exposed on `:5437`, so select that instance explicitly with
+> `DB_PORT=5437` or `CANOPY_DB_URL`. Use `--sample N` to choose target nodes
+> (default `25`, at least `1`), `--json` to emit the score as JSON, and
+> `--min-accuracy P` to fail below a ratio from `0.0` to `1.0`:
+>
+> ```bash
+> DB_HOST=localhost DB_PORT=5437 DB_USER=canopy DB_PASSWORD=canopy DB_NAME=canopy \
+>   ./bin/canopyd context-accuracy --sample 25 --json --min-accuracy 0.95
+> ```
+>
+> `session import` and `session associations-backfill` are also in-process
+> PostgreSQL commands (they read `DB_*` / `CANOPY_DB_URL` directly), so they are
+> configured like a server rather than like an HTTP client. See [Hermes session
+> source](#hermes-session-source-gap-077) for what they read.
 >
 > `card export` is the other exception: it reads the local per-type card stores
 > directly (`CANOPY_CARD_DATA_DIR`, default `~/.hermes/canopy/cards`) and never
