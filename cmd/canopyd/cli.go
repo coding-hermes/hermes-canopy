@@ -98,6 +98,7 @@ var knownSubcommands = map[string]struct{}{
 	"card":             {},
 	"db":               {},
 	"token":            {},
+	"config":           {},
 	"context-accuracy": {},
 }
 
@@ -128,6 +129,8 @@ func runCLI() {
 		runDBCmd(os.Args[2:])
 	case "token":
 		runTokenCmd(os.Args[2:])
+	case "config":
+		runConfigCmd(os.Args[2:])
 	case "context-accuracy":
 		runContextAccuracyCmd(os.Args[2:])
 	default:
@@ -152,6 +155,7 @@ func printCLIUsage() {
 	fmt.Fprintf(os.Stderr, "  card export [flags]       Export the local card stores as deterministic JSONL (docs/CARD_EXPORT.md)\n")
 	fmt.Fprintf(os.Stderr, "  db export-sqlite [flags] Copy core graph data from PostgreSQL into a new SQLite file\n")
 	fmt.Fprintf(os.Stderr, "  token mint|verify [flags] Mint or verify a dev HS256 JWT (JWT_SECRET)\n")
+	fmt.Fprintf(os.Stderr, "  config check [flags]      Validate configuration and print resolved values (no boot)\n")
 	fmt.Fprintf(os.Stderr, "  context-accuracy [flags] Measure ancestry/topic selection accuracy\n")
 	fmt.Fprintf(os.Stderr, "  serve [flags]             Start the API server (default mode; env-only config)\n")
 }

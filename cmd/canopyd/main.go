@@ -307,7 +307,7 @@ func main() {
 			log.Fatal().Err(err).Msg("SQLite schema version check failed")
 		}
 		log.Info().Str("path", cfg.SQLitePath).Int64("schema_version", version).Msg("SQLite schema parity self-check passed")
-		log.Fatal().Msg("SQLite core-graph boot succeeded, but full canopyd boot is refused: PostgreSQL-only repository surfaces remain (relay, events/snapshots, approvals, MLS, topics, transport, plugins, file viewer, federation, and profile routing)")
+		log.Fatal().Msg(errSQLiteFullBootRefused.Error())
 	}
 
 	// Initialize the database and inject the tree service into HTTP routes.
