@@ -18,3 +18,4 @@ This index is the canonical starting point for the repository's top-level docume
 - [SQLITE-PIVOT.md](SQLITE-PIVOT.md) — SQLite migration contract, inventory, translation rules, and wave plan.
 - [SQLITE-RUNTIME.md](SQLITE-RUNTIME.md) — SQLite runtime self-check, export command, and refusal behavior for incomplete serving support.
 - [scope-honesty.md](scope-honesty.md) — Measured decision record reconciling shipped subsystems with deferred-scope documentation.
+- [traceability-doctrine.md](traceability-doctrine.md) — Traceability doctrine defining evidence links from prompts and specs through delivery verification.
