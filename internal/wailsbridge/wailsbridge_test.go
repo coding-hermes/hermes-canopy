@@ -382,11 +382,51 @@ func TestValidateBackendAddrRequiresLoopback(t *testing.T) {
 }
 
 func TestResolveBackendBinary(t *testing.T) {
+	// PATH-lookup negative: only meaningful when canopyd is absent from
+	// PATH (true in CI; dev hosts may have it installed).
 	if _, err := ResolveBackendBinary(""); err == nil {
-		t.Skip("canopyd on PATH; negative case needs it absent")
+		t.Log("canopyd on PATH; skipping the PATH-lookup negative case")
 	}
+
+	// An explicit nonexistent path must be refused with a descriptive
+	// error, not passed through to fail later at exec time.
 	if _, err := ResolveBackendBinary("/nonexistent/canopyd-xyz"); err == nil {
 		t.Fatal("explicit nonexistent path accepted")
+	} else if !strings.Contains(err.Error(), "/nonexistent/canopyd-xyz") {
+		t.Fatalf("error %q does not name the rejected path", err)
+	}
+
+	// An explicit path that exists but is a directory must be refused
+	// (not a regular file).
+	dir := t.TempDir()
+	if _, err := ResolveBackendBinary(dir + string(filepath.Separator) + "."); err == nil {
+		t.Fatal("explicit directory path accepted")
+	}
+
+	// A valid explicit executable path must be accepted and returned
+	// unchanged.
+	exe := filepath.Join(dir, "canopyd")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write executable fixture: %v", err)
+	}
+	got, err := ResolveBackendBinary(exe)
+	if err != nil {
+		t.Fatalf("valid explicit executable rejected: %v", err)
+	}
+	if got != exe {
+		t.Fatalf("ResolveBackendBinary(%q) = %q, want unchanged", exe, got)
+	}
+
+	// A non-executable regular file must be refused. POSIX-mode based;
+	// Windows has no meaningful exec bit, so this arm is POSIX-only.
+	if runtime.GOOS != "windows" {
+		noexec := filepath.Join(dir, "canopyd-noexec")
+		if err := os.WriteFile(noexec, []byte("not executable\n"), 0o644); err != nil {
+			t.Fatalf("write non-executable fixture: %v", err)
+		}
+		if _, err := ResolveBackendBinary(noexec); err == nil {
+			t.Fatal("explicit non-executable path accepted")
+		}
 	}
 }
 

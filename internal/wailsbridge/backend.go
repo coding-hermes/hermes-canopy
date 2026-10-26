@@ -129,7 +129,7 @@ type SupervisedBackend struct {
 	stopped bool
 }
 
-func (b *SupervisedBackend) Addr() string           { return b.addr }
+func (b *SupervisedBackend) Addr() string            { return b.addr }
 func (b *SupervisedBackend) Exited() <-chan struct{} { return b.exited }
 
 // Binary reports the resolved child executable (for logs and tests).
@@ -222,7 +222,9 @@ func PollBackendHealth(ctx context.Context, addr string, timeout time.Duration) 
 
 // ResolveBackendBinary is the binary-resolution seam for the shell: an
 // explicit path wins, else "canopyd" (canopyd.exe on Windows) is looked up
-// on PATH.
+// on PATH. An explicit path must exist, be a regular file, and be
+// executable; a bad path is refused here with a descriptive error instead
+// of surfacing later as an opaque exec failure from cmd.Start.
 func ResolveBackendBinary(explicit string) (string, error) {
 	name := strings.TrimSpace(explicit)
 	if name == "" {
@@ -233,6 +235,9 @@ func ResolveBackendBinary(explicit string) (string, error) {
 		}
 	}
 	if strings.ContainsRune(name, '/') || strings.ContainsRune(name, '\\') {
+		if err := validateExplicitBinary(name); err != nil {
+			return "", err
+		}
 		return name, nil
 	}
 	path, err := exec.LookPath(name)
@@ -240,6 +245,25 @@ func ResolveBackendBinary(explicit string) (string, error) {
 		return "", fmt.Errorf("wailsbridge: resolve %s: %w (install canopyd on PATH or pass -canopyd)", name, err)
 	}
 	return path, nil
+}
+
+// validateExplicitBinary checks an explicit (path-containing) binary
+// argument: it must resolve to a regular, executable file. The executability
+// check is POSIX-mode based; on Windows the exec permission bits are not
+// meaningful, so existence and regular-file checks are what gate the path
+// there (the OS refuses a non-executable at CreateProcess time regardless).
+func validateExplicitBinary(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("wailsbridge: backend binary %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("wailsbridge: backend binary %q is not a regular file (mode %s)", path, info.Mode().Type())
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("wailsbridge: backend binary %q is not executable", path)
+	}
+	return nil
 }
 
 // DesktopService is the IPC surface exposed to the frontend through the
