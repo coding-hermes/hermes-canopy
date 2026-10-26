@@ -1,0 +1,20 @@
+{
+  "tick": "hermes-canopy-foreman-2026-10-26-14-59-56",
+  "project": "hermes-canopy",
+  "mode": "verification-only",
+  "wave_budget": 8,
+  "workers": [],
+  "rows": [
+    {
+      "id": "DF-HERMES-CANOPY-83",
+      "decision": "no-dispatch",
+      "reason": "external bunker install verification; no repository implementation surface"
+    }
+  ],
+  "evidence": ".coding-hermes/board/evidence/DF-HERMES-CANOPY-83-verify-2026-10-26.txt",
+  "gitreins": [
+    {"task_id": "VERIFY-DF83-20261026", "verdict": ".gitreins/history/2026-10-26/4fec5b17/verdict.json", "passed": false},
+    {"task_id": "VERIFY-DF83-20261026-R2", "verdict": ".gitreins/history/2026-10-26/c7827d26/verdict.json", "passed": false}
+  ],
+  "finished_at": "2026-10-26T15:44:12Z"
+}

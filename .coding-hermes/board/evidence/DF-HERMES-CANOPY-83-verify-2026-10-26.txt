@@ -1,0 +1,12 @@
+Verification tick: hermes-canopy-foreman-2026-10-26-14-59-56
+
+Target: DF-HERMES-CANOPY-83, fallback install claim on bunker-mvp.
+
+Fresh read-only/live evidence:
+- bunker status --server bunker-mvp: ONLINE, 93% disk used (138.8 GB / 149.9 GB), 3/50 agents before probe, 20 orphan keys.
+- Fresh probe df83verify1793027294: spawn succeeded; bunker exec identity probe returned OK, user bunker-df83verify1793027294, host bunker-mvp, git and go present; destroy succeeded; post-list returned 3 agents.
+- Fresh install probe df83live1793029115: spawn succeeded; public clone succeeded at HEAD d1ba6ad078c68bc20840077f0b0bd5f1ecdb1a46; make build started and downloaded Go/dependencies, then the bunker connection closed (rc=255) before build/version completion. Destroy initially returned 143 while the agent remained listed, then a retry succeeded; bunker info afterward returned not_found and post-list returned 2 agents.
+- The failed build is not a product verdict: the host was at critical disk pressure and the transport closed during dependency download. The criterion therefore remains unverified.
+- GitReins verification tasks VERIFY-DF83-20261026 and VERIFY-DF83-20261026-R2 were completed against the committed tree and both produced structured Tier 2 INCOMPLETE/FAIL verdicts because the judge cannot see the live bunker probe evidence. Verdicts: .gitreins/history/2026-10-26/4fec5b17/verdict.json and c7827d26/verdict.json. Both temporary tasks were deleted after readback.
+
+Disposition: keep DF-HERMES-CANOPY-83 pending. No implementation worker dispatched; this is an external install/infrastructure verification row. The earlier 2026-10-13 fallback PASS remains historical evidence, but this tick did not reproduce the full clone/build/version/health acceptance on the current bunker state.
