@@ -96,6 +96,17 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 ./bin/canopyd tree create "My Tree" --content 'Hello from the CLI'
 ./bin/canopyd tree list
 
+# Configuration validation (no server boot)
+# `canopyd config check` validates the resolved configuration without booting:
+# no database is opened, no migrations run, and no port is bound.
+# Exit 0 means `canopyd serve` would accept this configuration; exit 1 means
+# it would refuse (reason printed to stderr).
+./bin/canopyd config check
+# NOTE: with bare built-in defaults the command prints a warning that
+# `DB_PORT=5432` is NOT the documented development port — the compose stack,
+# Makefile and every project script use :5437 (docker-compose maps 5437:5432).
+# Set DB_PORT=5437 or CANOPY_DB_URL to select that instance.
+
 # Troubleshooting: "STALE BUILD" at startup
 # If canopyd refuses to start with `STALE BUILD: database schema is newer than
 # this binary's embedded migrations`, your database was created by a NEWER
