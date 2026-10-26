@@ -15,7 +15,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import ViewerHost, { VIEWER_SANDBOX_CSP, buildViewerDoc, viewerIframeName, type ViewerHostProps } from '../ViewerHost.tsx';
+import ViewerHost, { type ViewerHostProps } from '../ViewerHost.tsx';
+import { VIEWER_SANDBOX_CSP, buildViewerDoc, viewerIframeName } from '../viewerHostDoc.ts';
 import type { FileMetadata, ViewerRegistration } from '../../types/fileviewer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

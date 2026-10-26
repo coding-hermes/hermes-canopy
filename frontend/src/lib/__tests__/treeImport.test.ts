@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseTreeImportFile } from '../../components/FirstRunOnboarding';
+import { parseTreeImportFile } from '../../lib/treeImport';
 
 describe('parseTreeImportFile', () => {
   it('accepts a well-formed export envelope', () => {

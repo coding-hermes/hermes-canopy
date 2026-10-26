@@ -535,10 +535,7 @@ describe('topicProposalStore — SSE reconnect dedupe (§11.2 scenario 8)', () =
     // Clear any prior state
     store.clearAll();
 
-    let callCount = 0;
-    const unsub = store.subscribe(() => {
-      callCount++;
-    });
+    const unsub = store.subscribe(() => {});
 
     store.addProposal(event);
     const cardsAfterFirst = store.getCards().length;

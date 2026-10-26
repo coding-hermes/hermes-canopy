@@ -88,8 +88,11 @@ export const jsonHelpers = {
   matchJsonNodes: function (root: unknown, query: string): JsonSearchHit[] {
     const q = query.toLowerCase();
     const hits: JsonSearchHit[] = [];
-    const self = this;
-    function walk(value: unknown, segments: Array<string | number>): void {
+    // Arrow, not `function`: `this` must stay the helper object so
+    // this.buildJsonPath() keeps its own `this` (that method reads
+    // this.appendJsonPath). An aliased `const self = this` trips
+    // no-this-alias and is the same capture, written worse.
+    const walk = (value: unknown, segments: Array<string | number>): void => {
       if (Array.isArray(value)) {
         value.forEach(function (child, index) {
           walk(child, segments.concat([index]));
@@ -101,7 +104,7 @@ export const jsonHelpers = {
         for (const key of keys) {
           if (q !== '' && key.toLowerCase().includes(q)) {
             const segs = segments.concat([key]);
-            hits.push({ path: self.buildJsonPath(segs), segments: segs });
+            hits.push({ path: this.buildJsonPath(segs), segments: segs });
           }
           walk((value as Record<string, unknown>)[key], segments.concat([key]));
         }
@@ -109,9 +112,9 @@ export const jsonHelpers = {
       }
       const display = typeof value === 'string' ? value : String(value);
       if (q !== '' && display.toLowerCase().includes(q)) {
-        hits.push({ path: self.buildJsonPath(segments), segments: segments.slice() });
+        hits.push({ path: this.buildJsonPath(segments), segments: segments.slice() });
       }
-    }
+    };
     walk(root, []);
     return hits;
   },
@@ -138,7 +141,7 @@ function jsonViewerBodyScript(J: JsonHelpers): void {
       for (var i = 0; i < list.length; i += 1) {
         try {
           list[i](payload);
-        } catch (_handlerError) {
+        } catch {
           /* a broken handler must not kill the viewer */
         }
       }
@@ -199,7 +202,7 @@ function jsonViewerBodyScript(J: JsonHelpers): void {
         document.execCommand('copy');
         document.body.removeChild(ta);
         done();
-      } catch (_fallbackError) {
+      } catch {
         emit('json_copy_failed', { what: what });
       }
     };

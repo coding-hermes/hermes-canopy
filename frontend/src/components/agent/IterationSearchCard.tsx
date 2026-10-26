@@ -18,7 +18,8 @@ import type {
   SearchCardSubtypeData,
 } from '../../types/agent.ts';
 import { countLabel } from '../../lib/pluralize.ts';
-import { IterationLiveRegion, IterationStatusBadge, statusLabel } from './iterationShared.tsx';
+import { IterationLiveRegion, IterationStatusBadge } from './iterationShared.tsx';
+import { statusLabel } from './iterationStatus.ts';
 
 export type IterationSearchCardProps = IterationRendererProps<SearchCardSubtypeData>;
 

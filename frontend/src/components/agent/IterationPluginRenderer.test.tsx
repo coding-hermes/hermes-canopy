@@ -1,7 +1,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import IterationPluginRenderer, { iterationPluginStatus } from '../agent/IterationPluginRenderer.tsx';
+import IterationPluginRenderer from '../agent/IterationPluginRenderer.tsx';
+import { iterationPluginStatus } from '../agent/iterationPluginStatus.ts';
 import type { SearchCardSubtypeData } from '../../types/agent.ts';
 import type { PluginManifest } from '../../lib/pluginTypes';
 

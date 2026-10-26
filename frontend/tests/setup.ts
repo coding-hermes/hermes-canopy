@@ -13,9 +13,6 @@ export const BASE_URL = 'http://localhost:5173';
 /** How long to wait for page.goto before assuming the server is down. */
 const GOTO_TIMEOUT = 8_000;
 
-/** How long to wait for page load state after a successful navigation. */
-const LOAD_TIMEOUT = 15_000;
-
 // ─── Dev-server readiness ───────────────────────────────────────────────
 
 /**

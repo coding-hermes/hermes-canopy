@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import type { IterationCardSubtypeData, IterationSubtype } from '../../types/agent.ts';
 import { resolveIterationRenderer } from '../../lib/iterationRenderers.ts';
-import { statusLabel, statusTone } from './iterationShared.tsx';
+import { statusLabel, statusTone } from './iterationStatus.ts';
 import IterationPluginRenderer, { type IterationPlugin, type IterationPluginRendererProps, type IterationSseSource } from './IterationPluginRenderer.tsx';
 
 export interface IterationCardProps {

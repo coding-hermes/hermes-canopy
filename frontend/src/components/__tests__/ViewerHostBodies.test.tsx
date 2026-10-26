@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { VIEWER_SANDBOX_CSP, buildViewerDoc } from '../ViewerHost.tsx';
+import { VIEWER_SANDBOX_CSP, buildViewerDoc } from '../viewerHostDoc.ts';
 import type { FileMetadata, ViewerRegistration } from '../../types/fileviewer';
 
 const FILE_ID = '0198a7b6-c5d4-7321-8abc-def012345679';

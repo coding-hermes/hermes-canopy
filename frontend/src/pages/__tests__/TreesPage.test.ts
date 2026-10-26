@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { appendTrees, buildCreateTreePayload } from '../TreesPage';
+import { appendTrees, buildCreateTreePayload } from '../../lib/treeListUtils';
 
 type TreeSummary = {
   id: string;

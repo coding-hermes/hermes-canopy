@@ -68,7 +68,7 @@ function imageViewerBodyScript(H: ImageHelpers): void {
       for (var i = 0; i < list.length; i += 1) {
         try {
           list[i](payload);
-        } catch (_handlerError) {
+        } catch {
           /* a broken handler must not kill the viewer */
         }
       }
@@ -198,7 +198,7 @@ function imageViewerBodyScript(H: ImageHelpers): void {
         .catch(function () {
           /* bootstrap URL already in place; an API failure must not blank the frame */
         });
-    } catch (_streamError) {
+    } catch {
       /* keep the bootstrap URL */
     }
   } else if (!currentUrl) {

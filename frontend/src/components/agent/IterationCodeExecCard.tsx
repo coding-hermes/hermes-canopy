@@ -13,7 +13,8 @@ import { memo } from 'react';
 import { Square, Terminal } from 'lucide-react';
 import type { CodeExecSubtypeData, IterationRendererProps } from '../../types/agent.ts';
 import { formatElapsed } from '../../lib/iterationFormat.ts';
-import { IterationLiveRegion, IterationStatusBadge, statusLabel } from './iterationShared.tsx';
+import { IterationLiveRegion, IterationStatusBadge } from './iterationShared.tsx';
+import { statusLabel } from './iterationStatus.ts';
 
 export type IterationCodeExecCardProps = IterationRendererProps<CodeExecSubtypeData>;
 

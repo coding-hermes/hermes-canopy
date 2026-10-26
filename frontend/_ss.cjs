@@ -21,11 +21,11 @@ const path = require('path');
       await page.waitForTimeout(1500);
       await page.screenshot({ path: path.join(dir, p.name + '.png'), fullPage: false });
       console.log(`OK: ${p.name}`);
-    } catch(e) {
+    } catch (e) {
       console.log(`FAIL: ${p.name} - ${e.message.substring(0, 150)}`);
       try { 
         await page.screenshot({ path: path.join(dir, p.name + '-error.png'), fullPage: false });
-      } catch(_) {}
+      } catch {}
     }
   }
   

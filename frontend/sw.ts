@@ -35,7 +35,7 @@ const STATIC_URLS = [
 
 // ─── Install: pre-cache static assets ────────────────────────────────
 
-self.addEventListener('install', (event: ExtendableEvent) => {
+self.addEventListener('install', () => {
   void (async () => {
     const cache = await caches.open(CACHE_NAME);
     await cache.addAll(STATIC_URLS);
@@ -46,7 +46,7 @@ self.addEventListener('install', (event: ExtendableEvent) => {
 
 // ─── Activate: clean old caches ───────────────────────────────────────
 
-self.addEventListener('activate', (event: ExtendableEvent) => {
+self.addEventListener('activate', () => {
   void (async () => {
     const keys = await caches.keys();
     await Promise.all(

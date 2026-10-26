@@ -168,7 +168,7 @@ describe('Context Manifest UI (WIRE-002)', () => {
         });
 
       // Verify at least one ancestry item contains the root message content.
-      const hasRootItem = await expect
+      await expect
         .poll(
           async () => {
             const count = await ancestryItems.count();

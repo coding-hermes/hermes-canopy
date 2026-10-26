@@ -10,8 +10,7 @@
  */
 
 import { chromium } from '@playwright/test';
-import AxeBuilder from 'axe-core';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -29,17 +28,6 @@ const PAGES = [
   { route: '/approvals', name: 'ApprovalPanel', component: 'components/ApprovalPanel.tsx' },
   { route: '/tree/demo', name: 'TreeView', component: 'components/TreeView.tsx' },
 ];
-
-// Keyboard navigation test elements per page
-const KEYBOARD_TESTS = {
-  '/': { expectedTabCount: 7 }, // Dashboard + 7 nav links
-  '/trees': { expectedTabCount: 7 },
-  '/nodes': { expectedTabCount: 7 },
-  '/topics': { expectedTabCount: 7 },
-  '/cards': { expectedTabCount: 7 },
-  '/approvals': { expectedTabCount: 7 },
-  '/tree/demo': { expectedTabCount: 7 }, // nav links count
-};
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -67,11 +55,10 @@ async function runAxeOnPage(page, route, name) {
     }
   });
 
-  // Actually inject axe-core
+  // Actually inject axe-core. addScriptTag runs the source as a page script —
+  // no eval() (which is both a lint finding and blocked by a strict CSP).
   const axeCoreSource = await import('axe-core').then(m => m.default.source);
-  await page.evaluate(axeCoreSource => {
-    eval(axeCoreSource);
-  }, axeCoreSource);
+  await page.addScriptTag({ content: axeCoreSource });
 
   // Run axe
   const results = await page.evaluate(() => {

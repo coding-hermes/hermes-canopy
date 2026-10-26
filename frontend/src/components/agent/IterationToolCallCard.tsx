@@ -16,7 +16,8 @@ import { Check, Wrench, X } from 'lucide-react';
 import type { IterationRendererProps, ToolCallSubtypeData } from '../../types/agent.ts';
 import { formatDurationMs } from '../../lib/iterationFormat.ts';
 import { formatJsonSafe } from '../../lib/safeJson.ts';
-import { IterationLiveRegion, IterationStatusBadge, statusLabel } from './iterationShared.tsx';
+import { IterationLiveRegion, IterationStatusBadge } from './iterationShared.tsx';
+import { statusLabel } from './iterationStatus.ts';
 
 export type IterationToolCallCardProps = IterationRendererProps<ToolCallSubtypeData>;
 

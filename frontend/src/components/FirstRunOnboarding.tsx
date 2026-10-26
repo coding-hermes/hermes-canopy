@@ -22,6 +22,7 @@
 import { useRef, useState } from 'react';
 import { Sparkles, Plus, FileUp, TerminalSquare, AlertCircle, Loader2 } from 'lucide-react';
 import { apiPost } from '../lib/api';
+import { parseTreeImportFile } from '../lib/treeImport';
 
 /** Shape of the 201 response from POST /api/v1/trees/import (ExportResult). */
 interface ImportResult {
@@ -29,38 +30,6 @@ interface ImportResult {
   rootNodeId: string;
   nodeCount: number;
   edgeCount: number;
-}
-
-/**
- * Parse a user-selected export file into the body POST /trees/import
- * expects. Exported helpers are unit-tested; the component only branches
- * on the outcome, so a malformed file shows its real error and never
- * reaches the API.
- */
-export function parseTreeImportFile(
-  text: string,
-): { ok: true; data: Record<string, unknown> } | { ok: false; error: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return { ok: false, error: 'The file is not valid JSON.' };
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, error: 'Export files must be a JSON object (tree + nodes + edges).' };
-  }
-  const obj = parsed as Record<string, unknown>;
-  if (typeof obj.tree !== 'object' || obj.tree === null) {
-    return { ok: false, error: "The file has no 'tree' section — this does not look like a Canopy tree export." };
-  }
-  const tree = obj.tree as Record<string, unknown>;
-  if (typeof tree.title !== 'string' || tree.title.trim().length === 0) {
-    return { ok: false, error: "The export's tree section has no title — can't create a tree without a name." };
-  }
-  if (!Array.isArray(obj.nodes) || obj.nodes.length === 0) {
-    return { ok: false, error: 'The export contains no messages (nodes) — nothing to import.' };
-  }
-  return { ok: true, data: obj };
 }
 
 export default function FirstRunOnboarding({

@@ -28,7 +28,7 @@
  * FIRST-RUN premise the board row is about.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type CDPSession, type Page, type Response, type Route } from '@playwright/test';
+import { chromium, type Browser, type Page, type Response, type Route } from '@playwright/test';
 import { BASE_URL, isServerRunning } from './setup';
 import { TreeCleanup } from './e2e-cleanup';
 
@@ -37,7 +37,6 @@ const EMPTY_TREES = { trees: [], pagination: { nextCursor: null, hasMore: false,
 describe('First-run onboarding E2E (GAP-093)', () => {
   let browser: Browser;
   let page: Page;
-  let cdp: CDPSession | null = null;
   let serverAvailable = false;
   const cleanup = new TreeCleanup();
 

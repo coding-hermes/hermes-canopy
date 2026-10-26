@@ -13,7 +13,8 @@ import { memo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import type { FileHighlight, FileReadSubtypeData, IterationRendererProps } from '../../types/agent.ts';
 import { formatByteSize } from '../../lib/iterationFormat.ts';
-import { IterationLiveRegion, statusLabel } from './iterationShared.tsx';
+import { IterationLiveRegion } from './iterationShared.tsx';
+import { statusLabel } from './iterationStatus.ts';
 
 export type IterationFileReadCardProps = IterationRendererProps<FileReadSubtypeData>;
 

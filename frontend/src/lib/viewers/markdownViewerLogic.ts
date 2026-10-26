@@ -99,7 +99,7 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
    * it is returned as-is — no second escape pass.
    */
   function hrefAttribute(escapedHref: string): string {
-    var stripped = String(escapedHref).replace(/[\s\u0000-\u001f]+/g, '');
+    var stripped = String(escapedHref).replace(/[\s\p{Cc}]+/gu, '');
     if (/^(javascript|vbscript):/i.test(stripped)) return '';
     if (/^data:text\/html/i.test(stripped)) return '';
     return escapedHref;
@@ -148,7 +148,11 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
       })
       .join('');
     // Restore inline code spans (their content stays escaped, unprocessed).
-    text = text.replace(/\u0000C(\d+)\u0000/g, function (_match: string, index: string) {
+    // The sentinel is a single NUL, but the restore pattern is built at
+    // runtime: a literal control character inside a regex is unreadable in
+    // source and trips no-control-regex, and the behaviour is identical.
+    var sentinel = '\u0000';
+    text = text.replace(new RegExp(sentinel + 'C(\\d+)' + sentinel, 'g'), function (_match: string, index: string) {
       return '<code>' + esc(codeSpans[Number(index)]) + '</code>';
     });
     return text;
@@ -408,7 +412,7 @@ export function sanitizeHtml(html: string): string {
         function (attr: string) {
           var valueMatch = /\s*=\s*(?:"([\s\S]*)"|'([\s\S]*)'|([^\s>]+))/.exec(attr);
           var raw = String((valueMatch && (valueMatch[1] || valueMatch[2] || valueMatch[3])) || '');
-          var stripped = raw.replace(/[\s\u0000-\u001f]+/g, '');
+          var stripped = raw.replace(/[\s\p{Cc}]+/gu, '');
           if (/^(javascript|vbscript):/i.test(stripped)) return '';
           if (/^data:text\/html/i.test(stripped)) return '';
           return attr;

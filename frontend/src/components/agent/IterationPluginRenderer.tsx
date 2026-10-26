@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 import PluginHost from '../PluginHost.tsx';
 import type { PluginEventPayload, PluginManifest, PluginPermission } from '../../lib/pluginTypes';
 import type { IterationCardSubtypeData, IterationState } from '../../types/agent.ts';
+import { iterationPluginStatus } from './iterationPluginStatus.ts';
 
 export type IterationSseSource = Pick<EventSource, 'addEventListener' | 'removeEventListener'>;
 
@@ -38,11 +39,6 @@ export interface IterationPluginRendererProps {
 }
 
 /** Map card lifecycle state to a short plugin-visible status string. */
-export function iterationPluginStatus(data: IterationCardSubtypeData): string {
-  const progress = data.progress;
-  const counts = progress.total > 0 ? `${progress.current}/${progress.total}` : progress.status;
-  return `${data.state === 'waiting_for_user' ? 'waiting for user' : data.state} · ${counts}`;
-}
 
 const NOTIFICATION_LEVELS: Record<IterationState, 'info' | 'success' | 'warning' | 'error'> = {
   running: 'info',

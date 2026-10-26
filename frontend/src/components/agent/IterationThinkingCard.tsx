@@ -14,7 +14,8 @@ import { Brain, CheckCircle2, ChevronDown, ChevronRight, Circle, Loader2, XCircl
 import type { IterationRendererProps, ThinkingData, ThoughtStep } from '../../types/agent.ts';
 import { formatDurationMs } from '../../lib/iterationFormat.ts';
 import { countLabel } from '../../lib/pluralize.ts';
-import { IterationLiveRegion, statusLabel } from './iterationShared.tsx';
+import { IterationLiveRegion } from './iterationShared.tsx';
+import { statusLabel } from './iterationStatus.ts';
 
 export type IterationThinkingCardProps = IterationRendererProps<ThinkingData>;
 
