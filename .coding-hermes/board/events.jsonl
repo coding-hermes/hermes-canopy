@@ -1285,3 +1285,9 @@
 {"id": 20261109, "timestamp": "2026-10-26T04:49:00Z", "event_type": "task_completed", "task_id": "README-13", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 20261110, "timestamp": "2026-10-26T04:51:09Z", "event_type": "task_created", "task_id": "README-14", "actor": "foreman", "detail": "{\"id\":\"README-14\",\"status\":\"pending\"}"}
 {"id": 20261111, "timestamp": "2026-10-26T04:54:25Z", "event_type": "task_created", "task_id": "README-15", "actor": "foreman", "detail": "{\"id\":\"README-15\",\"status\":\"pending\"}"}
+{"id": 20261112, "timestamp": "2026-10-26T05:00:00Z", "event_type": "deploy_stale_alert", "task_id": "GAP-069", "actor": "deploy-staleness-check", "detail": "{\"reason\": \"STALE_BLOCKED\", \"lag_seconds\": 188933, \"source_commit\": \"3e07215cc9221d2cf38b91089228356ba47aa700\", \"deployed_binary\": \"/home/kara/bin/canopyd\", \"embedded_schema_version\": 49, \"db_schema_version\": 49, \"service_restarts\": \"0\"}"}
+{"id": 20261113, "timestamp": "2026-10-26T05:01:15Z", "event_type": "task_created", "task_id": "README-16", "actor": "foreman", "detail": "{\"id\":\"README-16\",\"status\":\"pending\"}"}
+{"id": 20261114, "timestamp": "2026-10-26T05:01:15Z", "event_type": "task_created", "task_id": "README-17", "actor": "foreman", "detail": "{\"id\":\"README-17\",\"status\":\"pending\"}"}
+{"id": 20261115, "timestamp": "2026-10-26T05:02:17Z", "event_type": "task_created", "task_id": "README-18", "actor": "foreman", "detail": "{\"id\":\"README-18\",\"status\":\"pending\"}"}
+{"id": 20261116, "timestamp": "2026-10-26T05:03:28Z", "event_type": "task_updated", "task_id": "README-18", "actor": "foreman", "detail": "{\"status\":\"blocked\"}"}
+{"id": 20261117, "timestamp": "2026-10-26T05:04:27Z", "event_type": "task_updated", "task_id": "README-17", "actor": "foreman", "detail": "{\"status\":\"blocked\"}"}
