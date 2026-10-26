@@ -229,8 +229,22 @@ Override the token with `VITE_DEV_JWT` if you need a different subject or expiry
 
 ### Direct API access (curl, scripts, etc.)
 
-Sign your own HS256 JWT with `JWT_SECRET` (default `dev-secret-change-me`), then
-send it as a Bearer token:
+The built binary mints the token for you — no script and no secret handling:
+
+```bash
+./bin/canopyd token mint                      # one line: a 24h HS256 JWT
+export CANOPY_TOKEN=$(./bin/canopyd token mint)
+./bin/canopyd token verify "$CANOPY_TOKEN"    # sub/exp; exit 1 when invalid
+```
+
+`token mint` signs with `JWT_SECRET` when it is set (otherwise the dev default
+`dev-secret-change-me`) for `sub=00000000-0000-0000-0000-000000000001`, the dev user
+`serve` provisions on a fresh dev database. `--sub <uuid>` and `--ttl <duration>`
+override the subject and the 24h lifetime. The token goes to stdout and nothing
+else, so it composes in scripts.
+
+If canopyd is not at hand (another host, a shell-only box), sign the JWT yourself
+with `JWT_SECRET` (default `dev-secret-change-me`), then send it as a Bearer token:
 
 ```bash
 # Using python3 (stdlib only — no node required; bare Debian has python3)

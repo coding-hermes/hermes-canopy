@@ -22,6 +22,18 @@ wave-1 binary then refuses full server startup because non-core PostgreSQL repos
 are not silently substituted. This refusal is intentional; it protects operators from a
 partially SQLite-backed server.
 
+Check the resolved configuration **without** booting — no database is opened, no
+migration runs, no port is bound and no file is created:
+
+```bash
+CANOPY_DB_DRIVER=sqlite canopyd config check
+```
+
+It prints `driver=sqlite sqlite_path=<file>` (the path boot would use), the rest of the
+resolved values, and `serve=refused` — so a passing `config check` on the sqlite backend
+is never mistaken for a bootable server. Exit 0 means `serve` would accept the
+configuration; exit 1 names the validation failure on stderr.
+
 ## One-time PostgreSQL export
 
 Configure the PostgreSQL source with `CANOPY_DB_URL`, or with the normal `DB_HOST`,
