@@ -144,6 +144,12 @@ also omits topics (DF-54).
 | MCP | `POST /api/v1/mcp` JSON-RPC 2.0 | `tools/list` → list_trees, get_tree, create_node, list_topics, get_graph_stats, list_approvals, list_cards — **see the MCP section below before wiring a real client** |
 | Gateway | `GET /api/v1/gateway/status` etc. | canopyd proxies the live Hermes gateway; key held server-side |
 
+## Native-packaging boundary (verified 2026-10-26)
+
+The embedded single-binary path remains the working local desktop-like fallback: `make build-ui` followed by `./bin/canopyd serve` serves the PWA and API from one process. In a clean detached worktree at HEAD 85f5e250, the build completed in 10.202s wall after installing frontend dependencies; an isolated scratch server returned `/health` 200 and `/` the embedded 688-byte shell. A real browser authenticated with the documented development JWT, opened `/trees`, and created a tree with a root message; the UI showed 1 conversation tree, 1 node, and 1 member.
+
+FTR-06 Phase 5 is not shipped at this HEAD. Do not claim `wails dev`, `wails build`, Wails IPC, signed DMG/MSI artifacts, or Wails updater behavior. The spec's Phase 5 requirements are still unverified: `cmd/canopy-desktop/`, `wails.json`, `build-wails`, native CI, and Wails use of the shared `latest.json`. The fresh bunker battery was partial: agent 82225e36 on bunker-mvp reached the install cells but fresh-install hit `no space left on device`, Node/npm was unavailable, and later safety/verification cells were skipped or unverified. This is not a product install PASS.
+
 ## Embedded single-binary SPA (verified 2026-10-20, HEAD 7eecdfac, run 17)
 
 `make build-ui` (Makefile:65-71) builds the Vite SPA, stages it at
