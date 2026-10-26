@@ -29,7 +29,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X mai
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication docs-check docs-check-test vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication validate-wails-desktop test-wails-desktop-contract build-wails docs-check docs-check-test vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -118,6 +118,49 @@ test-proxy:
 # override plumbing, and the stable gh-pages byte-copy contract.
 validate-release-manifest-publication:
 	python3 scripts/validate-release-manifest-publication.py
+
+# FTR-06 Phase 5: Wails desktop packaging contract. Source-level validation of
+# the nested desktop module, wails.json, Makefile wiring, updater feed, and the
+# documented host boundary. No Wails download, no native build.
+validate-wails-desktop:
+	python3 scripts/validate-wails-desktop.py
+
+# Host-independent build+test of the desktop shell: compiles the Wails
+# application surface with the pure-Go server platform app (no WebView SDKs,
+# no CGO). This is the CI-provable cell; the native build is build-wails.
+test-wails-desktop-contract:
+	cd cmd/canopy-desktop && CGO_ENABLED=0 go test -tags server,production ./... -count=1
+
+# Native Wails build (FTR-06 Phase 5, mode B). Explicit and fail-loud: every
+# prerequisite is checked first and a missing one aborts with the install
+# action — never a silent fallback to the embed build. Requires the platform
+# WebView SDKs; see docs/DESKTOP-WAILS.md for the per-OS list and for why
+# signed .dmg/.msi output is NOT produced here.
+WAILS3 ?= wails3
+build-wails: validate-wails-desktop
+	@command -v $(WAILS3) >/dev/null 2>&1 || { \
+		echo "FAIL: $(WAILS3) not found on PATH."; \
+		echo "  Install the Wails v3 CLI:  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34"; \
+		echo "  (with CGO_ENABLED=0 the CLI itself builds on any host)"; \
+		exit 1; }
+	@command -v go >/dev/null 2>&1 || { echo "FAIL: go toolchain not found."; exit 1; }
+	@if [ "$$(go env GOOS)" = "linux" ]; then \
+		pkg-config --exists gtk4 webkitgtk-6.0 || { \
+			echo "FAIL: Linux WebView SDKs missing (needs gtk4 + webkitgtk-6.0 dev packages)."; \
+			echo "  Debian/Ubuntu: sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev"; \
+			echo "  The host-independent contract cell is 'make test-wails-desktop-contract'."; \
+			exit 1; }; \
+		pkg-config --exists libsoup-3.0 || { \
+			echo "FAIL: libsoup-3.0 missing (WebKitGTK dependency)."; \
+			echo "  Debian/Ubuntu: sudo apt install libsoup-3.0-dev"; \
+			exit 1; }; \
+	fi
+	@cd cmd/canopy-desktop && CGO_ENABLED=0 go build -tags server,production -o ../../bin/canopy-desktop-server-check . \
+		&& echo "OK: server-mode desktop binary compiled (host-independent cell)" \
+		|| { echo "FAIL: server-mode desktop build failed."; exit 1; }
+	@echo "NEXT: native window build needs the WebView SDKs above; on a provisioned host run:"
+	@echo "  cd cmd/canopy-desktop && go build -tags production -o ../../bin/canopy-desktop ."
+	@echo "  (packaging to .dmg/.msi and code signing are NOT part of this target; see docs/DESKTOP-WAILS.md)"
 
 vet:
 	$(GO) vet ./...

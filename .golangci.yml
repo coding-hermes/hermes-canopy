@@ -16,6 +16,17 @@ linters:
       check-type-assertions: true
     staticcheck:
       checks: ["all"]
+  exclusions:
+    rules:
+      # cmd/canopy-desktop is a NESTED Go module (see docs/DESKTOP-WAILS.md):
+      # golangci-lint invoked from this root cannot load it ("main module does
+      # not contain package"), so the parent lint lane excludes the path and
+      # the nested module is linted in its own module context instead —
+      # `cd cmd/canopy-desktop && golangci-lint run --build-tags
+      # server,production ./...`, wired into `make test-wails-desktop-contract`.
+      - path: cmd/canopy-desktop/
+        linters:
+          - all
 
 issues:
   max-issues-per-linter: 0

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://wails.io/schemas/wails3.json",
+  "name": "canopy-desktop",
+  "outputfilename": "canopy-desktop",
+  "description": "Hermes Canopy — native desktop shell (Wails v3) around the canopyd local server",
+  "info": {
+    "companyName": "Hermes Canopy contributors",
+    "productName": "Hermes Canopy",
+    "productIdentifier": "app.canopy.desktop",
+    "description": "Graph-native collaboration surface for human-agent work",
+    "copyright": "© 2026, Hermes Canopy contributors",
+    "comments": "Native desktop packaging of the canopyd local server (SPEC-FTR-06 Phase 5)",
+    "version": "0.1.0"
+  },
+  "dev_mode": {
+    "root_path": "../../",
+    "log_level": "warn",
+    "debounce": 1000,
+    "ignore": {
+      "dir": [".git", "node_modules", "frontend", "bin"],
+      "file": [".DS_Store", ".gitignore", ".gitkeep", "*_test.go"],
+      "watched_extension": ["*.go"],
+      "git_ignore": true
+    },
+    "executes": [
+      {
+        "cmd": "go build -o bin/canopyd ./cmd/canopyd",
+        "type": "blocking"
+      },
+      {
+        "cmd": "./bin/canopyd serve",
+        "type": "background"
+      },
+      {
+        "cmd": "go build -tags production -o bin/canopy-desktop ./cmd/canopy-desktop",
+        "type": "primary",
+        "exit_policy": "shutdown"
+      }
+    ]
+  }
+}

@@ -1144,6 +1144,9 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 | `test-chaos-disconnect` | QA chaos-disconnect probe — bounded window; runs the `test-short` suite (see `docs/E2E-EVIDENCE.md`) |
 | `vet` | Run go vet |
 | `lint` | Run golangci-lint |
+| `validate-wails-desktop` | Offline Wails desktop packaging contract check (source-level, no Wails download) |
+| `test-wails-desktop-contract` | Build + test the nested desktop module in server mode (no WebView SDKs needed) |
+| `build-wails` | Wails desktop build with fail-loud prerequisite checks (WebView SDKs, wails3 CLI); native output needs a provisioned host — see `docs/DESKTOP-WAILS.md` |
 | `clean` | Remove build artifacts |
 | `docker` | Build Docker image |
 

@@ -8,6 +8,7 @@ This index is the canonical starting point for the repository's top-level docume
 - [CALENDAR_PHASE1.md](CALENDAR_PHASE1.md) — Phase-one calendar domain, validation, service seam, and SQLite card-store design.
 - [CARD_EXPORT.md](CARD_EXPORT.md) — Deterministic JSONL export of the per-type card stores.
 - [CTX_ACCURACY.md](CTX_ACCURACY.md) — Context-selection accuracy measurement for ancestry nodes and topics.
+- [DESKTOP-WAILS.md](DESKTOP-WAILS.md) — Wails v3 desktop shell: nested-module boundary, build targets, updater feed reuse, and host limitations.
 - [E2E-EVIDENCE.md](E2E-EVIDENCE.md) — Locations, conventions, and procedures for end-to-end and integration evidence.
 - [ENV.md](ENV.md) — Operator reference for server and CLI environment variables and their source read sites.
 - [INTEGRATION.md](INTEGRATION.md) — Local backend and frontend integration setup, Docker Compose, and verification guidance.

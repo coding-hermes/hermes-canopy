@@ -358,6 +358,39 @@ func defaultManifestURL(channel ReleaseChannel) string {
 	return fmt.Sprintf("%s/%s/latest.json", defaultManifestURLBase, channel)
 }
 
+// DefaultManifestURL returns the built-in per-channel manifest URL
+// (https://releases.canopy.app/<channel>/latest.json). Exported for the
+// desktop-shell feed adapter (internal/wailsbridge), which must resolve the
+// same default as Updater when --update-manifest-url is empty; keeping one
+// source of truth stops the two surfaces from drifting.
+func DefaultManifestURL(channel ReleaseChannel) string {
+	return defaultManifestURL(channel)
+}
+
+// DefaultPlatform and DefaultArch expose the runtime platform identity the
+// updater matches artifacts against. Exported for the desktop-shell feed
+// adapter so its artifact selection cannot silently use a different
+// platform spelling than the embed updater.
+func DefaultPlatform() string { return runtime.GOOS }
+func DefaultArch() string     { return runtime.GOARCH }
+
+// CompareVersions compares remote against current with the same semantics
+// CheckForUpdate uses: semver with an optional leading "v" on either side.
+// Returns -1 when remote < current, 0 when equal, 1 when remote > current.
+// Exported for the desktop-shell feed adapter (internal/wailsbridge), which
+// must apply the identical version policy as the embed updater.
+func CompareVersions(remote, current string) (int, error) {
+	r, err := parseVersion(remote)
+	if err != nil {
+		return 0, fmt.Errorf("updater: remote version: %w", err)
+	}
+	c, err := parseVersion(current)
+	if err != nil {
+		return 0, fmt.Errorf("updater: current version: %w", err)
+	}
+	return compareVersions(r, c), nil
+}
+
 func (u *Updater) channel() ReleaseChannel {
 	if u.Channel == "" {
 		return ChannelStable
