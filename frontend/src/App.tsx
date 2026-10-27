@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -13,17 +13,6 @@ import {
   RadioTower,
   X,
 } from 'lucide-react'
-import TreeView from './components/TreeView'
-import ApprovalPanel from './components/ApprovalPanel'
-import DashboardPage from './pages/DashboardPage'
-import TreesPage from './pages/TreesPage'
-import NodesPage from './pages/NodesPage'
-import TopicsPage from './pages/TopicsPage'
-import CardsPage from './pages/CardsPage'
-import WorkspacePage from './pages/WorkspacePage'
-import AgentsPage from './pages/AgentsPage'
-import ReviewPage from './pages/ReviewPage'
-import PeersPage from './pages/PeersPage'
 import { OfflineIndicator } from './components/OfflineIndicator'
 import TopicsRail from './components/TopicsRail'
 import TopicSearchPanel from './components/TopicSearchPanel'
@@ -32,6 +21,18 @@ import ShortcutHelp from './components/ShortcutHelp'
 import IterationSidePanel from './components/agent/IterationSidePanel'
 import { useShortcuts } from './hooks/useShortcuts'
 import { MERGE_ROUTE } from './lib/shortcuts'
+
+const TreeView = lazy(() => import('./components/TreeView'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const TreesPage = lazy(() => import('./pages/TreesPage'))
+const NodesPage = lazy(() => import('./pages/NodesPage'))
+const TopicsPage = lazy(() => import('./pages/TopicsPage'))
+const CardsPage = lazy(() => import('./pages/CardsPage'))
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage'))
+const AgentsPage = lazy(() => import('./pages/AgentsPage'))
+const ReviewPage = lazy(() => import('./pages/ReviewPage'))
+const PeersPage = lazy(() => import('./pages/PeersPage'))
+const ApprovalPanelPage = lazy(() => import('./components/ApprovalPanel'))
 
 // ─── Navigation model ──────────────────────────────────────────────────
 
@@ -231,20 +232,28 @@ function Layout() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="trees" element={<TreesPage />} />
-        <Route path="tree/:treeId" element={<TreeView />} />
-        <Route path="nodes" element={<NodesPage />} />
-        <Route path="topics" element={<TopicsPage />} />
-        <Route path="cards" element={<CardsPage />} />
-        <Route path="workspace" element={<WorkspacePage />} />
-        <Route path="agents" element={<AgentsPage />} />
-        <Route path="peers" element={<PeersPage />} />
-        <Route path="reviews" element={<ReviewPage />} />
-        <Route path="approvals" element={<ApprovalPanel />} />
-      </Route>
-    </Routes>
+    <Suspense
+      fallback={
+        <div className="flex min-h-full items-center justify-center p-6 text-content-muted">
+          Loading…
+        </div>
+      }
+    >
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="trees" element={<TreesPage />} />
+          <Route path="tree/:treeId" element={<TreeView />} />
+          <Route path="nodes" element={<NodesPage />} />
+          <Route path="topics" element={<TopicsPage />} />
+          <Route path="cards" element={<CardsPage />} />
+          <Route path="workspace" element={<WorkspacePage />} />
+          <Route path="agents" element={<AgentsPage />} />
+          <Route path="peers" element={<PeersPage />} />
+          <Route path="reviews" element={<ReviewPage />} />
+          <Route path="approvals" element={<ApprovalPanelPage />} />
+        </Route>
+      </Routes>
+    </Suspense>
   )
 }

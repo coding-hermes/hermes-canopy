@@ -69,6 +69,7 @@ build-embed:
 # for the compile and removed again afterwards; a plain `make build` above is
 # untouched, API-only and fast.
 build-ui:
+	npm --prefix frontend ci --no-audit --no-fund
 	npm --prefix frontend run build
 	rm -rf internal/webui/dist
 	mkdir -p $(BIN_DIR)

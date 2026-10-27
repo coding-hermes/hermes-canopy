@@ -65,11 +65,12 @@ The server auto-runs database migrations on startup, so the schema is created au
   frontend is separate in this profile and, in production, must be served
   through a **same-origin reverse proxy**. A plain static server is not safe for
   this profile because its SPA fallback can answer API requests with HTML.
-- `make build-ui` is the **single-binary embedded SPA** path. It requires
-  Node.js and npm at build time, builds the frontend, stages `frontend/dist` at
-  `internal/webui/dist`, and builds with `-tags embedui`. Run the resulting
-  binary with `./bin/canopyd serve`; it serves the SPA and API on the same API
-  port.
+- `make build-ui` is the **single-binary embedded SPA** path. It installs the
+  locked frontend dependencies from `frontend/package-lock.json`, builds the
+  frontend, stages `frontend/dist` at `internal/webui/dist`, and builds with
+  `-tags embedui`. It works from a fresh checkout without a pre-existing
+  `frontend/node_modules` directory. Run the resulting binary with
+  `./bin/canopyd serve`; it serves the SPA and API on the same API port.
 
 ```bash
 # Development: Vite dev server (proxies /api to :8091 by default)
@@ -86,7 +87,7 @@ python3 deploy/reference-proxy.py --dist frontend/dist --port 3000 \
 
 # Production, single-binary embedded SPA build:
 # From the repository root:
-make build-ui                             # requires Node.js and npm
+make build-ui                             # installs locked npm deps + builds
 ./bin/canopyd serve                        # SPA + API on the API port
 ```
 

@@ -44,8 +44,8 @@ cd hermes-canopy
 make build                 # default API-only binary
 
 # Optional: build the frontend and embed the SPA in the same canopyd binary.
-# This runs the frontend build, stages frontend/dist at internal/webui/dist,
-# and builds with -tags embedui.
+# This installs the locked frontend dependencies before building, so the
+# documented path also works from a fresh checkout with no frontend/node_modules.
 make build-ui
 
 # Cards are stored in per-type SQLite databases (modernc.org/sqlite), pure Go.
@@ -129,8 +129,9 @@ export CANOPY_TOKEN=your-jwt-token               # see "Authentication (dev mode
 # Open the frontend
 open http://localhost:5173  # dev mode (Vite dev server)
 # Plain `make build` produces the API-only default binary. `make build-ui`
-# builds the frontend and embeds the SPA into the same canopyd binary; that
-# build-time path requires Node.js and npm. The embedded SPA is served by
+# installs the locked frontend dependencies, builds the frontend, and embeds
+# the SPA into the same canopyd binary. That build-time path requires Node.js
+# and npm. The embedded SPA is served by
 # canopyd at runtime on the API port. For the separate Vite frontend, see the
 # same-origin reverse-proxy guidance under "Production (Manual)" below.
 ```
@@ -339,9 +340,10 @@ an arbitrary static server: the proxy must forward `/api/` and the other API
 routes to canopyd instead of answering them with the SPA shell.
 
 The opt-in `make build-ui` target is the **single-binary embedded SPA** path. It
-requires Node.js and npm at build time, runs the frontend build, stages
+installs the locked frontend dependencies, runs the frontend build, stages
 `frontend/dist` at `internal/webui/dist`, and builds canopyd with `-tags embedui`.
-Run the resulting binary with `./bin/canopyd serve`; it serves the embedded SPA
+It works from a fresh checkout without a pre-existing `frontend/node_modules`
+directory. Run the resulting binary with `./bin/canopyd serve`; it serves the embedded SPA
 and API on the same API port. The embedded handler preserves the API-reserved
 prefixes `/api`, `/health`, `/healthz`, `/version`, `/metrics`, `/ws`, and
 `/mcp`; an unknown `/api/*` remains a JSON 404 rather than an HTML SPA fallback.
@@ -816,8 +818,10 @@ METRICS_ENABLED=true \
 > ```
 >
 > The opt-in `make build-ui` target is the **single-binary embedded SPA** path.
-> It requires Node.js and npm at build time, stages `frontend/dist` at
-> `internal/webui/dist`, and builds with `-tags embedui`. Run it with
+> It installs the locked frontend dependencies, builds the frontend, stages
+> `frontend/dist` at `internal/webui/dist`, and builds with `-tags embedui`. It
+> works from a fresh checkout without a pre-existing `frontend/node_modules`
+> directory. Run it with
 > `./bin/canopyd serve`; the embedded SPA and API share the same API port. The
 > embedded handler preserves the API-reserved prefixes `/api`, `/health`,
 > `/healthz`, `/version`, `/metrics`, `/ws`, and `/mcp`; unknown `/api/*` remains
