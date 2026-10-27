@@ -1,0 +1,6 @@
+===STALE-FTL-CHECK===
+clean-no-STALE-FTL
+===LOG-SIZE===
+219 /tmp/canopy-build.log
+===HEALTH-BODY===
+{"status":"ok","service":"canopyd","schema_version":49,"embedded_migrations":49,"relay":{"mode":"air_gapped","status":"disabled","sessions":0},"version":"dev","commit":"unknown","build_time":"unknown"}
