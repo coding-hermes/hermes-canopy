@@ -49,9 +49,44 @@ function copyPdfjsAssets() {
 
 copyPdfjsAssets()
 
+// The baseline production entry was 1,031,244 bytes minified (289.10 kB gzip).
+// Keep the initial chunk below Vite's 500 kB warning budget by splitting the
+// measured heavyweight vendors instead of hiding the warning with a larger limit.
+const productionCodeSplitting = {
+  groups: [
+    {
+      name: 'react-vendor',
+      test: /node_modules[\\/](?:react|react-dom|react-router-dom)[\\/]/,
+      priority: 20,
+    },
+    {
+      name: 'graph-vendor',
+      test: /node_modules[\\/](?:@xyflow[\\/](?:react|system)|d3-hierarchy|dagre|y-indexeddb|yjs)[\\/]/,
+      priority: 15,
+    },
+    {
+      name: 'pdfjs-vendor',
+      test: /node_modules[\\/]pdfjs-dist[\\/]/,
+      priority: 20,
+    },
+    {
+      name: 'icons-vendor',
+      test: /node_modules[\\/]lucide-react[\\/]/,
+      priority: 10,
+    },
+  ],
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: productionCodeSplitting,
+      },
+    },
+  },
   server: {
     // LAN/Tailscale access (Bane 08-22): bind all interfaces, no tunnel host
     // allowance needed anymore (cloudflare quick tunnel retired).
