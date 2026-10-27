@@ -1,0 +1,40 @@
+{
+  "scheduler_tick": "hermes-canopy-foreman-2026-10-27-21-13-44",
+  "project": "hermes-canopy",
+  "repository": "/home/kara/hermes-canopy",
+  "base": "origin/master",
+  "base_sha": "6c966b28aaf880fed3b46832e466f294f084519b",
+  "budget": 8,
+  "mode": "wave",
+  "tasks": [
+    {
+      "id": "REVIEW-CANOPY-2026-10-27-FRONTEND",
+      "worktree": "/home/kara/worktrees/hermes-canopy-REVIEW-CANOPY-2026-10-27-FRONTEND",
+      "branch": "wt/REVIEW-CANOPY-2026-10-27-FRONTEND",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "files": ["frontend/package-lock.json", "frontend/vite.config.ts", "Makefile", "frontend/src/"],
+      "depends_on": []
+    },
+    {
+      "id": "REVIEW-CANOPY-2026-10-27-SW-BUILD-DEPRECATION",
+      "worktree": "/home/kara/worktrees/hermes-canopy-REVIEW-CANOPY-2026-10-27-SW-BUILD-DEPRECATION",
+      "branch": "wt/REVIEW-CANOPY-2026-10-27-SW-BUILD-DEPRECATION",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "files": ["frontend/vite.sw.config.ts", "frontend/src/serviceWorkerRegistration.ts", "frontend/e2e/toolchain.pw.ts"],
+      "depends_on": []
+    },
+    {
+      "id": "REVIEW-CANOPY-2026-10-27-NODE-AUTHOR-LABEL",
+      "worktree": "/home/kara/worktrees/hermes-canopy-REVIEW-CANOPY-2026-10-27-NODE-AUTHOR-LABEL",
+      "branch": "wt/REVIEW-CANOPY-2026-10-27-NODE-AUTHOR-LABEL",
+      "model": "gpt-5.6-luna",
+      "provider": "openai-codex",
+      "files": ["frontend/src/lib/nodeAvatar.ts", "frontend/src/lib/__tests__/nodeAvatar.test.ts", "frontend/src/components/TreeView.tsx", "frontend/e2e/toolchain.pw.ts"],
+      "depends_on": []
+    }
+  ],
+  "merge_policy": "serial; verify focused gates and exact acceptance criteria before each merge; push branch and canonical master after every commit",
+  "created_before_dispatch": true
+}
