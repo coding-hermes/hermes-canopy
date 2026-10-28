@@ -40,6 +40,7 @@ function MessageNodeComponent({ id, data, selected }: NodeProps<MessageNodeType>
   const isAgent = d.isAgent === true;
   const accent = isAgent ? palette.accent2 : palette.accent;
   const authorName = nodeAuthorName(d.authorId, {
+    displayName: d.authorDisplayName,
     names: d.authorNames,
     isAgent,
   });
@@ -78,6 +79,7 @@ function MessageNodeComponent({ id, data, selected }: NodeProps<MessageNodeType>
         <NodeAvatar
           authorId={d.authorId}
           isAgent={isAgent}
+          displayName={d.authorDisplayName}
           names={d.authorNames}
         />
         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-content-primary">

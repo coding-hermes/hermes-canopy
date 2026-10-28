@@ -112,14 +112,29 @@ export function avatarTextColor(background: string): string {
  */
 export function authorDisplayName(
   authorId: string | null | undefined,
-  opts: { names?: ReadonlyMap<string, string>; isAgent?: boolean } = {},
+  opts: {
+    displayName?: string;
+    names?: ReadonlyMap<string, string>;
+    isAgent?: boolean;
+  } = {},
 ): string {
   if (!authorId) return UNKNOWN_AUTHOR_NAME;
+
+  const displayName = opts.displayName?.trim();
+  if (displayName) return displayName;
 
   const known = opts.names?.get(authorId);
   if (known && known.trim()) return known.trim();
 
   if (authorId === LOCAL_AUTHOR_ID) return LOCAL_AUTHOR_NAME;
+
+  const trimmedAuthorId = authorId.trim();
+  const looksOpaqueUuid = /^[0-9a-f]{8}(?:[-\s][0-9a-f]{4}){3}[-\s][0-9a-f]{12}$/i.test(
+    trimmedAuthorId,
+  );
+  if (looksOpaqueUuid) {
+    return opts.isAgent ? AGENT_AUTHOR_NAME : 'User';
+  }
 
   const segments = authorId
     .split(/[\s_\-.:]+/)
@@ -172,7 +187,11 @@ export interface NodeAvatarDescriptor {
  */
 export function describeNodeAvatar(
   authorId: string | null | undefined,
-  opts: { names?: ReadonlyMap<string, string>; isAgent?: boolean } = {},
+  opts: {
+    displayName?: string;
+    names?: ReadonlyMap<string, string>;
+    isAgent?: boolean;
+  } = {},
 ): NodeAvatarDescriptor {
   const name = authorDisplayName(authorId, opts);
   const background = getColorForUser(authorId || UNKNOWN_AUTHOR_NAME);

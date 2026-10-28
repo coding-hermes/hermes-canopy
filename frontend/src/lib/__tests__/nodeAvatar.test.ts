@@ -107,6 +107,13 @@ describe('authorDisplayName', () => {
     expect(authorDisplayName('u-42', { names })).toBe('Sarah Chen');
   });
 
+  it('prefers a payload display name over id-derived and mapped labels', () => {
+    const names = new Map([['u-42', 'Mapped Name']]);
+    expect(
+      authorDisplayName('u-42', { displayName: 'Dev User', names }),
+    ).toBe('Dev User');
+  });
+
   it('a known identity wins even for the local author', () => {
     const names = new Map([[LOCAL_AUTHOR_ID, 'Alexis']]);
     expect(authorDisplayName(LOCAL_AUTHOR_ID, { names })).toBe('Alexis');
@@ -135,6 +142,18 @@ describe('authorDisplayName', () => {
     expect(authorDisplayName(null)).toBe(UNKNOWN_AUTHOR_NAME);
     expect(authorDisplayName(undefined)).toBe(UNKNOWN_AUTHOR_NAME);
     expect(authorDisplayName('')).toBe(UNKNOWN_AUTHOR_NAME);
+  });
+
+  it('treats space- and dash-separated UUIDs as opaque ids', () => {
+    const ids = [
+      '00000000 0000 0000 0000 000000000001',
+      '00000000-0000-0000-0000-000000000001',
+    ];
+
+    for (const id of ids) {
+      expect(authorDisplayName(id, { isAgent: true })).toBe(AGENT_AUTHOR_NAME);
+      expect(authorDisplayName(id)).toBe('User');
+    }
   });
 
   it('labels opaque hex ids as agents when flagged', () => {

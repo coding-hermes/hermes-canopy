@@ -355,6 +355,9 @@ export function mergeBackendNodes(
         contentFormat: n.contentFormat ?? 'markdown',
         nodeType: n.nodeType ?? 'message',
         authorId: n.authorId ?? 'local',
+        ...(n.authorDisplayName?.trim()
+          ? { authorDisplayName: n.authorDisplayName.trim() }
+          : {}),
         metadata,
         createdAt: n.createdAt ?? now,
         editedAt: n.editedAt ?? null,

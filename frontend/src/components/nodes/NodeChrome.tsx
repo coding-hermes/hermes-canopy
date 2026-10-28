@@ -31,6 +31,8 @@ import { palette, alpha } from '../../theme.ts';
 export interface NodeAvatarProps {
   authorId: string;
   isAgent?: boolean;
+  /** Authoritative display name from the node payload, when present. */
+  displayName?: string;
   /** Real display names when the caller has them (presence, membership). */
   names?: ReadonlyMap<string, string>;
   size?: 'sm' | 'md';
@@ -44,10 +46,11 @@ export interface NodeAvatarProps {
 function NodeAvatarComponent({
   authorId,
   isAgent,
+  displayName,
   names,
   size = 'md',
 }: NodeAvatarProps) {
-  const avatar = describeNodeAvatar(authorId, { names, isAgent });
+  const avatar = describeNodeAvatar(authorId, { displayName, names, isAgent });
   const px = size === 'sm' ? 22 : 28;
 
   return (

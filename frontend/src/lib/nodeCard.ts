@@ -19,7 +19,11 @@ import { describeNodeAvatar } from './nodeAvatar';
  */
 export function nodeAuthorName(
   authorId: string,
-  opts: { names?: ReadonlyMap<string, string>; isAgent?: boolean } = {},
+  opts: {
+    displayName?: string;
+    names?: ReadonlyMap<string, string>;
+    isAgent?: boolean;
+  } = {},
 ): string {
   return describeNodeAvatar(authorId, opts).name;
 }

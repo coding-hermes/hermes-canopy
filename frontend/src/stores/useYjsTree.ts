@@ -107,6 +107,7 @@ function buildSnapshot(doc: TreeYDoc): TreeSnapshot {
         nodeType: nodeType as TreeNodeCardData['nodeType'],
         content: nodeData.content,
         authorId: nodeData.authorId,
+        authorDisplayName: nodeData.authorDisplayName,
         createdAt: nodeData.createdAt,
         isAgent: nodeData.authorId !== 'local' && nodeType === 'message',
         isSystem: nodeType === 'system',

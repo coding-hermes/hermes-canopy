@@ -45,6 +45,15 @@ describe('mergeBackendNodes', () => {
     expect(getParentId(doc, root.id)).toBeUndefined();
   });
 
+  it('carries a backend author display name into the local replica', () => {
+    const doc = createTreeDoc('t1');
+    const hydrated = node({ authorDisplayName: 'Dev User' });
+
+    mergeBackendNodes(doc, [hydrated]);
+
+    expect(getNode(doc, hydrated.id)?.authorDisplayName).toBe('Dev User');
+  });
+
   it('creates reply edges for children and resolves parent/child links', () => {
     const doc = createTreeDoc('t1');
     const root = node({ content: 'root' });

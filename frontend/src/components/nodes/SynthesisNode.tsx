@@ -29,7 +29,10 @@ function SynthesisNodeComponent({
   selected,
 }: NodeProps<SynthesisNodeType>) {
   const d = data as unknown as TreeNodeCardData;
-  const authorName = nodeAuthorName(d.authorId, { names: d.authorNames });
+  const authorName = nodeAuthorName(d.authorId, {
+    displayName: d.authorDisplayName,
+    names: d.authorNames,
+  });
   const replyCount = d.replyCount ?? d.childCount ?? 0;
   const canCollapse = typeof d.onToggleCollapse === 'function';
 
@@ -68,7 +71,11 @@ function SynthesisNodeComponent({
 
       {/* Header */}
       <div className="flex items-center gap-2 px-2.5 pt-2.5">
-        <NodeAvatar authorId={d.authorId} names={d.authorNames} />
+        <NodeAvatar
+          authorId={d.authorId}
+          displayName={d.authorDisplayName}
+          names={d.authorNames}
+        />
         <span
           className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs font-semibold"
           style={{ color: ACCENT }}

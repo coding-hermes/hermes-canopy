@@ -51,7 +51,12 @@ function TopicNodeComponent({ data, selected }: NodeProps<TopicNodeType>) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-2.5 pt-2.5">
-        <NodeAvatar authorId={d.authorId} names={d.authorNames} size="sm" />
+        <NodeAvatar
+          authorId={d.authorId}
+          displayName={d.authorDisplayName}
+          names={d.authorNames}
+          size="sm"
+        />
         <span
           className="inline-flex min-w-0 flex-1 items-center gap-0.5 truncate text-xs font-semibold"
           style={{ color: ACCENT }}

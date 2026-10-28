@@ -84,6 +84,8 @@ export interface NodeData {
   contentFormat: string;
   nodeType: string;
   authorId: string;
+  /** Authoritative display name returned with hydrated backend nodes. */
+  authorDisplayName?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
   editedAt: string | null;
@@ -225,6 +227,8 @@ export interface TreeNodeCardData extends Record<string, unknown> {
   nodeType: NodeType;
   content: string;
   authorId: string;
+  /** Display name carried from the node payload, when available. */
+  authorDisplayName?: string;
   createdAt: string;
   isAgent: boolean;
   isSystem: boolean;
