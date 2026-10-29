@@ -1,0 +1,26 @@
+{
+  "scheduler_tick": "hermes-canopy-foreman-2026-10-29-16-13-26",
+  "project": "hermes-canopy",
+  "repository": "/home/kara/hermes-canopy",
+  "base": "origin/master",
+  "base_sha": "d81a41120b2fc2593f3aa043a2346f7d20913fce",
+  "budget": 8,
+  "mode": "verification-only (landed partial tranche; no worker)",
+  "tasks": [
+    {
+      "id": "FTR-06",
+      "decision": "no-dispatch",
+      "reason": "Phase 5 Wails contract is already landed and reachable on published master as da98b0f09c1d788e7fb1d5e16ff06f2a20e00303; full umbrella acceptance remains open because signed native macOS/Windows artifacts and cross-platform smoke evidence are not proven."
+    }
+  ],
+  "workers": [],
+  "independence": "Only one project-owned implementation row is open after PL-04 completion; FTR-06 is a landed partial tranche, not fresh worker work. QA-HERMES-CANOPY-README-1/2 are QA collect infrastructure failures, INT-CI-005 and RELEASE-READINESS-2026-10-27 are owner-gated release records, DEPLOY-STALE-001 is owner-controlled deployment state, and DF-HERMES-CANOPY-25 is a watch row.",
+  "evidence": {
+    "implementation_commit": "da98b0f09c1d788e7fb1d5e16ff06f2a20e00303",
+    "published_branch": "origin/master",
+    "local_contract": "make validate-wails-desktop; make test-wails-desktop-contract; go test ./internal/dist -run Test(SignAndVerifyManifestRejectsTampering|GenerateManifestIsStableAndSorted) -count=1; go run ./cmd/release-tool -h",
+    "result": "all commands passed",
+    "full_acceptance_gap": "Native signed .app/.exe output, cross-platform installer smoke tests, and update-from-previous-release proof remain unverified by the repository and current host."
+  },
+  "closed_at": "2026-10-29T16:30:00-05:00"
+}
