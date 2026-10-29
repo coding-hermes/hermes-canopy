@@ -13,6 +13,7 @@ This index is the canonical starting point for the repository's top-level docume
 - [ENV.md](ENV.md) — Operator reference for server and CLI environment variables and their source read sites.
 - [INTEGRATION.md](INTEGRATION.md) — Local backend and frontend integration setup, Docker Compose, and verification guidance.
 - [ITERATION_PANEL.md](ITERATION_PANEL.md) — User-facing behavior and event-stream contract for the Agent activity side panel.
+- [LIVE-EVIDENCE-2026-10-29.md](LIVE-EVIDENCE-2026-10-29.md) — Live probe evidence for the review-critical core loop against the dev stack (docker-compose :8092 and standalone :8091).
 - [RC1-MANIFEST.md](RC1-MANIFEST.md) — Immutable RC1 freeze metadata, artifact identity, and evidence recorded at the freeze.
 - [SCRATCH_INSTANCE.md](SCRATCH_INSTANCE.md) — Isolated throwaway-instance recipe that avoids sharing live ports and state.
 - [SELF_HOST.md](SELF_HOST.md) — Self-hosting guide covering installation, configuration, operation, backups, and upgrades.
