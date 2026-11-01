@@ -4,10 +4,10 @@ Target
 - Repository: coding-hermes/hermes-canopy
 - Canonical remote: git@github.com:coding-hermes/hermes-canopy.git
 - Default branch: master
-- Candidate SHA: 23b910bf8ee577fd44b3651f487a10fa588bdcb8
+- Candidate SHA: ae25c91756f8e809fd11e4592d50e6b106140e4a
 - Git and GitHub branch API agree on candidate SHA; origin/master is equal to the candidate.
 - Existing release tag: v0.2.0, remote peeled commit 65663f2c9551528f6fa2d32bc849da0bc6c1ff15.
-- Release range: v0.2.0..23b910bf8ee577fd44b3651f487a10fa588bdcb8, 152 commits.
+- Release range: v0.2.0..ae25c91756f8e809fd11e4592d50e6b106140e4a, 153 commits.
 
 Commit census
 - feat: 4
@@ -17,16 +17,16 @@ Commit census
 - docs: 15
 - test: 1
 - refactor: 0
-- other: 107
+- other: 108
 - breaking footer: none found
 - breaking subject marker: none found
 - Proposed semver: v0.3.0 (minor), not authorized for tagging.
 
 CI
-- Exact candidate run 41362959884: completed success, Build workflow, SHA 23b910bf.
-- URL: https://github.com/coding-hermes/hermes-canopy/actions/runs/41362959884
+- Exact candidate run 41363492772: completed success, Build workflow, SHA ae25c917.
+- URL: https://github.com/coding-hermes/hermes-canopy/actions/runs/41363492772
 - The exact job completed success; all listed build, test, frontend, gitleaks, Docker build, and deploy steps completed success.
-- Prior pre-carrier candidate run 41361709675 on 6aa20d57 also completed success.
+- Prior pre-carrier candidate run 41362959884 on 23b910bf also completed success.
 - Recent historical failures 40822877417, 40817525372, and 40816914731 are not on the candidate.
 - Tag-triggered release workflow exists at .github/workflows/release.yml.
 - Previous release workflow run 39539678215 on v0.2.0 failed at signed manifest generation because RELEASE_SIGNING_KEY was empty.
