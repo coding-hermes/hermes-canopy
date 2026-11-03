@@ -4194,3 +4194,21 @@ tasks:
   status: complete
   created_at: '2026-10-26T16:20:11.258460+00:00'
   completed_at: '2026-10-26T23:31:14.272313+00:00'
+- id: SKILL-MAINT-001
+  title: Split coding-hermes-foreman-hermes-canopy SKILL.md under the 100K skill-write
+    cap
+  criteria:
+  - SKILL.md of coding-hermes-foreman-hermes-canopy is under 100K chars (target <=50K)
+    with detail corpora MOVED VERBATIM into references/<topic>.md (content never deleted);
+    the nine dangling references (tick-499-gap088-selfhost-quickstart.md, tick-531-clean-machine-red.md,
+    t432-scan-subset-vs-full-board.md, flake-forensics-df26.md, pl02-built-in-viewer-phases.md,
+    tick-527-board-surgery-and-route-gating.md, canopy-testdb-url-override-contamination.md,
+    live-proof-isolated-stack.md, postgres-to-sqlite-ddl-translation.md) resolve to
+    real files or are repointed to the owning files/skills that carry their content;
+    references/boardctl-and-deploy-pitfalls-2026-10-31.md is routed from the Board
+    topology and Live deployment sections of the body; a skill_manage patch on SKILL.md
+    succeeds afterwards (write-cap headroom); skill_view loads the trimmed SKILL.md
+    and each referenced file.
+  status: complete
+  created_at: '2026-11-03T05:46:12.447408+00:00'
+  completed_at: '2026-11-03T06:12:17.008906+00:00'
