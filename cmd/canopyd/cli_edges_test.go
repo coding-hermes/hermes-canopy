@@ -94,13 +94,30 @@ func TestServerUsageListsSubcommands(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("printServerUsage returned %d, want 0", code)
 	}
+	const subcommandsStart = "Subcommands:\n"
+	const subcommandsEnd = "\nThe tree/session/topic subcommands are HTTP clients"
+	start := strings.Index(out, subcommandsStart)
+	end := strings.Index(out, subcommandsEnd)
+	if start < 0 || end < start {
+		t.Fatalf("server usage has no complete subcommand block: %q", out)
+	}
+	subcommands := out[start+len(subcommandsStart) : end]
+	lines := strings.Split(strings.TrimSuffix(subcommands, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("server usage lists %d subcommand lines, want 14: %q", len(lines), subcommands)
+	}
+	for _, want := range []string{
+		"tree create", "tree list", "tree delete", "tree navigate",
+		"session browse", "session import", "session associations-backfill",
+		"topic <subcmd>", "card export", "db export-sqlite", "token mint|verify",
+		"config check", "context-accuracy", "serve [flags]",
+	} {
+		if !strings.Contains(subcommands, "  "+want) {
+			t.Errorf("server usage is missing %q:\n%s", want, subcommands)
+		}
+	}
 	for _, want := range []string{
 		"Usage: canopyd [serve] [flags]",
-		"Subcommands:",
-		"  serve [flags]",
-		"  tree <subcmd>",
-		"  session <subcmd>",
-		"  topic <subcmd>",
 		"Flags:",
 		"-version",
 		"-relay-mode",
