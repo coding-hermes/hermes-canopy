@@ -4,6 +4,7 @@ package telemetry
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,12 +45,22 @@ func MetricsMiddleware(m *Metrics) func(http.Handler) http.Handler {
 			// routing; an unmatched request (chi's NotFound) leaves it
 			// empty, and those samples land in the unmatched bucket plus
 			// the dedicated unmatched counter — never the raw r.URL.Path.
+			//
+			// A pattern ending in "/*" is a CATCH-ALL: chi resolves a
+			// request that no specific route matches to the mount pattern
+			// of the subrouter that then 404s (e.g. "/api/v1/*"), so a raw
+			// pattern check alone would file probe traffic under a fake
+			// matched route and never move canopy_http_unmatched_requests_total.
+			// Treat catch-all resolution as unmatched, exactly like an
+			// empty pattern.
 			routePattern := unmatchedRouteLabel
 			matched := false
 			rctx := chi.RouteContext(r.Context())
 			if rctx != nil && rctx.RoutePattern() != "" {
-				routePattern = rctx.RoutePattern()
-				matched = true
+				if pattern := rctx.RoutePattern(); !strings.HasSuffix(pattern, "/*") {
+					routePattern = pattern
+					matched = true
+				}
 			}
 			if !matched {
 				m.IncUnmatchedRequest(r.Method)

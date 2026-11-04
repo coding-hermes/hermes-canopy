@@ -151,3 +151,58 @@ func TestUnmatchedCounterOnlyMovesOnUnmatched(t *testing.T) {
 		t.Errorf("a matched request incremented the unmatched counter:\n%s", out)
 	}
 }
+
+// TestUnmatchedUnderMountedSubrouter pins the PRODUCTION router shape, which
+// the flat fixture above cannot reproduce: canopyd mounts the API on a
+// subrouter (`r.Mount("/api/v1", apiRouter)`) whose own NotFound handler
+// answers unknown API paths. chi then leaves RoutePattern at the subrouter's
+// catch-all ("/api/v1/*") rather than empty, so a bare pattern check files
+// probe traffic under a fake matched route and the unmatched counter never
+// moves — the defect this test exists to catch. Live probe that found it:
+// GET /api/v1/sentinel-9f3a1c on :8091 produced path="/api/v1/*" and no
+// canopy_http_unmatched_requests_total series at all.
+func TestUnmatchedUnderMountedSubrouter(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	m := newMetricsWith(reg)
+
+	r := chi.NewRouter()
+	r.Use(MetricsMiddleware(m))
+
+	api := chi.NewRouter()
+	api.Get("/widgets/{widget_id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	api.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"error":{"code":"NOT_FOUND"}}`, http.StatusNotFound)
+	})
+	r.Mount("/api/v1", api)
+	r.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	const sentinel = "/api/v1/sentinel-9f3a1c"
+	resp, err := http.Get(srv.URL + sentinel)
+	if err != nil {
+		t.Fatalf("GET unknown path under mounted subrouter: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 from the subrouter NotFound, got %d", resp.StatusCode)
+	}
+
+	out := scrapeMetrics(t, srv.URL+"/metrics")
+
+	if !strings.Contains(out, `canopy_http_unmatched_requests_total{method="GET"} 1`) {
+		t.Errorf("mounted-subrouter 404 did not increment the unmatched counter:\n%s", out)
+	}
+	if !strings.Contains(out, `path="unmatched"`) {
+		t.Errorf("mounted-subrouter 404 did not land in path=\"unmatched\":\n%s", out)
+	}
+	if strings.Contains(out, `path="/api/v1/*"`) {
+		t.Errorf("catch-all resolution was recorded as a matched route:\n%s", out)
+	}
+	if strings.Contains(out, "sentinel-9f3a1c") {
+		t.Error("the raw unmatched path leaked into /metrics output")
+	}
+}
