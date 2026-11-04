@@ -1412,3 +1412,6 @@
 {"id":20261234,"timestamp":"2026-11-03T22:55:36Z","event_type":"task_created","task_id":"CAN-DB-01","actor":"foreman","detail":"{\"id\":\"CAN-DB-01\",\"status\":\"pending\"}","tick_number":null}
 {"id":20261235,"timestamp":"2026-11-03T22:55:36Z","event_type":"task_created","task_id":"CAN-MEM-04","actor":"foreman","detail":"{\"id\":\"CAN-MEM-04\",\"status\":\"pending\"}","tick_number":null}
 {"id":20261236,"timestamp":"2026-11-03T22:55:37Z","event_type":"task_created","task_id":"CAN-MET-01","actor":"foreman","detail":"{\"id\":\"CAN-MET-01\",\"status\":\"pending\"}","tick_number":null}
+{"id":20261237,"timestamp":"2026-11-04T13:27:41Z","event_type":"task_completed","task_id":"DOC-14","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":20261238,"timestamp":"2026-11-04T13:54:19Z","event_type":"task_completed","task_id":"CAN-MEM-01","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":20261239,"timestamp":"2026-11-04T13:54:30Z","event_type":"task_completed","task_id":"CAN-MET-01","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}

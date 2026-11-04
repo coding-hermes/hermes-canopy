@@ -4212,3 +4212,46 @@ tasks:
   status: complete
   created_at: '2026-11-03T05:46:12.447408+00:00'
   completed_at: '2026-11-03T06:12:17.008906+00:00'
+- id: DOC-14
+  title: Expose all canopyd CLI subcommands in --help
+  criteria:
+  - 'Implement DOC-14: canopyd --help must enumerate at least 14 subcommands including
+    token mint, config check, context-accuracy, and card export; the existing docs-check
+    must remain green.'
+  status: complete
+  created_at: '2026-11-03T18:21:50.731565+00:00'
+  completed_at: '2026-11-03T18:46:52.403008+00:00'
+- id: CAN-MEM-01
+  title: "P0 tree membership read path: GET /api/v1/trees/{tree_id}/members (SPEC-API-06\
+    \ \xA79)"
+  criteria:
+  - "Mount the route with membership middleware, return the \xA79.3 member shape with\
+    \ limit/offset and total, 403 envelope for non-members, drop the deferred-parity\
+    \ entry in internal/server/route_parity_test.go and the docs/API.md lines that\
+    \ call it unmounted in the same commit; go test ./internal/server ./internal/handler\
+    \ -count=1 exit 0."
+  status: complete
+  created_at: '2026-11-04T13:18:00.794673+00:00'
+  completed_at: '2026-11-04T13:44:38.556700+00:00'
+- id: CAN-MET-01
+  title: P1 Prometheus-attributable metric namespace for hermes-canopy
+  criteria:
+  - Emit every product series under canopy_ (http requests, duration, active connections,
+    tree_count, node_count), wire or delete the orphan node_count declaration with
+    a telemetry writer-coverage test, add canopy_http_unmatched_requests_total with
+    router-pattern route labels and no raw-URL label values, commit the untracked
+    docs/observability-spec.md; go test ./internal/telemetry -count=1 exit 0 and make
+    docs-check green.
+  status: complete
+  created_at: '2026-11-04T13:18:03.866384+00:00'
+  completed_at: '2026-11-04T13:46:46.046844+00:00'
+- id: CAN-MET-01-LIVE
+  title: 'CAN-MET-01 live-wire fix: catch-all resolution counts as unmatched'
+  criteria:
+  - A request to an unknown path under the mounted /api/v1 subrouter increments canopy_http_unmatched_requests_total{method}
+    and lands in path="unmatched"; no path="/api/v1/*" series and no raw path in any
+    label; TestUnmatchedUnderMountedSubrouter is RED at 0910d9bc and GREEN at the
+    fix commit; live :8091 scrape shows the counter after one sentinel probe.
+  status: complete
+  created_at: '2026-11-04T13:52:56.741467+00:00'
+  completed_at: '2026-11-04T13:53:01.725721+00:00'

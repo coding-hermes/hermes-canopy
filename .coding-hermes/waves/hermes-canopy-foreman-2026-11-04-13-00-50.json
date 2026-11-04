@@ -1,0 +1,41 @@
+{
+  "tick_id": "hermes-canopy-foreman-2026-11-04-13-00-50",
+  "project": "hermes-canopy",
+  "workdir": "/home/kara/hermes-canopy",
+  "base_ref": "origin/master",
+  "base_sha": "d36d83f7d9d88512f7b34032bbc16f6a9e85e96f",
+  "budget": 12,
+  "workers": [
+    {
+      "task_id": "CAN-MEM-01",
+      "priority": "P0",
+      "worktree": "/home/kara/worktrees/hermes-canopy-CAN-MEM-01",
+      "branch": "wt/CAN-MEM-01",
+      "model": "kimi-k3",
+      "provider": "neuralwatt",
+      "brief": "/home/kara/.hermes/cache/scratch/canopy-tick-20261104-1300/brief-CAN-MEM-01.md",
+      "files_expected": ["internal/handler/tree_handler.go", "internal/db/*", "internal/server/server.go", "internal/server/route_parity_test.go", "docs/API.md"],
+      "depends_on": []
+    },
+    {
+      "task_id": "CAN-MET-01",
+      "priority": "P1",
+      "worktree": "/home/kara/worktrees/hermes-canopy-CAN-MET-01",
+      "branch": "wt/CAN-MET-01",
+      "model": "kimi-k3-fast",
+      "provider": "neuralwatt",
+      "brief": "/home/kara/.hermes/cache/scratch/canopy-tick-20261104-1300/brief-CAN-MET-01.md",
+      "files_expected": ["internal/telemetry/metrics.go", "internal/server/server.go", "docs/observability-spec.md"],
+      "depends_on": []
+    }
+  ],
+  "verification_only_closures": [
+    {
+      "task_id": "DOC-14",
+      "reason": "already landed in d09c4ff8 (merged via e0bfc6ef) with verdict 85cf6a22 PASS; row still pending on the board",
+      "evidence": "bin/canopyd --help Subcommands count=14; token/config/context-accuracy/card-export grep count=4"
+    }
+  ],
+  "merge_order": ["CAN-MEM-01", "CAN-MET-01"],
+  "notes": "Mutually independent rows: disjoint primary files. CAN-MEM-01 owns handler/server route mounting + docs/API.md; CAN-MET-01 owns internal/telemetry + docs/observability-spec.md. Both touch internal/server/server.go (different blocks) - merge serially and re-run gates on each merged tree."
+}
