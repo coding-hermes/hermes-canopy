@@ -479,6 +479,149 @@ func (h *TreeHandler) ShareTree(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// memberListEntry is one member object in the SPEC-API-06 §9 response. Field
+// names are the spec's exact snake_case JSON names (§9.3/§9.4) — the Share
+// dialog consumes them verbatim, so no camelCase aliases are offered.
+type memberListEntry struct {
+	ID              uuid.UUID  `json:"id"`
+	TreeID          uuid.UUID  `json:"tree_id"`
+	ParticipantType string     `json:"participant_type"`
+	UserID          *uuid.UUID `json:"user_id"`
+	ProfileID       *uuid.UUID `json:"profile_id"`
+	DisplayName     string     `json:"display_name"`
+	ProfileName     *string    `json:"profile_name"`
+	AvatarURL       *string    `json:"avatar_url"`
+	Role            string     `json:"role"`
+	IsVisible       bool       `json:"is_visible"`
+	AutoApproved    bool       `json:"auto_approved"`
+	JoinedAt        time.Time  `json:"joined_at"`
+	LastSeenAt      *time.Time `json:"last_seen_at"`
+	InvitedBy       *uuid.UUID `json:"invited_by"`
+}
+
+// listMembersResponse is the §9.3 envelope: the page plus total/limit/offset.
+type listMembersResponse struct {
+	Members []memberListEntry `json:"members"`
+	Total   int               `json:"total"`
+	Limit   int               `json:"limit"`
+	Offset  int               `json:"offset"`
+}
+
+// ListMembers returns the tree's membership roster (SPEC-API-06 §9) — the
+// Share dialog's member source. Pagination: limit defaults to 50 and caps at
+// 200 (§9.2's 1–200 range), offset defaults to 0; the response echoes the
+// EFFECTIVE limit. Authorization (§9.1 "must be tree member"): the caller
+// needs a membership row or ownership of the tree, enforced here in the
+// handler so the route stays safe under any mount; non-members get 403
+// NOT_TREE_MEMBER, the same code TreeMembershipMiddleware uses upstream.
+// Visibility (§9.5): owners and admins see the full roster; members and
+// viewers see only is_visible rows.
+//
+// Mounted at GET /api/v1/trees/{tree_id}/members (membership-gated upstream).
+func (h *TreeHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	if h.members == nil {
+		writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED",
+			"member endpoints are not configured on this server")
+		return
+	}
+	treeID, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+
+	q := r.URL.Query()
+	limit := 50
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit must be an integer")
+			return
+		}
+		if v < 1 {
+			writeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit must be between 1 and 200")
+			return
+		}
+		limit = v
+	}
+	if limit > 200 {
+		limit = 200 // §9.2 cap
+	}
+	offset := 0
+	if raw := q.Get("offset"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_OFFSET", "offset must be a non-negative integer")
+			return
+		}
+		offset = v
+	}
+
+	userID := UserIDFromContext(r.Context())
+	if userID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+
+	role, isMember, err := h.members.IsMember(r.Context(), treeID, userID)
+	if err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("list members: membership check failed")
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not verify membership")
+		return
+	}
+	if !isMember {
+		// Owner fallback: the tree owner passes even without a membership
+		// row (CreateTree's owner-membership insert is best-effort). Same
+		// owner-or-member rule as canViewTree.
+		existing, gerr := h.svc.GetTree(r.Context(), treeID, service.GetTreeOptions{IncludeStats: false})
+		if gerr != nil {
+			h.writeServiceError(w, r, gerr)
+			return
+		}
+		if !isTreeOwner(existing.OwnerID, userID) {
+			writeError(w, http.StatusForbidden, "NOT_TREE_MEMBER", "you are not a member of this tree")
+			return
+		}
+		role = db.TreeRoleOwner
+	}
+
+	// §9.5: owners and admins see the full roster regardless of visibility;
+	// members and viewers see only is_visible=true rows.
+	includeHidden := role == db.TreeRoleOwner || role == db.TreeRoleAdmin
+
+	members, total, err := h.members.ListByTree(r.Context(), treeID, includeHidden, limit, offset)
+	if err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("list members: query failed")
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+		return
+	}
+
+	out := make([]memberListEntry, 0, len(members))
+	for _, m := range members {
+		out = append(out, memberListEntry{
+			ID:              m.ID,
+			TreeID:          m.TreeID,
+			ParticipantType: m.ParticipantType,
+			UserID:          m.UserID,
+			ProfileID:       m.ProfileID,
+			DisplayName:     m.DisplayName,
+			ProfileName:     m.ProfileName,
+			AvatarURL:       m.AvatarURL,
+			Role:            m.Role,
+			IsVisible:       m.IsVisible,
+			AutoApproved:    m.AutoApproved,
+			JoinedAt:        m.JoinedAt,
+			LastSeenAt:      m.LastSeenAt,
+			InvitedBy:       m.InvitedBy,
+		})
+	}
+	writeJSON(w, http.StatusOK, listMembersResponse{
+		Members: out,
+		Total:   total,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
 // permissionToRole maps the frontend PermissionLevel (viewer|editor|admin) to
 // the backend tree_role enum (viewer|member|admin). Unknown values default to
 // "viewer" (least privilege).
