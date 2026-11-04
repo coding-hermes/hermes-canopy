@@ -320,7 +320,7 @@ func TestResumeMiddlewareMiniRouterOpensNewWindowAfterIdle(t *testing.T) {
 
 // TestResumeMiddlewareIgnoresTreeWrites pins the fixed GAP-079 contract through
 // real requests: a 2xx WRITE whose route pattern is tree-scoped is not a resume
-// read, so resume_started_total stays at 0 and the tracker is never reached.
+// read, so canopy_resume_started_total stays at 0 and the tracker is never reached.
 func TestResumeMiddlewareIgnoresTreeWrites(t *testing.T) {
 	// A one-hour idle gap is load-bearing. If a write counted as a tree read it
 	// would seed the user's entry with lastTreeRead=now, so the GET milliseconds
@@ -333,7 +333,7 @@ func TestResumeMiddlewareIgnoresTreeWrites(t *testing.T) {
 	defer srv.Close()
 
 	// (a) 2xx writes on the tree mount open no window. fakeSink mirrors
-	// resume_started_total/resume_duration_seconds without touching Prometheus.
+	// canopy_resume_started_total/canopy_resume_duration_seconds without touching Prometheus.
 	for _, w := range []struct{ method, path string }{
 		{http.MethodPost, "/api/v1/trees/t1/share"},
 		{http.MethodPatch, "/api/v1/trees/t1"},
@@ -710,19 +710,19 @@ func TestNewMetricsRegistersResumeMetrics(t *testing.T) {
 	for _, fam := range families {
 		names = append(names, fam.GetName())
 		switch fam.GetName() {
-		case "resume_started_total":
+		case "canopy_resume_started_total":
 			if fam.GetType().String() != "COUNTER" {
-				t.Errorf("resume_started_total type = %s, want COUNTER", fam.GetType())
+				t.Errorf("canopy_resume_started_total type = %s, want COUNTER", fam.GetType())
 			}
 			for _, mt := range fam.GetMetric() {
 				if mt.GetCounter().GetValue() != 1 {
-					t.Errorf("resume_started_total = %v, want 1 after one IncResumeStarted", mt.GetCounter().GetValue())
+					t.Errorf("canopy_resume_started_total = %v, want 1 after one IncResumeStarted", mt.GetCounter().GetValue())
 				}
 				sawStarted = true
 			}
-		case "resume_duration_seconds":
+		case "canopy_resume_duration_seconds":
 			if fam.GetType().String() != "HISTOGRAM" {
-				t.Errorf("resume_duration_seconds type = %s, want HISTOGRAM", fam.GetType())
+				t.Errorf("canopy_resume_duration_seconds type = %s, want HISTOGRAM", fam.GetType())
 			}
 			for _, mt := range fam.GetMetric() {
 				for _, b := range mt.GetHistogram().GetBucket() {
@@ -742,10 +742,10 @@ func TestNewMetricsRegistersResumeMetrics(t *testing.T) {
 		}
 	}
 	if !sawStarted {
-		t.Errorf("resume_started_total not registered; registered: %v", names)
+		t.Errorf("canopy_resume_started_total not registered; registered: %v", names)
 	}
 	if !saw30Boundary {
-		t.Fatalf("resume_duration_seconds must carry the 30s SLO bucket boundary; registered: %v", names)
+		t.Fatalf("canopy_resume_duration_seconds must carry the 30s SLO bucket boundary; registered: %v", names)
 	}
 	if s30 != 0 {
 		t.Errorf("le=30 cumulative count = %v, want 0: a 31s observation must not fall in the 30s bucket", s30)

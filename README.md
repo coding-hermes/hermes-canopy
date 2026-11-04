@@ -1364,19 +1364,29 @@ Canopy does not create `~/.hermes/state-backups`; the directory is populated by 
 
 ## Monitoring
 
-When `METRICS_ENABLED=true`, the `/metrics` endpoint exposes:
+When `METRICS_ENABLED=true`, the `/metrics` endpoint exposes product series in
+the `canopy_` namespace (CAN-MET-01 — every product series is attributable to
+this daemon by name alone):
 
-- `request_total` — Request count by method, path, status
-- `request_duration_seconds` — Request duration histogram
-- `active_connections` — Concurrent request gauge
-- `tree_count` — Number of trees in the database
-- `node_count` — Number of nodes in the database
-- `resume_duration_seconds` — Seconds between a user's first tree-scoped read
+- `canopy_http_requests_total` — Request count by method, route pattern, status
+- `canopy_http_request_duration_seconds` — Request duration histogram
+- `canopy_active_connections` — Concurrent request gauge
+- `canopy_http_unmatched_requests_total` — Requests that matched no route, by
+  method only (the raw path is never a label value)
+- `canopy_tree_count` — Number of trees in the database
+- `canopy_node_count` — Number of nodes in the database
+- `canopy_resume_duration_seconds` — Seconds between a user's first tree-scoped read
   (GET/HEAD) after an idle gap and the compiled context they resume with
   (histogram; the buckets include the 30 second SLO line)
-- `resume_started_total` — Resume windows opened
+- `canopy_resume_started_total` — Resume windows opened
 
-`resume_duration_seconds` carries the resume metric behind the product's
+Route labels are always chi's mounted route pattern (e.g.
+`/api/v1/trees/{tree_id}`), never the concrete request path. A request that
+matches no route folds into the `unmatched` bucket and increments
+`canopy_http_unmatched_requests_total`, so probe traffic cannot mint a series
+per probed path.
+
+`canopy_resume_duration_seconds` carries the resume metric behind the product's
 "resume work in <30 seconds" claim. Semantics: a resume window **opens** on a
 user's first successful (HTTP 2xx) tree-scoped read (GET/HEAD) after at least 5
 minutes with no tree-scoped read by that user, and **completes** when that same
@@ -1385,7 +1395,7 @@ context, i.e. the point where the server has handed the user back their working
 context. Only reads count: the tree-scoped routes include writes (PATCH/DELETE
 `/api/v1/trees/{tree_id}` and the `POST` routes under it), and those never open,
 refresh or complete a window.
-`resume_started_total` counts windows opened, so a resume that never reaches a
+`canopy_resume_started_total` counts windows opened, so a resume that never reaches a
 context compile is visible as started-but-never-observed.
 
 > This is the **server-observable** part of the claim, and nothing more: browser
