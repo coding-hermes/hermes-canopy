@@ -221,11 +221,12 @@ func IsContextCompile(pattern string) bool {
 //   - It COMPLETES when that same user's next successful
 //     GET /api/v1/context/{node_id} returns — the compiled context, i.e. the
 //     point where the server has handed the user back their working context.
-//   - resume_duration_seconds observes the wall-clock seconds between those two
-//     requests. That is the SERVER-OBSERVABLE part of the "<30s resume" claim:
+//   - canopy_resume_duration_seconds observes the wall-clock seconds between
+//     those two requests. That is the SERVER-OBSERVABLE part of the "<30s
+//     resume" claim:
 //     browser render time is not included, and a resume performed entirely from
-//     cache is invisible. resume_started_total counts windows opened, so a
-//     window that never reaches a context compile shows up as
+//     cache is invisible. canopy_resume_started_total counts windows opened, so
+//     a window that never reaches a context compile shows up as
 //     started-but-never-observed.
 //
 // Only reads reach the tracker. The tree-scoped PATTERN covers writes too —

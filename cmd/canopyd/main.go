@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -604,6 +605,23 @@ func main() {
 	if cfg.MetricsEnabled {
 		metrics = telemetry.NewMetrics()
 		log.Info().Msg("prometheus metrics enabled on /metrics")
+		// CAN-MET-01: wire the tree/node gauges so they are never the
+		// permanent-zero orphans the observability audit found (D2). The
+		// counts come straight from the pool the tree/node repos already
+		// use; refresh on a tick so post-start writes move the gauges.
+		refreshDomainCountGauges(ctx, database.Pool, metrics)
+		go func() {
+			ticker := time.NewTicker(domainCountRefreshInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					refreshDomainCountGauges(ctx, database.Pool, metrics)
+				}
+			}
+		}()
 	}
 
 	// Context compiler — GAP-001 budgeted context assembly. The retrieved
@@ -841,3 +859,35 @@ func (h healthProbe) EmbeddedMigrations() int64 {
 }
 
 func (h healthProbe) RelayHealth() relaypkg.RelayHealth { return h.relay.Health() }
+
+// domainCountRefreshInterval is how often the tree/node Prometheus gauges are
+// re-read from the database. 30s is comfortably inside a 15s scrape pair: a
+// created tree shows on /metrics within at most two scrapes plus one tick.
+const domainCountRefreshInterval = 30 * time.Second
+
+// refreshDomainCountGauges reads the live tree/node counts from the pool and
+// writes them to the metrics gauges (CAN-MET-01). The same pool the tree and
+// node repos wrap is the count source, so the gauges and the API can never
+// disagree about WHERE the number comes from. A query error is logged and
+// leaves the previous gauge value in place — a transient DB hiccup must not
+// zero the dashboard.
+func refreshDomainCountGauges(ctx context.Context, pool *pgxpool.Pool, m *telemetry.Metrics) {
+	if pool == nil || m == nil {
+		return
+	}
+	var trees, nodes int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*)::int FROM trees WHERE deleted_at IS NULL`,
+	).Scan(&trees); err != nil {
+		log.Warn().Err(err).Msg("metrics: tree count refresh failed")
+		return
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*)::int FROM nodes WHERE deleted_at IS NULL`,
+	).Scan(&nodes); err != nil {
+		log.Warn().Err(err).Msg("metrics: node count refresh failed")
+		return
+	}
+	m.SetTreeCount(trees)
+	m.SetNodeCount(nodes)
+}
