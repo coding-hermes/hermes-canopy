@@ -465,6 +465,22 @@ type TreeMember struct {
 	InvitedBy    *uuid.UUID `db:"invited_by"    json:"invitedBy"`
 }
 
+// TreeMemberSummary is a tree_members row joined with the participant's
+// display identity (users for humans, profiles for agents). It backs the
+// SPEC-API-06 §9 members list: the §9.3 wire shape needs participant_type,
+// display_name, profile_name, avatar_url and last_seen_at, none of which the
+// tree_members table alone carries. The handler maps these fields to the
+// spec's snake_case JSON names; the embedded TreeMember's camelCase tags are
+// never marshalled directly.
+type TreeMemberSummary struct {
+	TreeMember
+	ParticipantType string // "human" or "profile"
+	DisplayName     string
+	ProfileName     *string
+	AvatarURL       *string
+	LastSeenAt      *time.Time
+}
+
 // ProfileInvite is a row in the profile_invites table
 // (migration 000008) inviting a Profile into a Tree.
 type ProfileInvite struct {

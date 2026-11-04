@@ -356,6 +356,14 @@ type TreeMemberRepo interface {
 	// GetByUser returns all memberships for a user across all trees.
 	GetByUser(ctx context.Context, userID uuid.UUID) ([]TreeMember, error)
 
+	// ListByTree returns one page of a tree's memberships, oldest first,
+	// each row joined with the participant's display identity
+	// (SPEC-API-06 §9). includeHidden=false restricts the page to
+	// is_visible rows — the §9.5 default for member/viewer callers;
+	// owners and admins pass true. total counts the filtered set, not the
+	// page. limit/offset are applied in SQL.
+	ListByTree(ctx context.Context, treeID uuid.UUID, includeHidden bool, limit, offset int) ([]TreeMemberSummary, int, error)
+
 	// UpdateRole changes a membership's role.
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (*TreeMember, error)
 
@@ -489,6 +497,55 @@ func (r *PGTreeMemberRepo) GetByUser(ctx context.Context, userID uuid.UUID) ([]T
 		return nil, fmt.Errorf("db: iterate tree members: %w", err)
 	}
 	return out, nil
+}
+
+// ListByTree returns one page of a tree's memberships, oldest first, joined
+// with the participant display identity the SPEC-API-06 §9 response carries
+// (users for humans, profiles for agents). COUNT(*) OVER () reports the
+// filtered total alongside the page rows, so an empty page still carries the
+// correct total of zero.
+func (r *PGTreeMemberRepo) ListByTree(ctx context.Context, treeID uuid.UUID, includeHidden bool, limit, offset int) ([]TreeMemberSummary, int, error) {
+	rows, err := r.pool.Query(ctx, `
+        SELECT m.id, m.tree_id, m.user_id, m.profile_id, m.role,
+               m.is_visible, m.auto_approved, m.joined_at, m.invited_by,
+               CASE WHEN m.user_id IS NOT NULL THEN 'human' ELSE 'profile' END,
+               COALESCE(u.display_name, p.display_name, ''),
+               p.name,
+               u.avatar_url,
+               u.last_seen_at,
+               COUNT(*) OVER ()
+        FROM tree_members m
+        LEFT JOIN users u ON u.id = m.user_id
+        LEFT JOIN profiles p ON p.id = m.profile_id
+        WHERE m.tree_id = $1
+          AND ($2::boolean OR m.is_visible)
+        ORDER BY m.joined_at ASC
+        LIMIT $3 OFFSET $4`,
+		treeID, includeHidden, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list tree members by tree: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]TreeMemberSummary, 0)
+	total := 0
+	for rows.Next() {
+		var s TreeMemberSummary
+		if err := rows.Scan(
+			&s.ID, &s.TreeID, &s.UserID, &s.ProfileID, &s.Role,
+			&s.IsVisible, &s.AutoApproved, &s.JoinedAt, &s.InvitedBy,
+			&s.ParticipantType, &s.DisplayName, &s.ProfileName,
+			&s.AvatarURL, &s.LastSeenAt, &total,
+		); err != nil {
+			return nil, 0, fmt.Errorf("db: scan tree member summary: %w", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("db: iterate tree member summaries: %w", err)
+	}
+	return out, total, nil
 }
 
 // UpdateRole changes a membership's tree_role. Returns

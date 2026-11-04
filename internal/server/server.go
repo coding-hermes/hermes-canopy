@@ -408,6 +408,12 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// Tree CRUD (SPEC-API-02).
 		treeHandler := handler.NewTreeHandler(treeSvc, syncEngine).
 			WithShares(userRepo, membersRepo, sseHub)
+		// SPEC-API-06 §9 — the members read path backing the Share dialog's
+		// roster. Registered BEFORE the /trees mount (same pattern as the
+		// topic-search, reference, multi-reference and merge routes above)
+		// so chi resolves the exact pattern first, and gated with the same
+		// membership middleware class as every sibling tree-scoped route.
+		r.With(membershipMW).Get("/trees/{tree_id}/members", treeHandler.ListMembers)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD (SPEC-API-03) — tree-scoped routes get membership check.

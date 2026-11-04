@@ -767,6 +767,108 @@ func (r *TreeMemberRepo) GetByUser(ctx context.Context, userID uuid.UUID) ([]db.
 	return collectTreeMembers(rows)
 }
 
+// ListByTree returns one page of a tree's memberships, oldest first, joined with the
+// participant display identity the SPEC-API-06 §9 response carries, mirroring
+// PGTreeMemberRepo.ListByTree. The boolean visibility gate is passed as 0/1 (`? OR
+// m.is_visible`); COUNT(*) OVER () reports the filtered total on every row. Column
+// decoding reuses the same TEXT helpers as scanTreeMember — ids via optionalID,
+// timestamps via requiredTime/optionalTime.
+func (r *TreeMemberRepo) ListByTree(ctx context.Context, treeID uuid.UUID, includeHidden bool, limit, offset int) ([]db.TreeMemberSummary, int, error) {
+	q, err := r.conn()
+	if err != nil {
+		return nil, 0, err
+	}
+	hidden := 0
+	if includeHidden {
+		hidden = 1
+	}
+	rows, err := q.QueryContext(ctx, `
+        SELECT m.id, m.tree_id, m.user_id, m.profile_id, m.role,
+               m.is_visible, m.auto_approved, m.joined_at, m.invited_by,
+               CASE WHEN m.user_id IS NOT NULL THEN 'human' ELSE 'profile' END,
+               COALESCE(u.display_name, p.display_name, ''),
+               p.name,
+               u.avatar_url,
+               u.last_seen_at,
+               COUNT(*) OVER ()
+        FROM tree_members m
+        LEFT JOIN users u ON u.id = m.user_id
+        LEFT JOIN profiles p ON p.id = m.profile_id
+        WHERE m.tree_id = ?
+          AND (? OR m.is_visible)
+        ORDER BY m.joined_at ASC
+        LIMIT ? OFFSET ?`,
+		idArg(treeID), hidden, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list tree members by tree: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]db.TreeMemberSummary, 0)
+	total := 0
+	for rows.Next() {
+		var (
+			s                     db.TreeMemberSummary
+			id, treeID            string
+			userID, profileID     sql.NullString
+			isVisible, autoApprov sql.NullInt64
+			joinedAt              sql.NullString
+			invitedBy             sql.NullString
+			displayName           sql.NullString
+			profileName           sql.NullString
+			avatarURL             sql.NullString
+			lastSeenAt            sql.NullString
+			rowTotal              int64
+		)
+		if err := rows.Scan(&id, &treeID, &userID, &profileID, &s.Role,
+			&isVisible, &autoApprov, &joinedAt, &invitedBy,
+			&s.ParticipantType, &displayName, &profileName, &avatarURL,
+			&lastSeenAt, &rowTotal); err != nil {
+			return nil, 0, fmt.Errorf("db: scan tree member summary: %w", err)
+		}
+		if s.ID, err = uuid.Parse(id); err != nil {
+			return nil, 0, fmt.Errorf("tree_members.id %q: %w", id, err)
+		}
+		if s.TreeID, err = uuid.Parse(treeID); err != nil {
+			return nil, 0, fmt.Errorf("tree_members.tree_id %q: %w", treeID, err)
+		}
+		if s.UserID, err = optionalID("tree_members.user_id", userID); err != nil {
+			return nil, 0, err
+		}
+		if s.ProfileID, err = optionalID("tree_members.profile_id", profileID); err != nil {
+			return nil, 0, err
+		}
+		if s.IsVisible, err = boolColumn("tree_members.is_visible", isVisible); err != nil {
+			return nil, 0, err
+		}
+		if s.AutoApproved, err = boolColumn("tree_members.auto_approved", autoApprov); err != nil {
+			return nil, 0, err
+		}
+		if s.JoinedAt, err = requiredTime("tree_members.joined_at", joinedAt); err != nil {
+			return nil, 0, err
+		}
+		if s.InvitedBy, err = optionalID("tree_members.invited_by", invitedBy); err != nil {
+			return nil, 0, err
+		}
+		s.DisplayName = displayName.String
+		if profileName.Valid {
+			s.ProfileName = &profileName.String
+		}
+		if avatarURL.Valid {
+			s.AvatarURL = &avatarURL.String
+		}
+		if s.LastSeenAt, err = optionalTime("users.last_seen_at", lastSeenAt); err != nil {
+			return nil, 0, err
+		}
+		total = int(rowTotal)
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("db: iterate tree member summaries: %w", err)
+	}
+	return out, total, nil
+}
+
 // UpdateRole changes a membership's role and returns the stored row.
 //
 // Unlike users.Update this can use RETURNING: tree_members carries no AFTER trigger in the

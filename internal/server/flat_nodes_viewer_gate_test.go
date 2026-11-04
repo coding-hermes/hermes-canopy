@@ -125,6 +125,12 @@ func (s *df84MemberStub) GetByUser(_ context.Context, _ uuid.UUID) ([]db.TreeMem
 	return nil, nil
 }
 
+// ListByTree satisfies the widened db.TreeMemberRepo interface (CAN-MEM-01);
+// the flat-nodes tests never list members, so an empty page is honest.
+func (s *df84MemberStub) ListByTree(_ context.Context, _ uuid.UUID, _ bool, _, _ int) ([]db.TreeMemberSummary, int, error) {
+	return nil, 0, nil
+}
+
 func (s *df84MemberStub) UpdateRole(_ context.Context, _ uuid.UUID, _ string) (*db.TreeMember, error) {
 	return nil, nil
 }

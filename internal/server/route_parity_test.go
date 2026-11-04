@@ -727,13 +727,22 @@ func TestRouteParityWorkspaceProfileRoutes(t *testing.T) {
 }
 
 // TestSpecAPI06RequiredRoutesAbsent pins the other side of the parity
-// decision: the twelve tree-scoped routes retained in SPEC-API-06 are not
-// mounted. If a future implementation adds one, this test fails until the
+// decision: the tree-scoped routes retained as Deferred in SPEC-API-06 are
+// not mounted. If a future implementation adds one, this test fails until the
 // specification and API reference are amended to describe the new surface.
+// CAN-MEM-01 shipped the §9 members read path, so it leaves the deferred
+// list and gains a presence pin instead.
 func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1")
 	if walkedTotal < 40 {
 		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
+	}
+
+	// CAN-MEM-01 (SPEC-API-06 §9): the members read path IS mounted. The
+	// deferred list below pins absence only, so an unmounted members route
+	// would silently pass — pin the shipped side explicitly.
+	if !mounted["GET /api/v1/trees/{}/members"] {
+		t.Fatalf("SPEC-API-06 §9 route GET /api/v1/trees/{}/members is not mounted on the real router")
 	}
 
 	deferred := []string{
@@ -742,7 +751,6 @@ func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 		"DELETE /api/v1/trees/{}/invites/{}",
 		"POST /api/v1/invites/{}/accept",
 		"POST /api/v1/invites/{}/decline",
-		"GET /api/v1/trees/{}/members",
 		"PATCH /api/v1/trees/{}/members/{}",
 		"DELETE /api/v1/trees/{}/members/{}",
 		"GET /api/v1/profiles",
@@ -815,9 +823,11 @@ func TestRouteParityTreeScopedReadsAreMembershipGated(t *testing.T) {
 			control.method, control.pattern)
 	}
 
-	// The two surfaces the judge flagged, plus the remaining graph siblings.
+	// The two surfaces the judge flagged, plus the remaining graph siblings
+	// and the CAN-MEM-01 members read path (SPEC-API-06 §9).
 	gated := []route{
 		{http.MethodGet, "/api/v1/trees/{}/export"},
+		{http.MethodGet, "/api/v1/trees/{}/members"},
 		{http.MethodGet, "/api/v1/graph/trees/{}/stats"},
 		{http.MethodGet, "/api/v1/graph/trees/{}/subtree/{}"},
 		{http.MethodGet, "/api/v1/graph/trees/{}/ancestors/{}"},
