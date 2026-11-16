@@ -1429,3 +1429,5 @@
 {"id": 20261251, "timestamp": "2026-11-16T03:00:00Z", "event_type": "deploy_stale_alert", "task_id": "GAP-069", "actor": "deploy-staleness-check", "detail": "{\"reason\": \"STALE_BLOCKED\", \"lag_seconds\": 997194, \"source_commit\": \"079cba5a33cdf6eb5063a0ba135d5de0e5e56c51\", \"deployed_binary\": \"/home/kara/bin/canopyd\", \"embedded_schema_version\": 49, \"db_schema_version\": 49, \"service_restarts\": \"0\"}"}
 {"id": 20261252, "timestamp": "2026-11-16T03:00:57Z", "event_type": "task_completed", "task_id": "CAN-TST-01", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 20261253, "timestamp": "2026-11-16T03:01:08Z", "event_type": "task_completed", "task_id": "CAN-MEM-04", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 20261254, "timestamp": "2026-11-16T12:12:23Z", "event_type": "task_updated", "task_id": "CAN-OPS-01", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261255, "timestamp": "2026-11-16T12:45:42Z", "event_type": "task_updated", "task_id": "CAN-OPS-01", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
