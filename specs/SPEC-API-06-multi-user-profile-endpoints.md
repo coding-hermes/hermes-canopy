@@ -40,7 +40,7 @@ Canopy has two participant types: **humans** (user accounts) and **Hermes profil
 
 ### 3.1 Deferred (not implemented) route summary
 
-The following twelve endpoint definitions are retained as the deferred
+The following eleven endpoint definitions are retained as the deferred
 implementation contract. They are not mounted today.
 
 | Method | Path | Auth | Status | Description |
@@ -50,7 +50,6 @@ implementation contract. They are not mounted today.
 | DELETE | `/trees/{tree_id}/invites/{invite_id}` | Required | **Deferred (not implemented)** | Cancel a pending invite |
 | POST | `/invites/{token}/accept` | Required | **Deferred (not implemented)** | Accept an invite via token |
 | POST | `/invites/{token}/decline` | Required | **Deferred (not implemented)** | Decline an invite via token |
-| GET | `/trees/{tree_id}/members` | Required | **Deferred (not implemented)** | List tree members |
 | PATCH | `/trees/{tree_id}/members/{member_id}` | Required | **Deferred (not implemented)** | Update member role or settings |
 | DELETE | `/trees/{tree_id}/members/{member_id}` | Required | **Deferred (not implemented)** | Remove a member from the tree |
 | GET | `/profiles` | Required | **Deferred (not implemented)** | List profiles owned by authenticated user |
@@ -75,6 +74,10 @@ are:
   `DELETE /{profile_name}`.
 - `POST /api/v1/trees/{tree_id}/share` — the shipped tree-sharing route; the
   tree owner resolves an invitee by `user_id` UUID first, then by email.
+- `GET /api/v1/trees/{tree_id}/members` — the shipped members read path
+  (§9, shipped 2026-11-04, CAN-MEM-01): returns the tree's member roster
+  with role, visibility, and display-name fields per §9.3. The write
+  routes (§10/§11) remain deferred above.
 
 These mounts are the current implementation and are not substitutes that should
 be silently read as the deferred tree-scoped contract above. The API reference

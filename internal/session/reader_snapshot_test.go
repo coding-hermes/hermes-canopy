@@ -18,6 +18,28 @@ import (
 
 // snapshotTestOptions returns options that resolve inside dir and materialize
 // into a per-test temp root, with a fixed clock.
+// sameSnapshotFile reports whether a and b name the same on-disk file,
+// tolerating symlink resolution differences between the path the test built
+// and the physical path SQLite reports back (PRAGMA database_list). When
+// either path cannot be stat-ed it falls back to literal equality.
+func sameSnapshotFile(t *testing.T, a, b string) bool {
+	t.Helper()
+	if a == b {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	if errA == nil && errB == nil && ra == rb {
+		return true
+	}
+	sa, errA := os.Stat(a)
+	sb, errB := os.Stat(b)
+	if errA == nil && errB == nil && os.SameFile(sa, sb) {
+		return true
+	}
+	return false
+}
+
 func snapshotTestOptions(t *testing.T, dir string, now time.Time) SnapshotOptions {
 	t.Helper()
 	return SnapshotOptions{
@@ -178,9 +200,11 @@ func TestSnapshotReaderInPlaceSnapshotIsNotImmutable(t *testing.T) {
 
 	r, _, _ := openSnapshotTestReader(t, opts)
 	// No copy is made for a plain snapshot, so the attached file IS the
-	// snapshot and nothing was written beside it.
+	// snapshot and nothing was written beside it. Compare by identity, not
+	// literal path: SQLite reports the resolved physical path, which differs
+	// from the test's path whenever the temp root contains a symlink.
 	dbs := attachedDatabases(t, r)
-	if got := dbs[attachedSchema]; got != plain {
+	if got := dbs[attachedSchema]; !sameSnapshotFile(t, got, plain) {
 		t.Fatalf("attached file = %q, want the snapshot itself %q", got, plain)
 	}
 	entries, err := os.ReadDir(dir)
