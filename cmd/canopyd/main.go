@@ -850,6 +850,13 @@ func (h healthProbe) SchemaVersion(ctx context.Context) (int64, error) {
 	return h.d.SchemaVersion(ctx)
 }
 
+func (h healthProbe) Readiness(ctx context.Context) error {
+	if h.d == nil || h.d.Pool == nil {
+		return errors.New("database pool is nil")
+	}
+	return h.d.Pool.Ping(ctx)
+}
+
 func (h healthProbe) EmbeddedMigrations() int64 {
 	v, err := db.EmbeddedMaxVersion()
 	if err != nil {

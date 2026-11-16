@@ -3,8 +3,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -249,6 +249,14 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				ctx := context.WithValue(req.Context(), healthSchemaKey{}, healthProbe)
+				next.ServeHTTP(w, req.WithContext(ctx))
+			})
+		})
+	}
+	if metrics != nil {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				ctx := context.WithValue(req.Context(), healthMetricsKey{}, metrics)
 				next.ServeHTTP(w, req.WithContext(ctx))
 			})
 		})
@@ -736,46 +744,60 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return errors.Join(drainErr, s.httpServer.Shutdown(ctx))
 }
 
-// healthHandler responds with a simple health check. schema_version and
-// healthHandler serves GET /health. embedded_migrations are reported so a
-// stale binary (older embedded migrations than the live DB) is visible from a
-// single curl — the diagnostic DF-HERMES-CANOPY-1 lacked.
+// healthReadinessTimeout bounds the database probe so /health cannot hang.
+const healthReadinessTimeout = 2 * time.Second
+
+// healthHandler reports build identity and database readiness.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	// Build identity rides on every /health answer (R14-03 / GAP-100): a
-	// RUNNING daemon must identify its exact build without the checker
-	// inferring it from file mtimes.
 	bi := currentBuildInfo()
 	schemaV, embeddedV := int64(-1), int64(-1)
+	status, databaseStatus, databaseUp := "ok", "ready", true
 	if dbh, ok := r.Context().Value(healthSchemaKey{}).(HealthDB); ok {
-		schemaV, _ = dbh.SchemaVersion(r.Context())
-		embeddedV = dbh.EmbeddedMigrations()
-		if rh, ok := dbh.(interface{ RelayHealth() relay.RelayHealth }); ok {
-			health := rh.RelayHealth()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if _, err := fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"relay":{"mode":%q,"status":%q,"sessions":%d},"version":%q,"commit":%q,"build_time":%q}`,
-				schemaV, embeddedV, health.Mode, health.Status, health.Sessions,
-				bi.Version, bi.Commit, bi.BuildTime); err != nil {
-				return
+		ctx, cancel := context.WithTimeout(r.Context(), healthReadinessTimeout)
+		defer cancel()
+		if probe, ok := dbh.(HealthReadiness); ok {
+			if err := probe.Readiness(ctx); err != nil {
+				status, databaseStatus, databaseUp = "degraded", "unavailable", false
 			}
-			return
 		}
+		schemaV, _ = dbh.SchemaVersion(ctx)
+		embeddedV = dbh.EmbeddedMigrations()
+	}
+	if m, ok := r.Context().Value(healthMetricsKey{}).(*telemetry.Metrics); ok {
+		m.SetDBUp(databaseUp)
+	}
+	body := map[string]any{
+		"status": status, "service": "canopyd", "database_status": databaseStatus,
+		"database_up": databaseUp, "schema_version": schemaV,
+		"embedded_migrations": embeddedV, "version": bi.Version,
+		"commit": bi.Commit, "build_time": bi.BuildTime,
+	}
+	if rh, ok := r.Context().Value(healthSchemaKey{}).(interface{ RelayHealth() relay.RelayHealth }); ok {
+		health := rh.RelayHealth()
+		body["relay"] = map[string]any{"mode": health.Mode, "status": health.Status, "sessions": health.Sessions}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprintf(w, `{"status":"ok","service":"canopyd","schema_version":%d,"embedded_migrations":%d,"version":%q,"commit":%q,"build_time":%q}`,
-		schemaV, embeddedV, bi.Version, bi.Commit, bi.BuildTime)
+	if !databaseUp {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // healthSchemaKey lets main() inject a read-only schema-version probe into
 // the health handler without widening the Server constructor.
 type healthSchemaKey struct{}
+type healthMetricsKey struct{}
 
 // HealthDB is the read-only probe surfaced on /health (implemented by
 // cmd/canopyd over *db.DB).
 type HealthDB interface {
 	SchemaVersion(ctx context.Context) (int64, error)
 	EmbeddedMigrations() int64
+}
+
+// HealthReadiness is the narrowly typed readiness seam used by /health.
+type HealthReadiness interface {
+	Readiness(ctx context.Context) error
 }
 
 // versionHandler lives in buildinfo.go — it serves the ldflags-stamped build

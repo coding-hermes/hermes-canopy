@@ -21,6 +21,8 @@ const (
 	SeriesTreeCount = "canopy_tree_count"
 	// SeriesNodeCount tracks the total number of nodes.
 	SeriesNodeCount = "canopy_node_count"
+	// SeriesDBUp tracks whether the database readiness probe succeeded.
+	SeriesDBUp = "canopy_db_up"
 	// SeriesResumeDuration is the server-observable resume-time histogram.
 	SeriesResumeDuration = "canopy_resume_duration_seconds"
 	// SeriesResumeStarted counts resume windows opened.
@@ -44,6 +46,8 @@ type Metrics struct {
 	TreeCount prometheus.Gauge
 	// NodeCount tracks the total number of nodes (wired from the same source).
 	NodeCount prometheus.Gauge
+	// DBUp tracks the most recent database readiness result.
+	DBUp prometheus.Gauge
 	// UnmatchedRequests counts requests that matched no chi route, by method
 	// only — the raw path never becomes a label value.
 	UnmatchedRequests *prometheus.CounterVec
@@ -118,6 +122,12 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 				Help: "Total number of nodes.",
 			},
 		),
+		DBUp: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: SeriesDBUp,
+				Help: "Whether the database readiness probe is healthy (1) or unavailable (0).",
+			},
+		),
 		UnmatchedRequests: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: SeriesHTTPUnmatchedRequestsTotal,
@@ -178,6 +188,19 @@ func (m *Metrics) SetNodeCount(n int) {
 	m.NodeCount.Set(float64(n))
 }
 
+// SetDBUp records the latest database readiness result. Nil-receiver safe so
+// health remains independent of whether metrics are enabled.
+func (m *Metrics) SetDBUp(up bool) {
+	if m == nil || m.DBUp == nil {
+		return
+	}
+	if up {
+		m.DBUp.Set(1)
+		return
+	}
+	m.DBUp.Set(0)
+}
+
 // IncUnmatchedRequest records one request that matched no chi route. The
 // method is the only label; the raw path is never recorded anywhere.
 // Nil-receiver safe.
@@ -210,6 +233,7 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesActiveConnections, "MetricsMiddleware: ActiveConnections Inc/Dec around each request"},
 	{SeriesTreeCount, "cmd/canopyd gauge refresh: Metrics.SetTreeCount from CountDomainTrees"},
 	{SeriesNodeCount, "cmd/canopyd gauge refresh: Metrics.SetNodeCount from CountDomainNodes"},
+	{SeriesDBUp, "healthHandler: Metrics.SetDBUp from the database readiness probe"},
 	{SeriesHTTPUnmatchedRequestsTotal, "MetricsMiddleware: Metrics.IncUnmatchedRequest when chi resolves no route pattern"},
 	{SeriesResumeDuration, "ResumeMiddleware: Metrics.ObserveResumeDuration on a completed resume window"},
 	{SeriesResumeStarted, "ResumeMiddleware: Metrics.IncResumeStarted when a resume window opens"},
