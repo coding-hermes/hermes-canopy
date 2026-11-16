@@ -1431,3 +1431,4 @@
 {"id": 20261253, "timestamp": "2026-11-16T03:01:08Z", "event_type": "task_completed", "task_id": "CAN-MEM-04", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 20261254, "timestamp": "2026-11-16T12:12:23Z", "event_type": "task_updated", "task_id": "CAN-OPS-01", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 20261255, "timestamp": "2026-11-16T12:45:42Z", "event_type": "task_updated", "task_id": "CAN-OPS-01", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 20261265, "timestamp": "2026-11-16T13:11:09Z", "event_type": "task_created", "task_id": "INT-CI-010", "actor": "foreman", "detail": "{\"id\":\"INT-CI-010\",\"status\":\"pending\"}"}
