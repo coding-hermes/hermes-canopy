@@ -4266,3 +4266,21 @@ tasks:
   status: complete
   created_at: '2026-11-16T02:57:20.783072+00:00'
   completed_at: '2026-11-16T02:57:33.479107+00:00'
+- id: CAN-OPS-01
+  title: Make /health report PostgreSQL outage
+  criteria:
+  - 'Implementation scope: when the injected PostgreSQL pool is unavailable, /health
+    must return a non-healthy response and expose canopy_db_up 0; add deterministic
+    tests for healthy and unavailable pool states. Do not perform live Docker stop/start
+    in this worker.'
+  status: in_progress
+  created_at: '2026-11-16T12:12:22.338191+00:00'
+- id: INT-CI-010
+  title: 'Fix red master CI: go mod tidy promotes prometheus/client_model to direct
+    require'
+  criteria:
+  - go mod tidy && git diff --exit-code go.mod go.sum exits 0 on the committed tree;
+    go build ./... and go vet ./... pass; CI build job Tidy step green on master.
+  status: complete
+  created_at: '2026-11-16T19:52:26.769793+00:00'
+  completed_at: '2026-11-16T19:57:42.069728+00:00'
