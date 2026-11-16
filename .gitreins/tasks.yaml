@@ -4255,3 +4255,14 @@ tasks:
   status: complete
   created_at: '2026-11-04T13:52:56.741467+00:00'
   completed_at: '2026-11-04T13:53:01.725721+00:00'
+- id: CAN-TST-01
+  title: session snapshot identity comparison + SPEC-API-06 spec alignment
+  criteria:
+  - 'PASS if go test ./internal/session -count=1 exits 0 on a host whose temp root
+    contains a symlink; FAILIF: the test compares literal unresolved temp paths'
+  - 'PASS if the SPEC-API-06 deferred table no longer lists the shipped GET /trees/{tree_id}/members
+    and the deferred count reads eleven; FAILIF: the spec still marks the shipped
+    route Deferred'
+  status: complete
+  created_at: '2026-11-16T02:57:20.783072+00:00'
+  completed_at: '2026-11-16T02:57:33.479107+00:00'
