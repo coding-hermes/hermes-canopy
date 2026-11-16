@@ -37,5 +37,45 @@
     }
   ],
   "merge_order": ["CAN-MEM-01", "CAN-MET-01"],
-  "notes": "Mutually independent rows: disjoint primary files. CAN-MEM-01 owns handler/server route mounting + docs/API.md; CAN-MET-01 owns internal/telemetry + docs/observability-spec.md. Both touch internal/server/server.go (different blocks) - merge serially and re-run gates on each merged tree."
+  "notes": "Mutually independent rows: disjoint primary files. CAN-MEM-01 owns handler/server route mounting + docs/API.md; CAN-MET-01 owns internal/telemetry + docs/observability-spec.md. Both touch internal/server/server.go (different blocks) - merge serially and re-run gates on each merged tree.",
+  "finished_at": "2026-11-16T05:30:00Z",
+  "recovery": {
+    "recovered_by": "hermes-canopy-foreman-2026-11-16-05-02-33",
+    "canonical_head_at_recovery": "a189afad0d19020f369f254f874ff7df515b45e9",
+    "published_head_at_recovery": "a189afad0d19020f369f254f874ff7df515b45e9",
+    "workers": [
+      {
+        "task_id": "CAN-MEM-01",
+        "branch": "wt/CAN-MEM-01",
+        "tip": "429b8aaf01ecedcfdaf6e9787fedd30a96107a3f",
+        "disposition": "already_reachable_and_verified",
+        "merged_commit": "494410835b14bba5b1e2294fa0e08c1b0a198a37",
+        "row_commit": "0910d9bcf994af7799c04af52aa6781935fd697d",
+        "verdict": "e2b3974f PASS, historical verdict bound to integrated implementation; current canonical full suite independently green",
+        "worktree": "already absent",
+        "branch_deleted": true
+      },
+      {
+        "task_id": "CAN-MET-01",
+        "branch": "wt/CAN-MET-01",
+        "tip": "333aaa740c945ac72b911d0c7b3cf46cb8073c97",
+        "disposition": "already_reachable_and_verified",
+        "merged_commit": "0910d9bcf994af7799c04af52aa6781935fd697d",
+        "row_commit": "470bb96f8604a778dfa6ed8044ec12f7dce64a0e",
+        "verdict": "884e9192 and 999f4cff PASS, historical verdicts bound to integrated implementation/live-wire fix; current canonical full suite independently green",
+        "worktree": "already absent",
+        "branch_deleted": true
+      }
+    ],
+    "board_truth": {
+      "CAN-MEM-01": "complete, commit_hash 0910d9bc, guard PASS, ci GREEN",
+      "CAN-MET-01": "complete, commit_hash 470bb96f, guard PASS, ci GREEN"
+    },
+    "gates": {
+      "current_canonical_full_go_test": "PASS: go test ./... on a clean detached closeout worktree",
+      "current_canonical_go_build": "PASS: go build ./... on a clean detached closeout worktree",
+      "remote_parity_before_closeout": "origin/master == canonical master == a189afad"
+    },
+    "residual_overlay": "Canonical checkout retains unrelated external deploy-staleness events and VFS graph cache residue; attributed and preserved, not included in this manifest-only closeout commit."
+  }
 }
