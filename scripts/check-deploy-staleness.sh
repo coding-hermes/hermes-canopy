@@ -65,6 +65,17 @@
 #                             board alert is written (default: 2 — one
 #                             isolated block is normal worker traffic, two in
 #                             a row is an operator problem)
+#   CANOPYD_DOCKER            docker binary used by the database-container
+#                             watchdog (default: docker)
+#   CANOPYD_DB_CONTAINER      container the watchdog requires to be HEALTHY
+#                             (default: canopy-pg)
+#   CANOPYD_DB_DOWN_THRESHOLD DB-container alert threshold: number of
+#                             CONSECUTIVE runs with no healthy database
+#                             container before a board alert is written
+#                             (default: 1 — the 2026-11-15 incident ran ~11
+#                             days with the container absent and /health still
+#                             answering ok, so the first hourly observation
+#                             after the outage must already be visible)
 #
 # Crash-loop alert (GAP-069 criterion 4): on EVERY staleness run the checker
 # compares the unit's NRestarts counter against a baseline persisted in
@@ -101,6 +112,26 @@
 # `make deploy` path — build → install → restart → health poll → smoke), then
 # re-run the staleness check; fail if the artifact is still stale afterwards.
 # Never runs from a tracked-dirty worktree (STALE_BLOCKED).
+#
+# Database-container watchdog (CAN-OPS-01): on EVERY staleness run the checker
+# asks docker whether the database container (default canopy-pg) is present and
+# HEALTHY, and — when it is not while canopy-canopyd.service is active — appends
+# ONE deploy_db_container_alert event to the board. This is the gap the
+# 2026-11-15 incident exposed: the container had been absent for ~11 days, every
+# authenticated route answered 503 USER_PROVISIONING_FAILED, and NOTHING in the
+# deploy-check output said so because staleness, crash-loops and the service
+# unit were all individually fine. The alert names the container, its observed
+# state, and the service state, so an operator reading events.jsonl can tell a
+# stopped container from a missing one from an unhealthy one.
+#   * service not active -> not applicable (the crash-loop/stale paths own
+#     that outage); the streak resets.
+#   * no usable docker binary / `docker ps` failed -> UNKNOWN: a loud NOTE,
+#     no alert, streak untouched. An unprovable container state must never be
+#     reported as an outage (and must never hide one either — the NOTE says so).
+#   * container healthy -> streak resets (edge-triggered alert re-arms).
+#   * no healthy container -> count the streak; alert as it crosses
+#     CANOPYD_DB_DOWN_THRESHOLD (default 1), one alert per outage, no repeat.
+# Like the other alert paths it never changes an exit code.
 
 set -uo pipefail
 
@@ -148,6 +179,15 @@ DEFAULT_STALE_BLOCKED_THRESHOLD=2
 STALE_BLOCKED_THRESHOLD="${CANOPYD_STALE_BLOCKED_THRESHOLD:-$DEFAULT_STALE_BLOCKED_THRESHOLD}"
 [[ "$STALE_BLOCKED_THRESHOLD" =~ ^[1-9][0-9]*$ ]] \
 	|| fail_error "CANOPYD_STALE_BLOCKED_THRESHOLD not a positive integer: '$STALE_BLOCKED_THRESHOLD'"
+# Database-container watchdog (CAN-OPS-01). The container is the dependency whose
+# absence the 2026-11-15 incident proved nothing watched: 11 days without
+# canopy-pg while /health kept answering ok.
+DOCKER_BIN="${CANOPYD_DOCKER:-docker}"
+DB_CONTAINER="${CANOPYD_DB_CONTAINER:-canopy-pg}"
+DEFAULT_DB_DOWN_THRESHOLD=1
+DB_DOWN_THRESHOLD="${CANOPYD_DB_DOWN_THRESHOLD:-$DEFAULT_DB_DOWN_THRESHOLD}"
+[[ "$DB_DOWN_THRESHOLD" =~ ^[1-9][0-9]*$ ]] \
+	|| fail_error "CANOPYD_DB_DOWN_THRESHOLD not a positive integer: '$DB_DOWN_THRESHOLD'"
 BOARD_EVENTS="$REPO_ROOT/.coding-hermes/board/events.jsonl"
 # Baselines for the two alert counters (crash-loop restart counter, GAP-070
 # un-remediated-stale streak). Local runtime state (git-ignored — see
@@ -459,6 +499,109 @@ reset_stale_blocked_streak() {
 	echo "stale-blocked streak reset to 0 (was $prev)"
 }
 
+# ── Database-container watchdog (CAN-OPS-01) ────────────────────────────────
+# db_container_status(): what does docker say about the database container?
+#   "healthy"            running AND its healthcheck reports healthy
+#   "unhealthy <status>" running but not (yet) healthy — includes
+#                        "Up 3 seconds (health: starting)" and a failed
+#                        healthcheck; <status> is docker's own text
+#   "absent"             docker answered and no running container by that name
+#                        (a stopped container is absent here too — `docker ps`
+#                        lists running containers only, and a stopped database
+#                        is an outage just the same)
+#   (no output)          UNKNOWN: no usable docker binary, or `docker ps` failed
+# Read-only: a bare `docker ps`. Nothing here starts, stops or inspects state
+# beyond the listing, and a failure is never rounded into "absent".
+db_container_status() {
+	local listing name status
+	command -v "$DOCKER_BIN" >/dev/null 2>&1 || return 0
+	listing="$("$DOCKER_BIN" ps --format '{{.Names}}|{{.Status}}' 2>/dev/null)" || return 0
+	while IFS='|' read -r name status; do
+		[[ "$name" == "$DB_CONTAINER" ]] || continue
+		if [[ "$status" == *"(healthy)"* ]]; then
+			echo "healthy"
+		else
+			echo "unhealthy ${status:-unknown}"
+		fi
+		return 0
+	done <<<"$listing"
+	echo "absent"
+}
+
+# reset_db_container_down_streak(): the database container is healthy (or the
+# watchdog no longer applies), so the next outage starts counting from one and
+# re-arms the alert.
+reset_db_container_down_streak() {
+	local prev
+	prev="$(state_get db_container_down_streak)"
+	[[ "$prev" =~ ^[0-9]+$ ]] || return 0
+	((prev == 0)) && return 0
+	state_patch "db_container_down_streak=0" "db_container_state=\"\""
+	echo "db-container down streak reset to 0 (was $prev)"
+}
+
+# check_db_container(): CAN-OPS-01 acceptance criterion 3. When docker shows no
+# HEALTHY database container while the canopyd unit is active, append ONE
+# deploy_db_container_alert board event naming the container, its observed state
+# and the service state. Edge-triggered on the same streak convention as the
+# GAP-070 alert (fires as the streak crosses CANOPYD_DB_DOWN_THRESHOLD, never
+# repeats while the outage persists, re-arms on recovery). Never changes an
+# exit code; never starts/stops/restarts anything.
+check_db_container() {
+	local svc_state cstate prev streak detail state_word
+	svc_state="$(service_serving_state)"
+	if [[ "$svc_state" != "active" ]]; then
+		reset_db_container_down_streak
+		echo "db-container: $CANOPYD_SERVICE is not active — database-container alert not applicable"
+		return 0
+	fi
+	cstate="$(db_container_status)"
+	if [[ -z "$cstate" ]]; then
+		echo "NOTE: cannot determine $DB_CONTAINER state (no usable $DOCKER_BIN) — database-container alert NOT evaluated" >&2
+		return 0
+	fi
+	if [[ "$cstate" == "healthy" ]]; then
+		reset_db_container_down_streak
+		echo "db-container: $DB_CONTAINER healthy"
+		return 0
+	fi
+	prev="$(state_get db_container_down_streak)"
+	[[ "$prev" =~ ^[0-9]+$ ]] || prev=0
+	streak=$((prev + 1))
+	state_patch "db_container_down_streak=$streak" "db_container_state=\"$cstate\""
+	if ((streak < DB_DOWN_THRESHOLD)); then
+		echo "db-container: $DB_CONTAINER not healthy ($cstate) — streak $streak/$DB_DOWN_THRESHOLD, below threshold, no alert"
+		return 0
+	fi
+	if ((prev >= DB_DOWN_THRESHOLD)); then
+		echo "db-container: $DB_CONTAINER still not healthy ($cstate) — alert already raised at the threshold, no repeat"
+		return 0
+	fi
+	# First word only for the stdout context: docker's status text is long and
+	# may carry spaces/parens.
+	state_word="${cstate%% *}"
+	detail="$(python3 - "$DB_CONTAINER" "$cstate" "$CANOPYD_SERVICE" "$streak" "$DB_DOWN_THRESHOLD" "$SRC_COMMIT" "$DEPLOYED_PATH" <<'PY'
+import json, sys
+print(json.dumps({
+    "container": sys.argv[1],
+    "container_state": sys.argv[2],
+    "container_present": not sys.argv[2].startswith("absent"),
+    "service": sys.argv[3],
+    "service_state": "active",
+    "consecutive_runs": int(sys.argv[4]),
+    "threshold": int(sys.argv[5]),
+    "source_commit": sys.argv[6],
+    "deployed_binary": sys.argv[7],
+}))
+PY
+)" || {
+		echo "NOTE: could not render database-container alert detail — alert NOT recorded" >&2
+		return 0
+	}
+	append_board_event "deploy_db_container_alert" "$detail" "container=$DB_CONTAINER state=$state_word service=active" "CAN-OPS-01"
+	echo "DB_CONTAINER_ALERT: no healthy $DB_CONTAINER container while $CANOPYD_SERVICE is active (state=$state_word, streak $streak >= threshold $DB_DOWN_THRESHOLD)"
+}
+
 # ── --check-schema: embedded schema vs live DB schema (read-only) ───────────
 if [[ "$MODE" == "check-schema" ]]; then
 	[[ -x "$SCHEMA_PROBE_BIN" ]] || fail_error "check-schema: canopyd binary not found/executable: $SCHEMA_PROBE_BIN (build it first: make build)"
@@ -509,6 +652,14 @@ SRC_HUMAN="$(date -u -d "@$SRC_TS" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u 
 # never changes this script's exit code. --check-schema returns earlier and is
 # left untouched (it is a pre-deploy gate, not a health watch).
 check_crashloop
+
+# ── Database-container watchdog (CAN-OPS-01) ────────────────────────────────
+# Also runs on EVERY staleness run and before the staleness verdict, for the
+# same reason as the crash-loop check: a missing database container is an
+# outage whatever the deployed binary's age. In the 2026-11-15 incident the
+# artifact was ALSO stale and the alert surface stayed silent for ~11 days
+# because nothing looked at the container. Never changes an exit code.
+check_db_container
 
 # ── Deployed artifact ────────────────────────────────────────────────────────
 LAG="" # seconds behind source; "" when the artifact is missing (set -u safe)

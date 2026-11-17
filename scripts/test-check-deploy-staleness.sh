@@ -184,6 +184,44 @@ run_case() {
 
 echo "== hermetic staleness checker tests (workdir: $WORK) =="
 
+# ── Docker stub (CAN-OPS-01) ────────────────────────────────────────────────
+# The checker's database-container watchdog shells out to `docker ps`. No test
+# may touch the host's real docker daemon (or depend on whether canopy-pg
+# happens to run on the machine executing the suite), so EVERY case below
+# inherits a fake docker that reports a HEALTHY canopy-pg unless the case
+# overrides CANOPYD_DOCKER. `env VAR=...` in the case helpers passes the parent
+# environment through, so exporting this once covers run_case, blocked_run and
+# crashloop_run alike.
+mk_fake_docker() {
+	local path="$1" listing="$2" rcfile="$3"
+	cat >"$path" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+	if [[ "\$a" == "ps" ]]; then
+		rc="\$(cat "$rcfile" 2>/dev/null || echo 0)"
+		if [[ "\$rc" != "0" ]]; then
+			echo "fake docker: cannot connect to the daemon" >&2
+			exit "\$rc"
+		fi
+		cat "$listing" 2>/dev/null || true
+		exit 0
+	fi
+done
+echo "fake docker: unrecognized invocation: \$*" >&2
+exit 17
+EOF
+	chmod +x "$path"
+}
+
+FAKE_DOCKER_LISTING="$WORK/fake-docker-listing"
+FAKE_DOCKER_RC="$WORK/fake-docker-rc"
+FAKE_DOCKER="${WORK}/fake-docker"
+echo 0 >"$FAKE_DOCKER_RC"
+printf 'canopy-pg|Up 4 hours (healthy)\n' >"$FAKE_DOCKER_LISTING"
+mk_fake_docker "$FAKE_DOCKER" "$FAKE_DOCKER_LISTING" "$FAKE_DOCKER_RC"
+CANOPYD_DOCKER="$FAKE_DOCKER"
+export CANOPYD_DOCKER
+
 # ── 1. Current artifact → 0 ─────────────────────────────────────────────────
 REPO="$WORK/cur"
 mkrepo "$REPO"
@@ -1062,6 +1100,210 @@ run_case "invalid CANOPYD_STALE_BLOCKED_THRESHOLD exits 3" 3 \
 	CANOPYD_STALE_PATH="$SB_ART1" \
 	CANOPYD_STALE_BLOCKED_THRESHOLD=0 \
 	EVIDENCE="CANOPYD_STALE_BLOCKED_THRESHOLD not a positive integer" --
+
+# ── CAN-OPS-01: database-container watchdog ─────────────────────────────────
+# The 2026-11-15 incident: canopy-pg absent ~11 days, every authed route 503
+# USER_PROVISIONING_FAILED, and the deploy-check reported nothing because the
+# artifact, the unit and its restart counter were all individually fine. These
+# controls prove the new alert fires on exactly that state, names the container
+# and the service state, stays edge-triggered, re-arms on recovery, and never
+# changes an exit code.
+DBW_LISTING="$WORK/dbw-listing"
+DBW_DOCKER_RC="$WORK/dbw-docker-rc"
+DBW_ACTIVE="$WORK/dbw-active"
+DBW_DOCKER="$WORK/fake-docker-dbw"
+DBW_SYSTEMCTL="$WORK/fake-systemctl-dbw"
+echo 0 >"$DBW_DOCKER_RC"
+printf 'canopy-pg|Up 4 hours (healthy)\n' >"$DBW_LISTING"
+printf 'active\n' >"$DBW_ACTIVE"
+mk_fake_docker "$DBW_DOCKER" "$DBW_LISTING" "$DBW_DOCKER_RC"
+mk_fake_systemctl "$DBW_SYSTEMCTL" "$CRASHLOOP_NRFILE" "$DBW_ACTIVE"
+
+# dbw_run <repo> <artifact> <docker-listing> <active-state> [docker-rc] [env...]
+# One staleness-mode checker run with stub docker + stub systemctl. The restart
+# counter is pinned at 0 so the crash-loop path stays silent and any alert in
+# the board can only come from the database-container watchdog.
+dbw_run() {
+	local repo="$1" art="$2" listing="$3" active="${4:-active}" drc="${5:-0}"
+	if (($# >= 5)); then
+		shift 5
+	else
+		shift $#
+	fi
+	printf '%s' "$listing" >"$DBW_LISTING"
+	echo "$drc" >"$DBW_DOCKER_RC"
+	printf '%s\n' "$active" >"$DBW_ACTIVE"
+	echo 0 >"$CRASHLOOP_NRFILE"
+	env CANOPYD_STALE_REPO_ROOT="$repo" \
+		CANOPYD_STALE_PATH="$art" \
+		CANOPYD_STALE_THRESHOLD_S=86400 \
+		CANOPYD_SYSTEMCTL="$DBW_SYSTEMCTL" \
+		CANOPYD_SERVICE_NAME=canopy-canopyd \
+		CANOPYD_DOCKER="$DBW_DOCKER" \
+		CANOPYD_SCHEMA_PSQL="$WORK/absent-psql-dbw" \
+		"$@" \
+		bash "$CHECKER" 2>&1
+}
+
+# db_container_alerts <repo>: deploy_db_container_alert lines on that board.
+db_container_alerts() {
+	local f="$1/.coding-hermes/board/events.jsonl"
+	if [[ ! -f "$f" ]]; then
+		echo 0
+		return
+	fi
+	grep -c 'deploy_db_container_alert' "$f" || true
+}
+
+# 27. Container ABSENT + unit active -> exactly one alert, rc unchanged (0 when
+#     the artifact is CURRENT, which is the incident's actual state: the binary
+#     was current enough to serve, the database was gone).
+REPO="$WORK/dbw-missing"
+DBW_ART1="$WORK/artifacts/dbw-missing-canopyd"
+mk_crashloop_repo "$REPO" "$DBW_ART1"
+OUT="$(dbw_run "$REPO" "$DBW_ART1" $'nginx|Up 2 hours\n')"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "1" ]] \
+	&& grep -q "DB_CONTAINER_ALERT: no healthy canopy-pg container while canopy-canopyd is active" <<<"$OUT" \
+	&& grep -q "container=canopy-pg state=absent service=active" <<<"$OUT"; then
+	ok "db-container: absent container + active unit alerts once, rc unchanged (rc=0)"
+else
+	bad "db-container: missing container did not alert as specified (rc=$rc alerts=$(db_container_alerts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+evs = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+alerts = [e for e in evs if e.get("event_type") == "deploy_db_container_alert"]
+assert len(alerts) == 1, evs
+ev = alerts[0]
+assert ev["task_id"] == "CAN-OPS-01", ev
+assert ev["actor"] == "deploy-staleness-check", ev
+assert isinstance(ev["id"], int), ev
+d = json.loads(ev["detail"])
+assert d["container"] == "canopy-pg", d
+assert d["container_state"] == "absent", d
+assert d["container_present"] is False, d
+assert d["service"] == "canopy-canopyd", d
+assert d["service_state"] == "active", d
+assert d["consecutive_runs"] == 1, d
+assert d["threshold"] == 1, d
+print("PASS: db-container alert names the container, its state and the service state")
+PY
+[[ $? == 0 ]] && ok "db-container: alert line carries container/state/service_state/threshold" \
+	|| bad "db-container: alert line failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+# 28. Same outage, second run -> NO repeat (edge-triggered), streak keeps
+#     counting, rc unchanged.
+OUT="$(dbw_run "$REPO" "$DBW_ART1" $'nginx|Up 2 hours\n')"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "1" ]] \
+	&& [[ "$(state_key "$REPO" db_container_down_streak)" == "2" ]] \
+	&& grep -q "alert already raised at the threshold, no repeat" <<<"$OUT"; then
+	ok "db-container: a second down run does not repeat the alert (streak 2, alerts 1)"
+else
+	bad "db-container: alert repeated or streak wrong (rc=$rc alerts=$(db_container_alerts "$REPO") streak=$(state_key "$REPO" db_container_down_streak))" "$OUT"
+fi
+
+# 29. Recovery -> streak resets to 0, no new alert, and the printed line proves
+#     the reset. (The incident's acceptance: canopy_db_up returns to 1 and
+#     every authed route recovers — the watchdog mirror of that is the
+#     container coming back healthy.)
+OUT="$(dbw_run "$REPO" "$DBW_ART1" $'canopy-pg|Up 5 seconds (healthy)\n')"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "1" ]] \
+	&& [[ "$(state_key "$REPO" db_container_down_streak)" == "0" ]] \
+	&& grep -q "db-container: canopy-pg healthy" <<<"$OUT" \
+	&& grep -q "db-container down streak reset to 0 (was 2)" <<<"$OUT"; then
+	ok "db-container: a healthy container resets the streak and re-arms the alert"
+else
+	bad "db-container: recovery did not reset the streak (rc=$rc alerts=$(db_container_alerts "$REPO") streak=$(state_key "$REPO" db_container_down_streak))" "$OUT"
+fi
+
+# 30. Present but NOT healthy (healthcheck starting / failing) is an alert too,
+#     and the detail distinguishes it from absent.
+REPO="$WORK/dbw-unhealthy"
+DBW_ART2="$WORK/artifacts/dbw-unhealthy-canopyd"
+mk_crashloop_repo "$REPO" "$DBW_ART2"
+OUT="$(dbw_run "$REPO" "$DBW_ART2" $'canopy-pg|Up 10 seconds (health: starting)\n')"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "1" ]] \
+	&& grep -q "state=unhealthy" <<<"$OUT"; then
+	ok "db-container: a present-but-unhealthy container alerts (rc=0)"
+else
+	bad "db-container: unhealthy container misbehaved (rc=$rc alerts=$(db_container_alerts "$REPO"))" "$OUT"
+fi
+python3 - "$REPO/.coding-hermes/board/events.jsonl" <<'PY'
+import json, sys
+evs = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+alerts = [e for e in evs if e.get("event_type") == "deploy_db_container_alert"]
+assert len(alerts) == 1, evs
+d = json.loads(alerts[0]["detail"])
+assert d["container_present"] is True, d
+assert d["container_state"].startswith("unhealthy"), d
+assert "health: starting" in d["container_state"], d
+print("PASS: unhealthy-but-present container is distinguished from absent")
+PY
+[[ $? == 0 ]] && ok "db-container: unhealthy event keeps docker's own status text" \
+	|| bad "db-container: unhealthy event failed shape validation" "$(cat "$REPO/.coding-hermes/board/events.jsonl")"
+
+# 31. Unit NOT active -> not applicable, no alert (the crash-loop / stale paths
+#     own that outage class; a second alert would be noise).
+REPO="$WORK/dbw-inactive"
+DBW_ART3="$WORK/artifacts/dbw-inactive-canopyd"
+mk_crashloop_repo "$REPO" "$DBW_ART3"
+OUT="$(dbw_run "$REPO" "$DBW_ART3" '' inactive)"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "0" ]] \
+	&& grep -q "is not active — database-container alert not applicable" <<<"$OUT"; then
+	ok "db-container: inactive unit is not an applicable db-container alert (no alert, rc=0)"
+else
+	bad "db-container: inactive unit misbehaved (rc=$rc alerts=$(db_container_alerts "$REPO"))" "$OUT"
+fi
+
+# 32. docker unusable -> UNKNOWN, loud NOTE, no alert, rc unchanged. An
+#     unprovable container state is never reported as an outage.
+REPO="$WORK/dbw-dockerfail"
+DBW_ART4="$WORK/artifacts/dbw-dockerfail-canopyd"
+mk_crashloop_repo "$REPO" "$DBW_ART4"
+OUT="$(printf 'active\n' >"$DBW_ACTIVE"; printf 'canopy-pg|Up 1 hour (healthy)\n' >"$DBW_LISTING"; echo 1 >"$DBW_DOCKER_RC"
+	env CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$DBW_ART4" \
+		CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_SYSTEMCTL="$DBW_SYSTEMCTL" \
+		CANOPYD_SERVICE_NAME=canopy-canopyd CANOPYD_DOCKER="$DBW_DOCKER" \
+		CANOPYD_SCHEMA_PSQL="$WORK/absent-psql-dbw" bash "$CHECKER" 2>&1)"
+rc=$?
+if [[ "$rc" == "0" ]] && [[ "$(db_container_alerts "$REPO")" == "0" ]] \
+	&& grep -q "database-container alert NOT evaluated" <<<"$OUT"; then
+	ok "db-container: docker ps failure is UNKNOWN — NOTE, no alert, rc unchanged"
+else
+	bad "db-container: docker failure misbehaved (rc=$rc alerts=$(db_container_alerts "$REPO"))" "$OUT"
+fi
+
+# 33. Threshold override: with CANOPYD_DB_DOWN_THRESHOLD=2 the first down run
+#     stays silent and the second fires.
+REPO="$WORK/dbw-thresh2"
+DBW_ART5="$WORK/artifacts/dbw-thresh2-canopyd"
+mk_crashloop_repo "$REPO" "$DBW_ART5"
+OUT="$(dbw_run "$REPO" "$DBW_ART5" $'nginx|Up 2 hours\n' active 0 CANOPYD_DB_DOWN_THRESHOLD=2)"
+rc=$?
+first_alerts="$(db_container_alerts "$REPO")"
+OUT2="$(dbw_run "$REPO" "$DBW_ART5" $'nginx|Up 2 hours\n' active 0 CANOPYD_DB_DOWN_THRESHOLD=2)"
+rc2=$?
+if [[ "$rc" == "0" ]] && [[ "$rc2" == "0" ]] && [[ "$first_alerts" == "0" ]] \
+	&& [[ "$(db_container_alerts "$REPO")" == "1" ]] \
+	&& grep -q "1/2, below threshold, no alert" <<<"$OUT"; then
+	ok "db-container: threshold override 2 silences the first run, alerts on the second"
+else
+	bad "db-container: threshold override misbehaved (rc=$rc/$rc2 alerts=$first_alerts→$(db_container_alerts "$REPO"))" "$OUT
+$OUT2"
+fi
+
+# 34. A nonsense threshold is an operational error (exit 3), never a silent
+#     no-op — same discipline as the other two thresholds.
+run_case "invalid CANOPYD_DB_DOWN_THRESHOLD exits 3" 3 \
+	CANOPYD_STALE_REPO_ROOT="$WORK/dbw-missing" \
+	CANOPYD_STALE_PATH="$DBW_ART1" \
+	CANOPYD_DB_DOWN_THRESHOLD=0 \
+	EVIDENCE="CANOPYD_DB_DOWN_THRESHOLD not a positive integer" --
 
 echo ""
 echo "== results: $pass passed, $fail failed =="
