@@ -4267,14 +4267,14 @@ tasks:
   created_at: '2026-11-16T02:57:20.783072+00:00'
   completed_at: '2026-11-16T02:57:33.479107+00:00'
 - id: CAN-OPS-01
-  title: Make /health report PostgreSQL outage
+  title: /health reports ok while PostgreSQL is down
   criteria:
-  - 'Implementation scope: when the injected PostgreSQL pool is unavailable, /health
-    must return a non-healthy response and expose canopy_db_up 0; add deterministic
-    tests for healthy and unavailable pool states. Do not perform live Docker stop/start
-    in this worker.'
+  - GET /health must not report status ok when the database is unreachable (pg_isready
+    -h 127.0.0.1 -p 5437 exits 1); canopy_db_up metric must be 0 while down and 1
+    after recovery without restarting canopyd; deploy-check raises a board alert when
+    no healthy canopy-pg container exists while canopy-canopyd.service is active.
   status: in_progress
-  created_at: '2026-11-16T12:12:22.338191+00:00'
+  created_at: '2026-11-17T17:02:58.512967+00:00'
 - id: INT-CI-010
   title: 'Fix red master CI: go mod tidy promotes prometheus/client_model to direct
     require'
@@ -4297,3 +4297,22 @@ tasks:
   status: complete
   created_at: '2026-11-17T10:23:20.538027+00:00'
   completed_at: '2026-11-17T10:59:36.655182+00:00'
+- id: CAN-MEM-03
+  title: Share dialog uses the real membership API, mock deleted
+  criteria:
+  - frontend/src/components/TreeView.tsx and ShareDialog.tsx contain no buildInitialMembers,
+    no Mock membership, no demo_user_1 and no mock_ id fallback; the share dialog
+    fetches GET /api/v1/trees/<id>/members; a ShareDialog test asserts that fetch;
+    npx tsc -b, npx vitest run and npx oxlint src/components all exit 0; error state
+    renders an explicit message when the API fails.
+  status: in_progress
+  created_at: '2026-11-17T17:02:59.788396+00:00'
+- id: CAN-DB-01
+  title: tree detail include_members roster
+  criteria:
+  - GET /api/v1/trees/<id>?include_members=true returns a members array populated
+    from the same source as GET /api/v1/trees/<id>/members, capped at 200 with members_truncated
+    and total_members set; handler package has an include_members test; go test ./internal/handler
+    -count=1 exits 0.
+  status: in_progress
+  created_at: '2026-11-17T17:03:01.883020+00:00'
