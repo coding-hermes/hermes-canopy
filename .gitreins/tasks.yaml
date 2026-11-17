@@ -4284,3 +4284,16 @@ tasks:
   status: complete
   created_at: '2026-11-16T19:52:26.769793+00:00'
   completed_at: '2026-11-16T19:57:42.069728+00:00'
+- id: CAN-MEM-02
+  title: "tree membership writes: PATCH and DELETE /api/v1/trees/{tree_id}/members/{member_id}\
+    \ (SPEC-API-06 \xA710-\xA711)"
+  criteria:
+  - "PATCH /api/v1/trees/{tree_id}/members/{member_id} updates role/auto_approved\
+    \ and returns 200 with the updated member; DELETE hard-deletes the row and returns\
+    \ 200 {member_id,tree_id,removed_at}; both emit SSE member_updated/user_left;\
+    \ enforcement per SPEC-API-06 \xA710.2/\xA711.2 and \xA711.5 error table; role\
+    \ vocabulary mapping tested table-driven; go test ./internal/handler -count=1\
+    \ exits 0; go build ./... and golangci-lint run ./... clean"
+  status: complete
+  created_at: '2026-11-17T10:23:20.538027+00:00'
+  completed_at: '2026-11-17T10:59:36.655182+00:00'
