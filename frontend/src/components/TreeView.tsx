@@ -57,11 +57,9 @@ import { resolveDemoAliasSync, storeTreeId } from '../lib/activeTree';
 import { useYjsTree } from '../stores/useYjsTree.ts';
 import { usePresence } from '../hooks/usePresence.ts';
 import type {
-  PermissionLevel,
   ShareInvitePayload,
   ShareInviteResult,
 } from '../types/multiUser.ts';
-import { getColorForUser } from '../types/multiUser.ts';
 import { token, palette, alpha } from '../theme.ts';
 import { apiGet, apiPost } from '../lib/api.ts';
 import { getContextPreview } from '../lib/contextApi.ts';
@@ -89,29 +87,6 @@ const MIN_SYNTHESIS_SOURCES = 2;
  * in the envelope's `context_budget` (§9.1).
  */
 const SYNTHESIS_PROFILE_BUDGET = 16384;
-// ─── Mock membership ───────────────────────────────────────────────────
-
-interface Member {
-  userId: string;
-  userName: string;
-  email: string;
-  permission: PermissionLevel;
-  avatarColor: string;
-}
-
-function buildInitialMembers(): Member[] {
-  // In production, these would be fetched from the backend.
-  // For now, we seed with a demo member.
-  return [
-    {
-      userId: 'demo_user_1',
-      userName: 'Demo User',
-      email: 'demo@example.com',
-      permission: 'editor',
-      avatarColor: getColorForUser('demo_user_1'),
-    },
-  ];
-}
 
 /** Re-read authoritative nodes + persisted edges after an SSE convergence gap. */
 async function replayTreeGraph(treeId: string, treeDoc: TreeYDoc): Promise<void> {
@@ -162,7 +137,6 @@ export default function TreeView() {
 
   // Share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [members, setMembers] = useState<Member[]>(buildInitialMembers);
 
   /**
    * /tree/demo alias resolution — E2E-ONLY TEST FIXTURE path (GAP-051).
@@ -416,19 +390,21 @@ export default function TreeView() {
   /**
    * Author display names for canvas avatars.
    *
-   * Presence is the only live identity source in MVP; membership fills in
-   * the rest. Avatar colours come from `getColorForUser` either way, so a
-   * person looks the same here as in the presence bar.
+   * Presence is the identity source here: the canvas only ever labels people
+   * the page can see live. The membership roster is NOT merged in any more —
+   * it is the Share dialog's own data (GET /trees/:id/members, CAN-MEM-03),
+   * so a name reaches the canvas through presence rather than a roster the
+   * page happened to hold. Avatar colours stay deterministic per user id
+   * (`getColorForUser`), so a person looks the same here and in the bar.
    */
   const authorNames = useMemo(() => {
     const names = new Map<string, string>();
-    for (const member of members) names.set(member.userId, member.userName);
     for (const [id, presence] of remotePresence) {
       if (presence.userName) names.set(id, presence.userName);
     }
     if (localUserId) names.set(localUserId, 'You');
     return names;
-  }, [members, remotePresence, localUserId]);
+  }, [remotePresence, localUserId]);
 
   // ── SPEC-PL-06 §7: multi-reference replies ──────────────────────────
 
@@ -887,46 +863,18 @@ export default function TreeView() {
 
   // ── Share dialog handlers ─────────────────────────────────────────
 
+  /**
+   * CAN-MEM-03: the Share dialog owns the tree's membership roster (it reads
+   * it from GET /trees/:id/members and re-reads it after every write). The
+   * page therefore has nothing to merge on invite — this is a notification
+   * hook only, and it never fabricates a member row.
+   */
   const handleInvite = useCallback(
     (payload: ShareInvitePayload, result?: ShareInviteResult) => {
       console.log('[TreeView] Invite sent:', payload, result);
-      // The 201 body is authoritative when present; the payload is the fallback.
-      // A user-ID invite (DF-HERMES-CANOPY-89) carries no email, so the name
-      // falls back to a short form of the UUID instead of inventing an address.
-      const userId = result?.userId ?? payload.user_id ?? `mock_${Date.now()}`;
-      const email = result?.email ?? payload.email ?? '';
-      const userName = email
-        ? (email.split('@')[0] || email)
-        : `User ${userId.slice(0, 8)}`;
-      const newMember: Member = {
-        userId,
-        userName,
-        email,
-        permission: result?.permission ?? payload.permission,
-        avatarColor: getColorForUser(userId),
-      };
-      // Re-inviting the same user replaces their row rather than duplicating it.
-      setMembers((prev) =>
-        prev.some((m) => m.userId === userId)
-          ? prev.map((m) => (m.userId === userId ? newMember : m))
-          : [...prev, newMember],
-      );
     },
     [],
   );
-
-  const handlePermissionChange = useCallback(
-    (userId: string, permission: PermissionLevel) => {
-      setMembers((prev) =>
-        prev.map((m) => (m.userId === userId ? { ...m, permission } : m)),
-      );
-    },
-    [],
-  );
-
-  const handleRemoveMember = useCallback((userId: string) => {
-    setMembers((prev) => prev.filter((m) => m.userId !== userId));
-  }, []);
 
   // ── Derive viewer mode ────────────────────────────────────────────
   const isViewer = currentPermission === 'viewer';
@@ -1235,14 +1183,11 @@ export default function TreeView() {
         }
       />
 
-      {/* Share dialog */}
+      {/* Share dialog — owns the tree's real membership roster */}
       <ShareDialog
         open={showShareDialog}
         onClose={() => setShowShareDialog(false)}
         treeId={treeId ?? ''}
-        members={members}
-        onPermissionChange={handlePermissionChange}
-        onRemoveMember={handleRemoveMember}
         onInvite={handleInvite}
       />
     </div>

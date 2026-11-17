@@ -3,9 +3,19 @@
  *
  * Modal dialog for sharing a tree with other users.
  *   - Invitee input (email OR user UUID) + permission dropdown → send invite
- *   - List of existing members with permission change + remove
+ *   - The tree's REAL membership roster with permission change + remove
  *
- * WIRE-004 / BUG-024: POSTs to the real /api/v1/trees/:id/share endpoint.
+ * WIRE-004 / BUG-024: the invite POSTs to the real
+ * `/api/v1/trees/:id/share` endpoint.
+ *
+ * CAN-MEM-03: the roster is real too. The member list used to be seeded from
+ * a hard-coded demo roster in TreeView; the dialog now owns the data and reads
+ * it from `GET /api/v1/trees/:id/members` (SPEC-API-06 §9) every time it opens,
+ * with role changes via `PATCH .../members/:member_id` (§10) and removals via
+ * `DELETE .../members/:member_id` (§11) — each followed by a fresh read of the
+ * roster, so what is rendered is always what the server stores (no optimistic
+ * rows, no fabricated members). A failed read renders an explicit error with a
+ * Retry affordance instead of an empty list.
  *
  * DF-HERMES-CANOPY-89: a value that parses as a UUID is sent as `user_id`
  * instead of `email`. Dev-mode provisioning creates the account without an
@@ -13,11 +23,17 @@
  * who has signed in; the email path still works for users that have one.
  */
 
-import { useState, useCallback } from 'react';
-import { X, Mail, Shield, Trash2, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { X, Mail, Shield, Trash2, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { token } from '../theme.ts';
 import { apiUrl, authInit } from '../lib/api.ts';
 import { isUuidLike } from '../lib/nodeMeta.ts';
+import {
+  fetchTreeMembers,
+  removeTreeMember,
+  updateTreeMember,
+  type TreeMember,
+} from '../lib/treeMembers.ts';
 import type {
   PermissionLevel,
   ShareInvitePayload,
@@ -27,18 +43,7 @@ import {
   getPermissionLabel,
   getPermissionStyle,
   getUserInitials,
-  getColorForUser,
 } from '../types/multiUser.ts';
-
-// ─── Mock member type ──────────────────────────────────────────────────
-
-interface Member {
-  userId: string;
-  userName: string;
-  email: string;
-  permission: PermissionLevel;
-  avatarColor: string;
-}
 
 // ─── Props ─────────────────────────────────────────────────────────────
 
@@ -49,15 +54,11 @@ export interface ShareDialogProps {
   onClose: () => void;
   /** Tree ID for API calls */
   treeId: string;
-  /** Current members with permissions */
-  members: Member[];
-  /** Called when a member's permission changes */
-  onPermissionChange: (userId: string, permission: PermissionLevel) => void;
-  /** Called when a member is removed */
-  onRemoveMember: (userId: string) => void;
   /**
    * Called when an invite succeeds, with the request payload and — when the
-   * server answered a parseable 201 body — the created share record.
+   * server answered a parseable 201 body — the created share record. The
+   * roster itself is re-read from the API, so the parent does not have to
+   * merge anything into a member list.
    */
   onInvite: (payload: ShareInvitePayload, result?: ShareInviteResult) => void;
 }
@@ -73,15 +74,20 @@ const PERMISSION_OPTIONS: Array<{
   { value: 'admin', label: 'Admin — full access' },
 ];
 
+// ─── Roster state ──────────────────────────────────────────────────────
+
+/**
+ * `loading` until the first read settles; `error` keeps the failed read's
+ * reason on screen (with Retry) and NEVER degrades into an empty list.
+ */
+type RosterState = 'loading' | 'ready' | 'error';
+
 // ─── Component ─────────────────────────────────────────────────────────
 
 export default function ShareDialog({
   open,
   onClose,
   treeId,
-  members,
-  onPermissionChange,
-  onRemoveMember,
   onInvite,
 }: ShareDialogProps) {
   const [invitee, setInvitee] = useState('');
@@ -91,6 +97,49 @@ export default function ShareDialog({
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [statusText, setStatusText] = useState('');
 
+  // Real roster (CAN-MEM-03) — starts EMPTY and is filled from the API.
+  const [members, setMembers] = useState<TreeMember[]>([]);
+  const [rosterState, setRosterState] = useState<RosterState>('loading');
+  const [rosterError, setRosterError] = useState('');
+  /** Bumped by Retry and after every successful mutation to re-read. */
+  const [rosterNonce, setRosterNonce] = useState(0);
+  /** Membership id whose write is in flight (its row's controls go quiet). */
+  const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  /** Last role/remove failure, shown under the roster. */
+  const [actionError, setActionError] = useState('');
+
+  // ── Read the roster (exactly one GET per open; re-read on demand) ──
+  useEffect(() => {
+    if (!open || treeId === '') return;
+
+    // React 19 StrictMode double-invokes effects in dev; the flag makes the
+    // abandoned run's result a no-op so the rendered roster is the newest one.
+    let ignore = false;
+    setRosterState('loading');
+    setRosterError('');
+
+    void fetchTreeMembers(treeId).then(
+      (roster) => {
+        if (ignore) return;
+        setMembers(roster);
+        setRosterState('ready');
+      },
+      (err: unknown) => {
+        if (ignore) return;
+        // Drop whatever was rendered before: a stale roster next to an error
+        // reads as "these are the members", which is exactly the lie the mock
+        // seeding produced.
+        setMembers([]);
+        setRosterState('error');
+        setRosterError(err instanceof Error ? err.message : String(err));
+      },
+    );
+
+    return () => {
+      ignore = true;
+    };
+  }, [open, treeId, rosterNonce]);
+
   // ── Reset on close ────────────────────────────────────────────────
   const handleClose = useCallback(() => {
     setInvitee('');
@@ -98,8 +147,13 @@ export default function ShareDialog({
     setMessage('');
     setStatus('idle');
     setStatusText('');
+    setActionError('');
     onClose();
   }, [onClose]);
+
+  const retryRoster = useCallback(() => {
+    setRosterNonce((n) => n + 1);
+  }, []);
 
   // ── Send invite (real POST to /api/v1/trees/:id/share) ────────────
   const handleSendInvite = useCallback(async () => {
@@ -156,6 +210,9 @@ export default function ShareDialog({
       onInvite(payload, result);
       setInvitee('');
       setMessage('');
+      // The roster is server-owned: re-read it so the new member appears with
+      // the role the membership row actually carries.
+      setRosterNonce((n) => n + 1);
     } catch (err) {
       // Network error / API down.
       const detail =
@@ -166,6 +223,52 @@ export default function ShareDialog({
       setSending(false);
     }
   }, [invitee, permission, message, treeId, onInvite]);
+
+  // ── Role change → PATCH, then re-read the roster ──────────────────
+  const handlePermissionChange = useCallback(
+    async (member: TreeMember, next: PermissionLevel) => {
+      if (busyMemberId !== null || next === member.permission) return;
+      setBusyMemberId(member.memberId);
+      setActionError('');
+      try {
+        await updateTreeMember(treeId, member.memberId, next);
+        setRosterNonce((n) => n + 1);
+      } catch (err) {
+        // No local mutation happened, so the row still shows the stored role;
+        // the failure is named instead of being swallowed.
+        setActionError(
+          `Could not change ${member.userName}'s role: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      } finally {
+        setBusyMemberId(null);
+      }
+    },
+    [busyMemberId, treeId],
+  );
+
+  // ── Remove → DELETE, then re-read the roster ──────────────────────
+  const handleRemoveMember = useCallback(
+    async (member: TreeMember) => {
+      if (busyMemberId !== null) return;
+      setBusyMemberId(member.memberId);
+      setActionError('');
+      try {
+        await removeTreeMember(treeId, member.memberId);
+        setRosterNonce((n) => n + 1);
+      } catch (err) {
+        setActionError(
+          `Could not remove ${member.userName}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      } finally {
+        setBusyMemberId(null);
+      }
+    },
+    [busyMemberId, treeId],
+  );
 
   if (!open) return null;
 
@@ -332,25 +435,85 @@ export default function ShareDialog({
               </button>
             </div>
 
-            {/* ── Members list ─────────────────────────────────────── */}
-            {members.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium" style={{ color: token.contentMuted }}>
-                  Members ({members.length})
-                </h3>
+            {/* ── Members (real roster: GET /trees/:id/members) ────── */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium" style={{ color: token.contentMuted }}>
+                {rosterState === 'ready' ? `Members (${members.length})` : 'Members'}
+              </h3>
 
+              {rosterState === 'loading' && (
+                <div
+                  className="flex items-center gap-2 px-3 py-2 text-xs"
+                  style={{ color: token.contentFaint }}
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                  Loading members…
+                </div>
+              )}
+
+              {rosterState === 'error' && (
+                <div
+                  className="px-3 py-2 rounded-lg text-xs space-y-2"
+                  role="alert"
+                  data-testid="share-members-error"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: token.danger,
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>{`Could not load members: ${rosterError}`}</span>
+                  </div>
+                  <button
+                    onClick={retryRoster}
+                    className="flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium transition-colors hover:bg-white/5"
+                    style={{
+                      borderColor: token.lineSubtle,
+                      color: token.contentPrimary,
+                    }}
+                  >
+                    <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {actionError !== '' && (
+                <div
+                  className="px-3 py-2 rounded-lg text-xs"
+                  role="alert"
+                  data-testid="share-action-error"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: token.danger,
+                  }}
+                >
+                  {actionError}
+                </div>
+              )}
+
+              {rosterState === 'ready' && members.length > 0 && (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {members.map((member) => {
                     const initials = getUserInitials(member.userName);
                     const permStyle = getPermissionStyle(member.permission);
                     const color =
-                      member.avatarColor || getColorForUser(member.userId);
+                      member.avatarColor || token.surfaceInput;
+                    // `owner` is not an assignable role on the members routes
+                    // (SPEC-API-06 §10.2) — the ownership row is read-only.
+                    const isOwner = member.role === 'owner';
+                    const busy = busyMemberId === member.memberId;
 
                     return (
                       <div
-                        key={member.userId}
+                        key={member.memberId}
+                        data-testid={`share-member-${member.memberId}`}
                         className="flex items-center gap-3 px-3 py-2 rounded-lg"
-                        style={{ backgroundColor: token.surfaceInput }}
+                        style={{
+                          backgroundColor: token.surfaceInput,
+                          opacity: busy ? 0.6 : 1,
+                        }}
                       >
                         {/* Avatar */}
                         <div
@@ -365,7 +528,7 @@ export default function ShareDialog({
                           {initials}
                         </div>
 
-                        {/* Name + email */}
+                        {/* Name + identity */}
                         <div className="flex-1 min-w-0">
                           <div
                             className="text-sm font-medium truncate"
@@ -373,12 +536,14 @@ export default function ShareDialog({
                           >
                             {member.userName}
                           </div>
-                          <div
-                            className="text-xs truncate"
-                            style={{ color: token.contentFaint }}
-                          >
-                            {member.email}
-                          </div>
+                          {member.detail !== '' && (
+                            <div
+                              className="text-xs truncate"
+                              style={{ color: token.contentFaint }}
+                            >
+                              {member.detail}
+                            </div>
+                          )}
                         </div>
 
                         {/* Permission badge */}
@@ -390,24 +555,27 @@ export default function ShareDialog({
                             border: `1px solid ${permStyle.border}`,
                           }}
                         >
-                          {getPermissionLabel(member.permission)}
+                          {isOwner ? 'Owner' : getPermissionLabel(member.permission)}
                         </span>
 
                         {/* Permission change dropdown */}
                         <select
                           value={member.permission}
+                          disabled={isOwner || busy}
                           onChange={(e) =>
-                            onPermissionChange(
-                              member.userId,
+                            void handlePermissionChange(
+                              member,
                               e.target.value as PermissionLevel,
                             )
                           }
+                          aria-label={`Permission for ${member.userName}`}
                           className="flex-shrink-0 px-1.5 py-1 rounded text-xs border outline-none cursor-pointer"
                           style={{
                             backgroundColor: token.surfaceRaised,
                             borderColor: token.lineSubtle,
                             color: token.contentMuted,
                             maxWidth: 80,
+                            cursor: isOwner || busy ? 'not-allowed' : 'pointer',
                           }}
                         >
                           <option value="viewer">Viewer</option>
@@ -417,10 +585,15 @@ export default function ShareDialog({
 
                         {/* Remove button */}
                         <button
-                          onClick={() => onRemoveMember(member.userId)}
-                          className="flex-shrink-0 p-1 rounded transition-colors hover:bg-red-500/10"
+                          onClick={() => void handleRemoveMember(member)}
+                          disabled={isOwner || busy}
+                          className="flex-shrink-0 p-1 rounded transition-colors hover:bg-red-500/10 disabled:opacity-40"
                           style={{ color: token.contentFaint }}
-                          title={`Remove ${member.userName}`}
+                          title={
+                            isOwner
+                              ? 'Ownership cannot be removed here'
+                              : `Remove ${member.userName}`
+                          }
                           aria-label={`Remove ${member.userName}`}
                         >
                           <Trash2 className="w-3.5 h-3.5 hover:text-red-400" />
@@ -429,18 +602,18 @@ export default function ShareDialog({
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Empty members state */}
-            {members.length === 0 && (
-              <div
-                className="text-center py-4 text-xs"
-                style={{ color: token.contentFaint }}
-              >
-                No members yet. Share this tree to collaborate.
-              </div>
-            )}
+              {/* Empty roster — only once a read has actually succeeded. */}
+              {rosterState === 'ready' && members.length === 0 && (
+                <div
+                  className="text-center py-4 text-xs"
+                  style={{ color: token.contentFaint }}
+                >
+                  No members yet. Share this tree to collaborate.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
