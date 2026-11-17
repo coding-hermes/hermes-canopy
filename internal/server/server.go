@@ -774,9 +774,18 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if m, ok := r.Context().Value(healthMetricsKey{}).(*telemetry.Metrics); ok {
 		m.SetDBUp(databaseUp)
 	}
+	// checks names each dependency /health actually probed and its state, so a
+	// degraded answer says WHICH dependency failed rather than only that
+	// something did (CAN-OPS-01: the 2026-11-15 incident answered
+	// status:"ok" for ~11 days while PostgreSQL was absent).
+	dbCheck := "up"
+	if !databaseUp {
+		dbCheck = "down"
+	}
 	body := map[string]any{
 		"status": status, "service": "canopyd", "database_status": databaseStatus,
-		"database_up": databaseUp, "schema_version": schemaV,
+		"database_up": databaseUp, "checks": map[string]string{"db": dbCheck},
+		"schema_version": schemaV,
 		"embedded_migrations": embeddedV, "version": bi.Version,
 		"commit": bi.Commit, "build_time": bi.BuildTime,
 	}
