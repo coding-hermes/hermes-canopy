@@ -135,6 +135,12 @@ func (s *df84MemberStub) UpdateRole(_ context.Context, _ uuid.UUID, _ string) (*
 	return nil, nil
 }
 
+// UpdateMember satisfies the widened db.TreeMemberRepo interface (CAN-MEM-02);
+// the flat-nodes and tree-nodes tests never manage memberships.
+func (s *df84MemberStub) UpdateMember(_ context.Context, _ uuid.UUID, _ *string, _ *bool) (*db.TreeMember, error) {
+	return nil, nil
+}
+
 func (s *df84MemberStub) Remove(_ context.Context, _ uuid.UUID) error { return nil }
 
 func (s *df84MemberStub) IsMember(_ context.Context, treeID, userID uuid.UUID) (string, bool, error) {

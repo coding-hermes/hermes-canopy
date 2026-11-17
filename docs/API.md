@@ -412,17 +412,101 @@ and `profile_name` are null for humans). Per §9.5, owners and admins see the
 full roster; members and viewers see only `is_visible=true` rows. The §9.2
 `include_hidden`, `role`, and `participant_type` filters are not implemented.
 
-The §10–§11 update/remove routes remain deferred (not implemented) and are
-pinned as absent by `TestSpecAPI06RequiredRoutesAbsent`; each path below
-answers a raw chi `404` with no error envelope. They are reserved names, not
-endpoints — do not build against them:
+The §10–§11 update/remove routes are mounted (CAN-MEM-02):
 
 ```
-PATCH  /api/v1/trees/{tree_id}/members/{member_id}  (SPEC-API-06 §10 — not mounted)
-DELETE /api/v1/trees/{tree_id}/members/{member_id}  (SPEC-API-06 §11 — not mounted)
+PATCH /api/v1/trees/{tree_id}/members/{member_id}
+DELETE /api/v1/trees/{tree_id}/members/{member_id}
 ```
 
-What a caller can do today:
+Both are tree-scoped writes registered inside the same membership gate as the
+read path (`r.With(membershipMW)`), and the handler additionally requires the
+caller to be the tree owner or an admin. `TestSpecAPI06RequiredRoutesAbsent`
+pins them mounted (they left the deferred list) and
+`TestRouteParityTreeScopedMemberWritesAreMembershipGated` pins their
+middleware class to the sibling tree writes.
+
+**PATCH request body** (SPEC-API-06 §10.2 — both fields optional, at least one
+required):
+
+```json
+{
+  "role": "admin",
+  "auto_approved": true
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | string | New role. Accepts the DB vocabulary `admin`, `member`, `viewer` **and** the Share dialog's `editor` (frontend `PermissionLevel`), which is stored as `member`. `owner` is rejected — ownership is not transferable through this route. Matching is case-sensitive, like the enum. |
+| `auto_approved` | boolean | Whether this member's input is pre-approved. An absent field leaves the stored flag untouched; an explicit `false` clears it. |
+
+**PATCH response (200):** the updated member object in exactly the shape of a
+`GET /members` entry (§9.3) — `id`, `tree_id`, `participant_type`, `user_id`,
+`profile_id`, `display_name`, `profile_name`, `avatar_url`, `role`,
+`is_visible`, `auto_approved`, `joined_at`, `last_seen_at`, `invited_by`. One
+deviation from the read path: `display_name`, `avatar_url` and `last_seen_at`
+are resolved from the users table for human participants only — the tree
+handler is not wired with a profile repo, so an agent membership's
+`display_name` comes back empty instead of the value the roster's join
+produces. Only the fields present in the request are written, in a single
+statement, so a two-field patch can never land half-applied.
+
+`member_updated` is broadcast on the tree's SSE stream:
+
+```
+event: member_updated
+data: {"member_id": "…", "tree_id": "…", "changes": {"role": "admin"}}
+```
+
+`changes` carries only the fields the request patched, and the role is the
+normalized DB value (`editor` arrives as `member`).
+
+**DELETE:** no request body.
+
+**DELETE response (200):**
+
+```json
+{
+  "member_id": "0191a8b2-7fff-7000-9000-000000000802",
+  "tree_id": "0191a8b2-7fff-7000-9000-000000000001",
+  "removed_at": "2026-07-20T23:45:00Z"
+}
+```
+
+Removal hard-deletes the `tree_members` row (membership is binary — there is
+no soft-delete); the member's nodes stay behind with their `author_id`
+intact. `user_left` is broadcast with `member_id`, `tree_id`,
+`participant_id` (the removed user or profile id) and `removed_at`. An SSE hub
+is optional on the server: when none is wired the write still succeeds and no
+event is emitted.
+
+**Errors for both routes (SPEC-API-06 §11.5):**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `INVALID_MEMBER_ID` | `member_id` is not a UUID |
+| 400 | `INVALID_BODY` | PATCH body is malformed JSON, or carries an unknown field |
+| 400 | `NO_FIELDS_PROVIDED` | PATCH body has neither `role` nor `auto_approved` |
+| 400 | `INVALID_ROLE` | `role` is in neither vocabulary (`admin`, `member`, `viewer`, `editor`) |
+| 400 | `CANNOT_INVITE_AS_OWNER` | `role` is `owner` |
+| 400 | `AUTO_APPROVE_NOT_ALLOWED_FOR_VIEWER` | `auto_approved=true` for a viewer — proposed or current |
+| 403 | `NOT_TREE_OWNER_OR_ADMIN` | the caller is neither the tree owner nor an admin |
+| 403 | `CANNOT_CHANGE_OWNER_ROLE` | PATCH targets the owner's membership |
+| 403 | `CANNOT_REMOVE_OWNER` | DELETE targets the owner's membership |
+| 403 | `ADMIN_SCOPE_LIMITED` | an admin targets **another** admin |
+| 404 | `MEMBER_NOT_FOUND` | no membership row with that id **in this tree** — a member id belonging to a different tree also answers 404 and is never mutated |
+| 401 | `TOKEN_MISSING` | no authenticated caller |
+| 501 | `NOT_IMPLEMENTED` | the server was built without member dependencies |
+| 503 | `SERVICE_UNAVAILABLE` | database unavailable |
+
+Client-shape errors (ids, body, role vocabulary) are answered before the
+authorization checks, and authorization is answered before the target member
+is looked up, so a plain member or viewer cannot use these routes to probe
+which member ids exist. An admin may edit or remove their own membership
+(leaving a tree) but not a colleague admin's.
+
+What a caller can do:
 
 - **See who has access:** `GET /api/v1/trees/{tree_id}/members` (above). The
   tree detail's `member_count` (`GET /api/v1/trees/{tree_id}`) remains a
@@ -431,12 +515,11 @@ What a caller can do today:
   (`internal/service/tree_service.go`, `TreeServiceImpl.GetTree`).
 - **Grant access:** `POST /api/v1/trees/{tree_id}/share` (§ Share Tree,
   owner-only).
-- **Downgrade or remove a member:** not possible over HTTP today. The data
-  layer supports it (`db.TreeMemberRepo` exposes `GetByTree`, `UpdateRole`,
-  and `Remove`), and the workspace-scoped collaboration surface
-  (§ Collaboration) ships the full member GET/PATCH/DELETE for
-  `/collab/{workspace_id}` workspaces — but there is no tree-scoped
-  equivalent. Recorded as Spec-vs-Code Drift entry 17.
+- **Downgrade or remove a member:** `PATCH` / `DELETE` on
+  `/api/v1/trees/{tree_id}/members/{member_id}` (above), owner or admin.
+  The workspace-scoped collaboration surface (§ Collaboration) carries its
+  own member GET/PATCH/DELETE for `/collab/{workspace_id}` workspaces —
+  a separate mount, not a substitute for this one.
 
 ---
 
@@ -4320,38 +4403,40 @@ actual code:
     is called.
 
 16. **SPEC-API-06 multi-user routes:** SPEC-API-06 marked twelve tree-scoped
-    invite, membership, and profile routes as Required, but only the §9
-    members read path is mounted (`GET /api/v1/trees/{tree_id}/members`,
-    shipped in CAN-MEM-01 and pinned present by
-    `TestSpecAPI06RequiredRoutesAbsent`). The remaining eleven answer raw chi
-    404s with no error envelope. The shipped collaboration surface is the
-    workspace-scoped `/api/v1/collab` mount (workspace CRUD, members,
-    invitations, join, and leave), plus workspace profiles at
-    `/api/v1/workspaces/{workspace_id}/profiles` and tree sharing at
-    `POST /api/v1/trees/{tree_id}/share`. The SPEC-API-06 Required column was
-    amended to Deferred (not implemented) in this commit; the parity tests
-    `TestRouteParityCollabRoutes`, `TestRouteParityWorkspaceProfileRoutes`,
-    and `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
+    invite, membership, and profile routes as Required. Three of them are
+    mounted — the §9 members read path (`GET
+    /api/v1/trees/{tree_id}/members`, CAN-MEM-01) and the §10/§11 member
+    writes (`PATCH`/`DELETE /api/v1/trees/{tree_id}/members/{member_id}`,
+    CAN-MEM-02), all pinned present by `TestSpecAPI06RequiredRoutesAbsent`.
+    The remaining nine answer raw chi 404s with no error envelope. The
+    shipped collaboration surface is the workspace-scoped `/api/v1/collab`
+    mount (workspace CRUD, members, invitations, join, and leave), plus
+    workspace profiles at `/api/v1/workspaces/{workspace_id}/profiles` and
+    tree sharing at `POST /api/v1/trees/{tree_id}/share`. The SPEC-API-06
+    Required column for the still-unmounted nine was amended to Deferred (not
+    implemented); the parity tests `TestRouteParityCollabRoutes`,
+    `TestRouteParityWorkspaceProfileRoutes`, and
+    `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
     sides.
 
-17. **Tree membership has no management surface:** `POST
-    /api/v1/trees/{tree_id}/share` creates `tree_members` rows and `GET
-    /api/v1/trees/{tree_id}/members` (SPEC-API-06 §9, shipped in CAN-MEM-01)
-    lists them, but the server mounts no route to update or remove tree
-    memberships — the SPEC-API-06 §10–§11 `PATCH|DELETE
-    /trees/{tree_id}/members/…` surface is deferred and pinned as absent by
-    `TestSpecAPI06RequiredRoutesAbsent` (§ Tree Membership documents the
-    reserved paths as not mounted). A tree's `member_count` is visible via
-    `GET /api/v1/trees/{tree_id}`, but the detail response's `members` roster
-    is never populated: no handler sets `GetTreeOptions.IncludeMembers`, and
-    the service returns an empty array even when the option is set
-    (`internal/service/tree_service.go`, `TreeServiceImpl.GetTree`). The
-    `db.TreeMemberRepo` data layer supports `GetByTree`, `ListByTree`,
-    `UpdateRole`, and `Remove`, so the remaining management surface is
-    handler work only; today a tree owner can see who has access but cannot
-    downgrade or remove a member over HTTP. The workspace-scoped `/collab`
-    surface ships the full member GET/PATCH/DELETE for workspaces, but there
-    is no tree-scoped equivalent.
+17. **Tree membership management (resolved by CAN-MEM-02):** `POST
+    /api/v1/trees/{tree_id}/share` creates `tree_members` rows, `GET
+    /api/v1/trees/{tree_id}/members` (SPEC-API-06 §9, CAN-MEM-01) lists them,
+    and `PATCH`/`DELETE /api/v1/trees/{tree_id}/members/{member_id}`
+    (SPEC-API-06 §10/§11, CAN-MEM-02) update a role / `auto_approved` flag
+    and remove a membership. All three are mounted inside the same
+    membership gate as every sibling tree-scoped route and documented in
+    § Tree Membership. This entry is kept as history: before CAN-MEM-02 the
+    server mounted no tree-scoped membership write, so an owner could see who
+    had access but could not downgrade or remove anyone over HTTP, even
+    though `db.TreeMemberRepo` already exposed `GetByTree`, `UpdateRole`, and
+    `Remove`. One related gap remains and is unchanged: a tree's
+    `member_count` is visible via `GET /api/v1/trees/{tree_id}`, but the
+    detail response's `members` roster is never populated — no handler sets
+    `GetTreeOptions.IncludeMembers`, and the service returns an empty array
+    even when the option is set (`internal/service/tree_service.go`,
+    `TreeServiceImpl.GetTree`). The workspace-scoped `/collab` surface still
+    carries its own member GET/PATCH/DELETE for workspaces.
 
 ## Iteration progress (SPEC-PL-04 phase 2)
 

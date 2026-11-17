@@ -622,6 +622,406 @@ func (h *TreeHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Member management (SPEC-API-06 §10-§11) --------------------------------
+
+// updateMemberRequestBody is the §10.2 PATCH body. Both fields are optional,
+// so auto_approved is a *bool: "absent" (leave the stored flag alone) has to
+// stay distinguishable from an explicit false (clear it). role is a *string
+// for the same reason — an absent role must not be read as the empty role.
+type updateMemberRequestBody struct {
+	Role         *string `json:"role"`
+	AutoApproved *bool   `json:"auto_approved"`
+}
+
+// removeMemberResponse is the §11.3 DELETE body. removed_at is formatted as
+// RFC3339 (not RFC3339Nano) so the wire shape is exactly the spec's.
+type removeMemberResponse struct {
+	MemberID  uuid.UUID `json:"member_id"`
+	TreeID    uuid.UUID `json:"tree_id"`
+	RemovedAt string    `json:"removed_at"`
+}
+
+// normalizeMemberRole maps a proposed role from EITHER role vocabulary onto
+// the tree_role enum the database stores, and reports whether the value is
+// assignable at all.
+//
+// Two vocabularies meet on this route: the DB enum (owner|admin|member|viewer,
+// migrations/000008) and the frontend PermissionLevel the Share dialog holds
+// (viewer|editor|admin, frontend/src/types/multiUser.ts). "editor" is the
+// frontend's name for the DB's "member" — the same pair permissionToRole /
+// roleToPermission already translate for the share path — so a PATCH carrying
+// the dialog's vocabulary is accepted rather than answered with INVALID_ROLE.
+//
+// "owner" is deliberately NOT accepted here: ownership is not transferable
+// through this route (the handler answers CANNOT_INVITE_AS_OWNER). Anything in
+// neither vocabulary ("superuser", "Editor" — the match is case-sensitive,
+// like the enum itself) is unmappable and reports ok=false.
+func normalizeMemberRole(raw string) (string, bool) {
+	switch raw {
+	case db.TreeRoleAdmin:
+		return db.TreeRoleAdmin, true
+	case db.TreeRoleMember, "editor":
+		return db.TreeRoleMember, true
+	case db.TreeRoleViewer:
+		return db.TreeRoleViewer, true
+	default:
+		return "", false
+	}
+}
+
+// parseMemberID reads and validates the {member_id} chi URL parameter
+// (§11.5: an invalid member id is 400 INVALID_MEMBER_ID, never a 404).
+func parseMemberID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, "member_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_MEMBER_ID", "member_id must be a valid UUID")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// memberEntry maps a stored membership row onto the §9.3 member object — the
+// same shape a GET /members entry has, which §10.3 requires the PATCH response
+// to carry. Display identity is resolved on a best-effort basis (see
+// memberDisplayIdentity).
+func (h *TreeHandler) memberEntry(ctx context.Context, m *db.TreeMember) memberListEntry {
+	entry := memberListEntry{
+		ID:              m.ID,
+		TreeID:          m.TreeID,
+		ParticipantType: participantTypeOf(m),
+		UserID:          m.UserID,
+		ProfileID:       m.ProfileID,
+		Role:            m.Role,
+		IsVisible:       m.IsVisible,
+		AutoApproved:    m.AutoApproved,
+		JoinedAt:        m.JoinedAt,
+		InvitedBy:       m.InvitedBy,
+	}
+	h.memberDisplayIdentity(ctx, &entry)
+	return entry
+}
+
+// participantTypeOf mirrors the SQL join's CASE: a human membership carries
+// user_id, an agent membership carries profile_id.
+func participantTypeOf(m *db.TreeMember) string {
+	if m.UserID != nil {
+		return "human"
+	}
+	return "profile"
+}
+
+// memberDisplayIdentity fills display_name / avatar_url / last_seen_at for a
+// human participant from the users repo. Profile display names are left empty:
+// TreeHandler is wired with the user and member repos only (WithShares), so it
+// has no profile repo to resolve profiles.display_name from — the PATCH
+// response then carries the stored row facts plus the identity this server can
+// resolve, and docs/API.md says so. Lookup failures are not fatal: the update
+// already committed, so a missing display name must not turn a 200 into a 500.
+func (h *TreeHandler) memberDisplayIdentity(ctx context.Context, entry *memberListEntry) {
+	if h.users == nil || entry.UserID == nil {
+		return
+	}
+	user, err := h.users.GetByID(ctx, *entry.UserID)
+	if err != nil || user == nil {
+		return
+	}
+	entry.DisplayName = user.DisplayName
+	entry.AvatarURL = user.AvatarURL
+	entry.LastSeenAt = user.LastSeenAt
+}
+
+// resolveManagerRole returns the caller's member-management role for the tree
+// — TreeRoleOwner or TreeRoleAdmin — or answers the error and reports false.
+//
+// §10.2/§11.2: "Only owners and admins can update/remove members". The owner
+// passes even without a membership row (the same ownership fallback
+// ListMembers uses: CreateTree's owner-membership insert is best-effort).
+// Everyone else gets 403 NOT_TREE_OWNER_OR_ADMIN. This runs BEFORE the target
+// member is looked up so a plain member or viewer cannot use these routes to
+// probe which member ids exist.
+func (h *TreeHandler) resolveManagerRole(w http.ResponseWriter, r *http.Request, treeID, userID uuid.UUID) (string, bool) {
+	role, isMember, err := h.members.IsMember(r.Context(), treeID, userID)
+	if err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("members: membership check failed")
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+		return "", false
+	}
+	if isMember && (role == db.TreeRoleOwner || role == db.TreeRoleAdmin) {
+		return role, true
+	}
+	existing, gerr := h.svc.GetTree(r.Context(), treeID, service.GetTreeOptions{IncludeStats: false})
+	if gerr != nil {
+		h.writeServiceError(w, r, gerr)
+		return "", false
+	}
+	if isTreeOwner(existing.OwnerID, userID) {
+		return db.TreeRoleOwner, true
+	}
+	writeError(w, http.StatusForbidden, "NOT_TREE_OWNER_OR_ADMIN",
+		"only owners and admins can perform this action")
+	return "", false
+}
+
+// findTreeMember resolves a membership id WITHIN the tree. A member id that
+// belongs to a different tree is reported exactly like a missing one
+// (MEMBER_NOT_FOUND 404): the route must neither mutate nor disclose a
+// membership outside the tree its caller is authorized for (§11.5).
+func (h *TreeHandler) findTreeMember(w http.ResponseWriter, r *http.Request, treeID, memberID uuid.UUID) (*db.TreeMember, bool) {
+	members, err := h.members.GetByTree(r.Context(), treeID)
+	if err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("members: list by tree failed")
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+		return nil, false
+	}
+	for i := range members {
+		if members[i].ID == memberID {
+			return &members[i], true
+		}
+	}
+	writeError(w, http.StatusNotFound, "MEMBER_NOT_FOUND", "tree member not found")
+	return nil, false
+}
+
+// membershipIsCaller reports whether the row belongs to the calling user. Used
+// for the "another admin" half of ADMIN_SCOPE_LIMITED: §10.2 forbids an admin
+// from promoting or demoting OTHER admins, which is not the same as an admin
+// editing their own row.
+func membershipIsCaller(m *db.TreeMember, userID uuid.UUID) bool {
+	return m.UserID != nil && *m.UserID == userID
+}
+
+// UpdateMember changes a membership's role and/or auto_approved flag
+// (SPEC-API-06 §10). PATCH semantics: only the fields present in the body are
+// written, in one statement, so a two-field patch never lands half-applied.
+//
+// Error contract (§10.2 constraints + §11.5 table): INVALID_MEMBER_ID 400,
+// NO_FIELDS_PROVIDED 400, INVALID_ROLE 400, CANNOT_INVITE_AS_OWNER 400,
+// AUTO_APPROVE_NOT_ALLOWED_FOR_VIEWER 400, INVALID_BODY 400,
+// NOT_TREE_OWNER_OR_ADMIN 403, CANNOT_CHANGE_OWNER_ROLE 403,
+// ADMIN_SCOPE_LIMITED 403, MEMBER_NOT_FOUND 404. Client-shape errors (ids,
+// body, role vocabulary) are answered before authorization; authorization is
+// answered before the target lookup. No client-side validation failure is ever
+// a 500.
+//
+// On success the updated member is returned in the §9.3 GET-entry shape and a
+// member_updated SSE event carries the changed fields (§10.4).
+//
+// Mounted at PATCH /api/v1/trees/{tree_id}/members/{member_id} (membership-
+// gated upstream, same middleware class as the sibling tree writes).
+func (h *TreeHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	if h.members == nil {
+		writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED",
+			"member endpoints are not configured on this server")
+		return
+	}
+	treeID, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+	memberID, ok := parseMemberID(w, r)
+	if !ok {
+		return
+	}
+	callerID := UserIDFromContext(r.Context())
+	if callerID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+
+	var req updateMemberRequestBody
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be valid JSON")
+		return
+	}
+	if req.Role == nil && req.AutoApproved == nil {
+		writeError(w, http.StatusBadRequest, "NO_FIELDS_PROVIDED",
+			"at least one field must be provided for update")
+		return
+	}
+
+	var roleArg *string
+	if req.Role != nil {
+		if *req.Role == db.TreeRoleOwner {
+			writeError(w, http.StatusBadRequest, "CANNOT_INVITE_AS_OWNER",
+				"cannot invite a participant as owner")
+			return
+		}
+		normalized, ok := normalizeMemberRole(*req.Role)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "INVALID_ROLE",
+				"role must be one of: admin, member, viewer")
+			return
+		}
+		roleArg = &normalized
+	}
+
+	callerRole, ok := h.resolveManagerRole(w, r, treeID, callerID)
+	if !ok {
+		return
+	}
+	target, ok := h.findTreeMember(w, r, treeID, memberID)
+	if !ok {
+		return
+	}
+
+	if target.Role == db.TreeRoleOwner {
+		writeError(w, http.StatusForbidden, "CANNOT_CHANGE_OWNER_ROLE",
+			"cannot change the owner's role")
+		return
+	}
+	if callerRole == db.TreeRoleAdmin && target.Role == db.TreeRoleAdmin && !membershipIsCaller(target, callerID) {
+		writeError(w, http.StatusForbidden, "ADMIN_SCOPE_LIMITED",
+			"admins cannot modify other admins or the owner")
+		return
+	}
+
+	// §10.2: viewers cannot create content, so pre-approving them is
+	// meaningless. The check reads the EFFECTIVE role, so both
+	// {"role":"viewer","auto_approved":true} and a bare auto_approved on a
+	// member who is already a viewer are rejected.
+	effectiveRole := target.Role
+	if roleArg != nil {
+		effectiveRole = *roleArg
+	}
+	if effectiveRole == db.TreeRoleViewer && req.AutoApproved != nil && *req.AutoApproved {
+		writeError(w, http.StatusBadRequest, "AUTO_APPROVE_NOT_ALLOWED_FOR_VIEWER",
+			"auto_approve cannot be enabled for viewers")
+		return
+	}
+
+	updated, err := h.members.UpdateMember(r.Context(), memberID, roleArg, req.AutoApproved)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			// The row vanished between the roster read and the update.
+			writeError(w, http.StatusNotFound, "MEMBER_NOT_FOUND", "tree member not found")
+			return
+		}
+		log.Ctx(r.Context()).Error().Err(err).Msg("update member: write failed")
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+		return
+	}
+
+	h.broadcastMemberUpdated(treeID, callerID, updated, roleArg, req.AutoApproved)
+
+	writeJSON(w, http.StatusOK, h.memberEntry(r.Context(), updated))
+}
+
+// broadcastMemberUpdated emits the §10.4 member_updated event. changes carries
+// only the fields the request patched, with the role in its normalized DB
+// spelling so consumers agree with the response body. A server without an SSE
+// hub (WithShares with a nil hub) simply skips the event — losing the
+// notification must not fail a write that already committed.
+func (h *TreeHandler) broadcastMemberUpdated(treeID, actorID uuid.UUID, updated *db.TreeMember, role *string, autoApproved *bool) {
+	if h.hub == nil {
+		return
+	}
+	changes := map[string]any{}
+	if role != nil {
+		changes["role"] = *role
+	}
+	if autoApproved != nil {
+		changes["auto_approved"] = *autoApproved
+	}
+	data, err := json.Marshal(map[string]any{
+		"member_id": updated.ID.String(),
+		"tree_id":   updated.TreeID.String(),
+		"changes":   changes,
+	})
+	if err != nil {
+		return
+	}
+	h.hub.Broadcast(treeID, sse.ComposeEvent(treeID, actorID, "member_updated", json.RawMessage(data)))
+}
+
+// RemoveMember hard-deletes a membership (SPEC-API-06 §11). The member's nodes
+// stay: removal is a membership delete, not a content delete (§11.2).
+//
+// Error contract (§11.2 + §11.5): INVALID_MEMBER_ID 400,
+// NOT_TREE_OWNER_OR_ADMIN 403, CANNOT_REMOVE_OWNER 403, ADMIN_SCOPE_LIMITED
+// 403, MEMBER_NOT_FOUND 404. The owner can never be removed, and an admin can
+// neither remove another admin nor the owner.
+//
+// Success answers 200 with the §11.3 body (member_id, tree_id, removed_at) and
+// broadcasts user_left with participant_id (§11.4).
+//
+// Mounted at DELETE /api/v1/trees/{tree_id}/members/{member_id} (membership-
+// gated upstream, same middleware class as the sibling tree writes).
+func (h *TreeHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	if h.members == nil {
+		writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED",
+			"member endpoints are not configured on this server")
+		return
+	}
+	treeID, ok := parseTreeID(w, r)
+	if !ok {
+		return
+	}
+	memberID, ok := parseMemberID(w, r)
+	if !ok {
+		return
+	}
+	callerID := UserIDFromContext(r.Context())
+	if callerID == uuid.Nil {
+		writeError(w, http.StatusUnauthorized, "TOKEN_MISSING", "authentication required")
+		return
+	}
+
+	callerRole, ok := h.resolveManagerRole(w, r, treeID, callerID)
+	if !ok {
+		return
+	}
+	target, ok := h.findTreeMember(w, r, treeID, memberID)
+	if !ok {
+		return
+	}
+
+	if target.Role == db.TreeRoleOwner {
+		writeError(w, http.StatusForbidden, "CANNOT_REMOVE_OWNER", "cannot remove the tree owner")
+		return
+	}
+	if callerRole == db.TreeRoleAdmin && target.Role == db.TreeRoleAdmin && !membershipIsCaller(target, callerID) {
+		writeError(w, http.StatusForbidden, "ADMIN_SCOPE_LIMITED",
+			"admins cannot remove other admins or the owner")
+		return
+	}
+
+	if err := h.members.Remove(r.Context(), memberID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "MEMBER_NOT_FOUND", "tree member not found")
+			return
+		}
+		log.Ctx(r.Context()).Error().Err(err).Msg("remove member: delete failed")
+		writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+		return
+	}
+
+	removedAt := time.Now().UTC().Format(time.RFC3339)
+	participantID := ""
+	switch {
+	case target.UserID != nil:
+		participantID = target.UserID.String()
+	case target.ProfileID != nil:
+		participantID = target.ProfileID.String()
+	}
+	if h.hub != nil {
+		data, err := json.Marshal(map[string]any{
+			"member_id":      memberID.String(),
+			"tree_id":        treeID.String(),
+			"participant_id": participantID,
+			"removed_at":     removedAt,
+		})
+		if err == nil {
+			h.hub.Broadcast(treeID, sse.ComposeEvent(treeID, callerID, "user_left", json.RawMessage(data)))
+		}
+	}
+
+	writeJSON(w, http.StatusOK, removeMemberResponse{
+		MemberID:  memberID,
+		TreeID:    treeID,
+		RemovedAt: removedAt,
+	})
+}
+
 // permissionToRole maps the frontend PermissionLevel (viewer|editor|admin) to
 // the backend tree_role enum (viewer|member|admin). Unknown values default to
 // "viewer" (least privilege).

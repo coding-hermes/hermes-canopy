@@ -422,6 +422,14 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// so chi resolves the exact pattern first, and gated with the same
 		// membership middleware class as every sibling tree-scoped route.
 		r.With(membershipMW).Get("/trees/{tree_id}/members", treeHandler.ListMembers)
+		// SPEC-API-06 §10/§11 — the Share dialog's role/remove controls. These
+		// are tree-scoped WRITES, so they carry exactly the same middleware
+		// class as the sibling tree writes (`r.With(membershipMW)`): the
+		// membership gate runs first, the handler then enforces owner/admin
+		// authorization. Registered next to the §9 read (and before the
+		// /trees mount) for the same chi-precedence reason.
+		r.With(membershipMW).Patch("/trees/{tree_id}/members/{member_id}", treeHandler.UpdateMember)
+		r.With(membershipMW).Delete("/trees/{tree_id}/members/{member_id}", treeHandler.RemoveMember)
 		r.Mount("/trees", treeHandler.Routes())
 
 		// Node CRUD (SPEC-API-03) — tree-scoped routes get membership check.

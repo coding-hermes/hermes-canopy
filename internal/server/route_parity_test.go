@@ -730,19 +730,27 @@ func TestRouteParityWorkspaceProfileRoutes(t *testing.T) {
 // decision: the tree-scoped routes retained as Deferred in SPEC-API-06 are
 // not mounted. If a future implementation adds one, this test fails until the
 // specification and API reference are amended to describe the new surface.
-// CAN-MEM-01 shipped the §9 members read path, so it leaves the deferred
-// list and gains a presence pin instead.
+// CAN-MEM-01 shipped the §9 members read path and CAN-MEM-02 the §10/§11
+// member writes, so all three leave the deferred list and gain a presence pin
+// instead.
 func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 	mounted, walkedTotal := mountedRoutesUnder(t, "/api/v1")
 	if walkedTotal < 40 {
 		t.Fatalf("chi.Walk enumerated only %d routes — it did not walk the real router", walkedTotal)
 	}
 
-	// CAN-MEM-01 (SPEC-API-06 §9): the members read path IS mounted. The
-	// deferred list below pins absence only, so an unmounted members route
-	// would silently pass — pin the shipped side explicitly.
-	if !mounted["GET /api/v1/trees/{}/members"] {
-		t.Fatalf("SPEC-API-06 §9 route GET /api/v1/trees/{}/members is not mounted on the real router")
+	// The members surface IS mounted (CAN-MEM-01 §9 read, CAN-MEM-02 §10/§11
+	// writes). The deferred list below pins absence only, so an unmounted
+	// members route would silently pass — pin the shipped side explicitly.
+	shipped := []string{
+		"GET /api/v1/trees/{}/members",
+		"PATCH /api/v1/trees/{}/members/{}",
+		"DELETE /api/v1/trees/{}/members/{}",
+	}
+	for _, route := range shipped {
+		if !mounted[route] {
+			t.Fatalf("SPEC-API-06 members route %s is not mounted on the real router", route)
+		}
 	}
 
 	deferred := []string{
@@ -751,8 +759,6 @@ func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 		"DELETE /api/v1/trees/{}/invites/{}",
 		"POST /api/v1/invites/{}/accept",
 		"POST /api/v1/invites/{}/decline",
-		"PATCH /api/v1/trees/{}/members/{}",
-		"DELETE /api/v1/trees/{}/members/{}",
 		"GET /api/v1/profiles",
 		"PATCH /api/v1/profiles/{}",
 		"PATCH /api/v1/trees/{}/profiles/{}/visibility",
@@ -772,6 +778,78 @@ func TestSpecAPI06RequiredRoutesAbsent(t *testing.T) {
 // test into the TestRouteParity acceptance selector used by the repository.
 func TestRouteParitySpecAPI06RequiredRoutesAbsent(t *testing.T) {
 	TestSpecAPI06RequiredRoutesAbsent(t)
+}
+
+// TestRouteParityTreeScopedMemberWritesAreMembershipGated extends the GAP-078
+// middleware-class proof to the CAN-MEM-02 member WRITES (SPEC-API-06 §10/§11).
+// PATCH and DELETE /trees/{tree_id}/members/{member_id} are tree-scoped
+// writes, so they must sit inside the same `r.With(membershipMW)` class as
+// every sibling tree-scoped write: a mount that lost the gate would show a
+// shorter inline chain than the write control, and a status probe could not
+// tell that apart from an auth failure.
+func TestRouteParityTreeScopedMemberWritesAreMembershipGated(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".hermes", "canopy", "gateway"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := &routeDeps{
+		jwtSecret: "route-parity-test-secret",
+		connMgr:   transport.NewConnectionManager(nil),
+		cfg:       &config.Config{},
+	}
+	router := newRouter(deps)
+
+	type route struct{ method, pattern string }
+	mwCount := map[route]int{}
+	err := chi.Walk(router, func(method, pattern string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		if method == "" {
+			method = http.MethodGet
+		}
+		mwCount[route{method, normalizeChiPattern(pattern)}] = len(middlewares)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("chi.Walk failed: %v", err)
+	}
+
+	// Control: a tree-scoped WRITE that has always carried the gate, mounted
+	// inline under the same authenticated group (the /trees subrouter's
+	// routes carry no inline middleware, so they cannot serve as the class
+	// reference).
+	control := route{http.MethodPost, "/api/v1/trees/{}/merge"}
+	controlMW, ok := mwCount[control]
+	if !ok {
+		t.Fatalf("control route %s %s is not mounted — cannot compare middleware classes",
+			control.method, control.pattern)
+	}
+
+	gated := []route{
+		{http.MethodPatch, "/api/v1/trees/{}/members/{}"},
+		{http.MethodDelete, "/api/v1/trees/{}/members/{}"},
+	}
+	for _, r := range gated {
+		n, ok := mwCount[r]
+		if !ok {
+			t.Errorf("tree-scoped member write %s %s is NOT mounted on the real router", r.method, r.pattern)
+			continue
+		}
+		if n != controlMW {
+			t.Errorf("tree-scoped member write %s %s has %d inline middleware, want %d (same class as %s) — its membership gate is missing",
+				r.method, r.pattern, n, controlMW, control.pattern)
+		}
+	}
+
+	// The writes must also share the READ path's class: the Share dialog hits
+	// GET and PATCH/DELETE on the same resource, so a divergence would mean
+	// one of the two surfaces is gated differently.
+	read := route{http.MethodGet, "/api/v1/trees/{}/members"}
+	if n, ok := mwCount[read]; !ok {
+		t.Errorf("members read %s %s is NOT mounted on the real router", read.method, read.pattern)
+	} else if n != controlMW {
+		t.Errorf("members read %s %s has %d inline middleware, want %d", read.method, read.pattern, n, controlMW)
+	}
 }
 
 // TestRouteParityTreeScopedReadsAreMembershipGated pins the DF-HERMES-CANOPY-36

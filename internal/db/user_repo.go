@@ -367,6 +367,19 @@ type TreeMemberRepo interface {
 	// UpdateRole changes a membership's role.
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (*TreeMember, error)
 
+	// UpdateMember applies a PARTIAL update to one membership in a single
+	// statement (SPEC-API-06 §10): a nil role leaves the stored role
+	// untouched and a nil autoApproved leaves auto_approved untouched, so a
+	// PATCH carrying both fields can never land half-applied. The updated
+	// row is returned; ErrNotFound means no row carries that id.
+	//
+	// The caller resolves the row within the tree it may manage (the handler
+	// does that via GetByTree). The id alone is the key here because a
+	// membership's tree_id is immutable and ids are globally unique: a
+	// tree-scoped check upstream cannot be escaped by passing a foreign id —
+	// that id is simply not in the tree's roster and answers MEMBER_NOT_FOUND.
+	UpdateMember(ctx context.Context, id uuid.UUID, role *string, autoApproved *bool) (*TreeMember, error)
+
 	// Remove hard-deletes the membership row.
 	// The matching approval_audit_log rows are preserved (the audit
 	// table is immutable).
@@ -564,6 +577,31 @@ func (r *PGTreeMemberRepo) UpdateRole(ctx context.Context, id uuid.UUID, role st
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("db: update tree member role: %w", err)
+	}
+	return &m, nil
+}
+
+// UpdateMember applies a partial update to one membership (SPEC-API-06 §10):
+// each column is COALESCEd against its own current value, so a nil role or nil
+// auto_approved leaves that column untouched and both fields land in a single
+// statement — a PATCH carrying role and auto_approved can never be observed
+// half-applied. The `$2::tree_role` cast fails an out-of-enum role exactly as
+// UpdateRole's does (the handler validates the vocabulary first).
+func (r *PGTreeMemberRepo) UpdateMember(ctx context.Context, id uuid.UUID, role *string, autoApproved *bool) (*TreeMember, error) {
+	row := r.pool.QueryRow(ctx, `
+        UPDATE tree_members
+        SET role = COALESCE($2::tree_role, role),
+            auto_approved = COALESCE($3::boolean, auto_approved)
+        WHERE id = $1
+        RETURNING `+treeMemberColumns,
+		id, role, autoApproved,
+	)
+	var m TreeMember
+	if err := scanTreeMember(row, &m); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("db: update tree member: %w", err)
 	}
 	return &m, nil
 }

@@ -899,6 +899,44 @@ func (r *TreeMemberRepo) UpdateRole(ctx context.Context, id uuid.UUID, role stri
 	return &m, nil
 }
 
+// UpdateMember applies a partial update to one membership, mirroring
+// PGTreeMemberRepo.UpdateMember (SPEC-API-06 §10). Each column is COALESCEd
+// against its own current value, so a nil role or nil auto_approved leaves
+// that column untouched and both fields land in one statement. The translated
+// DDL's role CHECK rejects an out-of-enum role, as the PostgreSQL enum cast
+// does; auto_approved is written as 0/1 like every other boolean column here.
+// tree_members carries no AFTER trigger, so RETURNING reports the stored row.
+func (r *TreeMemberRepo) UpdateMember(ctx context.Context, id uuid.UUID, role *string, autoApproved *bool) (*db.TreeMember, error) {
+	q, err := r.conn()
+	if err != nil {
+		return nil, err
+	}
+	// A nil pointer must bind as SQL NULL so COALESCE keeps the stored value;
+	// dereferencing a nil pointer is exactly what must NOT happen here.
+	var roleArg, autoArg any
+	if role != nil {
+		roleArg = *role
+	}
+	if autoApproved != nil {
+		autoArg = boolArg(*autoApproved)
+	}
+	row := q.QueryRowContext(ctx, `
+        UPDATE tree_members
+        SET role = COALESCE(?, role),
+            auto_approved = COALESCE(?, auto_approved)
+        WHERE id = ?
+        RETURNING `+treeMemberColumns,
+		roleArg, autoArg, idArg(id))
+	var m db.TreeMember
+	if err := scanTreeMember(row, &m); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, db.ErrNotFound
+		}
+		return nil, fmt.Errorf("db: update tree member: %w", err)
+	}
+	return &m, nil
+}
+
 // Remove hard-deletes the membership row, as PGTreeMemberRepo does. Approval audit rows are
 // untouched: approval_audit_log references approvals, not tree_members, so no cascade reaches
 // it — and unlike PostgreSQL (REVOKE UPDATE, DELETE) SQLite has no privilege layer, so the

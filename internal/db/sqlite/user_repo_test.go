@@ -779,6 +779,107 @@ func TestSQLiteTreeMemberRepoCRUD(t *testing.T) {
 	}
 }
 
+// TestSQLiteTreeMemberRepoUpdateMember pins the CAN-MEM-02 partial-update
+// contract: a nil role leaves the stored role alone, a nil auto_approved leaves
+// the stored flag alone, and both fields land in one statement. It also pins
+// the unchanged-row guarantee on the failure paths (unknown id, out-of-enum
+// role) and that UpdateRole/Remove remain intact alongside it.
+func TestSQLiteTreeMemberRepoUpdateMember(t *testing.T) {
+	s, trees, users, _, members := newIdentityRepos(t)
+	ctx := context.Background()
+	user := mustUser(t, ctx, users, "hermes-partial", "Partial")
+	other := mustUser(t, ctx, users, "hermes-partial-2", "Partial Two")
+	tree := mustTree(t, ctx, trees, "partial")
+
+	m, err := members.Add(ctx, &db.TreeMember{TreeID: tree.ID, UserID: &user.ID, IsVisible: true})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if m.Role != db.TreeRoleMember || m.AutoApproved {
+		t.Fatalf("seeded role/auto_approved = %q/%v, want the member/false defaults", m.Role, m.AutoApproved)
+	}
+
+	// role only: auto_approved must survive untouched.
+	admin := db.TreeRoleAdmin
+	got, err := members.UpdateMember(ctx, m.ID, &admin, nil)
+	if err != nil {
+		t.Fatalf("UpdateMember(role): %v", err)
+	}
+	if got.Role != db.TreeRoleAdmin {
+		t.Errorf("role = %q, want %q", got.Role, db.TreeRoleAdmin)
+	}
+	if got.AutoApproved {
+		t.Errorf("auto_approved = true, want the untouched false (nil must not clear or set it)")
+	}
+	if got.UserID == nil || *got.UserID != user.ID || got.ProfileID != nil {
+		t.Errorf("participant changed: user_id/profile_id = %v/%v", got.UserID, got.ProfileID)
+	}
+	if !got.JoinedAt.Equal(m.JoinedAt) {
+		t.Errorf("joined_at = %v, want the untouched %v", got.JoinedAt, m.JoinedAt)
+	}
+	if stored := storedText(t, ctx, s, `SELECT is_visible FROM tree_members WHERE id = ?`, m.ID.String()); stored != "1" {
+		t.Errorf("stored is_visible = %q, want the untouched 1", stored)
+	}
+
+	// auto_approved only: role must survive untouched.
+	auto := true
+	got, err = members.UpdateMember(ctx, m.ID, nil, &auto)
+	if err != nil {
+		t.Fatalf("UpdateMember(auto_approved): %v", err)
+	}
+	if !got.AutoApproved {
+		t.Error("auto_approved = false, want true")
+	}
+	if got.Role != db.TreeRoleAdmin {
+		t.Errorf("role = %q, want the untouched %q", got.Role, db.TreeRoleAdmin)
+	}
+	if stored := storedText(t, ctx, s, `SELECT auto_approved FROM tree_members WHERE id = ?`, m.ID.String()); stored != "1" {
+		t.Errorf("stored auto_approved = %q, want 1", stored)
+	}
+
+	// both fields in one statement.
+	viewer := db.TreeRoleViewer
+	off := false
+	got, err = members.UpdateMember(ctx, m.ID, &viewer, &off)
+	if err != nil {
+		t.Fatalf("UpdateMember(both): %v", err)
+	}
+	if got.Role != db.TreeRoleViewer || got.AutoApproved {
+		t.Errorf("role/auto_approved = %q/%v, want viewer/false", got.Role, got.AutoApproved)
+	}
+
+	// An unknown id is ErrNotFound, and the row survives.
+	if _, err := members.UpdateMember(ctx, uuid.New(), &admin, nil); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("UpdateMember(unknown id) error = %v, want db.ErrNotFound", err)
+	}
+
+	// An out-of-enum role is rejected by the role CHECK, leaving the row
+	// exactly as the previous update left it.
+	bad := "superuser"
+	if _, err := members.UpdateMember(ctx, m.ID, &bad, &auto); err == nil {
+		t.Error("UpdateMember(out-of-enum role) succeeded, want the role CHECK to reject it")
+	}
+	after, err := members.GetByTree(ctx, tree.ID)
+	if err != nil {
+		t.Fatalf("GetByTree: %v", err)
+	}
+	if len(after) != 1 || after[0].Role != db.TreeRoleViewer || after[0].AutoApproved {
+		t.Errorf("row after the rejected update = %+v, want viewer/false (no partial write)", after)
+	}
+
+	// The existing single-purpose methods still work alongside the new one.
+	if promoted, err := members.UpdateRole(ctx, m.ID, db.TreeRoleAdmin); err != nil || promoted.Role != db.TreeRoleAdmin {
+		t.Fatalf("UpdateRole after UpdateMember = %+v (err %v), want admin", promoted, err)
+	}
+	second, err := members.Add(ctx, &db.TreeMember{TreeID: tree.ID, UserID: &other.ID, Role: db.TreeRoleMember, IsVisible: true})
+	if err != nil {
+		t.Fatalf("Add(second): %v", err)
+	}
+	if err := members.Remove(ctx, second.ID); err != nil {
+		t.Errorf("Remove after UpdateMember: %v", err)
+	}
+}
+
 func TestSQLiteTreeMemberRepoParticipantValidation(t *testing.T) {
 	s, trees, users, profiles, members := newIdentityRepos(t)
 	ctx := context.Background()
