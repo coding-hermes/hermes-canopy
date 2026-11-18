@@ -4273,8 +4273,9 @@ tasks:
     -h 127.0.0.1 -p 5437 exits 1); canopy_db_up metric must be 0 while down and 1
     after recovery without restarting canopyd; deploy-check raises a board alert when
     no healthy canopy-pg container exists while canopy-canopyd.service is active.
-  status: in_progress
+  status: complete
   created_at: '2026-11-17T17:02:58.512967+00:00'
+  completed_at: '2026-11-18T01:14:12.581469+00:00'
 - id: INT-CI-010
   title: 'Fix red master CI: go mod tidy promotes prometheus/client_model to direct
     require'
@@ -4305,8 +4306,9 @@ tasks:
     fetches GET /api/v1/trees/<id>/members; a ShareDialog test asserts that fetch;
     npx tsc -b, npx vitest run and npx oxlint src/components all exit 0; error state
     renders an explicit message when the API fails.
-  status: in_progress
+  status: complete
   created_at: '2026-11-17T17:02:59.788396+00:00'
+  completed_at: '2026-11-18T01:20:29.877463+00:00'
 - id: CAN-DB-01
   title: tree detail include_members roster
   criteria:
@@ -4314,5 +4316,29 @@ tasks:
     from the same source as GET /api/v1/trees/<id>/members, capped at 200 with members_truncated
     and total_members set; handler package has an include_members test; go test ./internal/handler
     -count=1 exits 0.
-  status: in_progress
+  status: complete
   created_at: '2026-11-17T17:03:01.883020+00:00'
+  completed_at: '2026-11-18T02:04:10.633332+00:00'
+- id: OBS-1
+  title: 'Minimal viable Prometheus metric set: scrape job + gateway gauge + renamed
+    domain counters + /metrics rate-limit exemption'
+  criteria:
+  - "Metrics series emitted per docs/observability-spec.md (REALIGNED: the domain_*\
+    \ draft rename is REJECTED by the spec \u2014 shipped names canopy_tree_count\
+    \ and canopy_node_count win, so the AC literal canopy_domain_trees/canopy_domain_nodes\
+    \ is superseded): tree/node counts are real DB-backed counters wired from the\
+    \ canopyd entrypoint and unit-tested against a real pool (TestRefreshDomainCountGaugesWritesRealCounts),\
+    \ canopy_upstream_gateway_up gauge flips 0 within 15s of gateway unreachability\
+    \ and canopy_upstream_gateway_check_errors_total increases on failed checks (probe\
+    \ unit-tested), /metrics answers 200 while the global per-IP rate limiter is exhausted\
+    \ for other routes (handler test), unmatched-route requests counted in canopy_http_unmatched_requests_total\
+    \ without the raw garbage URL in any label value, deploy/prometheus/prometheus.yml\
+    \ defines job_name canopy scraping the compose container-side HTTP_ADDR target\
+    \ canopyd:8080/metrics (REALIGNED: compose pins HTTP_ADDR=:8080 and publishes\
+    \ 8092:8080 because :8091 is reserved for the host systemd unit \u2014 the AC\
+    \ literal canopyd:8091 is superseded; the host variant is documented in the config\
+    \ comments) and docker-compose.yml wires the prometheus service, go build/vet/test\
+    \ on touched packages green"
+  status: complete
+  created_at: '2026-11-18T02:06:06.799974+00:00'
+  completed_at: '2026-11-18T02:12:44.529267+00:00'
