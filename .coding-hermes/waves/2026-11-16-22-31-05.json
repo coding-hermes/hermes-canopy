@@ -1,0 +1,35 @@
+{
+  "tick_id": "2026-11-16-22-31-05",
+  "wave_budget": 9,
+  "task_count": 3,
+  "tasks": [
+    {
+      "id": "OBS-1",
+      "priority": "P1",
+      "title": "hermes-canopy emits zero series Prometheus can attribute: wire a scrape job AND fix the three broken labels/gauges",
+      "status": "abandoned-zero-commit",
+      "disposition": "branch wt/OBS-1 and worktree hermes-canopy-OBS-1 exist at base f9068014 with 0 commits ahead and a clean tree; no worker output. NOT merged, row left pending, re-eligible.",
+      "depends_on": []
+    },
+    {
+      "id": "CAN-HON-01",
+      "priority": "P0",
+      "title": "seeded registries served as live data: Agents, Reviews, Workspace channels",
+      "status": "abandoned-zero-commit",
+      "disposition": "branch wt/CAN-HON-01 and worktree hermes-canopy-CAN-HON-01 exist at base f9068014 with 0 commits ahead and a clean tree; no worker output. NOT merged, row left pending, re-eligible.",
+      "depends_on": []
+    },
+    {
+      "id": "CAN-OPS-01",
+      "priority": "P0",
+      "title": "/health prints ok while PostgreSQL is down",
+      "status": "redispatch-2026-11-17",
+      "disposition": "dead wt/canoops01 (0 commits ahead) left in place; re-dispatched this tick on wt/CAN-OPS-01-r2 from origin/master f370fe02 (wave 2026-11-17-16-44-46).",
+      "depends_on": []
+    }
+  ],
+  "created_at": "2026-11-16T22:31:05Z",
+  "finished_at": "2026-11-17T17:05:00Z",
+  "closeout_note": "Wave produced zero commits: all three branches are direct children of f9068014 with no work. Attributed to a dead dispatch (no live worker process at 2026-11-17T16:50Z). Worktrees left on disk because reaping is consent-gated on this unattended surface; they are clean and zero-ahead so a later tick can reap them without evidence loss.",
+  "foreman": "hermes-canopy-foreman"
+}

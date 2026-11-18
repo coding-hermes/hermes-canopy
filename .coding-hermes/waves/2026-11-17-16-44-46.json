@@ -1,0 +1,15 @@
+{
+  "tick_id": "2026-11-17-16-44-46",
+  "foreman": "hermes-canopy-foreman",
+  "wave_budget": 7,
+  "task_count": 3,
+  "base_sha": "f370fe02",
+  "base_ref": "origin/master",
+  "wave_mode": "auto-merge",
+  "tasks": [
+    {"id": "CAN-OPS-01", "priority": "P0", "branch": "wt/CAN-OPS-01-r2", "worktree": "/home/kara/worktrees/hermes-canopy-CAN-OPS-01-r2", "status": "dispatched"},
+    {"id": "CAN-MEM-03", "priority": "P0", "branch": "wt/CAN-MEM-03", "worktree": "/home/kara/worktrees/hermes-canopy-CAN-MEM-03", "status": "dispatched"},
+    {"id": "CAN-DB-01", "priority": "P2", "branch": "wt/CAN-DB-01", "worktree": "/home/kara/worktrees/hermes-canopy-CAN-DB-01", "status": "dispatched"}
+  ],
+  "created_at": "2026-11-17T16:58:00Z"
+}
