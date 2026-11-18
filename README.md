@@ -921,11 +921,15 @@ every artifact against an Ed25519 public key. Both the manifest URL and the
 public key are configurable so the updater is not hard-coded to a single
 endpoint.
 
-Release tags publish the exact signed `dist/latest.json` bytes both as the
-versioned GitHub Release asset and at the stable channel URL
-`https://releases.canopy.app/stable/latest.json` through the `gh-pages` branch.
-The `v0.1.0` release remains historical and predates this manifest publication;
-no release is retroactively claimed here.
+The intended design is to publish the signed manifest on the stable channel,
+but that channel is not live. The configured stable URL
+`https://releases.canopy.app/stable/latest.json` currently redirects (302) to
+GoDaddy's `https://www.godaddy.com/forsale/canopy.app` and ends at HTTP 403.
+The `v0.2.0` tag exists, but `gh release view v0.2.0 -R
+coding-hermes/hermes-canopy` reports `release not found`; the origin has no
+`gh-pages` branch (`git ls-remote --heads origin | grep -c
+refs/heads/gh-pages` returns `0`). A signed manifest on a published stable
+channel is therefore intended, not yet live.
 
 Release publication traceability is load-bearing in
 `scripts/validate-release-manifest-publication.py` and is rechecked by the
