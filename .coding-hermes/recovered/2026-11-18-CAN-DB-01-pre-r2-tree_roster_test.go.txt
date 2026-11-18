@@ -1,0 +1,447 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/coding-hermes/hermes-canopy/internal/db"
+)
+
+// CAN-DB-01: GET /trees/{tree_id} declares SPEC-API-02 §5.2's include_members
+// and must answer the tree's membership roster (EC-23). These tests pin the
+// service half: the roster comes from TreeMemberRepo.ListByTree — the exact
+// call the GET /trees/{tree_id}/members route pages — with the 200-entry cap,
+// the truncation contract, the §9.5 visibility rule, and the two wire states
+// (absent when not asked for, always present when asked for).
+
+// rosterMemberRepoStub serves IsMember and ListByTree from memory and records
+// what the service asked for, so the visibility flag and pagination are
+// assertable without a database.
+type rosterMemberRepoStub struct {
+	db.TreeMemberRepo
+	roles map[[2]uuid.UUID]string // (tree, user) → role; absent pair = non-member
+
+	page  []db.TreeMemberSummary
+	total int
+
+	listErr   error
+	memberErr error
+
+	listCalls int
+	memCalls  int
+	gotTree   uuid.UUID
+	gotHidden bool
+	gotLimit  int
+	gotOffset int
+}
+
+func (s *rosterMemberRepoStub) IsMember(_ context.Context, treeID, userID uuid.UUID) (string, bool, error) {
+	s.memCalls++
+	if s.memberErr != nil {
+		return "", false, s.memberErr
+	}
+	role, ok := s.roles[[2]uuid.UUID{treeID, userID}]
+	return role, ok, nil
+}
+
+func (s *rosterMemberRepoStub) ListByTree(_ context.Context, treeID uuid.UUID, includeHidden bool, limit, offset int) ([]db.TreeMemberSummary, int, error) {
+	s.listCalls++
+	s.gotTree, s.gotHidden, s.gotLimit, s.gotOffset = treeID, includeHidden, limit, offset
+	if s.listErr != nil {
+		return nil, 0, s.listErr
+	}
+	return s.page, s.total, nil
+}
+
+// rosterTestService returns a GetTree-capable service over the shared repo
+// stubs, with the given membership source and one owned tree.
+func rosterTestService(treeID, ownerID uuid.UUID, members db.TreeMemberRepo) *TreeServiceImpl {
+	return &TreeServiceImpl{
+		treeRepo: &treeRepoStub{
+			trees: []db.Tree{{
+				ID:        treeID,
+				OwnerID:   ownerID,
+				Title:     "roster tree",
+				CreatedAt: mustParseTime("2026-07-20T08:00:00Z"),
+			}},
+		},
+		nodeRepo:   &nodeRepoStub{},
+		edgeRepo:   &edgeRepoStub{},
+		memberRepo: members,
+	}
+}
+
+// rosterRowFixture builds one joined membership row as ListByTree's SQL join
+// produces it.
+func rosterRowFixture(treeID uuid.UUID, participantID uuid.UUID, kind, name string) db.TreeMemberSummary {
+	row := db.TreeMemberSummary{
+		TreeMember: db.TreeMember{
+			ID:        uuid.New(),
+			TreeID:    treeID,
+			Role:      db.TreeRoleMember,
+			IsVisible: true,
+			JoinedAt:  mustParseTime("2026-07-20T20:00:00Z"),
+		},
+		ParticipantType: kind,
+		DisplayName:     name,
+	}
+	if kind == "human" {
+		row.UserID = &participantID
+	} else {
+		row.ProfileID = &participantID
+	}
+	return row
+}
+
+// detailFields marshals a detail and returns its top-level JSON keys, so the
+// tests assert the wire shape a client sees rather than struct internals.
+func detailFields(t *testing.T, detail *TreeDetail) map[string]json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(detail)
+	if err != nil {
+		t.Fatalf("marshal tree detail: %v", err)
+	}
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("unmarshal tree detail: %v", err)
+	}
+	return fields
+}
+
+// TestGetTree_IncludeMembersPopulatesRoster is acceptance 1's service half: a
+// tree WITH a membership row answers a non-empty members array carrying the
+// same row the members endpoint would list.
+func TestGetTree_IncludeMembersPopulatesRoster(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	humanID, profileID := uuid.New(), uuid.New()
+
+	rows := []db.TreeMemberSummary{
+		rosterRowFixture(treeID, humanID, "human", "Bane"),
+		rosterRowFixture(treeID, profileID, "profile", "Coding Hermes"),
+	}
+	members := &rosterMemberRepoStub{page: rows, total: len(rows)}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	detail, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       ownerID,
+	})
+	if err != nil {
+		t.Fatalf("GetTree(include_members) error = %v", err)
+	}
+
+	if detail.Members == nil {
+		t.Fatal("Members is nil, want the roster (the CAN-DB-01 defect)")
+	}
+	if got := len(*detail.Members); got != 2 {
+		t.Fatalf("len(members) = %d, want 2", got)
+	}
+
+	// Entry values mirror the repository row, so the detail and the members
+	// endpoint cannot answer differently for the same membership.
+	first := (*detail.Members)[0]
+	if first.ID != rows[0].ID {
+		t.Errorf("members[0].id = %s, want the tree_members row id %s", first.ID, rows[0].ID)
+	}
+	if first.UserID == nil || *first.UserID != humanID {
+		t.Errorf("members[0].user_id = %v, want %s", first.UserID, humanID)
+	}
+	if first.ParticipantType != "human" || first.DisplayName != "Bane" {
+		t.Errorf("members[0] = %+v, want the human row's participant_type/display_name", first)
+	}
+	if first.Role != MemberRole(db.TreeRoleMember) {
+		t.Errorf("members[0].role = %q, want %q", first.Role, db.TreeRoleMember)
+	}
+	second := (*detail.Members)[1]
+	if second.ProfileID == nil || *second.ProfileID != profileID {
+		t.Errorf("members[1].profile_id = %v, want %s (profile participants have no user_id)",
+			second.ProfileID, profileID)
+	}
+	if second.UserID != nil {
+		t.Errorf("members[1].user_id = %v, want nil for a profile participant", second.UserID)
+	}
+
+	// The roster is one capped page of the SAME call the members route
+	// pages: limit = MemberRosterCap, offset 0.
+	if members.listCalls != 1 {
+		t.Errorf("ListByTree calls = %d, want 1", members.listCalls)
+	}
+	if members.gotTree != treeID {
+		t.Errorf("ListByTree tree = %s, want %s", members.gotTree, treeID)
+	}
+	if members.gotLimit != MemberRosterCap || members.gotOffset != 0 {
+		t.Errorf("ListByTree limit/offset = %d/%d, want %d/0",
+			members.gotLimit, members.gotOffset, MemberRosterCap)
+	}
+	// §9.5: the owner sees the full roster, hidden rows included.
+	if !members.gotHidden {
+		t.Error("ListByTree includeHidden = false for the tree owner, want true")
+	}
+
+	if detail.MembersTruncated == nil {
+		t.Error("MembersTruncated is nil, want false for an untruncated roster")
+	} else if *detail.MembersTruncated {
+		t.Error("MembersTruncated = true, want false: 2 members fit the cap")
+	}
+	if detail.TotalMembers == nil {
+		t.Error("TotalMembers is nil, want the real count")
+	} else if *detail.TotalMembers != 2 {
+		t.Errorf("TotalMembers = %d, want 2", *detail.TotalMembers)
+	}
+
+	fields := detailFields(t, detail)
+	if _, ok := fields["members"]; !ok {
+		t.Error(`wire shape has no "members" key, want the roster array`)
+	}
+	if raw, ok := fields["members_truncated"]; !ok {
+		t.Error(`wire shape has no "members_truncated" key, want false`)
+	} else if string(raw) != "false" {
+		t.Errorf("members_truncated = %s, want false", raw)
+	}
+	if raw, ok := fields["total_members"]; !ok {
+		t.Error(`wire shape has no "total_members" key, want 2`)
+	} else if string(raw) != "2" {
+		t.Errorf("total_members = %s, want 2", raw)
+	}
+}
+
+// TestGetTree_IncludeMembersCapsRosterAt200 is acceptance 2's service half:
+// more memberships than the cap yields exactly MemberRosterCap entries plus
+// members_truncated and the real total.
+func TestGetTree_IncludeMembersCapsRosterAt200(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+
+	const total = 250
+	page := make([]db.TreeMemberSummary, 0, MemberRosterCap)
+	for i := 0; i < MemberRosterCap; i++ {
+		page = append(page, rosterRowFixture(treeID, uuid.New(), "human", fmt.Sprintf("Member %d", i)))
+	}
+	members := &rosterMemberRepoStub{page: page, total: total}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	detail, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       ownerID,
+	})
+	if err != nil {
+		t.Fatalf("GetTree(include_members) error = %v", err)
+	}
+
+	if detail.Members == nil {
+		t.Fatal("Members is nil, want the capped roster")
+	}
+	if got := len(*detail.Members); got != MemberRosterCap {
+		t.Errorf("len(members) = %d, want the %d-entry cap", got, MemberRosterCap)
+	}
+	if detail.MembersTruncated == nil || !*detail.MembersTruncated {
+		t.Error("MembersTruncated = nil/false, want true for 250 memberships")
+	}
+	if detail.TotalMembers == nil || *detail.TotalMembers != total {
+		t.Errorf("TotalMembers = %v, want the real count %d", detail.TotalMembers, total)
+	}
+
+	// The page the service asked the repository for is the cap itself, NOT
+	// the total: the roster is a prefix, not the whole table.
+	if members.gotLimit != MemberRosterCap {
+		t.Errorf("ListByTree limit = %d, want %d", members.gotLimit, MemberRosterCap)
+	}
+
+	fields := detailFields(t, detail)
+	if raw, ok := fields["members_truncated"]; !ok {
+		t.Error(`wire shape has no "members_truncated" key, want true`)
+	} else if string(raw) != "true" {
+		t.Errorf("members_truncated = %s, want true", raw)
+	}
+	if raw, ok := fields["total_members"]; !ok {
+		t.Errorf(`wire shape has no "total_members" key, want %d`, total)
+	} else if string(raw) != fmt.Sprintf("%d", total) {
+		t.Errorf("total_members = %s, want %d", raw, total)
+	}
+}
+
+// TestGetTree_IncludeMembersEmptyRosterStaysPresent pins the EC-23 shape for a
+// tree with no memberships: `"members": []`, never a missing key and never
+// null. An absent key here is the CAN-DB-01 defect inverted.
+func TestGetTree_IncludeMembersEmptyRosterStaysPresent(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	members := &rosterMemberRepoStub{page: nil, total: 0}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	detail, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       ownerID,
+	})
+	if err != nil {
+		t.Fatalf("GetTree(include_members) error = %v", err)
+	}
+
+	if detail.Members == nil {
+		t.Fatal("Members is nil for an empty roster, want an empty slice (key must be present)")
+	}
+	if got := len(*detail.Members); got != 0 {
+		t.Errorf("len(members) = %d, want 0", got)
+	}
+
+	raw, err := json.Marshal(detail)
+	if err != nil {
+		t.Fatalf("marshal tree detail: %v", err)
+	}
+	if want := `"members":[]`; !containsJSONFragment(string(raw), want) {
+		t.Errorf("empty roster body %s does not carry %s", raw, want)
+	}
+	if detail.MembersTruncated == nil || *detail.MembersTruncated {
+		t.Error("MembersTruncated = nil/true, want false for an empty roster")
+	}
+	if detail.TotalMembers == nil || *detail.TotalMembers != 0 {
+		t.Errorf("TotalMembers = %v, want 0", detail.TotalMembers)
+	}
+}
+
+// containsJSONFragment reports whether body contains fragment verbatim. A tiny
+// helper keeps the empty-roster assertion readable without pulling a matcher
+// dependency into this package.
+func containsJSONFragment(body, fragment string) bool {
+	for i := 0; i+len(fragment) <= len(body); i++ {
+		if body[i:i+len(fragment)] == fragment {
+			return true
+		}
+	}
+	return false
+}
+
+// TestGetTree_WithoutIncludeMembersOmitsRosterKeys pins the compatibility
+// half of the contract: a caller that does not ask for the roster gets
+// EXACTLY today's response shape — no members, members_truncated or
+// total_members keys, and not even a membership query.
+func TestGetTree_WithoutIncludeMembersOmitsRosterKeys(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	members := &rosterMemberRepoStub{
+		page:  []db.TreeMemberSummary{rosterRowFixture(treeID, uuid.New(), "human", "Bane")},
+		total: 1,
+	}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	detail, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{CallerID: ownerID})
+	if err != nil {
+		t.Fatalf("GetTree() error = %v", err)
+	}
+
+	fields := detailFields(t, detail)
+	for _, key := range []string{"members", "members_truncated", "total_members"} {
+		if _, ok := fields[key]; ok {
+			t.Errorf("wire shape carries %q without include_members: %v", key, fields[key])
+		}
+	}
+	if members.listCalls != 0 || members.memCalls != 0 {
+		t.Errorf("membership repo consulted (list=%d, isMember=%d) without include_members, want 0",
+			members.listCalls, members.memCalls)
+	}
+}
+
+// TestGetTree_IncludeMembersVisibility pins SPEC-API-06 §9.5 for the detail
+// roster: owners and admins see every membership, members and viewers only
+// is_visible rows, and an unknown caller gets the restricted view.
+func TestGetTree_IncludeMembersVisibility(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+
+	tests := []struct {
+		name        string
+		callerID    uuid.UUID
+		role        string
+		hasRow      bool
+		wantHidden  bool
+		wantChecked bool
+	}{
+		{name: "owner without a membership row", callerID: ownerID, wantHidden: true, wantChecked: false},
+		{name: "admin member", callerID: uuid.New(), role: db.TreeRoleAdmin, hasRow: true, wantHidden: true, wantChecked: true},
+		{name: "owner-role member row", callerID: uuid.New(), role: db.TreeRoleOwner, hasRow: true, wantHidden: true, wantChecked: true},
+		{name: "plain member", callerID: uuid.New(), role: db.TreeRoleMember, hasRow: true, wantHidden: false, wantChecked: true},
+		{name: "viewer", callerID: uuid.New(), role: db.TreeRoleViewer, hasRow: true, wantHidden: false, wantChecked: true},
+		{name: "non-member", callerID: uuid.New(), hasRow: false, wantHidden: false, wantChecked: true},
+		{name: "unknown caller", callerID: uuid.Nil, wantHidden: false, wantChecked: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			roles := map[[2]uuid.UUID]string{}
+			if tc.hasRow {
+				roles[[2]uuid.UUID{treeID, tc.callerID}] = tc.role
+			}
+			members := &rosterMemberRepoStub{roles: roles, total: 0}
+			svc := rosterTestService(treeID, ownerID, members)
+
+			if _, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+				IncludeMembers: true,
+				CallerID:       tc.callerID,
+			}); err != nil {
+				t.Fatalf("GetTree(include_members) error = %v", err)
+			}
+			if members.gotHidden != tc.wantHidden {
+				t.Errorf("ListByTree includeHidden = %v, want %v", members.gotHidden, tc.wantHidden)
+			}
+			if checked := members.memCalls > 0; checked != tc.wantChecked {
+				t.Errorf("IsMember consulted = %v, want %v", checked, tc.wantChecked)
+			}
+		})
+	}
+}
+
+// TestGetTree_IncludeMembersRequiresMemberRepo pins the fail-loud wiring
+// contract: a service that was never given a membership repository must NOT
+// answer an empty roster (that would read as "this tree has no members").
+func TestGetTree_IncludeMembersRequiresMemberRepo(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	svc := rosterTestService(treeID, ownerID, nil)
+
+	detail, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       ownerID,
+	})
+	if !errors.Is(err, ErrMemberRosterUnavailable) {
+		t.Fatalf("GetTree(include_members) error = %v, want ErrMemberRosterUnavailable", err)
+	}
+	if detail != nil {
+		t.Errorf("GetTree returned a detail alongside the wiring error: %+v", detail)
+	}
+}
+
+// TestGetTree_IncludeMembersQueryFailure pins that a roster read failure is
+// classified as a database failure — never silently downgraded to an empty
+// roster.
+func TestGetTree_IncludeMembersQueryFailure(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	members := &rosterMemberRepoStub{listErr: errors.New("connection reset")}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	_, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       ownerID,
+	})
+	if !errors.Is(err, ErrDatabaseUnavailable) {
+		t.Fatalf("GetTree(include_members) error = %v, want ErrDatabaseUnavailable", err)
+	}
+}
+
+// TestGetTree_IncludeMembersMembershipCheckFailure mirrors the query-failure
+// contract for the §9.5 role lookup that precedes it.
+func TestGetTree_IncludeMembersMembershipCheckFailure(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	members := &rosterMemberRepoStub{memberErr: errors.New("connection reset")}
+	svc := rosterTestService(treeID, ownerID, members)
+
+	_, err := svc.GetTree(context.Background(), treeID, GetTreeOptions{
+		IncludeMembers: true,
+		CallerID:       uuid.New(), // not the owner → the role lookup runs
+	})
+	if !errors.Is(err, ErrDatabaseUnavailable) {
+		t.Fatalf("GetTree(include_members) error = %v, want ErrDatabaseUnavailable", err)
+	}
+	if members.listCalls != 0 {
+		t.Errorf("ListByTree calls = %d, want 0 after a failed membership check", members.listCalls)
+	}
+}

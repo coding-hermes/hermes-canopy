@@ -1,0 +1,314 @@
+diff --git a/cmd/canopyd/main.go b/cmd/canopyd/main.go
+index e5ebf153..eedf8a6c 100644
+--- a/cmd/canopyd/main.go
++++ b/cmd/canopyd/main.go
+@@ -427,6 +427,10 @@ func main() {
+ 		database.Edges,
+ 		database.Pool,
+ 	)
++	// CAN-DB-01: the include_members roster of GET /trees/{id} pages the
++	// same TreeMemberRepo the GET /trees/{id}/members route serves, so the
++	// two responses cannot drift.
++	treeService.WithMemberRepo(database.Members)
+ 	// SPEC-PL-06 §14.1: preflight selection tokens are HMAC-signed with a
+ 	// server secret (falling back to the JWT secret so a dev or probe stack
+ 	// needs no extra configuration), and the default profile context budget
+diff --git a/internal/handler/tree_handler.go b/internal/handler/tree_handler.go
+index 32f95e01..941d71c9 100644
+--- a/internal/handler/tree_handler.go
++++ b/internal/handler/tree_handler.go
+@@ -190,6 +190,22 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
+ 		IncludeStats:   q.Get("include_stats") != "false",
+ 		IncludeRelated: true, // WIRE-006: always surface associations when present
+ 	}
++	// SPEC-API-02 §5.2 / EC-23: include_members (default false) asks for the
++	// tree's membership roster in the detail body. Parsed strictly — a
++	// malformed value is answered as a client error instead of being read
++	// as "false", which would silently serve the old shape.
++	if raw := q.Get("include_members"); raw != "" {
++		includeMembers, err := strconv.ParseBool(raw)
++		if err != nil {
++			writeError(w, http.StatusBadRequest, "INVALID_INCLUDE_MEMBERS",
++				"include_members must be a boolean")
++			return
++		}
++		opts.IncludeMembers = includeMembers
++		// §9.5 visibility: the roster shows hidden memberships to owners
++		// and admins only, so the service needs to know who is asking.
++		opts.CallerID = userID
++	}
+ 	out, err := h.svc.GetTree(r.Context(), id, opts)
+ 	if err != nil {
+ 		h.writeServiceError(w, r, err)
+@@ -328,6 +344,13 @@ func (h *TreeHandler) writeServiceError(w http.ResponseWriter, r *http.Request,
+ 		writeError(w, 503, "SERVICE_UNAVAILABLE", "database unavailable")
+ 	case errors.Is(err, service.ErrTreeDeleted):
+ 		writeError(w, 410, "TREE_DELETED", "tree has been deleted")
++	case errors.Is(err, service.ErrMemberRosterUnavailable):
++		// The service was built without a membership repository, so the
++		// requested include_members roster cannot be answered. Same
++		// contract as the other dependency-less routes on this handler
++		// (ShareTree, ListMembers).
++		writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED",
++			"member roster is not configured on this server")
+ 	default:
+ 		log.Ctx(r.Context()).Error().Err(err).Msg("tree request failed")
+ 		writeError(w, 500, "INTERNAL_ERROR", "internal server error")
+diff --git a/internal/service/tree_service.go b/internal/service/tree_service.go
+index f8cc6516..e166de37 100644
+--- a/internal/service/tree_service.go
++++ b/internal/service/tree_service.go
+@@ -72,6 +72,12 @@ var (
+ 	ErrInvalidRole          = errors.New("tree service: invalid role filter")
+ 	ErrSearchTooShort       = errors.New("tree service: search query must be at least 3 characters")
+ 	ErrDatabaseUnavailable  = errors.New("tree service: database unavailable")
++	// ErrMemberRosterUnavailable means GetTree was asked for the members
++	// roster (include_members=true) on a service built without a
++	// TreeMemberRepo (WithMemberRepo). It is a wiring fault, not a data
++	// one: answering with an empty roster would claim the tree has no
++	// members, so the request fails loudly instead.
++	ErrMemberRosterUnavailable = errors.New("tree service: member roster is not available on this server")
+ )
+ 
+ // --- Validation limits (SPEC-API-02 §3-6) -----------------------------------
+@@ -84,6 +90,13 @@ const (
+ 	maxSearchLen      = 200
+ 	defaultListLimit  = 50
+ 	maxListLimit      = 100
++
++	// MemberRosterCap is the ceiling on the tree-detail members array
++	// (SPEC-API-02 EC-23: "Members array limited to first 200"). A tree
++	// with more memberships answers the first MemberRosterCap entries,
++	// sets members_truncated, and reports the real count in total_members
++	// so the client can page GET /trees/{tree_id}/members instead.
++	MemberRosterCap = 200
+ )
+ 
+ // --- Enums (SPEC-API-02 §7.1) -----------------------------------------------
+@@ -234,8 +247,22 @@ type CreateTreeParams struct {
+ // GetTreeOptions controls whether optional fields are included.
+ type GetTreeOptions struct {
+ 	IncludeStats   bool
+-	IncludeMembers bool
+ 	IncludeRelated bool // populate Related from metadata (WIRE-006)
++
++	// IncludeMembers populates Members / MembersTruncated / TotalMembers
++	// from the tree's membership roster (SPEC-API-02 §5.2, EC-23). It
++	// needs the service to be built WithMemberRepo — the identical
++	// TreeMemberRepo call that backs GET /trees/{tree_id}/members, so the
++	// two responses cannot drift.
++	IncludeMembers bool
++
++	// CallerID is the authenticated caller, read only when IncludeMembers
++	// is set: the roster's visibility follows SPEC-API-06 §9.5 (owners and
++	// admins see every row, members and viewers only is_visible rows), and
++	// that decision needs to know who is asking. uuid.Nil — an
++	// unauthenticated or unknowable caller — is treated as least
++	// privilege (visible rows only).
++	CallerID uuid.UUID
+ }
+ 
+ // Tree is the response from CreateTree.
+@@ -292,10 +319,26 @@ type TreeSummary struct {
+ // trailing pointers/slices are populated only when requested.
+ type TreeDetail struct {
+ 	TreeSummary
+-	DeletedAt *time.Time      `json:"deleted_at,omitempty"`
+-	Stats     *TreeStats      `json:"stats,omitempty"`
+-	Members   []MemberSummary `json:"members,omitempty"`
+-	Related   *Related        `json:"related,omitempty"`
++	DeletedAt *time.Time `json:"deleted_at,omitempty"`
++	Stats     *TreeStats `json:"stats,omitempty"`
++	// Members is the tree's membership roster, populated only when the
++	// caller asked for it (GET /trees/{tree_id}?include_members=true,
++	// SPEC-API-02 §5.2/EC-23). A pointer rather than a bare slice because
++	// the two states must stay distinguishable on the wire: nil → the
++	// roster was not requested, so the key is ABSENT (the pre-CAN-DB-01
++	// shape); non-nil → it was requested, so the key is always PRESENT,
++	// an empty array for a tree with no members. A bare slice could not
++	// express that: `omitempty` drops empty ones and no `omitempty` sends
++	// `null`.
++	Members *[]MemberSummary `json:"members,omitempty"`
++	// MembersTruncated reports that the tree holds more memberships than
++	// MemberRosterCap, so Members carries only the first page (EC-23);
++	// TotalMembers is the real count for the whole tree. Both ride the
++	// include_members flag and are pointers for the same presence reason
++	// as Members — absent when the roster was not requested.
++	MembersTruncated *bool    `json:"members_truncated,omitempty"`
++	TotalMembers     *int     `json:"total_members,omitempty"`
++	Related          *Related `json:"related,omitempty"`
+ }
+ 
+ // Related holds session-lineage associations extracted from tree
+@@ -332,12 +375,21 @@ type TreeStats struct {
+ 	PendingApprovals int `json:"pending_approvals"`
+ }
+ 
+-// MemberSummary is a lightweight member representation.
++// MemberSummary is one entry of the tree-detail members array
++// (SPEC-API-02 §5.3). It carries the fields GET /trees/{tree_id}/members
++// returns for the same row (SPEC-API-06 §9.3) — the tree_members row id, the
++// polymorphic participant, its display identity, role and join time — so a
++// client can compare the two responses entry-for-entry. UserID is a pointer
++// because a profile participant has none (exactly one of UserID/ProfileID is
++// set, enforced by the tree_members CHECK constraint).
+ type MemberSummary struct {
+-	UserID      uuid.UUID  `json:"user_id"`
+-	DisplayName string     `json:"display_name"`
+-	Role        MemberRole `json:"role"`
+-	JoinedAt    time.Time  `json:"joined_at"`
++	ID              uuid.UUID  `json:"id"`
++	UserID          *uuid.UUID `json:"user_id"`
++	ProfileID       *uuid.UUID `json:"profile_id"`
++	ParticipantType string     `json:"participant_type"`
++	DisplayName     string     `json:"display_name"`
++	Role            MemberRole `json:"role"`
++	JoinedAt        time.Time  `json:"joined_at"`
+ }
+ 
+ // --- Service interface + implementation ------------------------------------
+@@ -403,6 +455,14 @@ type TreeServiceImpl struct {
+ 	pool     *pgxpool.Pool
+ 	now      func() time.Time // injectable for testing
+ 
++	// memberRepo backs the include_members roster of GET /trees/{id}
++	// (SPEC-API-02 §5.2, EC-23). It is the SAME repository the
++	// GET /trees/{id}/members route pages, so the detail roster and the
++	// members endpoint can never drift apart. nil on a service built
++	// without WithMemberRepo: a caller asking for the roster then gets
++	// ErrMemberRosterUnavailable rather than a fabricated empty list.
++	memberRepo db.TreeMemberRepo
++
+ 	// Multi-message reference model (SPEC-PL-06 §11, §14.1): the HMAC
+ 	// signer for preflight selection tokens and the fallback profile
+ 	// context budget used for estimation.
+@@ -422,6 +482,17 @@ func NewTreeService(treeRepo db.TreeRepo, nodeRepo db.NodeRepo, edgeRepo db.Edge
+ 	}
+ }
+ 
++// WithMemberRepo wires the membership repository that supplies the
++// include_members roster of GET /trees/{id} (SPEC-API-02 §5.2, EC-23).
++// Pass the same db.TreeMemberRepo the members route serves — that shared
++// repository is what keeps `members` in the tree detail and
++// GET /trees/{id}/members from answering differently. Returns the receiver
++// for chaining (the WithReferenceSelection pattern).
++func (s *TreeServiceImpl) WithMemberRepo(repo db.TreeMemberRepo) *TreeServiceImpl {
++	s.memberRepo = repo
++	return s
++}
++
+ // --- CreateTree -------------------------------------------------------------
+ 
+ // CreateTree creates a new tree with an auto-created root node inside a
+@@ -849,10 +920,9 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
+ 	}
+ 
+ 	if opts.IncludeMembers {
+-		// The tree_members table is not yet in the migration set, so we
+-		// return an empty slice. Once the table lands, populate via a
+-		// SELECT joining tree_members + profiles (SPEC-DM-04).
+-		detail.Members = []MemberSummary{}
++		if err := s.attachMemberRoster(ctx, detail, *tree, opts.CallerID); err != nil {
++			return nil, err
++		}
+ 	}
+ 
+ 	if opts.IncludeRelated {
+@@ -862,6 +932,97 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
+ 	return detail, nil
+ }
+ 
++// attachMemberRoster fills the EC-23 roster fields of a tree detail from one
++// page of the tree's memberships. It is the read the GET /trees/{tree_id}
++// detail has always advertised with include_members and never performed
++// (CAN-DB-01); the rows come from TreeMemberRepo.ListByTree — the identical
++// call the GET /trees/{tree_id}/members route pages — so the two responses
++// cannot drift.
++//
++// Members always ends up non-nil here: a tree with no memberships answers
++// `"members": []`, never a missing key and never null. Truncation follows
++// EC-23 — the page is MemberRosterCap rows and total_members is the real
++// count for the whole (visibility-filtered) roster, so
++// members_truncated == total > len(members).
++func (s *TreeServiceImpl) attachMemberRoster(ctx context.Context, detail *TreeDetail, tree db.Tree, callerID uuid.UUID) error {
++	if s.memberRepo == nil {
++		// Never answer an empty roster for a service that simply has no
++		// membership repository wired: that is the CAN-DB-01 defect in a
++		// new disguise (an empty array reads as "the tree has no
++		// members").
++		return ErrMemberRosterUnavailable
++	}
++
++	includeHidden, err := s.rosterIncludesHidden(ctx, tree, callerID)
++	if err != nil {
++		return err
++	}
++	rows, total, err := s.memberRepo.ListByTree(ctx, tree.ID, includeHidden, MemberRosterCap, 0)
++	if err != nil {
++		return fmt.Errorf("%w: members: %v", ErrDatabaseUnavailable, err)
++	}
++
++	members := make([]MemberSummary, 0, len(rows))
++	for _, row := range rows {
++		members = append(members, memberSummaryOf(row))
++	}
++	truncated := total > len(members)
++
++	detail.Members = &members
++	detail.MembersTruncated = &truncated
++	detail.TotalMembers = &total
++	return nil
++}
++
++// rosterIncludesHidden applies SPEC-API-06 §9.5 to the detail roster: owners
++// and admins see every membership, members and viewers only is_visible rows.
++//
++// The owner check reads the tree row rather than tree_members because
++// CreateTree's owner-membership insert is best-effort — an owner without a
++// membership row still owns the tree. An unknown caller (uuid.Nil) gets the
++// restricted view.
++func (s *TreeServiceImpl) rosterIncludesHidden(ctx context.Context, tree db.Tree, callerID uuid.UUID) (bool, error) {
++	if callerID == uuid.Nil {
++		return false, nil
++	}
++	if tree.OwnerID != uuid.Nil && tree.OwnerID == callerID {
++		return true, nil
++	}
++	role, isMember, err := s.memberRepo.IsMember(ctx, tree.ID, callerID)
++	if err != nil {
++		return false, fmt.Errorf("%w: members: membership check: %v", ErrDatabaseUnavailable, err)
++	}
++	if !isMember {
++		return false, nil
++	}
++	return role == db.TreeRoleOwner || role == db.TreeRoleAdmin, nil
++}
++
++// memberSummaryOf maps one joined membership row onto the detail entry
++// SPEC-API-02 §5.3 documents. The fields mirror what the members route
++// returns for the same row (SPEC-API-06 §9.3), so a client can compare the
++// two responses entry-for-entry.
++func memberSummaryOf(row db.TreeMemberSummary) MemberSummary {
++	participantType := row.ParticipantType
++	if participantType == "" {
++		// Derive it when a repository leaves the join's CASE column empty,
++		// the same rule the members handler applies.
++		participantType = "profile"
++		if row.UserID != nil {
++			participantType = "human"
++		}
++	}
++	return MemberSummary{
++		ID:              row.ID,
++		UserID:          row.UserID,
++		ProfileID:       row.ProfileID,
++		ParticipantType: participantType,
++		DisplayName:     row.DisplayName,
++		Role:            MemberRole(row.Role),
++		JoinedAt:        row.JoinedAt,
++	}
++}
++
+ // extractRelated parses session-lineage metadata from a tree's metadata
+ // jsonb and resolves session IDs to Canopy tree refs. It is best-effort
+ // — any error (missing metadata, missing session_id key, no matching

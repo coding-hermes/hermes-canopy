@@ -1,0 +1,196 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	"github.com/coding-hermes/hermes-canopy/internal/service"
+)
+
+// CAN-DB-01, handler half: GET /api/v1/trees/{tree_id} must parse SPEC-API-02
+// §5.2's include_members query parameter (accepting "true"/"1"), hand it to
+// the service together with the caller (the §9.5 visibility input), and answer
+// a malformed value as a client error instead of silently reading it as false.
+
+// stubRosterTreeService records the GetTreeOptions the handler built and
+// answers a detail that MIRRORS the service's include_members contract, so the
+// wire assertions below exercise the handler's own parsing + serialization.
+type stubRosterTreeService struct {
+	service.TreeService
+	tree    service.TreeDetail
+	err     error
+	gotOpts *service.GetTreeOptions
+	calls   int
+}
+
+func (s *stubRosterTreeService) GetTree(_ context.Context, _ uuid.UUID, opts service.GetTreeOptions) (*service.TreeDetail, error) {
+	s.calls++
+	s.gotOpts = &opts
+	if s.err != nil {
+		return nil, s.err
+	}
+	detail := s.tree
+	if opts.IncludeMembers {
+		// Stand-in for the service's roster: one membership row, no
+		// truncation. The real mapping/cap live in internal/service and are
+		// covered by tree_roster_test.go.
+		userID := uuid.New()
+		members := []service.MemberSummary{{
+			ID:              uuid.New(),
+			UserID:          &userID,
+			ParticipantType: "human",
+			DisplayName:     "Bane",
+			Role:            service.MemberRole("owner"),
+		}}
+		truncated := false
+		total := 1
+		detail.Members = &members
+		detail.MembersTruncated = &truncated
+		detail.TotalMembers = &total
+	}
+	return &detail, nil
+}
+
+// getTreeDetail drives GET /api/v1/trees/{tree_id} for callerID and returns
+// the recorded response.
+func getTreeDetail(t *testing.T, h *TreeHandler, callerID, treeID uuid.UUID, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/trees/"+treeID.String()+query, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tree_id", treeID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, userIDContextKey{}, callerID)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h.GetTree(rec, req)
+	return rec
+}
+
+// newRosterTestHandler builds the tree route over the recording service. The
+// caller is the tree owner, so no membership repository is needed to pass the
+// handler's own access check.
+func newRosterTestHandler(ownerID, treeID uuid.UUID) (*TreeHandler, *stubRosterTreeService) {
+	svc := &stubRosterTreeService{
+		tree: service.TreeDetail{
+			TreeSummary: service.TreeSummary{ID: treeID, OwnerID: ownerID, Title: "roster"},
+		},
+	}
+	return NewTreeHandler(svc, nil), svc
+}
+
+// TestGetTree_IncludeMembersQueryParam pins the parameter parsing: "true" and
+// "1" both ask for the roster, "false" and an absent parameter do not, and the
+// caller id rides along for the §9.5 visibility decision.
+func TestGetTree_IncludeMembersQueryParam(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+
+	tests := []struct {
+		name       string
+		query      string
+		wantRoster bool
+	}{
+		{name: "absent", query: "", wantRoster: false},
+		{name: "true", query: "?include_members=true", wantRoster: true},
+		{name: "1", query: "?include_members=1", wantRoster: true},
+		{name: "TRUE (ParseBool spelling)", query: "?include_members=TRUE", wantRoster: true},
+		{name: "false", query: "?include_members=false", wantRoster: false},
+		{name: "0", query: "?include_members=0", wantRoster: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, svc := newRosterTestHandler(ownerID, treeID)
+
+			rec := getTreeDetail(t, h, ownerID, treeID, tc.query)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+			}
+			if svc.gotOpts == nil {
+				t.Fatal("GetTree was not called")
+			}
+			if svc.gotOpts.IncludeMembers != tc.wantRoster {
+				t.Errorf("opts.IncludeMembers = %v, want %v", svc.gotOpts.IncludeMembers, tc.wantRoster)
+			}
+			if tc.wantRoster && svc.gotOpts.CallerID != ownerID {
+				t.Errorf("opts.CallerID = %s, want the authenticated caller %s",
+					svc.gotOpts.CallerID, ownerID)
+			}
+
+			var body map[string]json.RawMessage
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			_, hasMembers := body["members"]
+			if hasMembers != tc.wantRoster {
+				t.Errorf("response members key present = %v, want %v (body: %s)",
+					hasMembers, tc.wantRoster, rec.Body.String())
+			}
+			if !tc.wantRoster {
+				// Today's shape, untouched: no roster metadata either.
+				for _, key := range []string{"members_truncated", "total_members"} {
+					if _, ok := body[key]; ok {
+						t.Errorf("response carries %q without include_members (body: %s)",
+							key, rec.Body.String())
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestGetTree_IncludeMembersInvalidValue pins that a malformed boolean is
+// answered as a client error — reading it as "false" would serve the old
+// shape to a caller that explicitly asked for the roster.
+func TestGetTree_IncludeMembersInvalidValue(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+
+	for _, raw := range []string{"yes", "2", "maybe"} {
+		t.Run(raw, func(t *testing.T) {
+			h, svc := newRosterTestHandler(ownerID, treeID)
+
+			rec := getTreeDetail(t, h, ownerID, treeID, "?include_members="+raw)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())
+			}
+			var body apiErrorBody
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("decode error body: %v", err)
+			}
+			if body.Error.Code != "INVALID_INCLUDE_MEMBERS" {
+				t.Errorf("code = %q, want INVALID_INCLUDE_MEMBERS", body.Error.Code)
+			}
+			if svc.calls != 0 {
+				t.Errorf("GetTree calls = %d, want 0 for a malformed parameter", svc.calls)
+			}
+		})
+	}
+}
+
+// TestGetTree_IncludeMembersUnwiredServer pins the fail-loud mapping: a
+// server whose service has no membership repository answers 501
+// NOT_IMPLEMENTED (the same contract ShareTree and ListMembers honour) rather
+// than an empty roster.
+func TestGetTree_IncludeMembersUnwiredServer(t *testing.T) {
+	ownerID, treeID := uuid.New(), uuid.New()
+	h, svc := newRosterTestHandler(ownerID, treeID)
+	svc.err = service.ErrMemberRosterUnavailable
+
+	rec := getTreeDetail(t, h, ownerID, treeID, "?include_members=true")
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusNotImplemented, rec.Body.String())
+	}
+	var body apiErrorBody
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if body.Error.Code != "NOT_IMPLEMENTED" {
+		t.Errorf("code = %q, want NOT_IMPLEMENTED", body.Error.Code)
+	}
+}
