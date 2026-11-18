@@ -1,0 +1,29 @@
+{
+  "tick_id": "hermes-canopy-foreman-2026-11-18-00-54-47",
+  "foreman": "hermes-canopy-foreman",
+  "wave_budget": 12,
+  "task_count": 2,
+  "base_sha": "9923c141",
+  "base_ref": "origin/master",
+  "wave_mode": "auto-merge",
+  "tasks": [
+    {
+      "id": "CAN-DB-01",
+      "priority": "P2",
+      "branch": "wt/CAN-DB-01-r2",
+      "worktree": "/home/kara/worktrees/hermes-canopy-CAN-DB-01-r2",
+      "brief": "/tmp/brief-CAN-DB-01-r2.txt",
+      "status": "dispatched"
+    },
+    {
+      "id": "OBS-1",
+      "priority": "P1",
+      "branch": "wt/OBS-1-r2",
+      "worktree": "/home/kara/worktrees/hermes-canopy-OBS-1-r2",
+      "brief": "/tmp/brief-OBS-1-r2.txt",
+      "status": "dispatched"
+    }
+  ],
+  "disposition_note": "CAN-OPS-01 + CAN-MEM-03 reconciled first (landed 11-17, judged tier2 PASS ebb97169/1e9a36ce, closed this tick). CAN-HON-01 deferred owner-gated. Dispatched rows are mutually independent: CAN-DB-01 = internal/handler + internal/service (members roster); OBS-1 = internal/telemetry + internal/server middleware + compose/deploy config. No shared registration seam expected; merge serially.",
+  "created_at": "2026-11-18T01:30:00Z"
+}
