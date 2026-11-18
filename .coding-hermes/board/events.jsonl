@@ -1489,3 +1489,8 @@
 {"id": 20261325, "timestamp": "2026-11-18T02:58:12Z", "event_type": "task_updated", "task_id": "OBS-2", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 20261326, "timestamp": "2026-11-18T02:58:31Z", "event_type": "task_created", "task_id": "CAN-OPS-03", "actor": "foreman", "detail": "{\"id\":\"CAN-OPS-03\",\"status\":\"pending\"}"}
 {"id": 20261327, "timestamp": "2026-11-18T02:58:36Z", "event_type": "task_updated", "task_id": "CAN-OPS-02", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261328, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-51", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-51\",\"status\":\"pending\"}"}
+{"id": 20261329, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-52", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-52\",\"status\":\"pending\"}"}
+{"id": 20261330, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-53", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-53\",\"status\":\"pending\"}"}
+{"id": 20261331, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-54", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-54\",\"status\":\"pending\"}"}
+{"id": 20261332, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-50-R2", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-50-R2\",\"status\":\"pending\"}"}
