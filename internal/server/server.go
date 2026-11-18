@@ -47,6 +47,13 @@ import (
 // request on the compile surfaces.
 const modelWindowCatalogTTL = 5 * time.Minute
 
+// Global per-IP rate limiter defaults (100 req/s, burst 200). Named so the
+// admin-facing comment and the metric-exemption test can cite one source.
+const (
+	rateLimitPerSecond = 100
+	rateLimitBurst     = 200
+)
+
 // Server is the Canopy HTTP server.
 type Server struct {
 	httpServer      *http.Server
@@ -203,6 +210,10 @@ type routeDeps struct {
 	relayRegistry   *relay.RelayRegistry
 	cfg             *config.Config
 	dbPool          *pgxpool.Pool
+	// rateLimiter overrides the global per-IP limiter. Nil (every production
+	// caller) keeps the documented 100 req/s, burst 200; tests pass a tiny
+	// bucket to exhaust it and prove /metrics is still served (OBS-1 AC6).
+	rateLimiter *handler.RateLimiter
 }
 
 // newRouter wires middleware and every route exactly as New always has.
@@ -260,6 +271,12 @@ func newRouter(deps *routeDeps) *chi.Mux {
 				next.ServeHTTP(w, req.WithContext(ctx))
 			})
 		})
+		// OBS-1 AC1: publish the SAME identity /version and /health serve, so
+		// a scrape can attribute series to the running build without joining
+		// against a deploy record. Written once per router construction —
+		// currentBuildInfo() is the single source both surfaces read.
+		bi := currentBuildInfo()
+		metrics.SetBuildInfo(bi.Version, bi.Commit)
 	}
 
 	// === Global middleware (applied to every route) ===
@@ -298,8 +315,13 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	r.Use(corsMiddleware(cfg.CORSOrigin))
 	r.Use(handler.BodySizeLimit(1024 * 1024)) // 1MB per SPEC-API-02 §10.1
 
-	// Rate limiter: 100 req/s per IP, burst 200.
-	rateLimiter := handler.NewRateLimiter(100, 200)
+	// Rate limiter: 100 req/s per IP, burst 200. A test-supplied limiter
+	// (routeDeps.rateLimiter) replaces it so the exhaustion arm can be driven
+	// without hammering 200 requests through the real router.
+	rateLimiter := deps.rateLimiter
+	if rateLimiter == nil {
+		rateLimiter = handler.NewRateLimiter(rateLimitPerSecond, rateLimitBurst)
+	}
 	r.Use(handler.RateLimit(rateLimiter))
 
 	// Prometheus metrics middleware (records request duration, count, active conns).

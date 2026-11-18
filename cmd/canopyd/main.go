@@ -31,6 +31,7 @@ import (
 	sqlitestore "github.com/coding-hermes/hermes-canopy/internal/db/sqlite"
 	"github.com/coding-hermes/hermes-canopy/internal/federation"
 	"github.com/coding-hermes/hermes-canopy/internal/fileviewer"
+	"github.com/coding-hermes/hermes-canopy/internal/gateway"
 	"github.com/coding-hermes/hermes-canopy/internal/handler"
 	"github.com/coding-hermes/hermes-canopy/internal/hermes"
 	"github.com/coding-hermes/hermes-canopy/internal/mls"
@@ -622,6 +623,16 @@ func main() {
 				}
 			}
 		}()
+		// OBS-1 AC2: canopy answers 2xx while every AI run fails when the
+		// upstream Hermes gateway is down — the outage nobody was paged for
+		// (spec §3.4). Poll the SAME base URL the run client uses
+		// (cfg.GatewayBaseURL, from HERMES_WEBUI_GATEWAY_BASE_URL) and keep
+		// canopy_upstream_gateway_up / _check_errors_total current.
+		if gwProbe, gwErr := gateway.NewClient(cfg.GatewayBaseURL, cfg.GatewayAPIKey); gwErr != nil {
+			log.Warn().Err(gwErr).Msg("metrics: upstream gateway probe disabled (unusable gateway base URL)")
+		} else {
+			telemetry.StartUpstreamGatewayProbe(ctx, telemetry.NewUpstreamGatewayProbe(metrics, gwProbe.Health))
+		}
 	}
 
 	// Context compiler — GAP-001 budgeted context assembly. The retrieved

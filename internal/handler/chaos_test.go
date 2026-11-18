@@ -866,10 +866,16 @@ func TestTEST03_RateLimiterHighConcurrency(t *testing.T) {
 
 	t.Run("health_endpoint_bypasses_rate_limiter", func(t *testing.T) {
 		// Verify that isPublicPath correctly identifies health endpoints.
+		// /metrics is exempt from the RATE LIMITER for the same class of
+		// reason (OBS-1 AC6): a 429'd scrape makes the Prometheus target
+		// flap. The metrics server-level exemption test lives in
+		// internal/server (metrics_ratelimit_test.go) because that is where
+		// the route is actually mounted.
 		publicPaths := []string{
 			"/health",
 			"/healthz",
 			"/version",
+			"/metrics",
 		}
 		for _, p := range publicPaths {
 			if !isPublicPath(p) {

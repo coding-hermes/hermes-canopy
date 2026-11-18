@@ -74,6 +74,21 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (*Client, error) {
 // BaseURL returns the configured base URL (useful for status surfacing).
 func (c *Client) BaseURL() string { return c.baseURL }
 
+// HealthError is returned by Health when the gateway answers with a non-200
+// status. It carries the status code as a FIELD so a metrics probe can
+// classify the failure (canopy_upstream_gateway_check_errors_total{kind=
+// "non_200"}) instead of parsing this message — and the message text is
+// unchanged from the pre-typed form, so existing callers see the same string.
+type HealthError struct {
+	StatusCode int
+}
+
+func (e *HealthError) Error() string { return fmt.Sprintf("gateway health: HTTP %d", e.StatusCode) }
+
+// HTTPStatusCode exposes the status for telemetry.GatewayStatusCoder, which is
+// how the probe classifies non-200 answers without importing this package.
+func (e *HealthError) HTTPStatusCode() int { return e.StatusCode }
+
 // Health checks the gateway /v1/health endpoint. Returns nil when the
 // gateway answers OK.
 func (c *Client) Health(ctx context.Context) error {
@@ -87,7 +102,7 @@ func (c *Client) Health(ctx context.Context) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("gateway health: HTTP %d", resp.StatusCode)
+		return &HealthError{StatusCode: resp.StatusCode}
 	}
 	return nil
 }

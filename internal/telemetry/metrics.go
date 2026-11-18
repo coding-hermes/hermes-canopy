@@ -31,10 +31,25 @@ const (
 	// route. Its only label is the method; the raw path is NEVER a label
 	// value anywhere (docs/observability-spec.md §4, D3).
 	SeriesHTTPUnmatchedRequestsTotal = "canopy_http_unmatched_requests_total"
+	// SeriesBuildInfo is the build identity gauge: value 1, labels
+	// version/commit. It is the only series that says WHICH binary a scraped
+	// host is running (docs/observability-spec.md §4, P0 table; OBS-1).
+	SeriesBuildInfo = "canopy_build_info"
+	// SeriesUpstreamGatewayUp reports whether the upstream Hermes gateway is
+	// reachable (1) or not (0). Canopy answers 2xx while every AI run fails
+	// when this is 0 — the page nobody was getting (spec §3.4; OBS-1 AC2).
+	SeriesUpstreamGatewayUp = "canopy_upstream_gateway_up"
+	// SeriesUpstreamGatewayCheckErrorsTotal counts failed gateway checks, by
+	// closed-set kind label (timeout/non_200/conn_refused/other), so a
+	// flapping gateway is countable and not just visible (spec §4, OBS-1 AC2).
+	SeriesUpstreamGatewayCheckErrorsTotal = "canopy_upstream_gateway_check_errors_total"
 )
 
 // Metrics holds all Prometheus metrics exported by canopyd.
 type Metrics struct {
+	// BuildInfo is the build identity gauge: value 1, labels version/commit,
+	// so a scrape can attribute the series to the running binary.
+	BuildInfo *prometheus.GaugeVec
 	// RequestDuration tracks HTTP request latency in seconds.
 	RequestDuration *prometheus.HistogramVec
 	// RequestTotal counts HTTP requests by method, route pattern, and status code.
@@ -51,6 +66,13 @@ type Metrics struct {
 	// UnmatchedRequests counts requests that matched no chi route, by method
 	// only — the raw path never becomes a label value.
 	UnmatchedRequests *prometheus.CounterVec
+	// UpstreamGatewayUp is the most recent upstream Hermes gateway
+	// reachability result (1 reachable, 0 not).
+	UpstreamGatewayUp prometheus.Gauge
+	// UpstreamGatewayCheckErrors counts failed gateway checks by a closed-set
+	// kind label — never by an error string (that would mint a series per
+	// distinct failure message).
+	UpstreamGatewayCheckErrors *prometheus.CounterVec
 	// ResumeDuration tracks the server-observable part of the product's
 	// "<30s resume" claim (GAP-079): the seconds between a user's first
 	// tree-scoped read after an idle gap and the compiled context they
@@ -67,6 +89,13 @@ type Metrics struct {
 // registry (the one promhttp.Handler() serves).
 func NewMetrics() *Metrics {
 	return newMetricsWith(prometheus.DefaultRegisterer)
+}
+
+// NewMetricsWithRegisterer creates and registers all Prometheus metrics on reg.
+// Production uses NewMetrics (default registry); tests and embedders that must
+// not touch the process-global registry use this.
+func NewMetricsWithRegisterer(reg prometheus.Registerer) *Metrics {
+	return newMetricsWith(reg)
 }
 
 // newMetricsWith creates and registers all Prometheus metrics on reg. Tests
@@ -89,6 +118,13 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 		},
 	)
 	m := &Metrics{
+		BuildInfo: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: SeriesBuildInfo,
+				Help: "Build identity of the running canopyd binary (value 1), labelled with version and commit.",
+			},
+			[]string{"version", "commit"},
+		),
 		RequestDuration: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    SeriesHTTPRequestDuration,
@@ -134,6 +170,19 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 				Help: "Requests that matched no chi route, by method. The raw path is never a label.",
 			},
 			[]string{"method"},
+		),
+		UpstreamGatewayUp: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: SeriesUpstreamGatewayUp,
+				Help: "Whether the upstream Hermes gateway answered its health check on the last poll (1) or not (0).",
+			},
+		),
+		UpstreamGatewayCheckErrors: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: SeriesUpstreamGatewayCheckErrorsTotal,
+				Help: "Failed upstream Hermes gateway health checks, by kind (timeout/non_200/conn_refused/other).",
+			},
+			[]string{"kind"},
 		),
 		ResumeDuration: &resumeDuration,
 		ResumeStarted: factory.NewCounter(
@@ -211,6 +260,60 @@ func (m *Metrics) IncUnmatchedRequest(method string) {
 	m.UnmatchedRequests.WithLabelValues(method).Inc()
 }
 
+// SetBuildInfo publishes the running binary's identity as
+// canopy_build_info{version,commit} = 1.
+//
+// Empty values fall back to the same placeholders /version and /health use
+// ("dev"/"unknown"), so an unstamped build is labelled honestly instead of
+// serving an empty label value. The vec is Reset first: a running process has
+// exactly ONE build identity, and a re-stamp must never leave a ghost series
+// behind for a PromQL join to pick up. Nil-receiver safe.
+func (m *Metrics) SetBuildInfo(version, commit string) {
+	if m == nil || m.BuildInfo == nil {
+		return
+	}
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+	m.BuildInfo.Reset()
+	m.BuildInfo.WithLabelValues(version, commit).Set(1)
+}
+
+// SetUpstreamGatewayUp records the latest upstream Hermes gateway
+// reachability result. Nil-receiver safe, so a probe running against a server
+// without metrics enabled is a no-op.
+func (m *Metrics) SetUpstreamGatewayUp(up bool) {
+	if m == nil || m.UpstreamGatewayUp == nil {
+		return
+	}
+	if up {
+		m.UpstreamGatewayUp.Set(1)
+		return
+	}
+	m.UpstreamGatewayUp.Set(0)
+}
+
+// IncUpstreamGatewayCheckError counts one failed gateway health check.
+//
+// The kind label is a CLOSED set: anything outside the documented values folds
+// into GatewayCheckErrorOther, so a caller (or a future error type) can never
+// mint one series per distinct failure message. Nil-receiver safe.
+func (m *Metrics) IncUpstreamGatewayCheckError(kind string) {
+	if m == nil || m.UpstreamGatewayCheckErrors == nil {
+		return
+	}
+	switch kind {
+	case GatewayCheckErrorTimeout, GatewayCheckErrorNon200,
+		GatewayCheckErrorConnRefused, GatewayCheckErrorOther:
+	default:
+		kind = GatewayCheckErrorOther
+	}
+	m.UpstreamGatewayCheckErrors.WithLabelValues(kind).Inc()
+}
+
 // SeriesWriter names the production writer path for one declared series. The
 // declared-series test (metrics_writers_test.go) fails when a series in this
 // table has an empty Writer, which is how the node_count orphan (declared
@@ -237,6 +340,9 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesHTTPUnmatchedRequestsTotal, "MetricsMiddleware: Metrics.IncUnmatchedRequest when chi resolves no route pattern"},
 	{SeriesResumeDuration, "ResumeMiddleware: Metrics.ObserveResumeDuration on a completed resume window"},
 	{SeriesResumeStarted, "ResumeMiddleware: Metrics.IncResumeStarted when a resume window opens"},
+	{SeriesBuildInfo, "router wiring (internal/server): Metrics.SetBuildInfo from currentBuildInfo()"},
+	{SeriesUpstreamGatewayUp, "UpstreamGatewayProbe.Check: Metrics.SetUpstreamGatewayUp on every gateway poll"},
+	{SeriesUpstreamGatewayCheckErrorsTotal, "UpstreamGatewayProbe.Check: Metrics.IncUpstreamGatewayCheckError on a failed gateway poll"},
 }
 
 // DeclaredSeriesWriters returns a copy of the writer registry so tests (and
