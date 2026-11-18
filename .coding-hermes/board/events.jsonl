@@ -1494,3 +1494,4 @@
 {"id": 20261330, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-53", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-53\",\"status\":\"pending\"}"}
 {"id": 20261331, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-54", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-54\",\"status\":\"pending\"}"}
 {"id": 20261332, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-50-R2", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-50-R2\",\"status\":\"pending\"}"}
+{"id": 20261333, "timestamp": "2026-11-18T03:14:03Z", "event_type": "task_updated", "task_id": "QA-HERMES-CANOPY-54", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
