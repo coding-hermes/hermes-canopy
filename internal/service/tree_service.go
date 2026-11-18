@@ -296,6 +296,15 @@ type TreeDetail struct {
 	Stats     *TreeStats      `json:"stats,omitempty"`
 	Members   []MemberSummary `json:"members,omitempty"`
 	Related   *Related        `json:"related,omitempty"`
+
+	// MembersTruncated and TotalMembers ride WITH Members and are the
+	// SPEC-API-02 EC-23 truncation facts: the roster carried here is
+	// capped, so a tree with more memberships than the cap reports the
+	// real membership total and flags that the array was cut (the client
+	// pages the rest through GET /trees/{tree_id}/members). Both stay
+	// absent unless a roster was requested and populated.
+	MembersTruncated bool `json:"members_truncated,omitempty"`
+	TotalMembers     int  `json:"total_members,omitempty"`
 }
 
 // Related holds session-lineage associations extracted from tree
@@ -332,12 +341,27 @@ type TreeStats struct {
 	PendingApprovals int `json:"pending_approvals"`
 }
 
-// MemberSummary is a lightweight member representation.
+// MemberSummary is one member object of a tree's roster. The field set and
+// the snake_case names are SPEC-API-06 §9.3/§9.4's exactly, i.e. the same
+// object GET /trees/{tree_id}/members serves: the tree-detail roster
+// (SPEC-API-02 §5.3 include_members) and the paginated member list are
+// member-for-member identical, which is what makes EC-23's "use the members
+// route for the full list" a drop-in for clients.
 type MemberSummary struct {
-	UserID      uuid.UUID  `json:"user_id"`
-	DisplayName string     `json:"display_name"`
-	Role        MemberRole `json:"role"`
-	JoinedAt    time.Time  `json:"joined_at"`
+	ID              uuid.UUID  `json:"id"`
+	TreeID          uuid.UUID  `json:"tree_id"`
+	ParticipantType string     `json:"participant_type"`
+	UserID          *uuid.UUID `json:"user_id"`
+	ProfileID       *uuid.UUID `json:"profile_id"`
+	DisplayName     string     `json:"display_name"`
+	ProfileName     *string    `json:"profile_name"`
+	AvatarURL       *string    `json:"avatar_url"`
+	Role            string     `json:"role"`
+	IsVisible       bool       `json:"is_visible"`
+	AutoApproved    bool       `json:"auto_approved"`
+	JoinedAt        time.Time  `json:"joined_at"`
+	LastSeenAt      *time.Time `json:"last_seen_at"`
+	InvitedBy       *uuid.UUID `json:"invited_by"`
 }
 
 // --- Service interface + implementation ------------------------------------
@@ -849,9 +873,12 @@ func (s *TreeServiceImpl) GetTree(ctx context.Context, treeID uuid.UUID, opts Ge
 	}
 
 	if opts.IncludeMembers {
-		// The tree_members table is not yet in the migration set, so we
-		// return an empty slice. Once the table lands, populate via a
-		// SELECT joining tree_members + profiles (SPEC-DM-04).
+		// The roster itself is filled by the transport layer, which is the
+		// only layer that knows the CALLER and therefore the §9.5
+		// visibility filter (owners and admins see hidden rows, members and
+		// viewers do not) — see handler.fillDetailMembers. Seed a non-nil
+		// slice here so an unpopulated roster still serializes as `[]`
+		// rather than being omitted from the detail body.
 		detail.Members = []MemberSummary{}
 	}
 

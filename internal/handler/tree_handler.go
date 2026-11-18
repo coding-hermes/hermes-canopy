@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	stdsync "sync"
 	"time"
@@ -188,6 +189,7 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	opts := service.GetTreeOptions{
 		IncludeStats:   q.Get("include_stats") != "false",
+		IncludeMembers: includeMembersRequested(q),
 		IncludeRelated: true, // WIRE-006: always surface associations when present
 	}
 	out, err := h.svc.GetTree(r.Context(), id, opts)
@@ -206,7 +208,131 @@ func (h *TreeHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "NOT_TREE_OWNER", "you do not have access to this tree")
 		return
 	}
+
+	// The roster is filled only AFTER the access gate: a caller who may not
+	// read the tree must never receive member identities in the 403 path.
+	if opts.IncludeMembers {
+		if err := h.fillDetailMembers(r.Context(), out, userID); err != nil {
+			log.Ctx(r.Context()).Error().Err(err).Msg("tree detail: members roster failed")
+			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "database unavailable")
+			return
+		}
+		writeJSON(w, 200, newTreeDetailWithMembers(out))
+		return
+	}
 	writeJSON(w, 200, out)
+}
+
+// treeDetailWithMembers is the GET /trees/{tree_id}?include_members=true body:
+// the service detail with its roster lifted one level so the members array is
+// ALWAYS present. The embedded TreeDetail already carries members /
+// members_truncated / total_members, but all three are `omitempty`, which
+// drops them when they are empty/false — and a caller who ASKED for the roster
+// must see `members: []` for a tree with no memberships, not a missing key
+// (SPEC-API-02 §5.3 documents the field as an array). The depth-0 fields here
+// win over the embedded ones; every other detail field still serializes from
+// the embedded struct exactly as on the plain detail path.
+type treeDetailWithMembers struct {
+	*service.TreeDetail
+	Members          []service.MemberSummary `json:"members"`
+	MembersTruncated bool                    `json:"members_truncated"`
+	TotalMembers     int                     `json:"total_members"`
+}
+
+// newTreeDetailWithMembers lifts the roster off the detail so it is emitted
+// even when empty. A nil Members would serialize as null, so an absent roster
+// is normalized to an empty slice.
+func newTreeDetailWithMembers(d *service.TreeDetail) treeDetailWithMembers {
+	members := d.Members
+	if members == nil {
+		members = []service.MemberSummary{}
+	}
+	return treeDetailWithMembers{
+		TreeDetail:       d,
+		Members:          members,
+		MembersTruncated: d.MembersTruncated,
+		TotalMembers:     d.TotalMembers,
+	}
+}
+
+// treeDetailMemberCap is the maximum roster size a tree-detail response
+// carries (SPEC-API-02 EC-23): the array is cut at 200 entries and the body
+// reports members_truncated + total_members so the client knows to page the
+// rest through GET /trees/{tree_id}/members.
+const treeDetailMemberCap = 200
+
+// includeMembersRequested reports whether the caller asked for the roster.
+// SPEC-API-02 §5.2 gives include_members a default of false, so ONLY an
+// explicit true opts in — every other value (absent, "false", garbage) leaves
+// the detail body exactly as it was before the roster existed.
+func includeMembersRequested(q url.Values) bool {
+	return q.Get("include_members") == "true"
+}
+
+// fillDetailMembers populates a tree detail's members roster from the same
+// repository query GET /trees/{tree_id}/members serves (ListByTree, oldest
+// membership first), so the two surfaces are parity-identical by
+// construction, and records the SPEC-API-02 EC-23 truncation facts.
+//
+// Visibility follows SPEC-API-06 §9.5 exactly as ListMembers applies it:
+// owners and admins see the full roster, members and viewers see is_visible
+// rows only. The ownership fallback covers a tree whose owner-membership row
+// is missing (CreateTree's insert is best-effort).
+func (h *TreeHandler) fillDetailMembers(ctx context.Context, detail *service.TreeDetail, userID uuid.UUID) error {
+	if h.members == nil {
+		// Server built without share/member dependencies: leave the roster at
+		// the empty non-nil slice the service seeded and keep the detail
+		// readable. Worth a log line — a silently empty roster looks like a
+		// tree with no members.
+		log.Ctx(ctx).Warn().Str("tree_id", detail.ID.String()).
+			Msg("tree detail: include_members requested but member endpoints are not configured")
+		return nil
+	}
+
+	includeHidden := isTreeOwner(detail.OwnerID, userID)
+	if !includeHidden {
+		role, isMember, err := h.members.IsMember(ctx, detail.ID, userID)
+		if err != nil {
+			return err
+		}
+		includeHidden = isMember && (role == db.TreeRoleOwner || role == db.TreeRoleAdmin)
+	}
+
+	rows, total, err := h.members.ListByTree(ctx, detail.ID, includeHidden, treeDetailMemberCap, 0)
+	if err != nil {
+		return err
+	}
+
+	roster := make([]service.MemberSummary, 0, len(rows))
+	for _, m := range rows {
+		roster = append(roster, memberSummaryFromRow(m))
+	}
+	detail.Members = roster
+	detail.TotalMembers = total
+	detail.MembersTruncated = total > len(roster)
+	return nil
+}
+
+// memberSummaryFromRow maps the repo's joined membership row onto the §9.3
+// member object. Both rostered surfaces (this detail roster and the paginated
+// GET /members page) go through it, so they cannot drift.
+func memberSummaryFromRow(m db.TreeMemberSummary) service.MemberSummary {
+	return service.MemberSummary{
+		ID:              m.ID,
+		TreeID:          m.TreeID,
+		ParticipantType: m.ParticipantType,
+		UserID:          m.UserID,
+		ProfileID:       m.ProfileID,
+		DisplayName:     m.DisplayName,
+		ProfileName:     m.ProfileName,
+		AvatarURL:       m.AvatarURL,
+		Role:            m.Role,
+		IsVisible:       m.IsVisible,
+		AutoApproved:    m.AutoApproved,
+		JoinedAt:        m.JoinedAt,
+		LastSeenAt:      m.LastSeenAt,
+		InvitedBy:       m.InvitedBy,
+	}
 }
 
 func (h *TreeHandler) UpdateTree(w http.ResponseWriter, r *http.Request) {
@@ -479,25 +605,13 @@ func (h *TreeHandler) ShareTree(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// memberListEntry is one member object in the SPEC-API-06 §9 response. Field
-// names are the spec's exact snake_case JSON names (§9.3/§9.4) — the Share
-// dialog consumes them verbatim, so no camelCase aliases are offered.
-type memberListEntry struct {
-	ID              uuid.UUID  `json:"id"`
-	TreeID          uuid.UUID  `json:"tree_id"`
-	ParticipantType string     `json:"participant_type"`
-	UserID          *uuid.UUID `json:"user_id"`
-	ProfileID       *uuid.UUID `json:"profile_id"`
-	DisplayName     string     `json:"display_name"`
-	ProfileName     *string    `json:"profile_name"`
-	AvatarURL       *string    `json:"avatar_url"`
-	Role            string     `json:"role"`
-	IsVisible       bool       `json:"is_visible"`
-	AutoApproved    bool       `json:"auto_approved"`
-	JoinedAt        time.Time  `json:"joined_at"`
-	LastSeenAt      *time.Time `json:"last_seen_at"`
-	InvitedBy       *uuid.UUID `json:"invited_by"`
-}
+// memberListEntry is one member object in the SPEC-API-06 §9 response. It
+// ALIASES the service's MemberSummary so the two rostered surfaces — this
+// page and the tree-detail roster (SPEC-API-02 §5.3 include_members) — have
+// one definition and cannot drift. Field names are the spec's exact
+// snake_case JSON names (§9.3/§9.4) — the Share dialog consumes them
+// verbatim, so no camelCase aliases are offered.
+type memberListEntry = service.MemberSummary
 
 // listMembersResponse is the §9.3 envelope: the page plus total/limit/offset.
 type listMembersResponse struct {
@@ -597,22 +711,7 @@ func (h *TreeHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]memberListEntry, 0, len(members))
 	for _, m := range members {
-		out = append(out, memberListEntry{
-			ID:              m.ID,
-			TreeID:          m.TreeID,
-			ParticipantType: m.ParticipantType,
-			UserID:          m.UserID,
-			ProfileID:       m.ProfileID,
-			DisplayName:     m.DisplayName,
-			ProfileName:     m.ProfileName,
-			AvatarURL:       m.AvatarURL,
-			Role:            m.Role,
-			IsVisible:       m.IsVisible,
-			AutoApproved:    m.AutoApproved,
-			JoinedAt:        m.JoinedAt,
-			LastSeenAt:      m.LastSeenAt,
-			InvitedBy:       m.InvitedBy,
-		})
+		out = append(out, memberSummaryFromRow(m))
 	}
 	writeJSON(w, http.StatusOK, listMembersResponse{
 		Members: out,
