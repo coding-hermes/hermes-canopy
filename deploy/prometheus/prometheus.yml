@@ -1,0 +1,49 @@
+# Prometheus configuration for the Canopy compose stack (OBS-1).
+#
+# Why this file exists: hermes-canopy emitted series that NOTHING scraped. The
+# observability spec (docs/observability-spec.md, defect D1) found no
+# `job_name: canopy` anywhere, which makes every emitted series worth zero at
+# 3am. This is the reference scrape config the compose stack ships with.
+#
+# Target address — read this before editing:
+#   * The board AC phrased the target as `canopyd:8091`. Inside THIS compose
+#     network that address answers nothing: the `canopyd` service pins
+#     HTTP_ADDR=:8080 (see docker-compose.yml) and publishes 8092:8080 to the
+#     host. :8091 is the HOST systemd instance (deploy/systemd/
+#     canopy-canopyd.service, the spec's §6 target) — reachable from a
+#     container only as host.docker.internal:8091, and only when that unit is
+#     running on the same box.
+#   * So the primary target below is the compose service on its real port. If
+#     you run the host systemd instance instead, comment the primary line in
+#     and use the host-gateway entry (docker-compose.yml already declares the
+#     host-gateway mapping for canopyd).
+#
+# Interval/timeout match the spec (§6): 15s scrape, 10s timeout. The gateway
+# gauge is polled every 10s with a 3s budget, so a 15s scrape observes any
+# outage transition within one interval — comfortably inside the spec's
+# "0 within 15s" acceptance bound.
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: "canopy"
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      # Compose service, container port (HTTP_ADDR=:8080 in docker-compose.yml).
+      - targets: ["canopyd:8080"]
+        labels:
+          product: hermes-canopy
+          service: canopyd
+          instance_kind: compose
+      # Host systemd instance (the spec's §6 target, HTTP_ADDR=:8091). Enable
+      # this entry — and disable the one above — when scraping the host unit:
+      #
+      # - targets: ["host.docker.internal:8091"]
+      #   labels:
+      #     product: hermes-canopy
+      #     service: canopyd
+      #     instance_kind: systemd

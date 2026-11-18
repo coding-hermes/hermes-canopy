@@ -158,9 +158,17 @@ func UserIDFromContext(ctx context.Context) uuid.UUID {
 	return userID
 }
 
+// isPublicPath reports whether path is served without authentication and
+// without the global per-IP rate limiter.
+//
+// /metrics is here for the second reason only (it is mounted unauthenticated
+// either way): a Prometheus scraper that gets 429'd makes the target flap, and
+// the scrape is the sole signal that would tell an operator the daemon is
+// rate-limiting someone — refusing it blinds exactly the surface that should
+// report the refusal (docs/observability-spec.md §5 change 2, defect D5).
 func isPublicPath(path string) bool {
 	switch path {
-	case "/health", "/healthz", "/version":
+	case "/health", "/healthz", "/version", "/metrics":
 		return true
 	default:
 		return false

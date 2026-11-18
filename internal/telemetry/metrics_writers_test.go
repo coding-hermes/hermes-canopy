@@ -62,6 +62,9 @@ func TestEveryDeclaredSeriesHasAWriter(t *testing.T) {
 		SeriesHTTPUnmatchedRequestsTotal,
 		SeriesResumeDuration,
 		SeriesResumeStarted,
+		SeriesBuildInfo,
+		SeriesUpstreamGatewayUp,
+		SeriesUpstreamGatewayCheckErrorsTotal,
 	} {
 		if !declared[name] {
 			t.Errorf("series %q is registered by NewMetrics but has no writer-registry entry", name)

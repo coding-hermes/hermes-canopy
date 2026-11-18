@@ -244,7 +244,16 @@ and is deliberately NOT in the rename commit.
 |---|---|---|---|---|
 | `canopy_build_info` | gauge = 1 | — | `version`,`commit` | which build is running in production? |
 | `canopy_upstream_gateway_up` | gauge 0/1 | — | — | **is the Hermes gateway reachable?** (the 3am page) |
-| `canopy_upstream_gateway_check_errors_total` | counter | checks | `kind` (`timeout`/`non_200`/`conn_refused`) | is the gateway flapping or down? |
+| `canopy_upstream_gateway_check_errors_total` | counter | checks | `kind` (`timeout`/`non_200`/`conn_refused`/`other`) | is the gateway flapping or down? |
+
+All three are wired by OBS-1: `canopy_build_info` is set from the same
+`currentBuildInfo()` that `/version` and `/health` serve (one identity, no
+deploy-record join); the gateway gauge and error counter come from the
+background poller in `internal/telemetry/gateway_probe.go` (10s interval, 3s
+per-check budget, so a transition is visible within one 15s scrape). `other` is
+the documented catch-all for a failure class the three named values cannot
+express (DNS, TLS, malformed URL) — without it, an error string or an unbounded
+value would become the label, which §4's convention forbids.
 
 ### Add — P1 (depth: §5 rows OB-2, OB-3)
 
@@ -303,8 +312,11 @@ Three required changes to the existing exposure:
 1. **`metrics` should default ON** for a daeon whose whole cost of exposure is one route. The
    current fail-off default means any deployment that forgets the env var is invisible. Keep the
    env var as an *opt-out* (`METRICS_ENABLED=false`) and document the flip in README's env table.
-2. **Exempt `/metrics` from the rate limiter** — add it to `isPublicPath`
-   (`internal/handler/auth.go:161-167`). A scraped endpoint must never be 429'd (D5).
+2. **Exempt `/metrics` from the rate limiter** — ~~add it to `isPublicPath`~~ **done by
+   OBS-1** (`internal/handler/auth.go`: `isPublicPath` now includes `/metrics`, so
+   `RateLimit` serves it without taking a token). A scraped endpoint must never be 429'd (D5);
+   `internal/server/metrics_ratelimit_test.go` exhausts a 1-token bucket and asserts `/metrics`
+   stays 200 while another route 429s.
 3. **Keep the metrics middleware registered BEFORE the rate limiter** so a 429 is attributed to
    its route rather than vanishing. The current order already does this correctly —
    `telemetry.MetricsMiddleware` is registered at `internal/server/server.go:298-300`, the rate
@@ -326,7 +338,13 @@ known port; push would duplicate scrape semantics for no benefit.
 
 - **Scrape target**: `canopy-server` / systemd `canopyd` on `HTTP_ADDR` (default `:8091`,
   `deploy/systemd/canopy-canopyd.service:52`).
-- **Scrape job** (to be added by the monitoring lane, NOT by this repo):
+- **Scrape job**: the repo now ships a reference config, `deploy/prometheus/prometheus.yml`
+  (`job_name: canopy`, 15s interval / 10s timeout per this section), plus a `prometheus`
+  service in `docker-compose.yml` that mounts it (OBS-1). Its target is the compose
+  service on its real container port — `canopyd:8080`, because this stack pins
+  `HTTP_ADDR=:8080` and publishes `8092:8080`; the host systemd instance below is
+  `host.docker.internal:8091` and is shipped commented-out in the same file. The fleet
+  monitoring lane still owns the production target list:
   `job_name: canopy`, `metrics_path: /metrics`, `interval: 15s`, `timeout: 10s`,
   `static_configs: [{targets: ["<canopy-host>:8091"], labels: {product: "hermes-canopy", service: "canopyd", host: "<host>"}}]`.
 - **Labels on every series**: `host`, `product=hermes-canopy`, `service=canopyd`, plus the

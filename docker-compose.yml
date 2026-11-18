@@ -90,8 +90,43 @@ services:
       - canopy-net
     restart: unless-stopped
 
+  # Prometheus (OBS-1). canopyd emitted series that nothing scraped: the
+  # observability spec's D1 finding ("no job_name mentions canopy, so every
+  # series is worth zero at 3am"). This service scrapes the canopyd service on
+  # the compose network via deploy/prometheus/prometheus.yml.
+  #
+  # Ports are bound to the loopback by default on purpose: the fleet's Grafana
+  # is loopback-only (host hygiene), and a Prometheus UI answering on a public
+  # interface would publish every product series. Override
+  # CANOPY_PROMETHEUS_BIND when the scraper lives on another host.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: canopy-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${CANOPY_PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      canopyd:
+        condition: service_started
+    networks:
+      - canopy-net
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  promdata:
 
 networks:
   canopy-net:
