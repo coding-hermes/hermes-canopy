@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 
@@ -277,6 +276,32 @@ func newRouter(deps *routeDeps) *chi.Mux {
 		// currentBuildInfo() is the single source both surfaces read.
 		bi := currentBuildInfo()
 		metrics.SetBuildInfo(bi.Version, bi.Commit)
+		metrics.SetTransportSnapshotSource(func() telemetry.TransportSnapshot {
+			snapshot := transport.Metrics().Snapshot()
+			out := telemetry.TransportSnapshot{
+				Connections: make(map[string]int), Connects: make(map[string]int64),
+				Reconnects: make(map[string]int64), MessagesSent: make(map[string]int64),
+				MessagesReceived: make(map[string]int64), RelayDrops: snapshot.RelayDrops,
+			}
+			for _, tt := range transport.AllTransportTypes() {
+				key := string(tt)
+				out.Connections[key] = 0
+				if connMgr != nil {
+					out.Connections[key] = connMgr.ConnectionCount(tt)
+					if relayAdapter, ok := connMgr.Adapter(tt).(*transport.RelayService); ok {
+						out.RelayQueueDepth = relayAdapter.QueueDepth()
+					}
+				}
+				out.Connects[key] = snapshot.ConnectAttempts[tt]
+				out.Reconnects[key] = snapshot.Reconnects[tt]
+				out.MessagesSent[key] = snapshot.MessagesSent[tt]
+				out.MessagesReceived[key] = snapshot.MessagesReceived[tt]
+			}
+			if relaySource, ok := healthProbe.(interface{ RelayHealth() relay.RelayHealth }); ok {
+				out.RelaySessions = relaySource.RelayHealth().Sessions
+			}
+			return out
+		})
 	}
 
 	// === Global middleware (applied to every route) ===
@@ -345,7 +370,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 
 	// Prometheus /metrics endpoint (public — standard practice for /metrics).
 	if metrics != nil {
-		r.Handle("/metrics", promhttp.Handler())
+		r.Handle("/metrics", metrics.Handler())
 	}
 
 	// === Authenticated routes ===
@@ -807,7 +832,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{
 		"status": status, "service": "canopyd", "database_status": databaseStatus,
 		"database_up": databaseUp, "checks": map[string]string{"db": dbCheck},
-		"schema_version": schemaV,
+		"schema_version":      schemaV,
 		"embedded_migrations": embeddedV, "version": bi.Version,
 		"commit": bi.Commit, "build_time": bi.BuildTime,
 	}

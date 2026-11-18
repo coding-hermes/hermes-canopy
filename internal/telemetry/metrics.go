@@ -2,8 +2,12 @@
 package telemetry
 
 import (
+	"net/http"
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Series names emitted by canopyd. Every product series carries the canopy_
@@ -43,10 +47,79 @@ const (
 	// closed-set kind label (timeout/non_200/conn_refused/other), so a
 	// flapping gateway is countable and not just visible (spec §4, OBS-1 AC2).
 	SeriesUpstreamGatewayCheckErrorsTotal = "canopy_upstream_gateway_check_errors_total"
+	SeriesTransportConnections            = "canopy_transport_connections"
+	SeriesTransportConnectTotal           = "canopy_transport_connect_total"
+	SeriesTransportReconnectsTotal        = "canopy_transport_reconnects_total"
+	SeriesTransportMessagesTotal          = "canopy_transport_messages_total"
+	SeriesRelaySessions                   = "canopy_relay_sessions"
+	SeriesRelayQueueDepth                 = "canopy_relay_queue_depth"
+	SeriesRelayDropsTotal                 = "canopy_relay_drops_total"
 )
+
+// TransportSnapshot is a bounded, label-safe snapshot of transport and relay state.
+type TransportSnapshot struct {
+	Connections      map[string]int
+	Connects         map[string]int64
+	Reconnects       map[string]int64
+	MessagesSent     map[string]int64
+	MessagesReceived map[string]int64
+	RelaySessions    int
+	RelayQueueDepth  int
+	RelayDrops       int64
+}
+
+type transportSnapshotCollector struct {
+	mu                                                                       sync.RWMutex
+	source                                                                   func() TransportSnapshot
+	connections, connects, reconnects, messages, sessions, queueDepth, drops *prometheus.Desc
+}
+
+func newTransportSnapshotCollector() *transportSnapshotCollector {
+	return &transportSnapshotCollector{
+		connections: prometheus.NewDesc(SeriesTransportConnections, "Active transport connections.", []string{"transport"}, nil),
+		connects:    prometheus.NewDesc(SeriesTransportConnectTotal, "Transport connection attempts.", []string{"transport"}, nil),
+		reconnects:  prometheus.NewDesc(SeriesTransportReconnectsTotal, "Transport reconnect attempts.", []string{"transport"}, nil),
+		messages:    prometheus.NewDesc(SeriesTransportMessagesTotal, "Transport messages sent or received.", []string{"transport", "direction"}, nil),
+		sessions:    prometheus.NewDesc(SeriesRelaySessions, "Active relay sessions.", nil, nil),
+		queueDepth:  prometheus.NewDesc(SeriesRelayQueueDepth, "Current relay queue depth.", nil, nil),
+		drops:       prometheus.NewDesc(SeriesRelayDropsTotal, "Relay messages dropped.", nil, nil),
+	}
+}
+
+func (c *transportSnapshotCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.connections
+	ch <- c.connects
+	ch <- c.reconnects
+	ch <- c.messages
+	ch <- c.sessions
+	ch <- c.queueDepth
+	ch <- c.drops
+}
+
+func (c *transportSnapshotCollector) Collect(ch chan<- prometheus.Metric) {
+	c.mu.RLock()
+	source := c.source
+	c.mu.RUnlock()
+	if source == nil {
+		return
+	}
+	s := source()
+	for _, tt := range []string{"relay", "sse", "webrtc", "nats", "redis"} {
+		ch <- prometheus.MustNewConstMetric(c.connections, prometheus.GaugeValue, float64(s.Connections[tt]), tt)
+		ch <- prometheus.MustNewConstMetric(c.connects, prometheus.CounterValue, float64(s.Connects[tt]), tt)
+		ch <- prometheus.MustNewConstMetric(c.reconnects, prometheus.CounterValue, float64(s.Reconnects[tt]), tt)
+		ch <- prometheus.MustNewConstMetric(c.messages, prometheus.CounterValue, float64(s.MessagesSent[tt]), tt, "sent")
+		ch <- prometheus.MustNewConstMetric(c.messages, prometheus.CounterValue, float64(s.MessagesReceived[tt]), tt, "received")
+	}
+	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.GaugeValue, float64(s.RelaySessions))
+	ch <- prometheus.MustNewConstMetric(c.queueDepth, prometheus.GaugeValue, float64(s.RelayQueueDepth))
+	ch <- prometheus.MustNewConstMetric(c.drops, prometheus.CounterValue, float64(s.RelayDrops))
+}
 
 // Metrics holds all Prometheus metrics exported by canopyd.
 type Metrics struct {
+	gatherer           prometheus.Gatherer
+	transportCollector *transportSnapshotCollector
 	// BuildInfo is the build identity gauge: value 1, labels version/commit,
 	// so a scrape can attribute the series to the running binary.
 	BuildInfo *prometheus.GaugeVec
@@ -117,7 +190,18 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 45, 60, 120},
 		},
 	)
+	collector := newTransportSnapshotCollector()
+	if err := reg.Register(collector); err != nil {
+		panic(err)
+	}
 	m := &Metrics{
+		gatherer: func() prometheus.Gatherer {
+			if gatherer, ok := reg.(prometheus.Gatherer); ok {
+				return gatherer
+			}
+			return prometheus.DefaultGatherer
+		}(),
+		transportCollector: collector,
 		BuildInfo: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: SeriesBuildInfo,
@@ -193,6 +277,26 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 		),
 	}
 	return m
+}
+
+// Handler returns a Prometheus exposition handler backed by this metrics registry.
+func (m *Metrics) Handler() http.Handler {
+	gatherer := prometheus.DefaultGatherer
+	if m != nil && m.gatherer != nil {
+		gatherer = m.gatherer
+	}
+	return promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+}
+
+// SetTransportSnapshotSource installs the live source read by the scrape collector.
+// Labels are generated from the collector's fixed transport/direction sets.
+func (m *Metrics) SetTransportSnapshotSource(source func() TransportSnapshot) {
+	if m == nil || m.transportCollector == nil {
+		return
+	}
+	m.transportCollector.mu.Lock()
+	m.transportCollector.source = source
+	m.transportCollector.mu.Unlock()
 }
 
 // IncResumeStarted records that a resume window opened.
@@ -343,6 +447,13 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesBuildInfo, "router wiring (internal/server): Metrics.SetBuildInfo from currentBuildInfo()"},
 	{SeriesUpstreamGatewayUp, "UpstreamGatewayProbe.Check: Metrics.SetUpstreamGatewayUp on every gateway poll"},
 	{SeriesUpstreamGatewayCheckErrorsTotal, "UpstreamGatewayProbe.Check: Metrics.IncUpstreamGatewayCheckError on a failed gateway poll"},
+	{SeriesTransportConnections, "transport snapshot collector: ConnectionManager.ConnectionCount per closed-set transport"},
+	{SeriesTransportConnectTotal, "transport snapshot collector: TransportMetrics.ConnectAttempts"},
+	{SeriesTransportReconnectsTotal, "transport snapshot collector: TransportMetrics.Reconnects"},
+	{SeriesTransportMessagesTotal, "transport snapshot collector: TransportMetrics.MessagesSent/MessagesReceived"},
+	{SeriesRelaySessions, "transport snapshot collector: the same RelayHealth source served as /health relay.sessions"},
+	{SeriesRelayQueueDepth, "transport snapshot collector: relay transport adapter QueueDepth"},
+	{SeriesRelayDropsTotal, "transport snapshot collector: TransportMetrics.RelayDrops"},
 }
 
 // DeclaredSeriesWriters returns a copy of the writer registry so tests (and
