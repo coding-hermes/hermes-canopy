@@ -4342,3 +4342,22 @@ tasks:
   status: complete
   created_at: '2026-11-18T02:06:06.799974+00:00'
   completed_at: '2026-11-18T02:12:44.529267+00:00'
+- id: OBS-2
+  title: Expose transport/relay metrics to Prometheus
+  criteria:
+  - 1) /metrics exposes >=7 canopy_transport_*/canopy_relay_* sample lines; 2) no
+    uuid/peer-id label values; 3) canopy_relay_sessions equals relay.sessions from
+    /health; 4) no high-cardinality labels; 5) go build/vet/test green
+  status: in_progress
+  created_at: '2026-11-18T02:54:26.692003+00:00'
+- id: CAN-OPS-02
+  title: Redeploy canopyd past the stale deploy-staleness gate and prove the live
+    member-write surface
+  criteria:
+  - AC1 deployed /health commit equals master HEAD and /metrics serves the OBS metric
+    families. AC2 deploy-check-state stale_blocked_streak returns to 0 with a clean
+    sweep. AC3 member write surface probed live with a dev JWT (200/401/401/403 negatives);
+    AC3/AC4 fixture clause refuted and split to CAN-OPS-03. AC5 no fabricated live
+    claims; evidence quoted per clause.
+  status: in_progress
+  created_at: '2026-11-18T03:06:46.782394+00:00'

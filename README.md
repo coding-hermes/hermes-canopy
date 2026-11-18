@@ -929,7 +929,8 @@ The `v0.2.0` tag exists, but `gh release view v0.2.0 -R
 coding-hermes/hermes-canopy` reports `release not found`; the origin has no
 `gh-pages` branch (`git ls-remote --heads origin | grep -c
 refs/heads/gh-pages` returns `0`). A signed manifest on a published stable
-channel is therefore intended, not yet live.
+channel is therefore intended, not yet live. The `v0.1.0` release remains historical
+and predates this manifest publication; no release is retroactively claimed here.
 
 Release publication traceability is load-bearing in
 `scripts/validate-release-manifest-publication.py` and is rechecked by the
