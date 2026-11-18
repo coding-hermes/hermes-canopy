@@ -255,9 +255,16 @@ POST /api/v1/trees
 GET /api/v1/trees/{tree_id}
 ```
 
-**Query params:** `include_stats` (bool, default true)
+**Query params:** `include_stats` (bool, default true), `include_members` (bool, default false)
 
 **Response (200):** Full tree detail including stats.
+
+With `include_members=true` the detail also carries the tree's roster: `members`
+(SPEC-API-06 §9 member objects, oldest membership first, at most 200 entries),
+`members_truncated` (true when the array was cut) and `total_members` (the full
+count the caller may see). The roster is filled using the same query and the
+same visibility rules (SPEC-API-06 §9.5) as `GET /api/v1/trees/{tree_id}/members`,
+so a truncated roster pages its remainder from that endpoint.
 
 **Error codes:** `INVALID_TREE_ID` (400), `TREE_NOT_FOUND` (404), `NOT_TREE_OWNER` (403)
 
