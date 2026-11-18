@@ -4348,8 +4348,9 @@ tasks:
   - 1) /metrics exposes >=7 canopy_transport_*/canopy_relay_* sample lines; 2) no
     uuid/peer-id label values; 3) canopy_relay_sessions equals relay.sessions from
     /health; 4) no high-cardinality labels; 5) go build/vet/test green
-  status: in_progress
+  status: complete
   created_at: '2026-11-18T02:54:26.692003+00:00'
+  completed_at: '2026-11-18T03:20:36.415782+00:00'
 - id: CAN-OPS-02
   title: Redeploy canopyd past the stale deploy-staleness gate and prove the live
     member-write surface
@@ -4361,3 +4362,64 @@ tasks:
     claims; evidence quoted per clause.
   status: in_progress
   created_at: '2026-11-18T03:06:46.782394+00:00'
+- id: OBS-3
+  title: Expose DB pool, federation queue and rate-limiter metrics to Prometheus
+  criteria:
+  - AC1 five new families present on live /metrics with HELP lines. AC2 driving the
+    per-IP limiter past its bucket yields a nonzero ratelimited counter. AC3 db_pool_total
+    >= 1 and db_pool_acquired <= db_pool_total. AC4 no IP or peer label values (bounded
+    labels only). AC5 build+vet+package tests green.
+  status: in_progress
+  created_at: '2026-11-18T03:21:22.762519+00:00'
+- id: README-19
+  title: README Makefile Targets table documents all 27 targets
+  criteria:
+  - 'AC1 the README Makefile Targets table lists every target present in the Makefile
+    (27), verified by diffing ''grep -E ^[a-zA-Z0-9_-]+:'' Makefile against table
+    rows. AC2 no fabricated targets: each documented row maps to a real target. AC3
+    markdown table stays valid. AC4 docs-only diff, no code paths.'
+  status: in_progress
+  created_at: '2026-11-18T03:21:24.750019+00:00'
+- id: OBS-6
+  title: 'CI guard: metric writer-coverage and label-safety enforcement'
+  criteria:
+  - AC1 go test ./internal/telemetry/ -run '<the writer-coverage and label-safety
+    cases this row adds>' -count=1 exits 0 on the fixed tree. AC2 deleting a single
+    writer (e.g. the node_count setter) makes that package run fail and name the orphaned
+    metric. AC3 a request to /api/v1/sentinel-9f3a1c leaves no gathered label value
+    containing sentinel-9f3a1c. AC4 both tests run in the repo's CI test gate (visible
+    in the workflow or Makefile diff).
+  status: in_progress
+  created_at: '2026-11-18T13:40:49.821686+00:00'
+- id: DOC-15
+  title: Document flat /api/v1/nodes/{node_id} write surface in docs/API.md
+  criteria:
+  - AC1 docs/API.md has a reference entry for PATCH, DELETE, POST reply and POST fork
+    on the flat /api/v1/nodes/{node_id} surface. AC2 documented shapes match internal/handler
+    node handler code. AC3 make docs-check exits 0. AC4 docs-only diff.
+  status: in_progress
+  created_at: '2026-11-18T13:40:50.651169+00:00'
+- id: README-17
+  title: README Signed updates section states measured release reality (parked domain,
+    no Release object)
+  criteria:
+  - 'AC1 README.md section no longer asserts a live stable-channel URL; text names
+    the measured state (302 -> godaddy, final 403). AC2 section states the real release
+    boundary: v0.2.0 tagged but gh release view v0.2.0 answers release not found,
+    and git ls-remote --heads origin grep -c refs/heads/gh-pages = 0. AC3 make docs-check
+    exits 0. AC4 no updater code, release workflow, or DF-HERMES-CANOPY-71/72 surface
+    changes.'
+  status: complete
+  created_at: '2026-11-18T13:40:51.458613+00:00'
+  completed_at: '2026-11-18T18:53:10.539973+00:00'
+- id: README-1-R2
+  title: 'Recurrence of README-1: sync .env.example with config.go FromEnv keys (CANOPY_FILE_ROOT,
+    CONTEXT_MODEL_WINDOWS)'
+  criteria:
+  - AC1 grep -c CANOPY_FILE_ROOT .env.example >= 1 and grep -c CONTEXT_MODEL_WINDOWS
+    .env.example >= 1. AC2 every key read by config.go FromEnv helpers appears in
+    .env.example (26 keys baseline, 0 missing). AC3 defaults stated in .env.example
+    match docs/ENV.md (CANOPY_FILE_ROOT ~/.canopy/files; CONTEXT_MODEL_WINDOWS unset/empty).
+    AC4 commit cites README-1 as recurrence source.
+  status: in_progress
+  created_at: '2026-11-18T13:40:52.245958+00:00'

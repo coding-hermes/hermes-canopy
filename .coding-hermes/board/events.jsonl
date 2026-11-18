@@ -1495,3 +1495,13 @@
 {"id": 20261331, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-54", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-54\",\"status\":\"pending\"}"}
 {"id": 20261332, "timestamp": "2026-11-18T03:11:23Z", "event_type": "task_created", "task_id": "QA-HERMES-CANOPY-50-R2", "actor": "foreman", "detail": "{\"id\":\"QA-HERMES-CANOPY-50-R2\",\"status\":\"pending\"}"}
 {"id": 20261333, "timestamp": "2026-11-18T03:14:03Z", "event_type": "task_updated", "task_id": "QA-HERMES-CANOPY-54", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 20261334, "timestamp": "2026-11-18T13:52:42Z", "event_type": "task_completed", "task_id": "OBS-2", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 20261335, "timestamp": "2026-11-18T13:54:07Z", "event_type": "task_updated", "task_id": "OBS-3", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261336, "timestamp": "2026-11-18T13:54:07Z", "event_type": "task_updated", "task_id": "OBS-6", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261337, "timestamp": "2026-11-18T13:54:07Z", "event_type": "task_updated", "task_id": "DOC-15", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261338, "timestamp": "2026-11-18T13:54:08Z", "event_type": "task_updated", "task_id": "README-17", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261339, "timestamp": "2026-11-18T13:54:08Z", "event_type": "task_updated", "task_id": "README-1-R2", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 20261340, "timestamp": "2026-11-18T18:58:32Z", "event_type": "task_completed", "task_id": "README-17", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 20261341, "timestamp": "2026-11-18T19:02:06Z", "event_type": "task_updated", "task_id": "OBS-6", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 20261342, "timestamp": "2026-11-18T19:02:06Z", "event_type": "task_updated", "task_id": "DOC-15", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 20261343, "timestamp": "2026-11-18T19:02:06Z", "event_type": "task_updated", "task_id": "README-1-R2", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
