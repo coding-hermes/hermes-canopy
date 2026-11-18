@@ -68,7 +68,12 @@ const (
 	SeriesContextCompileDuration = "canopy_context_compile_duration_seconds"
 	// SeriesExportDuration is the card-export wall time: the CLI snapshot
 	// lane's own duration, which had no record anywhere (OBS-4).
-	SeriesExportDuration = "canopy_export_duration_seconds"
+	SeriesExportDuration        = "canopy_export_duration_seconds"
+	SeriesDBPoolAcquired        = "canopy_db_pool_acquired"
+	SeriesDBPoolTotal           = "canopy_db_pool_total"
+	SeriesFederationQueueDepth  = "canopy_federation_queue_depth"
+	SeriesRateLimitedTotal      = "canopy_ratelimited_total"
+	SeriesRateLimiterTrackedIPs = "canopy_ratelimiter_tracked_ips"
 )
 
 // TransportSnapshot is a bounded, label-safe snapshot of transport and relay state.
@@ -135,6 +140,12 @@ func (c *transportSnapshotCollector) Collect(ch chan<- prometheus.Metric) {
 type Metrics struct {
 	gatherer           prometheus.Gatherer
 	transportCollector *transportSnapshotCollector
+	// DBPoolAcquired and DBPoolTotal expose the latest pgxpool capacity snapshot.
+	DBPoolAcquired        prometheus.Gauge
+	DBPoolTotal           prometheus.Gauge
+	FederationQueueDepth  prometheus.Gauge
+	RateLimitedTotal      *prometheus.CounterVec
+	RateLimiterTrackedIPs prometheus.Gauge
 	// BuildInfo is the build identity gauge: value 1, labels version/commit,
 	// so a scrape can attribute the series to the running binary.
 	BuildInfo *prometheus.GaugeVec
@@ -216,7 +227,12 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 			}
 			return prometheus.DefaultGatherer
 		}(),
-		transportCollector: collector,
+		transportCollector:    collector,
+		DBPoolAcquired:        factory.NewGauge(prometheus.GaugeOpts{Name: SeriesDBPoolAcquired, Help: "Number of PostgreSQL pool connections currently acquired."}),
+		DBPoolTotal:           factory.NewGauge(prometheus.GaugeOpts{Name: SeriesDBPoolTotal, Help: "Total number of PostgreSQL pool connections currently open."}),
+		FederationQueueDepth:  factory.NewGauge(prometheus.GaugeOpts{Name: SeriesFederationQueueDepth, Help: "Total pending federation events across all peers."}),
+		RateLimitedTotal:      factory.NewCounterVec(prometheus.CounterOpts{Name: SeriesRateLimitedTotal, Help: "Requests rejected by the rate limiter, by bounded chi route pattern."}, []string{"route"}),
+		RateLimiterTrackedIPs: factory.NewGauge(prometheus.GaugeOpts{Name: SeriesRateLimiterTrackedIPs, Help: "Number of client buckets currently tracked by the rate limiter."}),
 		BuildInfo: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: SeriesBuildInfo,
@@ -467,6 +483,40 @@ func (m *Metrics) SetTransportSnapshotSource(source func() TransportSnapshot) {
 	m.transportCollector.mu.Unlock()
 }
 
+// SetDBPoolSnapshot publishes one pgxpool.Stat() reading.
+func (m *Metrics) SetDBPoolSnapshot(acquired, total int) {
+	if m == nil {
+		return
+	}
+	m.DBPoolAcquired.Set(float64(acquired))
+	m.DBPoolTotal.Set(float64(total))
+}
+
+// SetFederationQueueDepth publishes the aggregate queue depth without peer labels.
+func (m *Metrics) SetFederationQueueDepth(depth int) {
+	if m != nil {
+		m.FederationQueueDepth.Set(float64(depth))
+	}
+}
+
+// IncRateLimited records a refusal using a bounded route label.
+func (m *Metrics) IncRateLimited(route string) {
+	if m == nil {
+		return
+	}
+	if route == "" {
+		route = "unmatched"
+	}
+	m.RateLimitedTotal.WithLabelValues(route).Inc()
+}
+
+// SetRateLimiterTrackedIPs publishes the number of limiter buckets.
+func (m *Metrics) SetRateLimiterTrackedIPs(count int) {
+	if m != nil {
+		m.RateLimiterTrackedIPs.Set(float64(count))
+	}
+}
+
 // IncResumeStarted records that a resume window opened.
 //
 // Nil-receiver safe: the resume middleware is registered conditionally, and a
@@ -625,6 +675,11 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesUpstreamProxyDuration, "telemetry.ObserveUpstreamProxyDuration: network proxy handler once per proxied request, transport health probe once per probe (both derived from the status they wrote)"},
 	{SeriesContextCompileDuration, "telemetry.ObserveContextCompileDuration: compilerImpl.Compile on every compile attempt"},
 	{SeriesExportDuration, "telemetry.ObserveExportDuration: cardexport.Export on every completed export"},
+	{SeriesDBPoolAcquired, "server saturation sampler: pgxpool.Stat().AcquiredConns"},
+	{SeriesDBPoolTotal, "server saturation sampler: pgxpool.Stat().MaxConns"},
+	{SeriesFederationQueueDepth, "server saturation sampler: sum of RelayService.QueueDepth across peers"},
+	{SeriesRateLimitedTotal, "RateLimit middleware refusal branch, by bounded chi route pattern"},
+	{SeriesRateLimiterTrackedIPs, "RateLimit middleware publishes the pruned limiter bucket count"},
 }
 
 // DeclaredSeriesWriters returns a copy of the writer registry so tests (and

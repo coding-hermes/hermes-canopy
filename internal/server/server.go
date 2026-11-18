@@ -64,6 +64,7 @@ type Server struct {
 	metrics         *telemetry.Metrics
 	calendarSvc     calendar.Service
 	relayCancel     context.CancelFunc
+	metricsCancel   context.CancelFunc
 	transportDrain  func() error
 }
 
@@ -153,6 +154,13 @@ func New(
 		relayCtx, relayCancel = context.WithCancel(context.Background())
 		go provider.Relay().Run(relayCtx)
 	}
+	var metricsCancel context.CancelFunc
+	queueSource, _ := federationSvc.(federationQueueSource)
+	if metrics != nil && (dbPool != nil || queueSource != nil) {
+		metricsCtx, cancel := context.WithCancel(context.Background())
+		metricsCancel = cancel
+		go runSaturationMetrics(metricsCtx, metrics, dbPool, queueSource)
+	}
 	return &Server{
 		router:          r,
 		sseHub:          sseHub,
@@ -162,6 +170,7 @@ func New(
 		metrics:         metrics,
 		calendarSvc:     calendarSvc,
 		relayCancel:     relayCancel,
+		metricsCancel:   metricsCancel,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
@@ -347,7 +356,7 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	if rateLimiter == nil {
 		rateLimiter = handler.NewRateLimiter(rateLimitPerSecond, rateLimitBurst)
 	}
-	r.Use(handler.RateLimit(rateLimiter))
+	r.Use(handler.RateLimit(rateLimiter, metrics))
 
 	// Prometheus metrics middleware (records request duration, count, active conns).
 	if metrics != nil {
@@ -788,6 +797,9 @@ func (s *Server) SetTransportDrain(drain func() error) { s.transportDrain = drai
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.relayCancel != nil {
 		s.relayCancel()
+	}
+	if s.metricsCancel != nil {
+		s.metricsCancel()
 	}
 	var drainErr error
 	if s.transportDrain != nil {

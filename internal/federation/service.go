@@ -45,6 +45,15 @@ func newService(repo Repository, signer *tokenSigner) *Service {
 
 func (s *Service) Relay() *RelayService { return s.relay }
 
+// QueueDepth reports pending events for a peer; it is used by the aggregate
+// Prometheus sampler and deliberately keeps peer IDs out of metric labels.
+func (s *Service) QueueDepth(ctx context.Context, peerID uuid.UUID) (int, error) {
+	if s.relay == nil {
+		return 0, nil
+	}
+	return s.relay.QueueDepth(ctx, peerID)
+}
+
 func (s *Service) ListConflicts(ctx context.Context, treeID *uuid.UUID, unresolved bool) ([]Conflict, error) {
 	if s.conflicts == nil {
 		return nil, ErrConflictNotFound

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -58,12 +59,15 @@ type visitor struct {
 	lastCheck time.Time
 }
 
+const rateLimiterVisitorIdleTTL = 10 * time.Minute
+
 // RateLimiter implements a per-IP token-bucket rate limiter.
 type RateLimiter struct {
-	mu     sync.Mutex
-	rate   float64 // tokens added per second
-	burst  int     // maximum accumulated tokens
-	visits map[string]*visitor
+	mu        sync.Mutex
+	rate      float64 // tokens added per second
+	burst     int     // maximum accumulated tokens
+	visits    map[string]*visitor
+	lastPrune time.Time
 }
 
 // NewRateLimiter creates a RateLimiter with the given rate (tokens/second) and
@@ -78,11 +82,15 @@ func NewRateLimiter(rate float64, burst int) *RateLimiter {
 
 // Allow reports whether a request from the given IP is within the rate limit.
 func (rl *RateLimiter) Allow(ip string) bool {
+	return rl.allowAt(ip, time.Now())
+}
+
+func (rl *RateLimiter) allowAt(ip string, now time.Time) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+	rl.pruneLocked(now)
 
 	v, ok := rl.visits[ip]
-	now := time.Now()
 	if !ok {
 		rl.visits[ip] = &visitor{tokens: float64(rl.burst) - 1, lastCheck: now}
 		return true
@@ -102,9 +110,33 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return true
 }
 
+func (rl *RateLimiter) pruneLocked(now time.Time) {
+	if !rl.lastPrune.IsZero() && now.Sub(rl.lastPrune) < time.Minute {
+		return
+	}
+	rl.lastPrune = now
+	for ip, v := range rl.visits {
+		if now.Sub(v.lastCheck) > rateLimiterVisitorIdleTTL {
+			delete(rl.visits, ip)
+		}
+	}
+}
+
+func (rl *RateLimiter) trackedIPs() int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.pruneLocked(time.Now())
+	return len(rl.visits)
+}
+
+type rateLimitMetrics interface {
+	IncRateLimited(route string)
+	SetRateLimiterTrackedIPs(count int)
+}
+
 // RateLimit returns middleware that rejects requests exceeding the configured
-// rate. Health endpoints are exempt.
-func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
+// rate. Health endpoints are exempt. Optional metrics are nil-safe.
+func RateLimit(rl *RateLimiter, metrics ...rateLimitMetrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isPublicPath(r.URL.Path) {
@@ -120,7 +152,15 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 			if ip == "" {
 				ip = r.RemoteAddr
 			}
-			if !rl.Allow(ip) {
+			allowed := rl.Allow(ip)
+			if len(metrics) > 0 && metrics[0] != nil {
+				metrics[0].SetRateLimiterTrackedIPs(rl.trackedIPs())
+			}
+			if !allowed {
+				if len(metrics) > 0 && metrics[0] != nil {
+					route := chi.RouteContext(r.Context()).RoutePattern()
+					metrics[0].IncRateLimited(route)
+				}
 				writeError(w, http.StatusTooManyRequests, "RATE_LIMITED",
 					"too many requests — try again later")
 				return
