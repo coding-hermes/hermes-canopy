@@ -20,6 +20,7 @@ changed (GAP-072).
 | `POST /api/v1/trees` | 201 | **bare object** — the created tree (no wrapper) |
 | `POST /api/v1/topics` | 201 | **bare object** — the created topic (no wrapper) |
 | `POST /api/v1/cards` | 201 | **bare object** — the created card (no wrapper) |
+| `POST /api/v1/profiles` | 201 | **bare object** — the created profile document (no wrapper) |
 | `POST /api/v1/trees/{tree_id}/nodes` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork` | 201 | **`{"node":{…},"edge":{…}}`** |
@@ -2943,7 +2944,111 @@ A method this surface does not mount — for example `PATCH /api/v1/reviews/{rev
 
 ## Profiles
 
-Mounted at `/api/v1/workspaces/{workspace_id}/profiles`. All require auth.
+Two mounts: the gateway profile-**mapping** routes live at
+`/api/v1/workspaces/{workspace_id}/profiles`, and the workspace-independent
+profile **create** route at `/api/v1/profiles`. All require auth.
+
+### Create Profile
+
+```
+POST /api/v1/profiles
+```
+
+Workspace-independent create (SPEC-API-06 §12.2). Creates a Canopy `profiles`
+row owned by the authenticated user and returns the row with its new `id` — the
+value the MLS surface consumes as `creator_profile_id` / `profile_id` — see
+[Profile ID space and group membership](#profile-id-space-and-group-membership).
+This is a **different object** from the gateway profile mappings that § Set
+Active Profile writes: mappings are keyed by `profileName` in `profile_route`,
+this route writes the `profiles` table.
+
+**Auth:** `Authorization: Bearer <jwt>` — the same HS256 gate as every
+`/api/v1` route. A missing or non-Bearer header is `401 TOKEN_MISSING`; a bad
+signature, expired token, or non-UUID `sub` is `401 TOKEN_INVALID`. The token
+subject must have a local user account: under a production `JWT_SECRET` an
+unknown subject is `403 USER_NOT_PROVISIONED` from the auth middleware (the
+handler repeats that pre-check against the profiles repo); under the dev secret
+the subject is provisioned on demand.
+
+**Request body** (`Content-Type: application/json`; bodies are capped at the
+server-wide 1 MB limit, `413 REQUEST_TOO_LARGE`):
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `name` | string | **Yes** | — | 1–64 characters, alphanumeric and hyphens only (`^[A-Za-z0-9-]+$`); unique per owner |
+| `token` | string | **Yes** | — | Gateway token. Validated non-empty by this route but **not persisted**: the encrypted-token store (`profile_route`) requires a `workspace_id`, so token binding stays on § Set Active Profile |
+| `display_name` | string | No | the `name` value | At most 200 characters |
+| `description` | string | No | absent (`null` in the row) | Empty string is stored as `NULL` |
+| `can_auto_respond` | boolean | No | `false` | Auto-reply to @mentions without approval |
+| `context_window_size` | integer | No | `32768` | When supplied (non-zero) it must be 1024–2097152; `0`/omitted takes the default at the repository layer |
+| `is_public` | boolean | No | `false` | Discoverable by other users |
+| `config_json` | object | No | `{}` | Stored verbatim as the row's `config_json` JSONB |
+
+Unknown field names, wrong value types, and malformed JSON are all rejected
+before validation — see `INVALID_BODY` below; the message names the offending
+field.
+
+**Example request:**
+
+```json
+{
+  "name": "research-hermes",
+  "token": "hermes-gateway-token-12345",
+  "display_name": "Research Hermes",
+  "description": "Deep research and analysis agent",
+  "can_auto_respond": false,
+  "context_window_size": 65536,
+  "is_public": false,
+  "config_json": {"provider": "deepseek"}
+}
+```
+
+**Response (201):** the created profile document as a **bare** object (no
+wrapper; see [Response envelopes](#response-envelopes-per-route)). Fields are
+**snake_case** — unlike the camelCase mapping objects of § List Profiles:
+
+```json
+{
+  "id": "7f3a1c2d-0000-0000-0000-000000000000",
+  "owner_id": "00000000-0000-0000-0000-000000000001",
+  "profile_type": "hermes-profile",
+  "name": "research-hermes",
+  "display_name": "Research Hermes",
+  "description": "Deep research and analysis agent",
+  "config_json": {"provider": "deepseek"},
+  "can_auto_respond": false,
+  "context_window_size": 65536,
+  "is_public": false,
+  "created_at": "2026-11-20T12:00:00Z",
+  "updated_at": "2026-11-20T12:00:00Z"
+}
+```
+
+`description` is omitted when the row's description is `NULL`. `config_json` is
+always present (`{}` when the request sent none). `profile_type` is always
+`hermes-profile`. `created_at` / `updated_at` are RFC3339 timestamps.
+
+**Status codes:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 201 | — | Profile created; body is the document above |
+| 400 | `INVALID_BODY` | Body is not valid JSON, contains an unknown field, or a known field has the wrong type |
+| 400 | `INVALID_PROFILE_NAME` | `name` missing, longer than 64 characters, or outside the allowed charset |
+| 400 | `VALIDATION_ERROR` | `token` missing or empty |
+| 400 | `INVALID_DISPLAY_NAME` | `display_name` longer than 200 characters |
+| 400 | `INVALID_CONTEXT_WINDOW` | `context_window_size` non-zero and outside 1024–2097152 |
+| 401 | `TOKEN_MISSING` / `TOKEN_INVALID` | No Bearer token, or invalid/expired token |
+| 403 | `USER_NOT_PROVISIONED` | Token subject has no user account on this server |
+| 409 | `DUPLICATE_PROFILE_NAME` | A profile with this `name` already exists for the authenticated owner (`uq_profiles_owner_name`) |
+| 500 | `INTERNAL_ERROR` | Unexpected storage failure |
+| 503 | `PROFILE_SURFACE_UNAVAILABLE` | Server started without the profiles repository wired |
+
+**Error shape** — the standard envelope:
+
+```json
+{"error":{"code":"INVALID_PROFILE_NAME","message":"name may contain only alphanumeric characters and hyphens"}}
+```
 
 ### List Profiles
 
@@ -3450,9 +3555,13 @@ Every `profile_id` / `creator_profile_id` in this section is a **Canopy
 profile-mapping id. The workspace surface
 `/api/v1/workspaces/{workspace_id}/profiles` manages gateway profile *mappings*
 (`profile_name` → gateway token, stored in `profile_route`); those ids never
-appear as an MLS identity. No HTTP endpoint currently lists Canopy profiles
-(the SPEC-API-06 unscoped `GET /api/v1/profiles` routes are not yet mounted),
-so until one ships, obtain a valid id directly from the database — on the dev
+appear as an MLS identity.
+
+To obtain a valid id, call [`POST /api/v1/profiles`](#create-profile) — it
+creates a profile owned by the authenticated user and returns its `id` in the
+response body. Only an unscoped `GET /api/v1/profiles` list is still unmounted
+(the SPEC-API-06 read routes are not wired), so a profile you did *not* create
+through that endpoint can still be discovered from the database — on the dev
 compose stack:
 
     docker exec canopy-pg psql -c "SELECT id, name, display_name, owner_id FROM profiles WHERE deleted_at IS NULL;"
@@ -3463,8 +3572,9 @@ its `creator_profile_id` as the first `mls_group_members` row (leaf 0).
 already a row in `mls_group_members` for that workspace's group, so a profile
 must first be the `creator_profile_id` of create-group. An unknown id returns
 `404 PROFILE_NOT_FOUND` (create-group) or `404 NOT_FOUND` ("profile is not a
-group member", encrypt/decrypt). Use the `id` from the query above as
-`creator_profile_id` and `profile_id`.
+group member", encrypt/decrypt). Use the `id` returned by
+`POST /api/v1/profiles` (or the fallback query above) as `creator_profile_id`
+and `profile_id`.
 
 ### Get MLS Group
 
