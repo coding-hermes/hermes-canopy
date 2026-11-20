@@ -24,6 +24,10 @@ changed (GAP-072).
 | `POST /api/v1/trees/{tree_id}/nodes` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/reply` | 201 | **`{"node":{…},"edge":{…}}`** |
 | `POST /api/v1/trees/{tree_id}/nodes/{node_id}/fork` | 201 | **`{"node":{…},"edge":{…}}`** |
+| `PATCH /api/v1/nodes/{node_id}` | 200 | **bare object** — the updated node detail (flat surface) |
+| `DELETE /api/v1/nodes/{node_id}` | 200 | **bare object** — `{"id":…,"treeId":…,"deletedAt":…}` (flat surface) |
+| `POST /api/v1/nodes/{node_id}/reply` | 201 | **`{"node":{…},"edge":{…}}`** (flat surface) |
+| `POST /api/v1/nodes/{node_id}/fork` | 201 | **`{"node":{…},"edge":{…}}`** (flat surface) |
 | `POST /api/v1/trees/{tree_id}/merge` | 201 | **`{"node":{…},"edges":[…],"merged_source_ids":[…]}`** — the single-parent routes above return one `edge`; a merge returns the whole edge set (GAP-078) |
 | `POST /api/v1/files/upload` | 201 | **`{"file":{…},"was_new_upload":…,…}`** |
 | `POST /api/v1/files/resolve` | 200 | **`{"file":{…},…}`** (same resolve shape) |
@@ -1070,6 +1074,176 @@ absent on an unchanged snapshot.
 that is not a multi-reference reply **and** for a node that does not exist —
 identical status, code and message, so the route is deliberately not an
 existence oracle.
+
+### Flat node surface (bare node id)
+
+Four **write** operations are mounted on the flat node surface — the node id
+alone, with no `tree_id` segment. They call the same handlers as the tree-scoped
+operations above (`internal/handler/node_handler.go`: `FlatRoutes` at line 102 →
+`handleUpdate` / `handleDelete` / `handleReply` / `handleFork`), so request
+bodies, success bodies and error codes are identical to their tree-scoped
+counterparts; only the path shape and the membership resolution differ.
+
+```
+PATCH  /api/v1/nodes/{node_id}
+DELETE /api/v1/nodes/{node_id}
+POST   /api/v1/nodes/{node_id}/reply
+POST   /api/v1/nodes/{node_id}/fork
+```
+
+**Authentication (all four):** JWT Bearer token required. The mount lives inside
+the authenticated `/api/v1` group (`internal/server/server.go:393-395`,
+`r.Use(authMW)`), and `NodeAccessMiddleware` answers a request without a user
+context with `401 TOKEN_MISSING` (`internal/handler/middleware.go:301-305`).
+
+**Membership resolution (there is no `tree_id` to gate on):** the tree is
+resolved **from the node**. `NodeAccessMiddleware` (mounted at
+`internal/server/server.go:517-519`, defined at
+`internal/handler/middleware.go:287-383`) loads the node via `GetByID`, reads its
+`TreeID`, and then applies the same per-tree membership check
+(`IsMember(treeID, userID)`) the tree-scoped mount uses. All four routes are
+writes, so a **viewer** of the node's tree is refused by the read-only gate
+before the handler runs (`isWriteMethod`, `middleware.go:375-379`, `389-396`;
+DF-HERMES-CANOPY-79/84).
+
+The refusal ladder — applied **before** chi resolves the method, so membership
+errors take precedence over a method-mismatch 405:
+
+| condition | status + code |
+|---|---|
+| no authenticated user | `401 TOKEN_MISSING` |
+| `node_id` is not a UUID | `400 INVALID_NODE_ID` (`middleware.go:340-344`) |
+| node does not exist | `404 NODE_NOT_FOUND` — message `node not found` (`middleware.go:345-350`) |
+| caller is not a member of the node's tree | `403 NOT_TREE_MEMBER` — message `you are not a member of this tree` (`middleware.go:367-370`) |
+| caller is a viewer of the node's tree | `403 VIEWER_READ_ONLY` — message `viewer role is read-only on this tree` (`middleware.go:375-379`) |
+
+A non-member therefore receives `403 NOT_TREE_MEMBER` — a **distinct** answer from
+the `404 NODE_NOT_FOUND` a missing node returns. The ladder is pinned against the
+real production router in `internal/server/flat_nodes_error_envelope_test.go`.
+
+**`GET /api/v1/nodes/{node_id}` is not part of this surface.** The mount serves
+only the `FlatRoutes` method set (PATCH, DELETE, POST), so a GET on a valid node
+path answers `405` with the documented error envelope and an `Allow` header:
+
+```json
+{"error":{"code":"METHOD_NOT_ALLOWED","message":"method not allowed"}}
+```
+```
+Allow: PATCH, DELETE, POST
+```
+
+The code constant is `METHOD_NOT_ALLOWED`, written by
+`handler.FlatNodeMethodNotAllowed` (`internal/handler/handler_util.go:148-151`);
+before that wrapper chi answered an empty-bodied 405 with no `Content-Type`
+(DF-HERMES-CANOPY-92). To **read** a node, use
+`GET /api/v1/trees/{tree_id}/nodes/{node_id}`. Because the access middleware runs
+first, a malformed id (`400 INVALID_NODE_ID`), an unknown id (`404 NODE_NOT_FOUND`)
+or a non-member (`403 NOT_TREE_MEMBER`) preempts the 405 on a wrong-method call.
+
+#### PATCH — Update Node (flat)
+
+```
+PATCH /api/v1/nodes/{node_id}
+```
+
+**Request body:** identical to [Update Node](#update-node) — a partial body with
+`content`, `content_format`, `metadata`, `pinned`; the camelCase aliases
+(`contentFormat`) are accepted on the same keys by `decodeNodeJSON`, and any
+other unknown field is `400 INVALID_BODY` naming the field
+(`internal/handler/handler_util.go:26-38`, `67-93`).
+
+**Response (200):** the updated node detail — the `service.NodeDetail` wire shape,
+camelCase keys: `id`, `treeId`, `parentId`, `authorId`, `authorDisplayName`,
+`content`, `contentFormat`, `nodeType`, `sequenceNum`, `metadata`, `depth`,
+`childCount`, `createdAt`, `editedAt`, `deletedAt`
+(`internal/service/node_service.go:190-207`, serialised by `MarshalJSON`
+at `node_service.go:209-253`).
+
+**Error codes:** `INVALID_NODE_ID` (400), `INVALID_BODY` (400),
+`VALIDATION_ERROR` (400 — includes a body with no updatable field,
+`service.ErrNoUpdateFields`), `TOKEN_MISSING` (401), `NOT_TREE_MEMBER` /
+`VIEWER_READ_ONLY` / `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409),
+`GONE` (410), `SERVICE_UNAVAILABLE` (503) — the mapping in `writeServiceError`
+(`internal/handler/node_handler.go:524-559`).
+
+#### DELETE — Delete Node (flat)
+
+```
+DELETE /api/v1/nodes/{node_id}
+```
+
+**Request body:** none.
+
+**Response (200):** the soft-delete result, the same `service.DeleteNodeResult`
+body the tree-scoped DELETE answers (both routes call `handleDelete`):
+
+```json
+{
+  "id": "uuid",
+  "treeId": "uuid",
+  "deletedAt": "RFC3339"
+}
+```
+
+(`internal/service/node_service.go:346-351`.) Soft delete marks the node deleted
+and erases its content and metadata (`NodeService.SoftDelete`, `node_service.go:385`).
+
+**Error codes:** `INVALID_NODE_ID` (400), `TOKEN_MISSING` (401), `NOT_TREE_MEMBER` /
+`VIEWER_READ_ONLY` (403), `NODE_NOT_FOUND` (404, from the middleware),
+`GONE` (410 — already deleted, `service.ErrNodeAlreadyDeleted`),
+`SERVICE_UNAVAILABLE` (503).
+
+#### POST — Reply to Node (flat)
+
+```
+POST /api/v1/nodes/{node_id}/reply
+```
+
+**Request body:** identical to [Reply to Node](#reply-to-node) — `content`
+(required), `content_format`, `node_type`, `metadata`.
+
+**Response (201):** the node+edge wrapper, exactly as the tree-scoped reply
+returns it:
+
+```json
+{ "node": {...}, "edge": {...} }
+```
+
+The response also carries `Location: /trees/{tree_id}/nodes/{new_node_id}`
+(server-relative, no `/api/v1` prefix — `internal/handler/node_handler.go:444`).
+The new node lands in the **source node's** tree.
+
+**Error codes:** `INVALID_NODE_ID` (400), `INVALID_BODY` (400),
+`VALIDATION_ERROR` (400), `TOKEN_MISSING` (401), `NOT_TREE_MEMBER` /
+`VIEWER_READ_ONLY` / `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409),
+`GONE` (410), `SERVICE_UNAVAILABLE` (503).
+
+#### POST — Fork from Node (flat)
+
+```
+POST /api/v1/nodes/{node_id}/fork
+```
+
+**Request body:** identical to [Fork from Node](#fork-from-node) — `content`
+(required), `content_format`, `node_type`, `metadata`.
+
+**Response (201):** the same node+edge wrapper as the tree-scoped fork —
+`{ "node": {...}, "edge": {...} }` — plus the same `Location` header
+(`internal/handler/node_handler.go:518`).
+
+**Empty body (GAP-072):** an empty or whitespace-only body, `{}`, or a body
+omitting `content` returns `400 EMPTY_CONTENT` with the message
+`content is required` (`internal/handler/node_handler.go:460-478`); malformed
+JSON still returns `400 INVALID_BODY`.
+
+**Leaf rule:** as with the tree-scoped route, the source node must already have
+at least one child — forking a leaf returns `400 VALIDATION_ERROR` ("fork
+requires parent with at least one child").
+
+**Error codes:** `INVALID_NODE_ID` (400), `EMPTY_CONTENT` (400),
+`INVALID_BODY` (400), `VALIDATION_ERROR` (400), `TOKEN_MISSING` (401),
+`NOT_TREE_MEMBER` / `VIEWER_READ_ONLY` / `FORBIDDEN` (403), `NOT_FOUND` (404),
+`CONFLICT` (409), `GONE` (410), `SERVICE_UNAVAILABLE` (503).
 
 ---
 

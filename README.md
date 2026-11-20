@@ -537,6 +537,17 @@ Tree-scoped (primary, membership-gated):
 | `GET` | `/api/v1/trees/{tree_id}/nodes/{node_id}` | Get node details |
 | `POST` | `/api/v1/trees/{tree_id}/nodes/{node_id}/fork` | Fork a node (create child branch; source must already have ≥1 child) |
 
+Flat surface (bare node id — the tree is resolved from the node and gated
+per-node by `NodeAccessMiddleware`; see
+[docs/API.md § Flat node surface](docs/API.md#flat-node-surface-bare-node-id)):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PATCH` | `/api/v1/nodes/{node_id}` | Update a node — same body/response as the tree-scoped PATCH |
+| `DELETE` | `/api/v1/nodes/{node_id}` | Soft-delete a node — 200 `{id, treeId, deletedAt}` |
+| `POST` | `/api/v1/nodes/{node_id}/reply` | Reply to a node — 201 `{"node":…,"edge":…}` |
+| `POST` | `/api/v1/nodes/{node_id}/fork` | Fork from a node (source must already have ≥1 child) — 201 `{"node":…,"edge":…}` |
+
 Reference context (SPEC-PL-06 §9.3) — flat surface, bare node id, membership
 resolved per node:
 
