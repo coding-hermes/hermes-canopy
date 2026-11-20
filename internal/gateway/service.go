@@ -556,24 +556,23 @@ func (s *Service) observe(runID string) {
 	}
 	body, err := s.client.ObserveRun(ctx, runID)
 	if err != nil {
-		if !errors.Is(err, context.Canceled) {
-			s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
+		if ctx.Err() == nil {
+			s.reconcileStream(ctx, runID, err)
 		}
 		return
 	}
 	defer func() { _ = body.Close() }()
 
 	stream := NewSSEStream(body)
+	var streamErr error
 	for {
 		ev, err := stream.Next()
 		if err != nil {
-			if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-				log.Warn().Err(err).Str("run_id", runID).Msg("gateway observe: stream error")
-				s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: err.Error(), Timestamp: float64(time.Now().Unix())})
-			}
+			streamErr = err
 			break
 		}
 		if ev == nil {
+			streamErr = io.EOF
 			break
 		}
 		s.noteEvent(runID, ev.Event)
@@ -584,17 +583,45 @@ func (s *Service) observe(runID string) {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
-	// A stream can end cleanly at the transport layer without carrying the
-	// gateway's terminal run event. Record that boundary explicitly so the
-	// registry does not keep presenting a started/running run forever. A stop
-	// request is not such a terminal boundary: keep its stopping status intact.
+	s.reconcileStream(ctx, runID, streamErr)
+}
+
+// reconcileStream makes one bounded attempt to recover the authoritative
+// terminal result after an incomplete stream, including a clean EOF.
+func (s *Service) reconcileStream(ctx context.Context, runID string, streamErr error) {
 	s.mu.RLock()
-	stopping := s.runs[runID] != nil && s.runs[runID].Status == "stopping"
+	rec := s.runs[runID]
+	skip := rec == nil || rec.IsTerminal() || rec.Status == "stopping"
 	s.mu.RUnlock()
-	if stopping {
+	if skip {
 		return
 	}
-	s.noteEvent(runID, RunEvent{Event: "run.stream_closed", RunID: runID, Timestamp: float64(time.Now().Unix())})
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	status, err := s.client.GetRun(ctx, runID)
+	if ctx.Err() == context.Canceled {
+		return
+	}
+	if err == nil {
+		ev := RunEvent{RunID: runID, Timestamp: float64(time.Now().Unix())}
+		switch status.Status {
+		case "completed", "failed", "cancelled":
+			ev.Event = "run." + status.Status
+			ev.Output, _ = status.Extra["output"].(string)
+			ev.Error, _ = status.Extra["error"].(string)
+			ev.Usage, _ = status.Extra["usage"].(map[string]any)
+			s.noteEvent(runID, ev)
+			return
+		default:
+			if errors.Is(streamErr, io.EOF) && status.Status != "not_found" {
+				ev.Event = "run.stream_closed"
+				s.noteEvent(runID, ev)
+				return
+			}
+			err = fmt.Errorf("gateway returned non-terminal or unavailable status %q", status.Status)
+		}
+	}
+	s.noteEvent(runID, RunEvent{Event: "run.observe_error", RunID: runID, Error: fmt.Sprintf("gateway stream ended (%v); reconciliation failed: %v", streamErr, err), Timestamp: float64(time.Now().Unix())})
 }
 
 // noteEvent applies one streamed event to the record and broadcasts it.
@@ -605,7 +632,7 @@ func (s *Service) noteEvent(runID string, ev RunEvent) {
 		s.mu.Unlock()
 		return
 	}
-	if ev.Event == "run.stream_closed" && (rec.IsTerminal() || rec.Status == "stopping") {
+	if (ev.Event == "run.stream_closed" || ev.Event == "run.observe_error") && (rec.IsTerminal() || rec.Status == "stopping") {
 		// A terminal gateway event (or an intentional stop) is authoritative;
 		// do not let the observer's transport close overwrite its last event.
 		s.mu.Unlock()

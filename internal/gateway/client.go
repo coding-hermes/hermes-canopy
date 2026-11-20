@@ -31,17 +31,23 @@ const DefaultBaseURL = "http://127.0.0.1:8642"
 // It is transport-only: no run maps, queues, or cancellation state live here
 // (mirrors hermes-webui's runner_client.py design).
 type Client struct {
-	baseURL string
-	apiKey  string
-	http    *http.Client
+	baseURL    string
+	apiKey     string
+	http       *http.Client
+	streamHTTP *http.Client
 }
 
 // ClientOption configures a Client.
 type ClientOption func(*Client)
 
-// WithHTTPClient overrides the underlying HTTP client (tests, custom timeouts).
+// WithHTTPClient overrides the control client and supplies the streaming transport.
 func WithHTTPClient(hc *http.Client) ClientOption {
-	return func(c *Client) { c.http = hc }
+	return func(c *Client) {
+		c.http = hc
+		stream := *hc
+		stream.Timeout = 0
+		c.streamHTTP = &stream
+	}
 }
 
 // NewClient constructs a gateway client. baseURL defaults to DefaultBaseURL
@@ -64,6 +70,7 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (*Client, error) {
 		http: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		streamHTTP: &http.Client{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -204,6 +211,22 @@ type RunStatus struct {
 	Extra map[string]any `json:"-"`
 }
 
+// UnmarshalJSON retains gateway-specific fields for status reconciliation.
+func (r *RunStatus) UnmarshalJSON(data []byte) error {
+	type plain RunStatus
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	*r = RunStatus(p)
+	r.Extra = extra
+	return nil
+}
+
 // GetRun polls a run's status via GET /v1/runs/{id}.
 func (c *Client) GetRun(ctx context.Context, runID string) (RunStatus, error) {
 	var out RunStatus
@@ -286,7 +309,7 @@ func (c *Client) ObserveRun(ctx context.Context, runID string) (io.ReadCloser, e
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.streamHTTP.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("gateway observe %s: %w", runID, err)
 	}
