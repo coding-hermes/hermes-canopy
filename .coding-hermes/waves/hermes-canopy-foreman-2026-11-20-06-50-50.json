@@ -1,0 +1,50 @@
+{
+  "wave_id": "hermes-canopy-foreman-2026-11-20-06-50-50",
+  "project": "hermes-canopy",
+  "created_utc": "2026-11-20T06:50:50Z",
+  "base_ref": "origin/master",
+  "base_sha": "99534966",
+  "wave_budget": 6,
+  "dispatched": 4,
+  "worker_model": "openai/gpt-6.1-terra",
+  "worker_provider": "xkiro",
+  "slots_unfilled_reason": "Parked rows conflict on file seams with dispatched rows: OBS-6 (internal/telemetry/metrics.go declaredSeriesWriters, same file/region as OBS-4), OBS-5 (metrics.go, same telemetry package), DOC-15 + DOC-17 (docs/API.md, same file as DOC-16), README-18 (README.md, same file as README-19). Remaining ready rows route to other owners (QA harness -> qa-foreman, P1/P2 release + CI -> releng, CAN-OPS-03 -> ops lane, GATE-001 -> ~/.hermes/scripts, out of this repo).",
+  "rows": [
+    {
+      "id": "OBS-4",
+      "priority": "P3",
+      "worktree": "/home/kara/worktrees/hermes-canopy-OBS-4",
+      "branch": "wt/OBS-4",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-OBS-4.md",
+      "files_scope": ["internal/telemetry/metrics.go", "internal/handler/network_proxy_handler.go", "internal/handler/transport_handler.go", "internal/context/compiler.go", "internal/cardexport/export.go"],
+      "state": "dispatched"
+    },
+    {
+      "id": "DOC-16",
+      "priority": "P4",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DOC-16",
+      "branch": "wt/DOC-16",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-DOC-16.md",
+      "files_scope": ["docs/API.md"],
+      "state": "dispatched"
+    },
+    {
+      "id": "README-19",
+      "priority": "P5",
+      "worktree": "/home/kara/worktrees/hermes-canopy-README-19",
+      "branch": "wt/README-19",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-README-19.md",
+      "files_scope": ["README.md"],
+      "state": "dispatched"
+    },
+    {
+      "id": "README-1-R2",
+      "priority": "P5",
+      "worktree": "/home/kara/worktrees/hermes-canopy-README-1-R2",
+      "branch": "wt/README-1-R2",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-README-1-R2.md",
+      "files_scope": [".env.example"],
+      "state": "dispatched"
+    }
+  ]
+}

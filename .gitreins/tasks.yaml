@@ -4372,14 +4372,15 @@ tasks:
   status: in_progress
   created_at: '2026-11-18T03:21:22.762519+00:00'
 - id: README-19
-  title: README Makefile Targets table documents all 27 targets
+  title: 'README-19: complete the Makefile Targets table'
   criteria:
-  - 'AC1 the README Makefile Targets table lists every target present in the Makefile
-    (27), verified by diffing ''grep -E ^[a-zA-Z0-9_-]+:'' Makefile against table
-    rows. AC2 no fabricated targets: each documented row maps to a real target. AC3
-    markdown table stays valid. AC4 docs-only diff, no code paths.'
-  status: in_progress
-  created_at: '2026-11-18T03:21:24.750019+00:00'
+  - README.md Makefile Targets table documents every Makefile target exactly once
+    (set difference vs grep of Makefile targets is empty), each new description is
+    derived from its recipe, make docs-check exits 0, and git diff --stat shows README.md
+    only.
+  status: complete
+  created_at: '2026-11-20T07:10:27.346190+00:00'
+  completed_at: '2026-11-20T07:41:27.261203+00:00'
 - id: OBS-6
   title: 'CI guard: metric writer-coverage and label-safety enforcement'
   criteria:
@@ -4413,13 +4414,32 @@ tasks:
   created_at: '2026-11-18T13:40:51.458613+00:00'
   completed_at: '2026-11-18T18:53:10.539973+00:00'
 - id: README-1-R2
-  title: 'Recurrence of README-1: sync .env.example with config.go FromEnv keys (CANOPY_FILE_ROOT,
-    CONTEXT_MODEL_WINDOWS)'
+  title: 'README-1-R2: sync .env.example with docs/ENV.md'
   criteria:
-  - AC1 grep -c CANOPY_FILE_ROOT .env.example >= 1 and grep -c CONTEXT_MODEL_WINDOWS
-    .env.example >= 1. AC2 every key read by config.go FromEnv helpers appears in
-    .env.example (26 keys baseline, 0 missing). AC3 defaults stated in .env.example
-    match docs/ENV.md (CANOPY_FILE_ROOT ~/.canopy/files; CONTEXT_MODEL_WINDOWS unset/empty).
-    AC4 commit cites README-1 as recurrence source.
+  - .env.example contains CANOPY_FILE_ROOT and CONTEXT_MODEL_WINDOWS (plus every other
+    key in the docs/ENV.md variable table), the docs/ENV.md-minus-.env.example set
+    difference is empty, no real secret is added, and git diff --stat shows .env.example
+    only.
   status: in_progress
-  created_at: '2026-11-18T13:40:52.245958+00:00'
+  created_at: '2026-11-20T07:10:28.735130+00:00'
+- id: OBS-4
+  title: 'OBS-4: duration histograms for upstream proxy, context compile, card export'
+  criteria:
+  - Three histograms registered in internal/telemetry (canopy_upstream_proxy_duration_seconds{outcome},
+    canopy_context_compile_duration_seconds, canopy_export_duration_seconds) with
+    SLO-justified buckets, observed at the four existing time.Since sites, registered
+    in declaredSeriesWriters, and covered by tests that gather a real _bucket series;
+    go build ./... + go vet ./... + go test ./internal/telemetry/ + short tests on
+    handler, context, cardexport all pass.
+  status: in_progress
+  created_at: '2026-11-20T07:10:19.012113+00:00'
+- id: DOC-16
+  title: 'DOC-16: document POST /api/v1/profiles in docs/API.md'
+  criteria:
+  - docs/API.md carries a reference entry for POST /api/v1/profiles matching the mounted
+    handler (auth, request/response fields, status codes, error shape, example), the
+    stale psql profile-id instruction points at the endpoint, and make docs-check
+    + make docs-check-test exit 0; only docs/API.md changes.
+  status: complete
+  created_at: '2026-11-20T07:10:25.973250+00:00'
+  completed_at: '2026-11-20T07:41:29.481114+00:00'
