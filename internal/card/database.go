@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // CGo-free SQLite driver
 )
 
@@ -152,9 +153,6 @@ func (m *CardDBManager) Close() error {
 // GetByContextHash searches all card-type databases for cards with the given
 // context hash. Satisfies the context.CardReader interface for the context compiler.
 func (m *CardDBManager) GetByContextHash(ctx context.Context, contextHash string) ([]Card, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	var all []Card
 	for ctype := range ValidCardTypes {
 		repo, err := m.Repository(ctype)
@@ -166,6 +164,30 @@ func (m *CardDBManager) GetByContextHash(ctx context.Context, contextHash string
 			return nil, fmt.Errorf("card: get by context hash (%s): %w", ctype, err)
 		}
 		all = append(all, cards...)
+	}
+	return all, nil
+}
+
+// GetByNodeIDs returns cards attached to the supplied ancestry nodes.
+func (m *CardDBManager) GetByNodeIDs(ctx context.Context, treeID uuid.UUID, nodeIDs []uuid.UUID) ([]Card, error) {
+	var all []Card
+	for ctype := range ValidCardTypes {
+		repo, err := m.Repository(ctype)
+		if err != nil {
+			return nil, err
+		}
+		for _, nodeID := range nodeIDs {
+			for offset := 0; ; offset += 100 {
+				cards, err := repo.List(ctx, ListCardsOptions{TreeID: &treeID, NodeID: &nodeID, Limit: 100, Offset: offset})
+				if err != nil {
+					return nil, err
+				}
+				all = append(all, cards...)
+				if len(cards) < 100 {
+					break
+				}
+			}
+		}
 	}
 	return all, nil
 }

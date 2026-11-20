@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/coding-hermes/hermes-canopy/internal/card"
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
 	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
@@ -426,7 +427,7 @@ func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*Compil
 	}
 
 	// ── Step 6: Cards ───────────────────────────────────────────────────
-	cardContent, cardItems, cardWarnings := c.compileCards(ctx, req, currentNode.Content, remainingBudget)
+	cardContent, cardItems, cardWarnings := c.compileCards(ctx, req, currentNode, ancestors, remainingBudget)
 	manifest.Cards = append(manifest.Cards, cardItems...)
 	manifest.Warnings = append(manifest.Warnings, cardWarnings...)
 
@@ -592,19 +593,48 @@ func mergeTopics(dst, src []db.Topic) []db.Topic {
 func (c *compilerImpl) compileCards(
 	ctx context.Context,
 	req CompileRequest,
-	nodeContent string,
+	currentNode *db.Node,
+	ancestors []db.Node,
 	budget int,
 ) (sections []string, items []ManifestItem, warnings []string) {
 	if !req.IncludeCards {
 		return nil, nil, nil
 	}
 
-	ch := ContextHash(nodeContent)
+	ch := ContextHash(currentNode.Content)
 	cards, err := c.cards.GetByContextHash(ctx, ch)
 	if err != nil {
 		// Partial failure
 		warnings = append(warnings, fmt.Sprintf("card lookup failed: %v", err))
 		return nil, nil, warnings
+	}
+
+	if reader, ok := c.cards.(interface {
+		GetByNodeIDs(context.Context, uuid.UUID, []uuid.UUID) ([]card.Card, error)
+	}); ok {
+		ids := []uuid.UUID{currentNode.ID}
+		seenNodes := map[uuid.UUID]bool{currentNode.ID: true}
+		for _, node := range ancestors {
+			if !seenNodes[node.ID] {
+				seenNodes[node.ID] = true
+				ids = append(ids, node.ID)
+			}
+		}
+		attached, err := reader.GetByNodeIDs(ctx, currentNode.TreeID, ids)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("card lookup failed: %v", err))
+		} else {
+			seen := make(map[uuid.UUID]bool, len(cards))
+			for _, cd := range cards {
+				seen[cd.ID] = true
+			}
+			for _, cd := range attached {
+				if !seen[cd.ID] {
+					cards = append(cards, cd)
+					seen[cd.ID] = true
+				}
+			}
+		}
 	}
 
 	remainingBudget := budget
