@@ -1144,15 +1144,28 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 
 | Target | Description |
 |--------|-------------|
+| `all` | Aggregate target — runs `build`, `test`, `vet`, `lint` in that order (prerequisite list, no recipe of its own) |
 | `build` | Build the canopyd binary |
+| `build-embed` | Build the version-stamped `bin/canopyd` (same recipe as `build`; `scripts/deploy-canopyd.sh` calls it by name) |
+| `build-embed-linux-amd64` | Cross-compile `bin/canopyd_linux_amd64` (`GOOS=linux GOARCH=amd64`, same ldflags, no `embedui` tag) |
+| `build-embed-darwin-amd64` | Cross-compile `bin/canopyd_darwin_amd64` (`GOOS=darwin GOARCH=amd64`, same ldflags, no `embedui` tag) |
+| `build-embed-darwin-arm64` | Cross-compile `bin/canopyd_darwin_arm64` (`GOOS=darwin GOARCH=arm64`, same ldflags, no `embedui` tag) |
+| `build-embed-windows-amd64` | Cross-compile `bin/canopyd_windows_amd64.exe` (`GOOS=windows GOARCH=amd64`, same ldflags, no `embedui` tag) |
+| `build-embed-linux-arm64` | Cross-compile `bin/canopyd_linux_arm64` (`GOOS=linux GOARCH=arm64`, same ldflags, no `embedui` tag) |
+| `build-ui` | Build the SPA (`npm ci` + `npm run build`), stage it at `internal/webui/dist`, compile `bin/canopyd` with `-tags embedui`, then delete the staged copy |
 | `deploy` | Build, install to `/home/kara/bin/canopyd`, restart `canopy-canopyd`, run the gateway smoke test |
 | `install-deploy-timer` | Install + enable the hourly deployed-binary staleness check timer (GAP-067) |
 | `run` | Build and run with dev defaults (`:8091`, DB `:5437`) |
 | `test` | Run all tests |
 | `test-short` | Run tests (skip integration) |
+| `test-proxy` | Run the reference-proxy end-to-end suite (`python3 -m unittest discover -s deploy/tests`; stdlib only, no canopyd or PostgreSQL) |
 | `test-chaos-disconnect` | QA chaos-disconnect probe — bounded window; runs the `test-short` suite (see `docs/E2E-EVIDENCE.md`) |
+| `docs-check` | Check the docs index, README links, shell examples and tables against the built `bin/canopyd` (`scripts/docs-check.sh`) |
+| `docs-check-test` | Negative self-test of `docs-check` — plants defects in a temp copy of the README/docs and asserts each one FAILs |
 | `vet` | Run go vet |
 | `lint` | Run golangci-lint |
+| `tidy` | Run `go mod tidy` |
+| `validate-release-manifest-publication` | Offline release-publication contract check (updater defaults, workflow paths, gh-pages byte copy) |
 | `validate-wails-desktop` | Offline Wails desktop packaging contract check (source-level, no Wails download) |
 | `test-wails-desktop-contract` | Build + test the nested desktop module in server mode (no WebView SDKs needed) |
 | `build-wails` | Wails desktop build with fail-loud prerequisite checks (WebView SDKs, wails3 CLI); native output needs a provisioned host — see `docs/DESKTOP-WAILS.md` |
