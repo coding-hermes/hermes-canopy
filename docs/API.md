@@ -4392,35 +4392,39 @@ code set — see [§ File Viewers](#file-viewers-spec-pl-02) for the full table
 
 ## Spec-vs-Code Drift
 
-The following discrepancies were found between the README API reference and the
-actual code:
+The following records include historical resolutions and remaining discrepancies.
+README and route registrations were rechecked on 2026-11-20; the commands below
+inspect source, not a running deployment. A zero-match `grep` exits with status 1.
 
-1. **Edges:** README documents `GET/POST /api/v1/edges` and `DELETE /api/v1/edges/{id}`,
-   but no EdgeHandler is registered in `server.go`. Edges are created implicitly
-   through node operations (reply, fork) and returned in node creation responses.
-   There are no standalone edge CRUD routes.
+1. **Edges (resolved):** The README previously listed standalone edge CRUD
+   routes; it no longer lists `/api/v1/edges`. Edges are created implicitly
+   through node operations; no standalone edge handler is mounted.
+   Verify: `grep -Fn '/api/v1/edges' README.md; grep -in edge internal/server/server.go`.
 
-2. **Approvals:** README documents `POST /api/v1/approvals` (create), but the
-   `ApprovalHandler.Routes()` only registers `GET /`, `GET /pending`,
-   `GET /history`, `GET /{approval_id}`, `POST /{approval_id}/approve`, and
-   `POST /{approval_id}/deny`. There is no create-approval endpoint.
+2. **Approvals (resolved):** The README previously listed a public create route;
+   it now says approval requests are created internally, with no public create
+   endpoint. The handler still has no create route.
+   Verify: `grep -n -A1 'Approval requests are created internally' README.md; grep -nE 'r\.(Get|Post)\(' internal/handler/approval_handler.go`.
 
-3. **SSE events:** README documents `GET /api/v1/events` and
-   `GET /api/v1/events?tree_id={id}`, but the actual route is
-   `GET /api/v1/trees/{tree_id}/events` (tree-scoped, membership-gated).
+3. **SSE events (resolved):** The README previously listed `/api/v1/events`;
+   it now lists the tree-scoped, membership-gated route.
+   Verify: `grep -Fn '/api/v1/events' README.md; grep -Fn '/api/v1/trees/{tree_id}/events' README.md; grep -n 'HandleTreeEvents' internal/server/server.go`.
 
 4. **Export/Import:** Registered directly on the `/api/v1/trees` router (not
    via Mount), so the paths are `/api/v1/trees/{tree_id}/export` and
    `/api/v1/trees/import` — not under a separate `/export` mount.
+   Verify: `grep -nE 'exportHandler\.(ExportTree|ImportTree)' internal/server/server.go; grep -nE 'export|/api/v1/trees/import' README.md`.
 
-5. **Context compiler:** `GET /api/v1/context/{node_id}` is registered but not
-   documented in the README.
+5. **Context compiler (resolved):** The README previously omitted the registered
+   `GET /api/v1/context/{node_id}` route; it now describes it.
+   Verify: `grep -Fn 'GET /api/v1/context/{node_id}' README.md; grep -n '"/context/{node_id}"' internal/server/server.go`.
 
 6. **MCP endpoint:** `POST /api/v1/mcp` is registered and is now documented in
    the README (§ API Reference → MCP) as well as here — this entry is kept as
    history: before DF-HERMES-CANOPY-10 the endpoint answered `-32601` for
    `initialize`, so it was advertised in `entry_point` and absent from both the
    README and any usable handshake.
+   Verify: `grep -Fn '/api/v1/mcp' README.md; grep -n 'Mount("/mcp"' internal/server/server.go`.
 
 7. **Plugin endpoints:** earlier revisions of this document described a
    `register`/`install` route pair and an `instances` list plus pause/resume
@@ -4439,21 +4443,28 @@ actual code:
    which fails when a documented plugin route is not mounted, when a mounted
    plugin route is undocumented, or when a stale plugin path reappears in the
    section.
+   Verify: `grep -nE 'Mount\("/plugins"|"/plugins/' internal/server/server.go; grep -nE 'r\.(Get|Post|Delete|Patch|Put)\(' internal/handler/plugin_handler.go; grep -Fn '/api/v1/plugins' README.md`.
 
-8. **Profile endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/profiles`
-   — not documented in the README.
+8. **Profile endpoints (partially resolved):** The README now mentions
+   `POST /api/v1/workspaces/{ws}/profiles`, although it does not provide the
+   full workspace profile route reference.
+   Verify: `grep -nE '/api/v1/workspaces/\{(ws|workspace_id)\}/profiles' README.md; grep -n -A2 'Mount("/workspaces/{workspace_id}/profiles"' internal/server/server.go`.
 
 9. **Transport endpoints:** Mounted at `/api/v1/transports` — not documented
     in the README.
+    Verify: `grep -Fn '/api/v1/transports' README.md; grep -n 'Route("/api/v1/transports"' internal/server/server.go`.
 
-10. **MLS endpoints:** Mounted at `/api/v1/workspaces/{workspace_id}/mls` — not
-    documented in the README.
+10. **MLS endpoints (partially resolved):** The README now names the MLS mount,
+    though it does not list its individual routes.
+    Verify: `grep -Fn '/api/v1/workspaces/{workspace_id}/mls' README.md; grep -n -A3 'Route("/api/v1/workspaces/{workspace_id}/mls"' internal/server/server.go`.
 
-11. **Sync endpoints:** Mounted at `/api/v1/trees/{tree_id}/sync` — not
-    documented in the README.
+11. **Sync endpoints (resolved):** The README now lists the mounted sync GET,
+    POST and snapshot POST routes.
+    Verify: `grep -Fn '/api/v1/trees/{tree_id}/sync' README.md; grep -n 'Mount("/trees/{tree_id}/sync"' internal/server/server.go; grep -nE 'r\.(Get|Post)\(' internal/handler/sync_handler.go`.
 
 12. **Health probes:** `/health/transports/{type}` (public) — not documented in
     the README.
+    Verify: `grep -Fn '/health/transports' README.md; grep -n '"/health/transports/"' internal/server/server.go`.
 
 13. **Live Hermes gateway (GAP-050):** Mounted at `/api/v1/gateway` — canopyd
     is a CLIENT of the Hermes gateway api_server (`hermes gateway run`,
@@ -4675,6 +4686,7 @@ actual code:
       context compiler wired into the gateway surface
 
     The gateway API key is held server-side; the browser never sees it.
+    Verify: `grep -Fn '/api/v1/gateway' README.md; grep -n 'Mount("/gateway"' internal/server/server.go; grep -nE 'r\.(Get|Post)\(' internal/handler/gateway_handler.go`.
 
 14. **File-viewer routes and error mapping (GAP-071 docs pass):** the files that
     `internal/fileviewer/handlers.go` registers (SPEC-PL-02 phase 1, migrations
@@ -4697,6 +4709,7 @@ actual code:
 
     `DELETE /api/v1/files/{id}` (soft delete) also exists in code and is now
     documented.
+    Verify: `grep -nE 'ErrStorageUnavailable|ErrFileSoftDeleted' internal/fileviewer/{errors,handlers,service}.go; grep -n -A8 'func (r \*PGFileMetadataRepo) GetByID' internal/fileviewer/repo.go`.
 
 15. **Agents and reviews (GAP-087 docs pass):** the agent roster
     (`/api/v1/agents`) and the PR review panel (`/api/v1/reviews` plus
@@ -4714,6 +4727,7 @@ actual code:
     deterministically from the name/PR so they survive a restart), and the review
     verdict is a deterministic simulation derived from the PR string — no model
     is called.
+    Verify: `grep -nE '/api/v1/(agents|reviews)' README.md; go test ./internal/server -run 'TestRouteParityDocumented(Agent|Review)Routes' -count=1`.
 
 16. **SPEC-API-06 multi-user routes:** SPEC-API-06 marked twelve tree-scoped
     invite, membership, and profile routes as Required. Three of them are
@@ -4731,6 +4745,7 @@ actual code:
     `TestRouteParityWorkspaceProfileRoutes`, and
     `TestSpecAPI06RequiredRoutesAbsent` pin both the shipped and deferred
     sides.
+    Verify: `go test ./internal/server -run 'TestRouteParityCollabRoutes|TestRouteParityWorkspaceProfileRoutes|TestSpecAPI06RequiredRoutesAbsent' -count=1; grep -nE 'members|profiles|/collab' README.md`.
 
 17. **Tree membership management (resolved by CAN-MEM-02):** `POST
     /api/v1/trees/{tree_id}/share` creates `tree_members` rows, `GET
@@ -4743,13 +4758,10 @@ actual code:
     server mounted no tree-scoped membership write, so an owner could see who
     had access but could not downgrade or remove anyone over HTTP, even
     though `db.TreeMemberRepo` already exposed `GetByTree`, `UpdateRole`, and
-    `Remove`. One related gap remains and is unchanged: a tree's
-    `member_count` is visible via `GET /api/v1/trees/{tree_id}`, but the
-    detail response's `members` roster is never populated — no handler sets
-    `GetTreeOptions.IncludeMembers`, and the service returns an empty array
-    even when the option is set (`internal/service/tree_service.go`,
-    `TreeServiceImpl.GetTree`). The workspace-scoped `/collab` surface still
-    carries its own member GET/PATCH/DELETE for workspaces.
+    `Remove`. The previously unpopulated detail roster was also resolved: the
+    handler now requests and populates members when `include_members` is set.
+    The workspace-scoped `/collab` surface carries its own member operations.
+    Verify: `grep -nE 'includeMembersRequested|IncludeMembers|fillDetailMembers' internal/handler/tree_handler.go; grep -n 'opts.IncludeMembers' internal/service/tree_service.go; grep -nE 'members|/collab' README.md`.
 
 ## Iteration progress (SPEC-PL-04 phase 2)
 
