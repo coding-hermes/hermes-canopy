@@ -1,0 +1,49 @@
+{
+  "wave_id": "hermes-canopy-foreman-2026-11-20-11-41-41",
+  "project": "hermes-canopy",
+  "created_utc": "2026-11-20T11:41:41Z",
+  "base_ref": "origin/master",
+  "base_sha": "da544fe0",
+  "wave_budget": 6,
+  "dispatched": 3,
+  "worker_model": "openai/gpt-6.1-terra",
+  "worker_provider": "xkiro",
+  "pre_wave_landing": {
+    "row": "OBS-3",
+    "commit": "da544fe0",
+    "note": "stranded wave worker commit (371 lines, 7 files) rebased onto c605da2d, conflicted only on internal/telemetry/metrics.go const/writer tables (both sides additive, kept both), build+vet+telemetry/server/federation tests green in worktree, ff-merged to master and pushed BEFORE any wave branch was cut so OBS-5 does not collide on metrics.go."
+  },
+  "slots_unfilled_reason": "Remaining ready rows are gated or seam-conflicted: CAN-HON-01 is deferred=true (owner ruling required), RELEASE-READINESS-2026-10-27 + INT-CI-005 need the release signing key (releng/owner), CAN-OPS-03 needs live member fixtures (post-deploy), OBS-6 collides with OBS-5 on internal/telemetry/metrics.go declaredSeriesWriters, DOC-17 collides with DOC-15 on docs/API.md, TRACE-001 requires scheduler.db lane-prompt edits outside this repo, QA-HERMES-CANOPY rows route to qa-foreman.",
+  "rows": [
+    {
+      "id": "OBS-5",
+      "priority": "P3",
+      "worktree": "/home/kara/worktrees/hermes-canopy-OBS-5",
+      "branch": "wt/OBS-5",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-OBS-5.md",
+      "files_scope": ["internal/telemetry/metrics.go", "internal/server/db_growth_metrics.go", "internal/server/server.go", "internal/relay/tls.go", "internal/relay/relay_service.go"],
+      "commit": "c9acd4d0",
+      "state": "landed"
+    },
+    {
+      "id": "DOC-15",
+      "priority": "P4",
+      "worktree": "/home/kara/worktrees/hermes-canopy-DOC-15",
+      "branch": "wt/DOC-15",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-DOC-15.md",
+      "files_scope": ["docs/API.md", "README.md"],
+      "commit": "b92445d1",
+      "state": "landed"
+    },
+    {
+      "id": "README-18",
+      "priority": "P4",
+      "worktree": "/home/kara/worktrees/hermes-canopy-README-18",
+      "branch": "wt/README-18",
+      "brief": "/home/kara/.hermes/cache/scratch/brief-README-18.md",
+      "files_scope": ["README.md"],
+      "commit": "80a1a4b4",
+      "state": "landed"
+    }
+  ]
+}
