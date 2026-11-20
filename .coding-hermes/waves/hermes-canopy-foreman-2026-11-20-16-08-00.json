@@ -1,0 +1,26 @@
+{
+  "wave_id": "hermes-canopy-foreman-2026-11-20-16-08-00",
+  "project": "hermes-canopy",
+  "created_utc": "2026-11-20T16:15:00Z",
+  "base_ref": "origin/master",
+  "base_sha": "8a662018",
+  "wave_budget": 7,
+  "dispatched": 6,
+  "worker_model": "openai/gpt-6.1-terra",
+  "worker_provider": "xkiro",
+  "slots_unfilled_reason": "Budget 7, 6 independent rows dispatched. CAN-HON-01 (P0) deferred: owner ruling required (back with data vs label demo). INT-CI-005 (P2) deferred: requires repo secret RELEASE_SIGNING_KEY + release tag push (releng/owner-gated, per prior wave note). DEPLOY-STALE-1-R2 is compatible with this wave: its fix makes untracked .coding-hermes/ debris (incl. this manifest) non-blocking for the deploy gate.",
+  "off_by_one_prefetch": {
+    "DF-HERMES-CANOPY-98": "1020-go-test-self-deadlock-mutex-held-across-locking-call (non-reentrant mutex held across a call that locks it again; release before calling lock-taking helpers)",
+    "DF-HERMES-CANOPY-99": "2011-go-chi-global-timeout-sse-stream-exemption + 2733 client timeout budget (timeout wrapping SSE/stream work kills long runs)",
+    "DF-HERMES-CANOPY-100": "1861-gateway-model-list-envelope-mismatch + 1907 same-page shape split (single documented envelope + parity test)",
+    "DF-HERMES-CANOPY-101": "1365-python-tuple-unpack-arity-drift (producer arity moved, consumer not updated; pin/version-check the SDK)"
+  },
+  "rows": [
+    {"id": "DF-HERMES-CANOPY-98", "priority": "P0", "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-98", "branch": "wt/DF-HERMES-CANOPY-98", "brief": "/home/kara/.hermes/cache/scratch/brief-DF-98.md", "files_scope": ["internal/handler/context_handler.go", "internal/context/", "internal/handler/"], "commit": null, "state": "dispatched"},
+    {"id": "DF-HERMES-CANOPY-99", "priority": "P1", "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-99", "branch": "wt/DF-HERMES-CANOPY-99", "brief": "/home/kara/.hermes/cache/scratch/brief-DF-99.md", "files_scope": ["internal/gateway/client.go"], "commit": null, "state": "dispatched"},
+    {"id": "DF-HERMES-CANOPY-100", "priority": "P3", "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-100", "branch": "wt/DF-HERMES-CANOPY-100", "brief": "/home/kara/.hermes/cache/scratch/brief-DF-100.md", "files_scope": ["internal/handler/gateway_handler.go", "docs/API.md"], "commit": null, "state": "dispatched"},
+    {"id": "DF-HERMES-CANOPY-101", "priority": "P2", "worktree": "/home/kara/worktrees/hermes-canopy-DF-HERMES-CANOPY-101", "branch": "wt/DF-HERMES-CANOPY-101", "brief": "/home/kara/.hermes/cache/scratch/brief-DF-101.md", "files_scope": ["scripts/mcp_sdk_canary.py"], "commit": null, "state": "dispatched"},
+    {"id": "DEPLOY-STALE-1-R2", "priority": "P1", "worktree": "/home/kara/worktrees/hermes-canopy-DEPLOY-STALE-1-R2", "branch": "wt/DEPLOY-STALE-1-R2", "brief": "/home/kara/.hermes/cache/scratch/brief-DEPLOY-STALE-1-R2.md", "files_scope": ["scripts/check-deploy-staleness.sh", "scripts/test-check-deploy-staleness.sh"], "commit": null, "state": "dispatched"},
+    {"id": "DOC-17", "priority": "P4", "worktree": "/home/kara/worktrees/hermes-canopy-DOC-17", "branch": "wt/DOC-17", "brief": "/home/kara/.hermes/cache/scratch/brief-DOC-17.md", "files_scope": ["docs/API.md"], "commit": null, "state": "dispatched"}
+  ]
+}
