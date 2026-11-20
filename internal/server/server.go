@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"time"
 
@@ -405,6 +406,8 @@ func newRouter(deps *routeDeps) *chi.Mux {
 	// === Authenticated routes ===
 	authMW := handler.AuthMiddlewareWithUserRepo(jwtSecret, userRepo)
 	membershipMW := handler.TreeMembershipMiddleware(membersRepo)
+	// Goroutine stacks may contain sensitive request data; require authentication.
+	r.With(authMW).Get("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
