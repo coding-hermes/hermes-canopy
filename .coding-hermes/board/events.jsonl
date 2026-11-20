@@ -1536,3 +1536,15 @@
 {"id":20261372,"timestamp":"2026-11-20T16:13:48Z","actor":"foreman","event_type":"task_updated","task_id":"DF-HERMES-CANOPY-101","detail":"{\"status\":\"in_progress\"}"}
 {"id":20261373,"timestamp":"2026-11-20T16:13:48Z","actor":"foreman","event_type":"task_updated","task_id":"DEPLOY-STALE-1-R2","detail":"{\"status\":\"in_progress\"}"}
 {"id":20261374,"timestamp":"2026-11-20T16:13:48Z","actor":"foreman","event_type":"task_updated","task_id":"DOC-17","detail":"{\"status\":\"in_progress\"}"}
+{"id":20261375,"timestamp":"2026-11-20T17:52:24Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-98","detail":"{\"status\":\"complete\"}"}
+{"id":20261376,"timestamp":"2026-11-20T17:52:24Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-99","detail":"{\"status\":\"complete\"}"}
+{"id":20261377,"timestamp":"2026-11-20T17:52:25Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-100","detail":"{\"status\":\"complete\"}"}
+{"id":20261378,"timestamp":"2026-11-20T17:52:25Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-101","detail":"{\"status\":\"complete\"}"}
+{"id":20261379,"timestamp":"2026-11-20T17:52:25Z","actor":"foreman","event_type":"task_completed","task_id":"DEPLOY-STALE-1-R2","detail":"{\"status\":\"complete\"}"}
+{"id":20261380,"timestamp":"2026-11-20T17:52:25Z","actor":"foreman","event_type":"task_completed","task_id":"DOC-17","detail":"{\"status\":\"complete\"}"}
+{"id":20261381,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-98","detail":"wave16 commit fc527c30 judge 739f55d3 PASS"}
+{"id":20261382,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-99","detail":"wave16 commit 9c1f711b judge 42de5f14 PASS"}
+{"id":20261383,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-100","detail":"wave16 commit 079343f8 judge d31e978a PASS (premise: envelope already unified at base; docs+parity test pinned)"}
+{"id":20261384,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-101","detail":"wave16 commit 68489afd judge c744177b PASS live canary MCP_SDK_CANARY_OK"}
+{"id":20261385,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DEPLOY-STALE-1-R2","detail":"wave16 commit cf9d62b5 judge 789f4784 PASS battery 92/0"}
+{"id":20261386,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DOC-17","detail":"wave16 commit 6374d3bd judge f5e78c32 PASS"}
