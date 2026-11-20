@@ -4444,3 +4444,20 @@ tasks:
   status: complete
   created_at: '2026-11-20T07:10:25.973250+00:00'
   completed_at: '2026-11-20T07:41:29.481114+00:00'
+- id: OBS-5
+  title: Expose db table row-count and relay cert expiry metrics
+  criteria:
+  - canopy_db_largest_table_rows (5 allowlisted tables, no COUNT(*), uses pg_class.reltuples),
+    canopy_relay_cert_expiry_seconds matching the relay cert notAfter, and a monotonic
+    canopy_relay_key_rotations_total are registered with writers, sampled by a server-side
+    collector, unit-tested, and green on build/vet/test
+  status: in_progress
+  created_at: '2026-11-20T12:05:35.311852+00:00'
+- id: README-18
+  title: Strip worker closeout residue comments from README
+  criteria:
+  - README has zero 'row=README-16' hits and zero '<!-- STATUS|TIER|EVIDENCE' comments,
+    KEEPS the validator-required 'row=DF-HERMES-CANOPY-72' marker, and make validate-release-manifest-publication
+    plus make docs-check exit 0
+  status: in_progress
+  created_at: '2026-11-20T12:05:36.375017+00:00'
