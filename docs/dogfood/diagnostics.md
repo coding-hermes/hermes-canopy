@@ -625,3 +625,48 @@ writes in one transaction.
 block, and treat `make docs-check` as "the spellings I listed exist", not "the docs are true".
 Data: `canopyd db export-sqlite --sqlite-path <new>` against a QUIET instance, then verify the
 result per-column before you delete anything.
+
+
+## 2026-11-20 — the includeCards deadlock and the 30s run cap (tick hermes-canopy-dogfood-2026-11-20-11-41-43)
+
+Two failure modes sit on the same flagship path and are easy to misdiagnose as
+each other, so this is how each actually behaves and how to tell them apart.
+
+1. The context-compile cards wedge (DF-HERMES-CANOPY-98). GET
+/api/v1/context/{node}?includeCards=true does not fail, does not time out, and
+does not log: the goroutine deadlocks holding a lock the whole cards store
+needs. The tell is asymmetric health: /health stays 200, plain compiles answer
+in single-digit milliseconds, and every card route on every tree hangs at the
+client cap. The wedge survives the client hanging up — restarting the CLIENT
+proves nothing; only restarting canopyd clears it. The duration histogram will
+NOT show it (observations land at completion), so "metrics look fine" means
+nothing here. Diagnostic sequence that worked: plain compile (healthy) →
+includeCards with an 8s cap (000) → card GET with a 5s cap (000) → trees list
+(200) → conclude wedge, restart, and only then re-test anything else. Evidence:
+evidence dir wedge_proof.sh / wedge_controls.sh, three fresh boots.
+
+2. The gateway run 30s cap (DF-HERMES-CANOPY-99). A node-linked gateway run
+"fails" at ~30s with "read SSE stream: context deadline exceeded". Before
+blaming the gateway, read the gateway-side record: GET /v1/runs/{run_id} on
+:8642 showed status=completed with the full answer text while canopyd had
+already marked the run failed and captured 1 event. The cause is the http.Client
+Timeout in internal/gateway/client.go:65 — a whole-client 30s cap that bounds
+the SSE read. Plain prompts finish in 14-18s and survive; compiled contexts make
+the model slower and die. The right way to attribute a "failed" gateway run:
+pull BOTH records (canopyd run + gateway run) and compare status before filing.
+
+3. Why the deployed binary lags (DEPLOY-STALE-1-R2). check-deploy-staleness.sh
+--deploy refuses on any non-allowlisted tracked/untracked change. DEPLOY-STALE-1
+allowlisted three bookkeeping files; the fleet then grew new untracked debris
+classes in the same checkout (foreman wave manifests under
+.coding-hermes/waves/, stray lane dumps like o18.json at the repo root). The
+refusal is by design correct — a dirty tree must not deploy — but the
+allowlist is whack-a-mole against writers who legitimately drop files. The
+durable fix is structural: gate on deployable inputs (the paths the deploy
+actually ships) or deploy from a detached worktree, not on tree cleanliness.
+
+Right way to drive this stack for real use (2026-11-20 verified): build with
+make (bare go build leaves version/commit unknown in /health), boot an isolated
+instance per scripts/scratch-instance.sh (own DB + HOME + port + file root),
+mint the dev JWT from the documented recipe, and keep prompts tiny on the live
+gateway. Never send includeCards=true until DF-98 closes.

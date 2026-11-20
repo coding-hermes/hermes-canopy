@@ -7,8 +7,8 @@ description: >-
   binary can crash-loop the service — GAP-069 outage, fresh-DB profile brick
   GAP-071, casing split, docs drift). Load this before touching the stack.
   Written from the 2026-08-17, 08-27, 09-10, 09-14, 09-16, 09-20, 09-21,
-  09-22, 09-23, 09-24, 10-20 and 10-23 deep dogfood runs.
-version: 2.9.0
+  09-22, 09-23, 09-24, 10-20, 10-23 and 11-20 deep dogfood runs.
+version: 2.10.0
 category: software-development
 ---
 
@@ -288,6 +288,45 @@ output appears. Zero console errors in the 2026-08-27 probe.
   derivation inert unless `CONTEXT_MODEL_WINDOWS` is set.
 - Perf: runs list 7.3 ms ± 0.5 ms warm (hyperfine 20), compile POST 4–101 ms,
   SSE first event ~2 s. Nothing slow.
+
+### 2026-11-20 round (HEAD c605da2d, schema 49, live gateway)
+
+- **NEVER send `includeCards=true` to `GET /api/v1/context/{node_id}` until
+  DF-HERMES-CANOPY-98 closes.** One request deadlocks the compile (no timeout,
+  no log, /health stays 200) and permanently wedges the WHOLE cards store for
+  the process lifetime — card GET/PATCH/LIST/CREATE hang on every tree
+  afterward, even card-less ones. Only a restart clears it; the duration
+  histogram never sees the hung request. Attribution recipe: plain compile
+  (healthy) → includeCards with an 8s client cap (000) → card GET with a 5s
+  cap (000) → trees list (200) ⇒ wedge; restart before testing anything else.
+- **Node-linked gateway runs (POST /api/v1/gateway/runs with node_id) fail at
+  ~30s canopy-side while the gateway completes** (DF-HERMES-CANOPY-99;
+  internal/gateway/client.go:65 Timeout: 30s on the SSE read). Attribution:
+  compare canopyd's run record with the gateway's own /v1/runs/{id} — when
+  canopyd says failed/deadline and the gateway says completed with output, it
+  is this cap. Plain (18s) and tool runs (14s) fit; DF-66's fix is confirmed
+  live (tool run completes with output).
+- **POST /api/v1/gateway/runs answers two 202 shapes** (DF-100): bare run
+  object without node_id, `{"run": {...}}` with it. Parse `.run.run_id`
+  defensively; docs show neither shape.
+- **Profiles POST /api/v1/profiles (DOC-16) verified**: 201 bare snake_case
+  row, duplicate name → 409 DUPLICATE_PROFILE_NAME, unknown field → 400
+  INVALID_BODY naming the field. `GET /api/v1/profiles` answers 405 — the
+  list surface lives elsewhere; do not trust a docs-only route.
+- **Budget transparency verified real**: budget=32 on a 92-token context
+  omits 1 node with omittedReason="budget" + truncationMarkers + warnings
+  populated; manifestHash stable across identical compiles.
+- **Resume instrument (OBS-4) is live but burst-invisible**: windows open on
+  the first tree-scoped read after a 5-minute idle gap (hardcoded
+  DefaultResumeIdleGap) and complete on the next context compile. In a
+  bursty probe session count=0 is correct, not broken. First observation
+  measured: 1.017s wall including a deliberate 1s dwell; server part ~25ms.
+- **Deploy staleness recurred** (DEPLOY-STALE-1-R2): the auto-deploy gate
+  allowlists 3 bookkeeping files but untracked fleet debris (foreman wave
+  manifests, stray lane dumps) keeps STALE_BLOCKED alive — live :8091 ran
+  52h behind master. Check `systemctl --user status canopy-deploy-check`
+  before trusting the deployed surface to have a feature the board says
+  shipped.
 
 ## Verified working flows (2026-08-17 + 2026-08-27)
 
