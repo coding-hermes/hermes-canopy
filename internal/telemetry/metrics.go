@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -74,6 +75,24 @@ const (
 	SeriesFederationQueueDepth  = "canopy_federation_queue_depth"
 	SeriesRateLimitedTotal      = "canopy_ratelimited_total"
 	SeriesRateLimiterTrackedIPs = "canopy_ratelimiter_tracked_ips"
+	// SeriesDBLargestTableRows is the row estimate of one content table,
+	// labelled by a BOUNDED `table` allowlist (five names hardcoded in
+	// internal/server/db_growth_metrics.go). The number is
+	// pg_class.reltuples — PostgreSQL's own planner statistic — so "is our
+	// data growing?" is answerable from a scrape without ever counting rows
+	// (OBS-5).
+	SeriesDBLargestTableRows = "canopy_db_largest_table_rows"
+	// SeriesRelayCertExpirySeconds is the unix timestamp of the relay TLS leaf
+	// certificate's notAfter: the one number that answers "is our relay
+	// certificate expiring?" without opening /health by hand (OBS-5). It is a
+	// timestamp, not a duration, so a scraper can compare it against time()
+	// whatever the scrape interval is.
+	SeriesRelayCertExpirySeconds = "canopy_relay_cert_expiry_seconds"
+	// SeriesRelayKeyRotationsTotal counts relay HMAC key rotations since
+	// process start, mirroring RelayHealth.Rotations as a counter that can be
+	// rate()d — a rotation that cannot be counted cannot be alerted on
+	// (OBS-5).
+	SeriesRelayKeyRotationsTotal = "canopy_relay_key_rotations_total"
 )
 
 // TransportSnapshot is a bounded, label-safe snapshot of transport and relay state.
@@ -146,6 +165,20 @@ type Metrics struct {
 	FederationQueueDepth  prometheus.Gauge
 	RateLimitedTotal      *prometheus.CounterVec
 	RateLimiterTrackedIPs prometheus.Gauge
+	// DBLargestTableRows is the per-table row estimate. Its ONLY label is
+	// `table`, and its values are allowlist-only (see
+	// internal/server/db_growth_metrics.go) so the series can never grow one
+	// child per table PostgreSQL happens to have (OBS-5).
+	DBLargestTableRows *prometheus.GaugeVec
+	// RelayCertExpirySeconds is the relay TLS leaf certificate's notAfter as a
+	// unix timestamp. It is a label-less GaugeVec rather than a Gauge so the
+	// series can be genuinely ABSENT (not 0) while no certificate is
+	// configured: a registered plain Gauge exports its zero value, which would
+	// read as "expired in 1970" and fire every alert on it.
+	RelayCertExpirySeconds *prometheus.GaugeVec
+	// RelayKeyRotationsTotal counts relay HMAC key rotations since process
+	// start.
+	RelayKeyRotationsTotal prometheus.Counter
 	// BuildInfo is the build identity gauge: value 1, labels version/commit,
 	// so a scrape can attribute the series to the running binary.
 	BuildInfo *prometheus.GaugeVec
@@ -233,6 +266,21 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 		FederationQueueDepth:  factory.NewGauge(prometheus.GaugeOpts{Name: SeriesFederationQueueDepth, Help: "Total pending federation events across all peers."}),
 		RateLimitedTotal:      factory.NewCounterVec(prometheus.CounterOpts{Name: SeriesRateLimitedTotal, Help: "Requests rejected by the rate limiter, by bounded chi route pattern."}, []string{"route"}),
 		RateLimiterTrackedIPs: factory.NewGauge(prometheus.GaugeOpts{Name: SeriesRateLimiterTrackedIPs, Help: "Number of client buckets currently tracked by the rate limiter."}),
+		DBLargestTableRows: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: SeriesDBLargestTableRows,
+				Help: "Estimated row count of a content table, from pg_class.reltuples (allowlist-only `table` label).",
+			},
+			[]string{"table"},
+		),
+		RelayCertExpirySeconds: factory.NewGaugeVec(prometheus.GaugeOpts{
+			Name: SeriesRelayCertExpirySeconds,
+			Help: "Unix timestamp of the relay TLS leaf certificate's notAfter. Absent while no certificate is configured.",
+		}, nil),
+		RelayKeyRotationsTotal: factory.NewCounter(prometheus.CounterOpts{
+			Name: SeriesRelayKeyRotationsTotal,
+			Help: "Relay HMAC key rotations since process start.",
+		}),
 		BuildInfo: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: SeriesBuildInfo,
@@ -517,6 +565,47 @@ func (m *Metrics) SetRateLimiterTrackedIPs(count int) {
 	}
 }
 
+// SetDBLargestTableRows publishes one content table's row estimate.
+//
+// The `table` label is BOUNDED — the db-growth sampler only ever passes names
+// from its own hardcoded allowlist (internal/server/db_growth_metrics.go) — and
+// a blank name is dropped here rather than minting a label-less child. Rows are
+// already clamped by the sampler: reltuples is -1 for a never-analyzed table,
+// and a negative row count is not a fact, it is "no estimate", which reads as 0.
+// Nil-receiver safe.
+func (m *Metrics) SetDBLargestTableRows(table string, rows float64) {
+	if m == nil || m.DBLargestTableRows == nil || table == "" {
+		return
+	}
+	m.DBLargestTableRows.WithLabelValues(table).Set(rows)
+}
+
+// SetRelayCertExpiry publishes the relay TLS leaf certificate's notAfter as a
+// unix timestamp.
+//
+// Callers must SKIP (not publish 0) when no certificate is configured: 0 would
+// render as an expiry in 1970 and every alert on the series would fire forever.
+// The series is a label-less GaugeVec precisely so "skip" leaves it absent from
+// the registry instead of exposing a zero. Nil-receiver safe.
+func (m *Metrics) SetRelayCertExpiry(notAfter time.Time) {
+	if m == nil || m.RelayCertExpirySeconds == nil || notAfter.IsZero() {
+		return
+	}
+	m.RelayCertExpirySeconds.WithLabelValues().Set(float64(notAfter.Unix()))
+}
+
+// AddRelayKeyRotations advances the rotation counter by delta, the increase the
+// sampler observed in RelayHealth.Rotations since its previous cycle. A
+// counter cannot decrease, so a delta of 0 (or a source that went backwards
+// because the relay state was replaced) is a no-op here — the sampler is what
+// rebases its own baseline. Nil-receiver safe.
+func (m *Metrics) AddRelayKeyRotations(delta uint64) {
+	if m == nil || m.RelayKeyRotationsTotal == nil || delta == 0 {
+		return
+	}
+	m.RelayKeyRotationsTotal.Add(float64(delta))
+}
+
 // IncResumeStarted records that a resume window opened.
 //
 // Nil-receiver safe: the resume middleware is registered conditionally, and a
@@ -680,6 +769,9 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesFederationQueueDepth, "server saturation sampler: sum of RelayService.QueueDepth across peers"},
 	{SeriesRateLimitedTotal, "RateLimit middleware refusal branch, by bounded chi route pattern"},
 	{SeriesRateLimiterTrackedIPs, "RateLimit middleware publishes the pruned limiter bucket count"},
+	{SeriesDBLargestTableRows, "server db-growth sampler (internal/server/db_growth_metrics.go): pg_class.reltuples per allowlisted table -> Metrics.SetDBLargestTableRows"},
+	{SeriesRelayCertExpirySeconds, "server db-growth sampler (internal/server/db_growth_metrics.go): relay.CertificateExpiry (TLS leaf notAfter) -> Metrics.SetRelayCertExpiry"},
+	{SeriesRelayKeyRotationsTotal, "server db-growth sampler (internal/server/db_growth_metrics.go): RelayHealth().Rotations delta -> Metrics.AddRelayKeyRotations"},
 }
 
 // DeclaredSeriesWriters returns a copy of the writer registry so tests (and

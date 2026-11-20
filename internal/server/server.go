@@ -65,6 +65,7 @@ type Server struct {
 	calendarSvc     calendar.Service
 	relayCancel     context.CancelFunc
 	metricsCancel   context.CancelFunc
+	dbGrowthCancel  context.CancelFunc
 	transportDrain  func() error
 }
 
@@ -161,6 +162,24 @@ func New(
 		metricsCancel = cancel
 		go runSaturationMetrics(metricsCtx, metrics, dbPool, queueSource)
 	}
+	// OBS-5: data growth + relay certificate. Its own sampler and its own ticker
+	// because both questions move on a much slower clock than saturation. The
+	// rotation seam is the same RelayHealth /health serves; the certificate
+	// source is the health probe when it exposes the relay service, else the
+	// persisted relay config (see relayCertExpiryFrom).
+	var dbGrowthCancel context.CancelFunc
+	if metrics != nil {
+		var rotations dbGrowthRelayHealth
+		if source, ok := healthProbe.(dbGrowthRelayHealth); ok {
+			rotations = source
+		}
+		certExpiry := relayCertExpiryFrom(healthProbe, dbPool)
+		if dbPool != nil || rotations != nil || certExpiry != nil {
+			growthCtx, cancel := context.WithCancel(context.Background())
+			dbGrowthCancel = cancel
+			go runDBGrowthMetrics(growthCtx, metrics, dbPool, rotations, certExpiry)
+		}
+	}
 	return &Server{
 		router:          r,
 		sseHub:          sseHub,
@@ -171,6 +190,7 @@ func New(
 		calendarSvc:     calendarSvc,
 		relayCancel:     relayCancel,
 		metricsCancel:   metricsCancel,
+		dbGrowthCancel:  dbGrowthCancel,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      r,
@@ -800,6 +820,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.metricsCancel != nil {
 		s.metricsCancel()
+	}
+	if s.dbGrowthCancel != nil {
+		s.dbGrowthCancel()
 	}
 	var drainErr error
 	if s.transportDrain != nil {

@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"os"
@@ -150,5 +151,120 @@ func writePEM(t *testing.T, path, kind string, der []byte) {
 	t.Helper()
 	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: der}), 0600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCertificateExpiryMatchesParsedNotAfter asserts the accessor reports the
+// certificate file's actual notAfter — the number the OBS-5 gauge publishes.
+func TestCertificateExpiryMatchesParsedNotAfter(t *testing.T) {
+	ca, caKey, caFile := testCA(t)
+	serverCert, serverKey := testCertificate(t, ca, caKey, "server", true)
+	cfg := testTLSConfig(t, serverCert, serverKey, caFile)
+
+	got, err := CertificateExpiry(cfg)
+	if err != nil {
+		t.Fatalf("CertificateExpiry: %v", err)
+	}
+
+	pemBytes, err := os.ReadFile(serverCert)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		t.Fatal("no PEM block in generated certificate")
+	}
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("parse cert: %v", err)
+	}
+	if !got.Equal(leaf.NotAfter) {
+		t.Fatalf("CertificateExpiry = %v, want leaf notAfter %v", got, leaf.NotAfter)
+	}
+}
+
+// TestRelayServiceCertificateExpiryUsesLiveConfig proves the exported method
+// reads the service's own config rather than a stale copy.
+func TestRelayServiceCertificateExpiryUsesLiveConfig(t *testing.T) {
+	ca, caKey, caFile := testCA(t)
+	serverCert, serverKey := testCertificate(t, ca, caKey, "server", true)
+	cfg := testTLSConfig(t, serverCert, serverKey, caFile)
+
+	// testTLSConfig listens on port 0, which is right for the handshake tests but
+	// is rejected by DeploymentConfig.Validate; the service is built with a real
+	// port and a no-op transport so nothing actually binds.
+	svcCfg := cfg
+	svcCfg.ListenAddr = "tcp://127.0.0.1:9443"
+	svc, err := NewRelayService(svcCfg, noopRelayTransport{}, nil)
+	if err != nil {
+		t.Fatalf("NewRelayService: %v", err)
+	}
+	got, err := svc.CertificateExpiry()
+	if err != nil {
+		t.Fatalf("RelayService.CertificateExpiry: %v", err)
+	}
+	want, err := CertificateExpiry(cfg)
+	if err != nil {
+		t.Fatalf("CertificateExpiry: %v", err)
+	}
+	if !got.Equal(want) {
+		t.Fatalf("service expiry %v != config expiry %v", got, want)
+	}
+
+	// No certificate configured on the live config -> the sentinel, never a zero
+	// time that a caller could publish as "expired in 1970".
+	disabled := svcCfg
+	disabled.TLSEnabled, disabled.TLSCertFile = false, nil
+	svc.mu.Lock()
+	svc.config = disabled
+	svc.mu.Unlock()
+	if _, err := svc.CertificateExpiry(); !errors.Is(err, ErrNoRelayCertificate) {
+		t.Fatalf("expected ErrNoRelayCertificate, got %v", err)
+	}
+}
+
+// TestCertificateExpiryWithoutCertificateErrors pins the "not configured" class
+// the sampler skips on.
+func TestCertificateExpiryWithoutCertificateErrors(t *testing.T) {
+	for name, mutate := range map[string]func(*DeploymentConfig){
+		"tls disabled":           func(cfg *DeploymentConfig) { cfg.TLSEnabled = false },
+		"no certificate path":    func(cfg *DeploymentConfig) { cfg.TLSCertFile = nil },
+		"empty certificate path": func(cfg *DeploymentConfig) { empty := ""; cfg.TLSCertFile = &empty },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			mutate(&cfg)
+			if _, err := CertificateExpiry(cfg); !errors.Is(err, ErrNoRelayCertificate) {
+				t.Fatalf("expected ErrNoRelayCertificate, got %v", err)
+			}
+		})
+	}
+}
+
+// TestCertificateExpiryBrokenFileErrors keeps the two broken classes distinct so
+// /health's reason strings stay truthful after sharing one parser.
+func TestCertificateExpiryBrokenFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	garbage := filepath.Join(dir, "garbage.pem")
+	if err := os.WriteFile(garbage, []byte("not a certificate"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing.pem")
+
+	cfgFor := func(path string) DeploymentConfig {
+		cfg := DefaultConfig()
+		cfg.TLSEnabled = true
+		cfg.TLSCertFile = &path
+		return cfg
+	}
+
+	if _, err := CertificateExpiry(cfgFor(garbage)); !errors.Is(err, errTLSCertInvalid) {
+		t.Fatalf("garbage PEM: expected errTLSCertInvalid, got %v", err)
+	}
+	if _, err := CertificateExpiry(cfgFor(missing)); !errors.Is(err, errTLSCertUnreadable) {
+		t.Fatalf("missing file: expected errTLSCertUnreadable, got %v", err)
+	}
+	if degraded, reason := tlsCertificateHealth(cfgFor(missing), time.Now()); !degraded || reason != "tls_cert_unreadable" {
+		t.Fatalf("health for missing cert = (%v, %q), want (true, tls_cert_unreadable)", degraded, reason)
 	}
 }

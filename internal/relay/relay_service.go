@@ -182,6 +182,20 @@ func (r *RelayService) Shutdown(ctx context.Context) error {
 	return err
 }
 
+// CertificateExpiry reports the relay TLS leaf certificate's notAfter from the
+// service's live deployment config.
+//
+// It exists so the metrics sampler never re-implements certificate parsing: the
+// gauge and /health's TLS degradation check both go through the same PEM/X.509
+// path in tls.go. ErrNoRelayCertificate means "no certificate is configured";
+// the caller must skip publishing rather than record a zero expiry (OBS-5).
+func (r *RelayService) CertificateExpiry() (time.Time, error) {
+	r.mu.RLock()
+	cfg := r.config
+	r.mu.RUnlock()
+	return CertificateExpiry(cfg)
+}
+
 func (r *RelayService) Health() RelayHealth {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
