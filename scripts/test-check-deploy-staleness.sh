@@ -348,8 +348,8 @@ run_case "untracked-only dirt also blocks --deploy" 2 \
 	|| ok "deploy NOT invoked on untracked-only dirt"
 
 # ── DEPLOY-STALE-1: the checker's own board ledger is not deploy dirt ───────
-# The gate ignores ONLY .coding-hermes/board/events.jsonl (self-appended by
-# append_stale_event; never deployable content). Everything else still blocks.
+# The gate ignores its three tracked bookkeeping files and the narrowly scoped
+# untracked debris covered below; other tracked and untracked changes block.
 
 # a. dirty ONLY in the excluded ledger -> deploy IS invoked, run reaches CURRENT
 REPO="$WORK/ledger-dirty"
@@ -483,6 +483,84 @@ run_case "untracked file blocks --deploy even with ledger dirt too" 2 \
 [[ -f "$WORK/deploy-invoked" ]] \
 	&& bad "deploy invoked despite untracked dirt" "" \
 	|| ok "deploy NOT invoked with untracked + ledger dirt"
+
+# ── DEPLOY-STALE-1-R2: untracked debris versus tracked changes ─────────────
+REPO="$WORK/debris"
+mkrepo "$REPO"
+touch_new_commit "$REPO"
+: >"$ART/debris-canopyd"
+mkdir -p "$REPO/.coding-hermes/waves"
+printf '{}\n' >"$REPO/.coding-hermes/waves/2026-11-16-22-31-05.json"
+make_stale "$ART/debris-canopyd"
+run_case "untracked wave manifest permits deploy" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/debris-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_DEPLOY_DIR="$WORK" \
+	CANOPYD_DEPLOY_CMD="touch $ART/debris-canopyd && touch $WORK/deploy-invoked" \
+	EVIDENCE="CURRENT deploying" -- --deploy
+if [[ -f "$WORK/deploy-invoked" ]]; then
+	ok "wave deploy invoked"
+else
+	bad "wave deploy not invoked" ""
+fi
+rm "$REPO/.coding-hermes/waves/2026-11-16-22-31-05.json"
+printf '{}\n' >"$REPO/o18.json"
+make_stale "$ART/debris-canopyd"
+run_case "untracked root lane dump permits deploy" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/debris-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_DEPLOY_DIR="$WORK" \
+	CANOPYD_DEPLOY_CMD="touch $ART/debris-canopyd && touch $WORK/deploy-invoked" \
+	EVIDENCE="CURRENT deploying" -- --deploy
+if [[ -f "$WORK/deploy-invoked" ]]; then
+	ok "lane dump deploy invoked"
+else
+	bad "lane dump deploy not invoked" ""
+fi
+printf '{}\n' >"$REPO/.coding-hermes/waves/2026-11-16-22-31-05.json"
+make_stale "$ART/debris-canopyd"
+run_case "incident wave and root dump together permit deploy" 0 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/debris-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_DEPLOY_DIR="$WORK" \
+	CANOPYD_DEPLOY_CMD="touch $ART/debris-canopyd && touch $WORK/deploy-invoked" \
+	EVIDENCE="CURRENT deploying" -- --deploy
+if [[ -f "$WORK/deploy-invoked" ]]; then
+	ok "incident deploy invoked"
+else
+	bad "incident deploy not invoked" ""
+fi
+rm "$REPO/o18.json" "$REPO/.coding-hermes/waves/2026-11-16-22-31-05.json"
+
+# Every tracked deploy input, plus tracked board data outside the three
+# exceptions, must still refuse. The allowed root pattern is untracked-only.
+for tracked in internal/x/a.go cmd/main.go migrations/001.sql go.mod go.sum .coding-hermes/tracked.json o18.json; do
+	REPO="$WORK/tracked-${tracked//\//-}"
+	mkrepo "$REPO"
+	mkdir -p "$REPO/$(dirname "$tracked")"
+	printf 'original\n' >"$REPO/$tracked"
+	git -C "$REPO" add -- "$tracked"
+	git -C "$REPO" commit -q -m "seed tracked fixture"
+	printf 'modified\n' >>"$REPO/$tracked"
+	make_stale "$ART/debris-canopyd"
+	run_case "tracked $tracked blocks deploy" 2 \
+		CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/debris-canopyd" \
+		CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_DEPLOY_DIR="$WORK" \
+		CANOPYD_DEPLOY_CMD="touch $ART/debris-canopyd && touch $WORK/deploy-invoked" \
+		EVIDENCE="STALE_BLOCKED" -- --deploy
+	if [[ ! -f "$WORK/deploy-invoked" ]]; then
+		ok "tracked $tracked did not invoke deploy"
+	else
+		bad "tracked $tracked invoked deploy" ""
+	fi
+done
+
+REPO="$WORK/unknown-root"
+mkrepo "$REPO"
+printf '{}\n' >"$REPO/oops.json"
+make_stale "$ART/debris-canopyd"
+run_case "unrecognized root file blocks deploy" 2 \
+	CANOPYD_STALE_REPO_ROOT="$REPO" CANOPYD_STALE_PATH="$ART/debris-canopyd" \
+	CANOPYD_STALE_THRESHOLD_S=86400 CANOPYD_DEPLOY_DIR="$WORK" \
+	CANOPYD_DEPLOY_CMD="touch $ART/debris-canopyd && touch $WORK/deploy-invoked" \
+	EVIDENCE="STALE_BLOCKED" -- --deploy
 
 # ── 6. Deploy that does not fix staleness → fail ────────────────────────────
 REPO="$WORK/stillstale"

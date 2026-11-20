@@ -706,8 +706,9 @@ fi
 # graph refreshes a symbols cache. Because those files are tracked, the raw
 # porcelain status is always dirty on an hourly run and the gate deadlocks
 # against its own side-writes (stale_blocked_streak=45 observed, DEPLOY-STALE-1).
-# Ignore ONLY these three bookkeeping paths — they are never deployable content;
-# every other tracked/untracked change still blocks (DEPLOY-STALE-2).
+# Ignore these three tracked bookkeeping paths. Also ignore only untracked
+# files under .coding-hermes/ and root-level o<digits>.json lane dumps (the
+# incident had o18.json). Other tracked or untracked changes still block.
 IGNORED_DEPLOY_BOOKKEEPING=(
 	".coding-hermes/board/events.jsonl"
 	".gitreins/tasks.yaml"
@@ -717,7 +718,22 @@ GATE_EXCLUDES=()
 for ignored_path in "${IGNORED_DEPLOY_BOOKKEEPING[@]}"; do
 	GATE_EXCLUDES+=(":(exclude)$ignored_path")
 done
-STATUS_PORCELAIN="$(git -C "$REPO_ROOT" status --porcelain -- . "${GATE_EXCLUDES[@]}" 2>/dev/null)"
+STATUS_PORCELAIN="$(git -C "$REPO_ROOT" status --porcelain -z --untracked-files=all -- . "${GATE_EXCLUDES[@]}" 2>/dev/null | python3 -c '
+import re, sys
+entries = sys.stdin.buffer.read().split(b"\0")
+i = 0
+while i < len(entries) and entries[i]:
+    entry = entries[i]
+    status, path = entry[:2], entry[3:]
+    i += 1
+    # Porcelain -z gives renames/copies a second pathname; never ignore them.
+    if b"R" in status or b"C" in status:
+        i += 1
+    if status == b"??" and (path.startswith(b".coding-hermes/") or re.fullmatch(rb"o[0-9]+\.json", path)):
+        continue
+    print("dirty")
+    break
+' )" || fail_error "cannot inspect worktree status"
 if [[ -n "$STATUS_PORCELAIN" ]]; then
 	echo "STALE_BLOCKED: worktree has tracked/untracked changes; refusing to auto-deploy" >&2
 	echo "STALE_BLOCKED: commit or stash, then re-run $0 --deploy" >&2
