@@ -4473,6 +4473,28 @@ actual code:
       context window sizes the default budget (`CONTEXT_BUDGET_PERCENT`,
       default 60%). An explicit `token_budget` always wins, unchanged
 
+    Both variants return the same HTTP 202 envelope: top-level `run_id` and
+    `status` for existing consumers, plus the full `run` record for callers
+    that inspect provenance. For example, a request without `node_id`,
+    `{"message":"hello","session_id":"s1"}`, returns:
+
+    ```json
+    {"run_id":"run_ctx","status":"started","run":{"run_id":"run_ctx","session_id":"s1","message":"hello","model":"","status":"started","created_at":"2026-11-20T16:49:33.83980114Z","events":null}}
+    ```
+
+    With `{"message":"hello","session_id":"s1","node_id":"11111111-1111-1111-1111-111111111111","token_budget":8000}`
+    and a compiler returning a manifest, the same envelope can contain:
+
+    ```json
+    {"run_id":"run_ctx","status":"started","run":{"run_id":"run_ctx","session_id":"s1","message":"hello","model":"","status":"started","created_at":"2026-11-20T16:49:33.840683614Z","events":null,"source_node_id":"11111111-1111-1111-1111-111111111111","token_budget":8000,"context_tokens":42,"manifest":{"requestId":"req-1","nodeId":"11111111-1111-1111-1111-111111111111","compiledAt":"2026-01-02T03:04:05Z","tokenBudget":8000,"tokensUsed":42,"ancestry":null,"references":null,"cards":null,"omittedCount":0,"omittedReason":"","truncationMarkers":null,"warnings":null,"manifestHash":""}}}
+    ```
+
+    These values illustrate the handler test's stubbed gateway and compiler;
+    IDs, timestamps, manifest contents and event state vary. Context fields
+    are omitted when empty, including `manifest` if the compiler returns none.
+    The requested `model` is forwarded upstream; the initial run record's
+    `model` field is currently empty. Poll the run record for later updates.
+
     **Gateway contract (raw `/v1/runs`).** The gateway's own `POST /v1/runs`
     requires `{"input": "..."}` (the `Input` field on
     `StartRunRequest` in `internal/gateway/client.go`, serialized as

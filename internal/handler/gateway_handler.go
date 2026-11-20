@@ -209,6 +209,8 @@ func (h *GatewayHandler) StartRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "gateway_unavailable", err.Error())
 		return
 	}
+	// Both paths share this envelope: existing clients read run_id and status
+	// at the top level, while context-aware callers inspect run.
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"run_id": rec.RunID,
 		"status": rec.Status,
