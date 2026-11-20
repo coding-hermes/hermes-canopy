@@ -4431,8 +4431,9 @@ tasks:
     in declaredSeriesWriters, and covered by tests that gather a real _bucket series;
     go build ./... + go vet ./... + go test ./internal/telemetry/ + short tests on
     handler, context, cardexport all pass.
-  status: in_progress
+  status: complete
   created_at: '2026-11-20T07:10:19.012113+00:00'
+  completed_at: '2026-11-20T07:56:11.782291+00:00'
 - id: DOC-16
   title: 'DOC-16: document POST /api/v1/profiles in docs/API.md'
   criteria:
