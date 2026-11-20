@@ -1,0 +1,40 @@
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/kara/hermes-canopy/scripts/mcp_sdk_canary.py", line 93, in <module>
+  |     main()
+  |     ~~~~^^
+  |   File "/home/kara/hermes-canopy/scripts/mcp_sdk_canary.py", line 81, in main
+  |     asyncio.run(check())
+  |     ~~~~~~~~~~~^^^^^^^^^
+  |   File "/home/kara/.hermes/tools/python-3.14.9+20261021-linux-x64/lib/python3.14/asyncio/runners.py", line 205, in run
+  |     return runner.run(main)
+  |            ~~~~~~~~~~^^^^^^
+  |   File "/home/kara/.hermes/tools/python-3.14.9+20261021-linux-x64/lib/python3.14/asyncio/runners.py", line 128, in run
+  |     return self._loop.run_until_complete(task)
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  |   File "/home/kara/.hermes/tools/python-3.14.9+20261021-linux-x64/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+  |     return future.result()
+  |            ~~~~~~~~~~~~~^^
+  |   File "/home/kara/hermes-canopy/scripts/mcp_sdk_canary.py", line 57, in check
+  |     async with streamable_http_client(URL, http_client=http_client) as (read_stream, write_stream):
+  |                ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/home/kara/.hermes/tools/python-3.14.9+20261021-linux-x64/lib/python3.14/contextlib.py", line 235, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "/home/kara/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/lib/python3.14/site-packages/mcp/client/streamable_http.py", line 672, in streamable_http_client
+  |     async with anyio.create_task_group() as tg:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/home/kara/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/kara/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/lib/python3.14/site-packages/mcp/client/streamable_http.py", line 695, in streamable_http_client
+    |     yield (
+    |     ...<3 lines>...
+    |     )
+    |   File "/home/kara/hermes-canopy/scripts/mcp_sdk_canary.py", line 57, in check
+    |     async with streamable_http_client(URL, http_client=http_client) as (read_stream, write_stream):
+    |                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    | ValueError: too many values to unpack (expected 2, got 3)
+    +------------------------------------
