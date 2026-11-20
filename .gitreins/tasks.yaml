@@ -4465,3 +4465,50 @@ tasks:
   status: complete
   created_at: '2026-11-20T12:05:36.375017+00:00'
   completed_at: '2026-11-20T12:38:34.418778+00:00'
+- id: DF-HERMES-CANOPY-98
+  title: Fix includeCards=true deadlock that wedges the cards surface
+  criteria:
+  - includeCards=true returns 200/structured-5xx within handler timeout on all three
+    control shapes, cards array populated; cards surface stays answerable after a
+    hang-class failure; regression test drives includeCards then card CRUD in one
+    process
+  status: in_progress
+  created_at: '2026-11-20T16:13:28.493417+00:00'
+- id: DF-HERMES-CANOPY-99
+  title: Remove 30s whole-client timeout that kills long gateway runs
+  criteria:
+  - run whose model work takes >35s completes canopy-side as completed with gateway
+    output; stub-gateway regression test emits completion at T+35s and expects completed
+    not failed; mid-stream drop reconciles against gateway run record instead of failing
+  status: in_progress
+  created_at: '2026-11-20T16:13:29.309704+00:00'
+- id: DF-HERMES-CANOPY-100
+  title: Unify POST /api/v1/gateway/runs 202 envelope
+  criteria:
+  - one documented envelope for both call shapes; docs/API.md shows exact 202 body
+    per accepted field combination; parity test asserts single shape
+  status: in_progress
+  created_at: '2026-11-20T16:13:30.139794+00:00'
+- id: DF-HERMES-CANOPY-101
+  title: Fix mcp_sdk_canary.py SDK unpack arity crash
+  criteria:
+  - python3 scripts/mcp_sdk_canary.py exits 0 against local canopyd MCP endpoint;
+    SDK drift fails with named version mismatch not unpack crash
+  status: in_progress
+  created_at: '2026-11-20T16:13:30.974628+00:00'
+- id: DEPLOY-STALE-1-R2
+  title: 'Deploy gate: stop refusing on untracked non-deployable debris'
+  criteria:
+  - deploy proceeds when only dirt is untracked non-deployable files under .coding-hermes/
+    plus root lane dumps, post-deploy health commit equals HEAD; tracked changes under
+    internal/ cmd/ migrations/ go.mod go.sum still refuse; staleness test battery
+    gains wave-manifest and stray-root-file scenarios
+  status: in_progress
+  created_at: '2026-11-20T16:13:31.869148+00:00'
+- id: DOC-17
+  title: Fix stale Spec-vs-Code Drift appendix entries in docs/API.md
+  criteria:
+  - four stale entries corrected or past-tense; grep proves no live-tense claim about
+    absent README statements; appendix names re-verification command per entry
+  status: in_progress
+  created_at: '2026-11-20T16:13:32.656208+00:00'
