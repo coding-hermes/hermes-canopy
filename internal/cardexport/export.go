@@ -56,6 +56,7 @@ import (
 	_ "modernc.org/sqlite" // CGo-free SQLite driver, same driver as internal/card
 
 	"github.com/coding-hermes/hermes-canopy/internal/card"
+	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 )
 
 // recordKindCard is the `record` discriminator of a card line. It exists so a
@@ -126,8 +127,12 @@ type dbFile struct {
 // database, a database without a `cards` table, and a row whose JSON columns
 // cannot be represented. It never writes a partial line: a record is encoded
 // into the encoder's buffer by encoding/json and flushed by a single Write.
-func Export(ctx context.Context, opts Options) (Result, error) {
-	var res Result
+func Export(ctx context.Context, opts Options) (res Result, err error) {
+	// The export had no duration record at all, so a slow or stuck export was
+	// invisible: canopy_export_duration_seconds measures the whole write,
+	// including the failure returns, which is where a stuck lane shows up.
+	started := time.Now()
+	defer func() { telemetry.ObserveExportDuration(time.Since(started).Seconds()) }()
 
 	if strings.TrimSpace(opts.DataDir) == "" {
 		return res, errors.New("cardexport: no data directory given")

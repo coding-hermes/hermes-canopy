@@ -3,11 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 )
 
 const networkProxyBodyLimit = 10 * 1024 * 1024
@@ -67,16 +70,22 @@ func (h *NetworkProxyHandler) Proxy(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	resp, err := h.client.Do(req)
 	if err != nil {
+		// The one place a proxied call can lose to the clock: classify it as
+		// timeout rather than a plain error so "gateway is slow" and "gateway
+		// is broken" are separable on canopy_upstream_proxy_duration_seconds.
+		telemetry.ObserveUpstreamProxyDuration(proxyErrorOutcome(ctx, err), time.Since(started).Seconds())
 		writeError(w, 502, "NETWORK_ERROR", err.Error())
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, networkProxyBodyLimit+1))
 	if err != nil {
+		telemetry.ObserveUpstreamProxyDuration(telemetry.UpstreamProxyOutcomeError, time.Since(started).Seconds())
 		writeError(w, 502, "NETWORK_ERROR", err.Error())
 		return
 	}
 	if len(payload) > networkProxyBodyLimit {
+		telemetry.ObserveUpstreamProxyDuration(telemetry.UpstreamProxyOutcomeError, time.Since(started).Seconds())
 		writeError(w, 413, "PAYLOAD_TOO_LARGE", "upstream response exceeds 10 MB")
 		return
 	}
@@ -84,5 +93,28 @@ func (h *NetworkProxyHandler) Proxy(w http.ResponseWriter, r *http.Request) {
 	for key, values := range resp.Header {
 		headers[key] = strings.Join(values, ", ")
 	}
+	elapsed := time.Since(started)
+	telemetry.ObserveUpstreamProxyDuration(proxyOutcome(resp.StatusCode), elapsed.Seconds())
 	writeJSON(w, 200, map[string]any{"status": resp.StatusCode, "statusText": http.StatusText(resp.StatusCode), "headers": headers, "body": string(payload), "durationMs": time.Since(started).Milliseconds()})
+}
+
+// proxyOutcome maps the upstream status Canopy relays to its caller onto the
+// closed outcome set of canopy_upstream_proxy_duration_seconds: a 2xx/3xx
+// answer is "ok", anything else (a gateway 4xx/5xx) is "error". It reads the
+// status the handler already writes into the response body — never a URL, user
+// id, tree id or node id, which would mint one series per request.
+func proxyOutcome(status int) string {
+	if status >= 200 && status < 400 {
+		return telemetry.UpstreamProxyOutcomeOK
+	}
+	return telemetry.UpstreamProxyOutcomeError
+}
+
+// proxyErrorOutcome classifies a failed upstream call: an exhausted deadline is
+// "timeout" (Canopy gave up at its own 30s budget), anything else is "error".
+func proxyErrorOutcome(ctx context.Context, err error) string {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return telemetry.UpstreamProxyOutcomeTimeout
+	}
+	return telemetry.UpstreamProxyOutcomeError
 }

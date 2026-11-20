@@ -2,6 +2,9 @@
 package telemetry
 
 import (
+	"context"
+	"errors"
+	"net"
 	"net/http"
 	"sync"
 
@@ -54,6 +57,18 @@ const (
 	SeriesRelaySessions                   = "canopy_relay_sessions"
 	SeriesRelayQueueDepth                 = "canopy_relay_queue_depth"
 	SeriesRelayDropsTotal                 = "canopy_relay_drops_total"
+	// SeriesUpstreamProxyDuration is the duration histogram over outbound
+	// upstream calls: the network proxy to the Hermes gateway and the
+	// transport health probe. Today both stamp a duration into their
+	// response body and no series ever sees it (OBS-4; spec §4 P2).
+	SeriesUpstreamProxyDuration = "canopy_upstream_proxy_duration_seconds"
+	// SeriesContextCompileDuration is the server-side context-compile
+	// duration — the CPU-bound build behind the "<30s resume" claim, which
+	// only the end-to-end resume window measured before OBS-4.
+	SeriesContextCompileDuration = "canopy_context_compile_duration_seconds"
+	// SeriesExportDuration is the card-export wall time: the CLI snapshot
+	// lane's own duration, which had no record anywhere (OBS-4).
+	SeriesExportDuration = "canopy_export_duration_seconds"
 )
 
 // TransportSnapshot is a bounded, label-safe snapshot of transport and relay state.
@@ -279,6 +294,159 @@ func newMetricsWith(reg prometheus.Registerer) *Metrics {
 	return m
 }
 
+// ── Slow-path duration histograms (OBS-4) ───────────────────────────────────
+//
+// Four sites computed a duration that no series ever saw: the network proxy to
+// the Hermes gateway (body-only durationMs), the transport health probe
+// (body-only latency_ms — the same two sites spec §3.2 calls out), the context
+// compiler (no record), and the card export (no record). They share three
+// families because the two outbound calls are one slow-path class (an upstream
+// call an agent waits on) and the two local compute paths are distinct. Each
+// bucket list straddles the SLO line the path is judged against.
+//
+// These are package-level promauto histograms on the DEFAULT registry (the one
+// /metrics serves) with package-level Observe helpers, deliberately NOT fields
+// on Metrics: the call sites (a handler, the CPU-bound compiler, a CLI export)
+// have no metrics handle and threading *Metrics through their constructors
+// would be interface surgery for one Observe call. newDurationHistograms takes
+// a Registerer so tests can gather them from a private registry instead.
+
+// Outcomes for SeriesUpstreamProxyDuration. This is a CLOSED set — anything
+// else folds into UpstreamProxyOutcomeError, so a caller can never mint one
+// series per distinct failure. It is derived from the status the call
+// produced, never from a URL, user id, tree id or node id (spec §4: no
+// unbounded label values).
+const (
+	// UpstreamProxyOutcomeOK is an upstream call that answered 2xx/3xx.
+	UpstreamProxyOutcomeOK = "ok"
+	// UpstreamProxyOutcomeError is an upstream call that failed or answered
+	// a 4xx/5xx.
+	UpstreamProxyOutcomeError = "error"
+	// UpstreamProxyOutcomeTimeout is an upstream call Canopy abandoned at
+	// its own deadline. It is distinct from UpstreamProxyOutcomeError
+	// because "the gateway is slow" and "the gateway is broken" page
+	// differently.
+	UpstreamProxyOutcomeTimeout = "timeout"
+)
+
+// durationHistograms holds the OBS-4 slow-path histograms. The struct exists
+// so a test can build a private-registry instance (newDurationHistograms) and
+// the exported Observe helpers can share one process-wide instance
+// (defaultDurations) without threading a *Metrics to the call sites.
+type durationHistograms struct {
+	upstreamProxy  *prometheus.HistogramVec
+	contextCompile prometheus.Histogram
+	export         prometheus.Histogram
+}
+
+// newDurationHistograms registers the OBS-4 histograms on reg.
+func newDurationHistograms(reg prometheus.Registerer) *durationHistograms {
+	factory := promauto.With(reg)
+	return &durationHistograms{
+		upstreamProxy: factory.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name: SeriesUpstreamProxyDuration,
+				Help: "Seconds spent on an outbound upstream call (network proxy to the Hermes gateway, transport health probe), by outcome.",
+				// SLO boundaries: 1s is the interactive latency line for a
+				// proxied call an agent is waiting on, and 30s is the
+				// handler's hard upstream budget (both the client Timeout
+				// and the request-context timeout are 30s), so a sample
+				// beyond 30 can only be a timeout outcome.
+				Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 45, 60},
+			},
+			[]string{"outcome"},
+		),
+		contextCompile: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: SeriesContextCompileDuration,
+				Help: "Seconds spent compiling a context (the CPU-bound build behind a resume), excluding browser render time.",
+				// SLO boundaries: 30 is the product "<30s resume" line and
+				// stays a boundary here so the SLO is readable straight off
+				// the compile histogram (the same 30 the resume histogram
+				// carries); 1s and 5s are the shares of that budget a
+				// single interactive compile is expected to stay inside.
+				Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 45, 60},
+			},
+		),
+		export: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: SeriesExportDuration,
+				Help: "Seconds spent writing a card-export snapshot.",
+				// SLO boundaries: 10s is the interactive wait line for a
+				// user-run `canopy export`, and 60s is the ceiling of the
+				// short-lived CLI lane it belongs to (spec §3.9 — an export
+				// that crosses a minute is the stuck-export case). Per §3.9
+				// export must NOT grow its own scrape target, so the sample
+				// rides the process registry: visible when export runs
+				// in-process, inert (and free) in a standalone CLI run.
+				Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120},
+			},
+		),
+	}
+}
+
+// defaultDurations is the process-wide instance the exported Observe helpers
+// write to: registered on the default registry, i.e. the families appear on
+// the /metrics scrape.
+var defaultDurations = newDurationHistograms(prometheus.DefaultRegisterer)
+
+// ObserveUpstreamProxyDuration records one completed outbound upstream call.
+// outcome is a CLOSED set (UpstreamProxyOutcomeOK/Error/Timeout); anything
+// else is recorded as UpstreamProxyOutcomeError rather than creating a series.
+func ObserveUpstreamProxyDuration(outcome string, seconds float64) {
+	defaultDurations.observeUpstreamProxy(outcome, seconds)
+}
+
+// ObserveContextCompileDuration records one completed context compile.
+func ObserveContextCompileDuration(seconds float64) {
+	defaultDurations.observeContextCompile(seconds)
+}
+
+// UpstreamProxyOutcomeForStatus maps the status an upstream call produced onto
+// the closed outcome set, so the label is derived from the result rather than
+// from anything request-specific.
+func UpstreamProxyOutcomeForStatus(code int) string {
+	if code >= 400 {
+		return UpstreamProxyOutcomeError
+	}
+	return UpstreamProxyOutcomeOK
+}
+
+// UpstreamProxyOutcomeForError classifies a failed upstream call: a call Canopy
+// abandoned at its own deadline is a timeout, anything else is an error.
+func UpstreamProxyOutcomeForError(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return UpstreamProxyOutcomeTimeout
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return UpstreamProxyOutcomeTimeout
+	}
+	return UpstreamProxyOutcomeError
+}
+
+// ObserveExportDuration records one completed card export.
+func ObserveExportDuration(seconds float64) {
+	defaultDurations.observeExport(seconds)
+}
+
+func (d *durationHistograms) observeUpstreamProxy(outcome string, seconds float64) {
+	switch outcome {
+	case UpstreamProxyOutcomeOK, UpstreamProxyOutcomeError, UpstreamProxyOutcomeTimeout:
+	default:
+		outcome = UpstreamProxyOutcomeError
+	}
+	d.upstreamProxy.WithLabelValues(outcome).Observe(seconds)
+}
+
+func (d *durationHistograms) observeContextCompile(seconds float64) {
+	d.contextCompile.Observe(seconds)
+}
+
+func (d *durationHistograms) observeExport(seconds float64) {
+	d.export.Observe(seconds)
+}
+
 // Handler returns a Prometheus exposition handler backed by this metrics registry.
 func (m *Metrics) Handler() http.Handler {
 	gatherer := prometheus.DefaultGatherer
@@ -454,6 +622,9 @@ var declaredSeriesWriters = []SeriesWriter{
 	{SeriesRelaySessions, "transport snapshot collector: the same RelayHealth source served as /health relay.sessions"},
 	{SeriesRelayQueueDepth, "transport snapshot collector: relay transport adapter QueueDepth"},
 	{SeriesRelayDropsTotal, "transport snapshot collector: TransportMetrics.RelayDrops"},
+	{SeriesUpstreamProxyDuration, "telemetry.ObserveUpstreamProxyDuration: network proxy handler once per proxied request, transport health probe once per probe (both derived from the status they wrote)"},
+	{SeriesContextCompileDuration, "telemetry.ObserveContextCompileDuration: compilerImpl.Compile on every compile attempt"},
+	{SeriesExportDuration, "telemetry.ObserveExportDuration: cardexport.Export on every completed export"},
 }
 
 // DeclaredSeriesWriters returns a copy of the writer registry so tests (and

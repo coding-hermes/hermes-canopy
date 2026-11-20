@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
+	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 	"github.com/coding-hermes/hermes-canopy/internal/transport"
 )
 
@@ -236,7 +237,17 @@ func (h *TransportHandler) HealthProbe(tt string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		healthErr := h.adapter.Health(r.Context())
-		latency := time.Since(start).Milliseconds()
+		elapsed := time.Since(start)
+		latency := elapsed.Milliseconds()
+		// Same slow-path class as the network proxy: an outbound call to a
+		// dependency an agent waits on, so it shares
+		// canopy_upstream_proxy_duration_seconds and its ok/30s SLO bounds.
+		// The label comes from the probe result the handler already writes.
+		outcome := telemetry.UpstreamProxyOutcomeOK
+		if healthErr != nil {
+			outcome = telemetry.UpstreamProxyOutcomeError
+		}
+		telemetry.ObserveUpstreamProxyDuration(outcome, elapsed.Seconds())
 		if healthErr != nil {
 			writeJSON(w, http.StatusServiceUnavailable, healthProbeResponse{
 				TransportType: tt, Healthy: false, CheckedAt: time.Now().UTC().Format(time.RFC3339),

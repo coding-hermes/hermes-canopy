@@ -11,6 +11,7 @@ import (
 
 	"github.com/coding-hermes/hermes-canopy/internal/db"
 	"github.com/coding-hermes/hermes-canopy/internal/reference"
+	"github.com/coding-hermes/hermes-canopy/internal/telemetry"
 )
 
 // --- Compiler implementation -------------------------------------------------
@@ -125,6 +126,13 @@ func NewCompiler(
 
 // Compile implements Compiler.
 func (c *compilerImpl) Compile(ctx context.Context, req CompileRequest) (*CompiledContext, error) {
+	// The CPU-bound build behind a resume. Only the end-to-end resume window
+	// used to be measured, so a regression here hid inside a still-green
+	// resume; canopy_context_compile_duration_seconds pins the compile's own
+	// share of the <30s line (OBS-4).
+	started := time.Now()
+	defer func() { telemetry.ObserveContextCompileDuration(time.Since(started).Seconds()) }()
+
 	// Validate budget
 	if req.TokenBudget < 1 {
 		return nil, ErrInvalidBudget
