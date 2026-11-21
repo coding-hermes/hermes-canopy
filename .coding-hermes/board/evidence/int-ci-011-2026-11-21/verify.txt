@@ -1,0 +1,34 @@
+# INT-CI-011 foreman verification — 2026-11-21
+
+CI red: run 44789256392, job 'build (ubuntu-latest, 1.25)', step 'MCP SDK canary', head ff547e69.
+Cause: .github/workflows/build.yml:91 installed bare 'pip install mcp', which resolved to upstream 2.3.0
+and the canary's supported range is >=1.30.0,<1.31.0.
+
+## AC1 — no bare pip install mcp in build.yml
+$ grep -n 'pip install.*mcp' .github/workflows/build.yml
+  91:          /tmp/mcp45-venv/bin/pip install 'mcp>=1.30.0,<1.31.0'
+$ grep -cE "pip install +'?mcp'? *$" .github/workflows/build.yml   # bare, unpinned
+  0
+
+## AC2 — pin script green on the real tree
+$ bash scripts/test-mcp-canary-pin.sh ; echo RC=$?
+  RC=0
+
+## AC3 — pin script is a real guard (drifted copies must exit non-zero)
+$ sed 's/mcp>=1.30.0,<1.31.0/mcp/' build.yml > /tmp/wf.yml ; test-mcp-canary-pin.sh --file-workflow /tmp/wf.yml
+  BARE_RC=1   (unpinned install rejected)
+$ sed "s/mcp>=1.30.0,<1.31.0/mcp>=2.0.0,<3.0.0/" build.yml > /tmp/wf2.yml ; test-mcp-canary-pin.sh --file-workflow /tmp/wf2.yml
+  NEW_RC=1    (out-of-range window rejected)
+  real tree untouched: git status --short .github/workflows/build.yml -> 0 lines
+
+## Post-merge gates on master (merge 8ef4cf8f)
+  go build ./...   BUILD_RC=0
+  go vet ./...     VET_RC=0
+  make lint        golangci-lint run ./... --timeout=3m -> 0 issues. LINT_RC=0
+  go test ./... -short -count=1  exit 0
+  scripts/check-shell-yaml.sh scripts/test-mcp-canary-pin.sh .github/workflows/build.yml -> exit 0
+  scripts/check-board.sh -> exit 0
+
+## CI confirmation
+  gh run 8ef4cf8f (merge wt/INT-CI-006) = completed/success — the MCP SDK canary step is green.
+  Tier-2 verdict .gitreins/history/2026-11-21/f53b408d passed=true on 2c58f89a.

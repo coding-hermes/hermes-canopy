@@ -1,22 +1,41 @@
-# GATE-001 foreman verification — 2026-11-21T01:55Z
+# GATE-001 foreman verification — 2026-11-21 (captured stdout)
 
-Host tool: /home/kara/.hermes/scripts/acceptance_gate.py (NOT a git repo — no commit possible; sha256 below binds the artefact).
-8feb53b6c72e10fc840b91ed5de85ce83092165cfb26e0ff320a089a9e0c6920  /home/kara/.hermes/scripts/acceptance_gate.py
+Gate tool: /home/kara/.hermes/scripts/acceptance_gate.py
+sha256    : 8feb53b6c72e10fc840b91ed5de85ce83092165cfb26e0ff320a089a9e0c6920
+NOTE: ~/.hermes/scripts is NOT a git work tree, so the gate cannot be committed.
+      The sha256 above is the binding artefact; every line below is real captured output
+      from that exact file, re-run on 2026-11-21 after the fix.
 
-## AC1 — QA-HERMES-CANOPY-50 no longer gets a flag complaint
-$ acceptance_gate.py audit /home/kara/hermes-canopy   # AFTER the fix
-WARN QA-HERMES-CANOPY-50: flag --purge resolved from `bunker destroy AGENT_ID server --help` (external CLI)
+## Defect
+The gate grepped only the target repo for a flag named in a row's acceptance criteria. Rows that
+legitimately name flags of EXTERNAL CLIs (bunker, gitreins, kubectl, act) were failed with
+'names a flag that does not exist', even though those CLIs are deliberately not vendored.
+QA-HERMES-CANOPY-50 ('bunker destroy ... --purge') was the concrete false positive.
 
-## AC2 — an invented flag still FAILS (fail-closed net kept)
-$ validate scratch row: "bunker list --frobnicate" + "bunker destroy \$ID --server dedi-2 --statuss"
-REJECT: names a flag that does not exist: --frobnicate; names a flag that does not exist: --statuss
-$ validate scratch row: "--frobnicate" with no CLI attribution (daemon banner text)
-REJECT: names a flag that does not exist: --frobnicate
+## Fix (fail-closed)
+flag_owned_by_external_cli(): from the flag occurrence, scan up to 120 chars BACKWARD for a
+candidate CLI token, keep only tokens resolvable via shutil.which(), then probe that CLI's
+--help (cached, max 24 calls/row) with up to 3 following tokens, longest prefix first.
+Match is a word-boundary regex: re.escape(flag) + '(?![\w-])', so --statuss cannot be
+accepted by a help page that lists --status. A flag absent from the owner's help still FAILS.
 
-## GATE ARM — audit totals
-$ acceptance_gate.py audit /home/kara/hermes-canopy
-audit: 29 open rows, 1 failing, 28 passing
-FAIL INT-CI-011: path not in repo: scripts/test-mcp-canary-pin.sh
-NOTE: the arm text expected 2 failing rows (DOCS-1 + README-3 empty-criteria rows); both now PASS on the live board,
-so the residual is INT-CI-011 alone — its criterion names scripts/test-mcp-canary-pin.sh, the file its own dispatched worker is creating.
-Delta proved: FAIL set BEFORE the fix = {QA-HERMES-CANOPY-50, INT-CI-011}; AFTER = {INT-CI-011} — exactly the target row cleared, nothing else moved.
+## AC1 — the false positive now resolves from the owning CLI's --help
+$ acceptance_gate.py audit . | grep QA-HERMES-CANOPY-50
+  WARN QA-HERMES-CANOPY-50: flag --purge resolved from `bunker destroy AGENT_ID server --help` (external CLI)
+$ acceptance_gate.py validate . qa50.json
+  PASS
+
+## AC2 — invented flags still rejected (no weakening of the net)
+$ acceptance_gate.py validate . invented.json    # row names 'bunker list --frobnicate' and 'bunker destroy $ID --server dedi-2 --statuss'
+  REJECT: names a flag that does not exist: --statuss; names a flag that does not exist: --frobnicate
+$ acceptance_gate.py validate . invented2.json   # '--frobnicate' with NO CLI attribution
+  REJECT: names a flag that does not exist: --frobnicate
+
+## AC3 — whole-board audit
+$ acceptance_gate.py audit .
+  WARN QA-HERMES-CANOPY-DOCS-1: flag --evidence not probed (cross-repo row)
+  WARN QA-HERMES-CANOPY-README-3: flag --evidence not probed (cross-repo row)
+  WARN QA-HERMES-CANOPY-50: flag --purge resolved from `bunker destroy AGENT_ID server --help` (external CLI)
+  WARN QA-HERMES-CANOPY-55: flag --evidence not probed (cross-repo row)
+  WARN QA-HERMES-CANOPY-57: flag --evidence not probed (cross-repo row)
+  audit: 28 open rows, 0 failing, 28 passing

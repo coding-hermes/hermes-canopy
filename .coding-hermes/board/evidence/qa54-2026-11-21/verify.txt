@@ -1,0 +1,72 @@
+# QA-HERMES-CANOPY-54 foreman verification — 2026-11-21
+
+Repo: coding-hermes-tools (tracked harness mirror). Branch wt/QA-HERMES-CANOPY-54 merged into master, pushed.
+Worker commit: d69a46b
+
+## Symptom reproduced
+agent_ssh_port read the per-agent spawn transcript from the bare global ${EVIDENCE:-} base
+(LAUNCH-process scope). A separate 'collect --evidence <path>' process saw no bundle -> fell back to
+2223 -> a live agent answering on 22 read as unreachable. Verified with BUNKER_QA_SSH_PORT=22 override.
+
+## Acceptance criteria
+
+AC1 explicit port wins / operator override / no-bundle 2223 / no-port-bundle 22:
+  ok   resolver extracted; override arm present
+  ok   A1 explicit override beats transcript metadata
+  ok   A2 transcript port metadata honored
+  ok   A3 normal bundle, omitted port -> 22
+  ok   A4 no usable metadata -> legacy 2223 preserved (missing + garbled transcript)
+  ok   A4c explicit override with no metadata
+  ok   A5 port-line variant (--ssh-port=NNNN) honored
+  ok   A6 invalid ports rejected; valid edges honored
+  ok   negative control SKIPPED (harness copy defines no server_ssh_port table)
+  ok   spawn_agent: transcript persisted; probe resolves per-agent
+  ok   agent_ssh resolves per-agent
+  spawn attempt 1 produced agent deadc0de but ssh reachability probe failed (rc=1; timeout=5s) — destroying before retry
+  spawn attempt 1 agent deadc0de answered on alternate ssh port 2223 (resolved 22) — handing off
+  ok   F1 EXECUTED: primary 22 failed, alternate 2223 answered, id returned, destroy never called
+  spawn attempt 1 produced agent badalt99 but ssh reachability probe failed (rc=1; timeout=5s) — destroying before retry
+  spawn attempt 1 agent badalt99 answered on alternate ssh port 2223 (resolved 22) — handing off
+  ok   F2 EXECUTED: invalid transcript port fell through, never reached ssh
+  
+  9 · QA-HERMES-CANOPY-54 — collect must reach a live agent (ssh port)
+  PASS explicit-port
+  PASS operator-override-wins
+  PASS no-bundle-falls-back-2223
+  PASS no-port-bundle-resolves-22
+  PASS no-port-bundle-resolves-22
+  PASS no-port-bundle-resolves-22
+  PASS no-port-bundle-resolves-22
+  PASS no-port-bundle-resolves-22
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  
+  PASS test_bunker_qa_ssh_port.sh (harness=/home/kara/worktrees/coding-hermes-tools-QA-HERMES-CANOPY-54/bunker-qa.sh)
+
+AC2 collect abort names the port tried + ssh stderr:
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+  PASS abort-detail-names-port-and-stderr
+
+AC3 mutation reds the suite (proof the test bites, not decoration):
+  mutation: blanked the spawn-bundle base assignment in bunker-qa.sh (echo base="")
+  result  : suite FAILED - no-port-bundle-resolves-22 saw 2223 instead of the bundle port
+  restore : cp backup; git status --short bunker-qa.sh -> clean; suite GREEN again (rc=0)
+
+## Gates on the merged tree
+  bash test_bunker_qa_ssh_port.sh -> rc=0
+  bash -n bunker-qa.sh -> OK
+  make test -> rc=0 (repo suite)
