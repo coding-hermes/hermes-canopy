@@ -154,3 +154,72 @@ Candidate reconciliation (shared checkout moved mid-sweep)
   board-only commit run 44906489729 were in_progress at 2026-11-21T12:58Z — not yet proven.
   Anyone re-opening the cut decision must re-confirm CI on the then-current tip.
 
+---
+
+## Sweep 2026-11-21 — tick hermes-canopy-releng-2026-11-21-12-28-55 (second fire / re-fire)
+
+Re-fire of the tick above. Delta only; the first-fire section stands and its decision is carried,
+with the candidate/CI binding superseded to the newer tip.
+
+Identity at re-measure (2026-11-21T13:24Z–13:31Z)
+- Candidate 40b687d1f99ea3979247f5d79d43798ef00793b8, simultaneously local HEAD, origin/master and
+  the gitlab mirror master; `git rev-list --left-right --count <remote>/master...HEAD` = 0 0 on both.
+- d3113afe is a strict ancestor of the new tip (`git merge-base --is-ancestor` rc=0). Six commits
+  separate them: ad63f9f1, ca31084f, 87a8ecef, dc739739, 5a1cea47, 40b687d1.
+
+Product surface: unchanged
+- `git diff --name-only d3113afe..40b687d1` excluding `.coding-hermes/`, `.gitreins/`, `reports/` and
+  `releng/` returns exactly two paths: scripts/canops02-sse-probe.sh and scripts/canops03-member-probe.sh.
+  Both are operator probe scripts added by ad63f9f1; neither is compiled into canopyd.
+- The rest of the delta (9 files, 375 insertions, 14 deletions) is board, evidence and .gitreins
+  bookkeeping. The first fire's census, semver derivation, tooling inventory and gate arms 2/3/5
+  therefore carry forward unchanged; only the CI binding and arm 6 move.
+
+CI truth on the new tip
+- Run 44906754678 on 40b687d1: Build, push, completed/success, run_attempt 1. One job
+  `build (ubuntu-latest, 1.25)`, completed/success on the SHA's check-runs.
+- The intervening bookkeeping commits each minted their own green run — 44906324624 (ca31084f),
+  44906489729 (87a8ecef), 44906698441 (5a1cea47), all attempt 1 success — so the workflow is not
+  path-filtered away from board/evidence commits.
+- The prior fire's run 44891600918 on d3113afe stays green but is no longer the tip binding.
+
+Version hygiene: arm 6's premise resolved
+- `git describe --tags --always --dirty` at the new tip = `v0.2.0-280-g40b687d1`, with NO `-dirty`
+  suffix: the tracked .gitreins/tasks.yaml edit that dirtied the first fire's candidate is now
+  committed. The working tree carries only the untracked .gitreins/review-state.json (agent vcs
+  state, not product).
+- CHANGELOG still tops out at `## [v0.2.0] - 2026-10-21` with zero Unreleased markers — arm 2 stays FAIL.
+- Inventory restated at the new tip: 280 commits / 255 non-merge / 254 files since v0.2.0; conventional
+  classes feat 11, fix 29, docs 23, chore 25, test 3; 0 subject `!` markers and 0 `BREAKING CHANGE`
+  footers; path-classified 74 material commits vs 181 bookkeeping. Minor → v0.3.0 remains a proposal.
+
+Deployed surface
+- /home/kara/bin/canopyd unchanged: built 2026-11-21T12:43:24Z, commit=d3113afe, version
+  v0.2.0-274-gd3113afe-dirty, pid 418864 on *:8091; /healthz status ok, db up, schema_version 49.
+- scripts/check-deploy-staleness.sh: CURRENT (watched source 6aa480ad, lag -69344s under the 43200s
+  threshold); crash-loop delta 0, db container healthy.
+- The deployed commit is d3113afe, not the tip, but the only product-path delta is those two shell
+  probes, so the deployed binary is candidate-equivalent for this re-fire. Not a new finding.
+
+Blockers: unchanged in kind
+- RELEASE_SIGNING_KEY still absent — `gh secret list -R coding-hermes/hermes-canopy` returns nothing.
+  release.yml still cannot publish; tag run 39539678215 remains the proof. INT-CI-005 pending and
+  owner-supplied.
+- v0.2.0 still has no GitHub Release object: `gh release view v0.2.0` → release not found;
+  `gh release list` shows only v0.1.0 (2026-09-21). Tag refs are identical on both remotes and must
+  not be moved or recreated.
+- No candidate-bound GitReins verdict: no `.gitreins/history` file mentions 40b687d1 (d3113afe has 10
+  and ad63f9f1 has 12, all predating the tip). CI remains the authority.
+- No cut authorization names v0.3.0; a scheduled readiness sweep is not authorization.
+
+Decision
+- NO-GO / NO-CUT, unchanged in kind, carried with a superseded binding. No tag created, no tag moved,
+  no Release published, no worker dispatched.
+- Gate arms at the new tip: arm 1 partial (untracked review-state.json only), arm 2 FAIL, arm 3 FAIL,
+  arm 4 PASS (run 44906754678 on the exact head), arm 5 FAIL, arm 6 PASS (clean version string).
+  Arm 6 flips from FAIL to PASS only because the dirty vcs-state file got committed — not because of
+  any release work.
+- RELEASE-CANOPY-2026-11-21 still owns the only worker-executable gap (CHANGELOG v0.3.0 promotion +
+  release-path doc). Wave budget 2 carried unused again: every remaining arm is owner-gated or belongs
+  to that row.
+
