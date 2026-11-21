@@ -1,0 +1,22 @@
+# GATE-001 foreman verification — 2026-11-21T01:55Z
+
+Host tool: /home/kara/.hermes/scripts/acceptance_gate.py (NOT a git repo — no commit possible; sha256 below binds the artefact).
+8feb53b6c72e10fc840b91ed5de85ce83092165cfb26e0ff320a089a9e0c6920  /home/kara/.hermes/scripts/acceptance_gate.py
+
+## AC1 — QA-HERMES-CANOPY-50 no longer gets a flag complaint
+$ acceptance_gate.py audit /home/kara/hermes-canopy   # AFTER the fix
+WARN QA-HERMES-CANOPY-50: flag --purge resolved from `bunker destroy AGENT_ID server --help` (external CLI)
+
+## AC2 — an invented flag still FAILS (fail-closed net kept)
+$ validate scratch row: "bunker list --frobnicate" + "bunker destroy \$ID --server dedi-2 --statuss"
+REJECT: names a flag that does not exist: --frobnicate; names a flag that does not exist: --statuss
+$ validate scratch row: "--frobnicate" with no CLI attribution (daemon banner text)
+REJECT: names a flag that does not exist: --frobnicate
+
+## GATE ARM — audit totals
+$ acceptance_gate.py audit /home/kara/hermes-canopy
+audit: 29 open rows, 1 failing, 28 passing
+FAIL INT-CI-011: path not in repo: scripts/test-mcp-canary-pin.sh
+NOTE: the arm text expected 2 failing rows (DOCS-1 + README-3 empty-criteria rows); both now PASS on the live board,
+so the residual is INT-CI-011 alone — its criterion names scripts/test-mcp-canary-pin.sh, the file its own dispatched worker is creating.
+Delta proved: FAIL set BEFORE the fix = {QA-HERMES-CANOPY-50, INT-CI-011}; AFTER = {INT-CI-011} — exactly the target row cleared, nothing else moved.

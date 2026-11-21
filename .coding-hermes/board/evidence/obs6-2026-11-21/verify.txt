@@ -1,0 +1,28 @@
+# OBS-6 foreman verification — 2026-11-21T01:35Z @ master ff547e69
+
+## AC1+AC2: writer-coverage + orphan-detector tests
+=== RUN   TestEveryDeclaredSeriesHasAWriter
+--- PASS: TestEveryDeclaredSeriesHasAWriter (0.00s)
+=== RUN   TestOrphanDetectorNamesTheOrphan
+--- PASS: TestOrphanDetectorNamesTheOrphan (0.00s)
+PASS
+ok  	github.com/coding-hermes/hermes-canopy/internal/telemetry	0.005s
+
+## AC3: label safety (sentinel path never lands in a label)
+--- PASS: TestDurationHistogramLabelsAreBounded (0.00s)
+--- PASS: TestUnlabelledDurationFamiliesHaveNoLabels (0.00s)
+--- PASS: TestIncUpstreamGatewayCheckErrorClosesTheLabelSet (0.00s)
+--- PASS: TestSetBuildInfoNeverServesEmptyLabels (0.00s)
+--- PASS: TestUnmatchedRequestsNeverLeakTheRawPath (0.00s)
+--- PASS: TestUnmatchedCounterOnlyMovesOnUnmatched (0.00s)
+--- PASS: TestUnmatchedUnderMountedSubrouter (0.00s)
+ok  	github.com/coding-hermes/hermes-canopy/internal/telemetry	0.012s
+
+## AC2 RED-PROOF: blank the canopy_node_count writer entry, expect named orphan
+$ sed -i {SeriesNodeCount, \"\"} internal/telemetry/metrics.go && go test -run TestEveryDeclaredSeriesHasAWriter
+--- FAIL: TestEveryDeclaredSeriesHasAWriter (0.00s)
+    metrics_writers_test.go:42: declared series with NO writer (permanent-zero orphans): canopy_node_count
+rc=1  (file restored byte-identical afterwards: git diff --stat internal/telemetry/metrics.go = empty)
+
+## AC4: CI gate inclusion
+62:        run: go test ./... -short -count=1 -timeout=300s

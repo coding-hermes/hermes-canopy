@@ -1548,3 +1548,5 @@
 {"id":20261384,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DF-HERMES-CANOPY-101","detail":"wave16 commit 68489afd judge c744177b PASS live canary MCP_SDK_CANARY_OK"}
 {"id":20261385,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DEPLOY-STALE-1-R2","detail":"wave16 commit cf9d62b5 judge 789f4784 PASS battery 92/0"}
 {"id":20261386,"timestamp":"2026-11-20T17:58:10Z","actor":"foreman","event_type":"task_completed","task_id":"DOC-17","detail":"wave16 commit 6374d3bd judge f5e78c32 PASS"}
+{"id":20261387,"timestamp":"2026-11-21T01:28:01Z","actor":"foreman","event_type":"task_created","task_id":"INT-CI-011","detail":"{\"id\":\"INT-CI-011\",\"status\":\"pending\"}"}
+{"id":20261388,"timestamp":"2026-11-21T01:28:03Z","actor":"foreman","event_type":"task_created","task_id":"QA-HERMES-CANOPY-058","detail":"{\"id\":\"QA-HERMES-CANOPY-058\",\"status\":\"pending\"}"}

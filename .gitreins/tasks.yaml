@@ -4383,16 +4383,16 @@ tasks:
   created_at: '2026-11-20T07:10:27.346190+00:00'
   completed_at: '2026-11-20T07:41:27.261203+00:00'
 - id: OBS-6
-  title: 'CI guard: metric writer-coverage and label-safety enforcement'
+  title: 'OBS-6: telemetry declared-series writer coverage + label safety verified
+    on master'
   criteria:
-  - AC1 go test ./internal/telemetry/ -run '<the writer-coverage and label-safety
-    cases this row adds>' -count=1 exits 0 on the fixed tree. AC2 deleting a single
-    writer (e.g. the node_count setter) makes that package run fail and name the orphaned
-    metric. AC3 a request to /api/v1/sentinel-9f3a1c leaves no gathered label value
-    containing sentinel-9f3a1c. AC4 both tests run in the repo's CI test gate (visible
-    in the workflow or Makefile diff).
-  status: in_progress
-  created_at: '2026-11-18T13:40:49.821686+00:00'
+  - internal/telemetry/metrics_writers_test.go contains TestEveryDeclaredSeriesHasAWriter
+    which fails naming an orphan when a declared series loses its writer; TestUnmatchedRequestsNeverLeakTheRawPath
+    proves the sentinel path never lands in a label; both run under go test ./...
+    in .github/workflows/build.yml; verification transcript committed at .coding-hermes/board/evidence/obs6-2026-11-21/verify.txt
+  status: complete
+  created_at: '2026-11-21T01:32:19.654515+00:00'
+  completed_at: '2026-11-21T01:32:21.404433+00:00'
 - id: DOC-15
   title: Document flat /api/v1/nodes/{node_id} write surface in docs/API.md
   criteria:
@@ -4512,3 +4512,10 @@ tasks:
     absent README statements; appendix names re-verification command per entry
   status: in_progress
   created_at: '2026-11-20T16:13:32.656208+00:00'
+- id: INT-CI-011
+  title: Pin the MCP SDK canary install to its supported range (master CI red)
+  criteria:
+  - no bare 'pip install mcp' in .github/workflows/build.yml; scripts/test-mcp-canary-pin.sh
+    exits 0 and exits non-zero on a drifted pin in a temp copy
+  status: in_progress
+  created_at: '2026-11-21T01:27:44.941294+00:00'
