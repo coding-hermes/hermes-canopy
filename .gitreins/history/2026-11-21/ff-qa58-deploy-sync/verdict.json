@@ -1,0 +1,63 @@
+{
+  "task_id": "QA-HERMES-CANOPY-058",
+  "task_title": "QA harness deploy lag: deployed ~/.hermes/scripts/bunker-qa.sh trails the tracked mirror by 1193 lines",
+  "task_criteria": [
+    "Deployed bunker-qa.sh is byte-identical to the tracked mirror (cmp -s exits 0); make qa-runner-drift and qa-runner-drift-selftest pass against the deployed path; the lag (wc -l gap) is 0."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/coding-hermes-tools",
+  "branch": "master",
+  "commit": "1d3f247",
+  "pass_class": "foreman-ad-hoc-verified",
+  "tier2_skipped": true,
+  "items": [
+    {
+      "criterion": "arm 1 — pre-sync lag reproduced (row premise true)",
+      "status": "PASS",
+      "detail": "Pre-sync: deployed wc -l 4770 sha256 7f82eb5d496e588d..., mirror wc -l 5963 sha256 db98fcfbc802eeb5... (matches PM cycle-3 measurement exactly; gap 1193 lines)."
+    },
+    {
+      "criterion": "arm 2 — deployed copy synced byte-identically to tracked mirror @1d3f247",
+      "status": "PASS",
+      "detail": "install -m 775 coding-hermes-tools/bunker-qa.sh ~/.hermes/scripts/bunker-qa.sh; cmp -s exit 0; sha256 of BOTH files after sync = db98fcfbc802eeb5d689389209f26bb1f04715e844a01610532af4b5bb6642c5; deployed wc -l 5963 (lag 1193 -> 0)."
+    },
+    {
+      "criterion": "arm 3 — make qa-runner-drift grades the DEPLOYED path green",
+      "status": "PASS",
+      "detail": "make qa-runner-drift -> PASS (11 arms) incl. rr-jqctx-coverage (9/9), rr-rendered (9/9), rr-mirror-identity (db98fcfbc802)."
+    },
+    {
+      "criterion": "arm 4 — the drift gate itself is red-provable (not a pass-only guard)",
+      "status": "PASS",
+      "detail": "make qa-runner-drift-selftest -> PASS (control green 11 arms; strip-jq regression caught naming 7 arms; strip-jqctx regression caught naming the JQCTX arm)."
+    },
+    {
+      "criterion": "arm 5 — rollback path preserved",
+      "status": "PASS",
+      "detail": "Pre-sync deployed copy preserved at /tmp/bunker-qa.sh.pre-QA58-backup (sha256 7f82eb5d496e588d...)."
+    }
+  ],
+  "merge_recommendation": "no_concerns_found",
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "Foreman ad-hoc verification run: deploy-only change outside any git tree (deployed path is not tracked), so no repo commit and no tier-2 judge. Every arm was re-run as a raw shell command and captured in probes.txt.",
+      "steps": [
+        {
+          "id": "probes",
+          "type": "script",
+          "passed": true,
+          "output": "see probes.txt (sha256sum x2 pre; cmp -s; sha256sum x2 post; make qa-runner-drift; make qa-runner-drift-selftest; wc -l post)"
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "lane": "hermes-canopy-foreman",
+    "tick": "hermes-canopy-foreman-2026-11-21-08-36-09",
+    "probe_log": ".gitreins/history/2026-11-21/ff-qa58-deploy-sync/probes.txt",
+    "evidence_file": ".coding-hermes/board/evidence/QA-HERMES-CANOPY-058-deploy-sync-2026-11-21.md"
+  }
+}

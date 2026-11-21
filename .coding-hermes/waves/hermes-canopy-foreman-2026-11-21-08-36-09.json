@@ -1,0 +1,39 @@
+{
+  "tick": "hermes-canopy-foreman-2026-11-21-08-36-09",
+  "created_at": "2026-11-21T13:45:00Z",
+  "budget": 3,
+  "dispatched": 2,
+  "workers": [
+    {
+      "task_id": "GATE-002",
+      "project": "coding-hermes-tools",
+      "worktree": "/home/kara/worktrees/coding-hermes-tools-GATE-002",
+      "branch": "wt/GATE-002",
+      "base_sha": "1d3f247",
+      "model": "openai/gpt-6.1-terra",
+      "provider": "xkiro",
+      "brief": "/tmp/brief-GATE-002-tick083609.md",
+      "files": ["scripts/acceptance_gate.py (new)", "tests/test_acceptance_gate.py (new)", "scripts/<sync> (new)", "README section", "ci.yml/make wiring"],
+      "reason": "GATE-001 fix lives at an uncommittable ~/.hermes path; vendor it with tests + reproducible sync"
+    },
+    {
+      "task_id": "QA-HERMES-CANOPY-51",
+      "project": "coding-hermes-tools",
+      "worktree": "/home/kara/worktrees/coding-hermes-tools-QA-HERMES-CANOPY-51",
+      "branch": "wt/QA-HERMES-CANOPY-51",
+      "base_sha": "1d3f247",
+      "model": "openai/gpt-6.1-terra",
+      "provider": "xkiro",
+      "brief": "/tmp/brief-QA-51-tick083609.md",
+      "files": ["bunker-qa.sh", "test_bunker_qa_docker_build_context.sh (new)", "ci.yml/make wiring"],
+      "reason": "docker_build grades valid deploy/Dockerfile repos FAIL (subdir context); recurred in 2026-11-20 battery (QA-55)"
+    }
+  ],
+  "independence": "both workers target coding-hermes-tools at base 1d3f247 but disjoint file seams: GATE-002 adds new files (scripts/acceptance_gate.py, tests/, sync script, README), QA-51 edits bunker-qa.sh + adds its own test; no shared paths, no depends_on edges",
+  "foreman_direct": [
+    "QA-HERMES-CANOPY-058 (P1): sync deployed ~/.hermes/scripts/bunker-qa.sh from tracked mirror + arms (cmp, qa-runner-drift, selftest)",
+    "README-1-R2: land the staged .env.example + .gitreins/config.yaml allow-line in worktrees/hermes-canopy-README-1-R2 (PM UNBLOCK 2026-11-21: DO NOT REDO)",
+    "QA-HERMES-CANOPY-44-R2: bind foreman note — deployed copy already carries disconnect_log_valid guard; remediation = QA-058 deploy; live re-proof tracked by QA-55 battery rerun"
+  ],
+  "slot_3_reason": "WAVE_BUDGET=3 but only 2 mutually independent coding rows exist: all other ready QA rows share the bunker-qa.sh file seam with QA-51 (serial, next tick), host/owner rows route (QA-45/50/56/57 bunker hosts, INT-CI-005 secrets, CAN-OPS-02/03 ops), README-1-R2 + QA-058 are foreman-direct finishes, TRACE-001/DF-25 are process/watch rows, FTR-06 needs spec decomposition"
+}

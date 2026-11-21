@@ -1,0 +1,14 @@
+README-1-R2 acceptance arms — re-run 2026-11-21 in worktree /home/kara/worktrees/hermes-canopy-README-1-R2 @ 104bc5ec (rebased onto origin/master 36c980fc)
+
+AC1: grep -c '^CANOPY_FILE_ROOT=' .env.example -> 1
+     grep -c '^CONTEXT_MODEL_WINDOWS=' .env.example -> 1
+AC2: FromEnv key loop over internal/config/config.go -> NO MISSING lines
+     Broadened loop over ALL os.Getenv keys in internal/ + cmd/ (non-test) -> NO MISSING lines
+     (note: credential-shaped / opt-in keys documented as commented override lines per the
+     file's own convention — CANOPY_DB_URL, CANOPY_SERVER_URL, test-infra keys)
+Gate arm: grep -c '\.env\.example' .gitreins/config.yaml -> 2 (baseline on master: 0);
+     commit-time tier-1 guard ran WITH the allow-line in effect: secrets clean
+     (gitleaks + builtin cross-check), go_* correctly skipped (no Go files staged).
+
+Residual probe: CANOPY_DB_URL initially flagged by a stricter '^KEY=' probe; verified present
+as a commented override with DSN example + precedence note (config.go:473, docs/ENV.md line 25).

@@ -1,0 +1,30 @@
+# Foreman evidence run ff-qa58-deploy-sync — QA-HERMES-CANOPY-058 arms, run 2026-11-21 (tick hermes-canopy-foreman-2026-11-21-08-36-09)
+
+## arm 1: pre-sync state (row premise)
+sha256sum deployed mirror:
+7f82eb5d496e588d853d4f66a2f1dfe9a7d00d64e5b4ecd60ef4f4b30f2651dc  /home/kara/.hermes/scripts/bunker-qa.sh
+db98fcfbc802eeb5d689389209f26bb1f04715e844a01610532af4b5bb6642c5  /home/kara/coding-hermes-tools/bunker-qa.sh
+wc -l: deployed 4770, mirror 5963 (gap 1193 — matches PM cycle-3 measurement)
+
+## arm 2: sync + byte-identity
+install -m 775 /home/kara/coding-hermes-tools/bunker-qa.sh /home/kara/.hermes/scripts/bunker-qa.sh
+cmp -s mirror deployed -> exit 0 (ARM1 cmp -s: EXIT 0)
+sha256 after sync: BOTH = db98fcfbc802eeb5d689389209f26bb1f04715e844a01610532af4b5bb6642c5
+
+## arm 3: make qa-runner-drift (against deployed path)
+PASS rr-jqctx-defined
+PASS rr-jqctx-coverage (9/9 ci-pass details)
+PASS rr-rendered (9/9 rendered ci-pass cells)
+PASS rr-mirror-identity (db98fcfbc802)
+qa-runner-drift: PASS (11 arms)
+
+## arm 4: red-proof of the drift gate itself
+qa-runner-drift --self-test: PASS (control green 11 arms; strip-jq caught naming 7 arms; strip-jqctx caught naming the JQCTX arm)
+
+## arm 5: rollback
+pre-sync deployed copy preserved: /tmp/bunker-qa.sh.pre-QA58-backup (sha 7f82eb5d496e588d...)
+post-sync wc -l deployed: 5963 (lag 0)
+
+## safety check before sync
+pgrep for live bunker-qa batteries matched only the foreman's OWN worker dispatch cmdline
+(brief text mentions bunker-qa.sh) — no live QA battery on the host; swap safe.
