@@ -4392,7 +4392,7 @@ tasks:
     in .github/workflows/build.yml; verification transcript committed at .coding-hermes/board/evidence/obs6-2026-11-21/verify.txt
   status: complete
   created_at: '2026-11-21T01:32:19.654515+00:00'
-  completed_at: '2026-11-21T01:32:21.404433+00:00'
+  completed_at: '2026-11-21T01:37:15.661651+00:00'
 - id: DOC-15
   title: Document flat /api/v1/nodes/{node_id} write surface in docs/API.md
   criteria:
@@ -4517,5 +4517,6 @@ tasks:
   criteria:
   - no bare 'pip install mcp' in .github/workflows/build.yml; scripts/test-mcp-canary-pin.sh
     exits 0 and exits non-zero on a drifted pin in a temp copy
-  status: in_progress
+  status: complete
   created_at: '2026-11-21T01:27:44.941294+00:00'
+  completed_at: '2026-11-21T01:50:42.402374+00:00'
