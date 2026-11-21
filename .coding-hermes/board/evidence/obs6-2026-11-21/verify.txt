@@ -26,3 +26,15 @@ rc=1  (file restored byte-identical afterwards: git diff --stat internal/telemet
 
 ## AC4: CI gate inclusion
 62:        run: go test ./... -short -count=1 -timeout=300s
+
+## Tier-2 judge verdict (GitReins)
+
+run_dir      : .gitreins/history/2026-11-21/d25ab7b4/verdict.json
+commit graded: 8ef4cf8fdf175eface3db06f69d72de3557eb7fa
+passed       : true   (pass_class=judged, evaluated_at 2026-11-21T01:40:38Z)
+prior run    : .gitreins/history/2026-11-21/be3faf10 = passed:false on ff547e69
+               (pre-evidence tree; superseded by the graded run above)
+
+Note: boardctl requires --evidence-run-id to be a single directory component
+directly under .gitreins/history/ and refuses nested <date>/<run> ids, so the
+row carries the date component and the exact run id is bound here.
