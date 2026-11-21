@@ -78,10 +78,17 @@ jobs:
           CANOPY_TEST_DB_URL: postgres://canopy:canopy@localhost:5437/canopy?sslmode=disable
           CANOPY_REQUIRE_DB: "1"
 
+      # Guard (INT-CI-006): the install specifier below must stay inside the
+      # canary's supported range (scripts/mcp_sdk_canary.py MIN/MAX_MCP_VERSION).
+      # The unpinned install this replaces let upstream mcp 2.3.0 break this job
+      # at the very end of the build (run 44789256392); this step fails in ~1s.
+      - name: MCP SDK canary pin check
+        run: bash scripts/test-mcp-canary-pin.sh
+
       - name: MCP SDK canary
         run: |
           python3 -m venv /tmp/mcp45-venv
-          /tmp/mcp45-venv/bin/pip install mcp
+          /tmp/mcp45-venv/bin/pip install 'mcp>=1.30.0,<1.31.0'
           go build -o /tmp/canopyd-mcp-sdk ./cmd/canopyd
           /tmp/mcp45-venv/bin/python scripts/mcp_sdk_canary.py
         env:
