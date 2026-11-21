@@ -1,5 +1,11 @@
 guards:
   secrets: true
+  # README-1-R2 (I-8): .env.example is a TEMPLATE of placeholder keys, tracked
+  # by design; gitleaks content scan still applies to it. Real .env files stay
+  # blocked by the path class (red-proved 2026-11-20 before landing this).
+  sensitive_paths:
+    allow:
+      - ".env.example"
   lint: true
   tests: true
   test_mode: full
