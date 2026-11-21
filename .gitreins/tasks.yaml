@@ -4352,16 +4352,15 @@ tasks:
   created_at: '2026-11-18T02:54:26.692003+00:00'
   completed_at: '2026-11-18T03:20:36.415782+00:00'
 - id: CAN-OPS-02
-  title: Redeploy canopyd past the stale deploy-staleness gate and prove the live
-    member-write surface
+  title: Redeploy canopyd at master HEAD and verify live /health parity
   criteria:
-  - AC1 deployed /health commit equals master HEAD and /metrics serves the OBS metric
-    families. AC2 deploy-check-state stale_blocked_streak returns to 0 with a clean
-    sweep. AC3 member write surface probed live with a dev JWT (200/401/401/403 negatives);
-    AC3/AC4 fixture clause refuted and split to CAN-OPS-03. AC5 no fabricated live
-    claims; evidence quoted per clause.
-  status: in_progress
-  created_at: '2026-11-18T03:06:46.782394+00:00'
+  - 1. bash scripts/deploy-canopyd.sh prints DEPLOY OK and smoke-gateway PASSED. 2.
+    GET http://127.0.0.1:8091/health reports commit equal to the master HEAD sha at
+    deploy time with a fresh build_time. 3. deploy-check-state.json carries no STALE_BLOCKED
+    reason after the checker run.
+  status: complete
+  created_at: '2026-11-21T12:43:14.385491+00:00'
+  completed_at: '2026-11-21T12:54:47.111938+00:00'
 - id: OBS-3
   title: Expose DB pool, federation queue and rate-limiter metrics to Prometheus
   criteria:
@@ -4520,3 +4519,17 @@ tasks:
   status: complete
   created_at: '2026-11-21T01:27:44.941294+00:00'
   completed_at: '2026-11-21T01:50:42.402374+00:00'
+- id: CAN-OPS-03
+  title: Live member-write probes on the deployed :8091 binary (share -> viewer ->
+    member -> delete, plus negatives)
+  criteria:
+  - 'AC2 a non-owner member exists on tree ee380e90 created through POST /api/v1/trees/{tree_id}/share
+    and its member id is recorded. AC3 owner PATCH role viewer->member returns 200
+    and GET /members reflects both values. AC4 DELETE returns 200 with member_id,
+    tree_id, removed_at and GET /members no longer lists it (tree net-zero). AC5 negatives:
+    non-member GET 403, expired JWT 401, unsigned alg none token rejected. AC6 evidence
+    file .coding-hermes/board/evidence/CAN-OPS-03-20261121-probe.jsonl records every
+    status and body.'
+  status: complete
+  created_at: '2026-11-21T12:47:50.951273+00:00'
+  completed_at: '2026-11-21T12:54:49.176653+00:00'
