@@ -1567,3 +1567,7 @@
 {"id":20261403,"timestamp":"2026-11-21T09:51:54Z","actor":"foreman","event_type":"task_completed","task_id":"QA-HERMES-CANOPY-51","detail":"{\"status\":\"complete\"}"}
 {"id":20261404,"timestamp":"2026-11-21T12:54:30Z","actor":"foreman","event_type":"task_completed","task_id":"CAN-OPS-02","detail":"{\"status\":\"complete\"}"}
 {"id":20261405,"timestamp":"2026-11-21T12:54:36Z","actor":"foreman","event_type":"task_completed","task_id":"CAN-OPS-03","detail":"{\"status\":\"complete\"}"}
+{"id":20261406,"timestamp":"2026-11-21T12:58:40Z","actor":"foreman","event_type":"task_created","task_id":"QA-HERMES-CANOPY-060","detail":"{\"id\":\"QA-HERMES-CANOPY-060\",\"status\":\"pending\"}"}
+{"id":20261407,"timestamp":"2026-11-21T12:58:46Z","actor":"foreman","event_type":"task_created","task_id":"QA-HERMES-CANOPY-061","detail":"{\"id\":\"QA-HERMES-CANOPY-061\",\"status\":\"pending\"}"}
+{"id":20261408,"timestamp":"2026-11-21T12:59:06Z","actor":"foreman","event_type":"task_updated","task_id":"QA-HERMES-CANOPY-061","detail":"{\"status\":\"pending\"}"}
+{"id":20261409,"timestamp":"2026-11-21T12:59:57Z","actor":"foreman","event_type":"task_updated","task_id":"QA-HERMES-CANOPY-061","detail":"{\"status\":\"pending\"}"}
