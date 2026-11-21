@@ -142,3 +142,15 @@ Decision
 - Wave budget 2 carried unused: CI is green at the candidate and every remaining blocker is
   either owner-gated or a single bounded repo task belonging to the foreman, so there was no
   attributable red to hand a releng worker.
+
+Candidate reconciliation (shared checkout moved mid-sweep)
+- The measurements above were taken against d3113afe. While this sweep ran, a sibling foreman
+  committed into the same shared checkout twice: ad63f9f1 (adds scripts/canops02-sse-probe.sh and
+  scripts/canops03-member-probe.sh plus their CAN-OPS-02/03 evidence) and ca31084f (board +
+  .gitreins/tasks.yaml bookkeeping, closes CAN-OPS-02/03).
+- Product runtime scope is unchanged across d3113afe..87a8ecef: the only non-bookkeeping paths are
+  the two probe scripts, so the census, semver derivation and gate arms above still stand.
+- CI: d3113afe run 44891600918 completed/success. ca31084f run 44906324624 and this tick's
+  board-only commit run 44906489729 were in_progress at 2026-11-21T12:58Z — not yet proven.
+  Anyone re-opening the cut decision must re-confirm CI on the then-current tip.
+
