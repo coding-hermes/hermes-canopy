@@ -1555,3 +1555,6 @@
 {"id":20261391,"timestamp":"2026-11-21T01:57:17Z","actor":"foreman","event_type":"task_completed","task_id":"GATE-001","detail":"{\"status\":\"complete\"}"}
 {"id":20261392,"timestamp":"2026-11-21T01:57:43Z","actor":"foreman","event_type":"task_created","task_id":"GATE-002","detail":"{\"id\":\"GATE-002\",\"status\":\"pending\"}"}
 {"id":20261393,"timestamp":"2026-11-21T01:58:18Z","actor":"foreman","event_type":"task_completed","task_id":"QA-HERMES-CANOPY-54","detail":"{\"status\":\"complete\"}"}
+{"id":20261394,"timestamp":"2026-11-21T07:08:50Z","actor":"foreman","event_type":"task_updated","task_id":"CAN-OPS-02","detail":"{\"status\":\"pending\"}"}
+{"id":20261395,"timestamp":"2026-11-21T07:08:54Z","actor":"foreman","event_type":"task_updated","task_id":"FTR-06","detail":"{\"status\":\"pending\"}"}
+{"id":20261396,"timestamp":"2026-11-21T07:09:05Z","actor":"foreman","event_type":"task_updated","task_id":"README-1-R2","detail":"{\"status\":\"pending\"}"}
