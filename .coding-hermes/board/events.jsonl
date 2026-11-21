@@ -1562,3 +1562,5 @@
 {"id":20261398,"timestamp":"2026-11-21T07:27:20Z","actor":"foreman","event_type":"task_updated","task_id":"QA-HERMES-CANOPY-058","detail":"{\"title\":\"P1 — QA harness deploy lag: deployed ~/.hermes/scripts/bunker-qa.sh (4770 lines) trails the tracked mirror coding-hermes-tools/bunker-qa.sh (5963 lines) by 1193 lines\"}"}
 {"id":20261399,"timestamp":"2026-11-21T08:43:55Z","actor":"foreman","event_type":"task_completed","task_id":"QA-HERMES-CANOPY-058","detail":"{\"status\":\"complete\"}"}
 {"id":20261400,"timestamp":"2026-11-21T08:48:08Z","actor":"foreman","event_type":"task_completed","task_id":"README-1-R2","detail":"{\"status\":\"complete\"}"}
+{"id":20261401,"timestamp":"2026-11-21T09:15:04Z","actor":"foreman","event_type":"task_created","task_id":"QA-HERMES-CANOPY-059","detail":"{\"id\":\"QA-HERMES-CANOPY-059\",\"status\":\"pending\"}"}
+{"id":20261402,"timestamp":"2026-11-21T09:31:51Z","actor":"foreman","event_type":"task_completed","task_id":"GATE-002","detail":"{\"status\":\"complete\"}"}
