@@ -29,7 +29,7 @@ LDFLAGS   = -ldflags="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X mai
 HTTP_ADDR ?= :8091
 DB_PORT   ?= 5437
 
-.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication validate-wails-desktop test-wails-desktop-contract build-wails docs-check docs-check-test vet lint tidy clean run docker
+.PHONY: all build deploy install-deploy-timer build-embed build-ui test test-short test-chaos-disconnect test-proxy validate-release-manifest-publication validate-wails-desktop test-wails-desktop-contract build-wails docs-check docs-check-test ci-pin-check vet lint tidy clean run docker
 
 all: build test vet lint
 
@@ -38,6 +38,12 @@ build:
 
 docs-check:
 	bash scripts/docs-check.sh
+
+# INT-CI-006: the MCP SDK canary install in .github/workflows/build.yml must
+# stay inside the canary's supported range (MIN/MAX_MCP_VERSION in
+# scripts/mcp_sdk_canary.py). Offline, ~1s, fails on a bare `pip install mcp`.
+ci-pin-check:
+	bash scripts/test-mcp-canary-pin.sh
 
 docs-check-test:
 	bash scripts/docs-check-test.sh
