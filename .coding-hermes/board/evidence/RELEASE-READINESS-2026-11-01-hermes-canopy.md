@@ -156,10 +156,16 @@ Candidate reconciliation (shared checkout moved mid-sweep)
 
 ---
 
-## Sweep 2026-11-21 — tick hermes-canopy-releng-2026-11-21-12-28-55 (second fire / re-fire)
+## Sweep 2026-11-21 — tick hermes-canopy-releng-2026-11-21-12-28-55 (third fire; fire-c)
 
-Re-fire of the tick above. Delta only; the first-fire section stands and its decision is carried,
-with the candidate/CI binding superseded to the newer tip.
+Firing ordinal corrected after publication: this tick id has now fired three times, not two.
+Fire a is this document's first section, committed as 87a8ecef. Fire b, a mid-tick candidate
+reconcile, committed as 5a1cea47 and appended 12 lines to the fire-a section without opening a
+section of its own — which is why fire a and fire b are not two headings. Fire c is this section.
+The earlier "second fire / re-fire" heading was an undercount and is superseded here.
+
+Delta only; the fire-a section stands and its decision is carried, with the candidate/CI binding
+superseded to the newer tip.
 
 Identity at re-measure (2026-11-21T13:24Z–13:31Z)
 - Candidate 40b687d1f99ea3979247f5d79d43798ef00793b8, simultaneously local HEAD, origin/master and
