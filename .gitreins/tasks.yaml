@@ -4548,3 +4548,14 @@ tasks:
   status: complete
   created_at: '2026-11-21T19:24:14.198451+00:00'
   completed_at: '2026-11-22T11:00:24.181698+00:00'
+- id: CAN-HON-02
+  title: Port SPEC-023 shared workspace UI corpus into canopy specs
+  criteria:
+  - 'specs/SPEC-023-shared-workspace-ui.md exists with first heading ''SPEC-023: Shared
+    Workspace UI (Web/PWA)'' and a provenance line naming Helix origin sha 4d6d71a7ad62779fe2b73c67413004c46ecdec79
+    and origin location (Helix repository, specs directory, shared-workspace-ui.md);
+    every remaining SPEC-023 cite in internal frontend docs CHANGELOG.md resolves
+    to an existing local spec path or names the Helix origin file; go build ./...
+    and go vet ./... and go test ./internal/handler -count=1 exit 0'
+  status: in_progress
+  created_at: '2026-11-22T19:41:48.945183+00:00'
