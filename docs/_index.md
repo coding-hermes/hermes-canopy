@@ -10,3 +10,4 @@ The canonical documentation index is `docs/README.md`. This compatibility entry 
 - [ENV.md](ENV.md) — environment variable reference
 - [API.md](API.md) — API reference
 - [traceability-doctrine.md](traceability-doctrine.md) — traceability doctrine for board rows
+- `docs/releases/README.md` — release-path documentation (v* tag workflow, packaging, signed manifest gate); subdirectory, indexed from the canonical docs/README.md

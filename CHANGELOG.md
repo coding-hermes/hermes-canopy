@@ -1,5 +1,100 @@
 # Changelog
 
+## [Unreleased]
+
+_Nothing yet._
+
+## [v0.3.0] - 2026-11-22 (prep — no tag cut yet)
+
+Range: `v0.2.0`..`d3113afe` — 249 non-merge commits (11 `feat`, 29 `fix`,
+23 `docs`, 23 `chore`, 3 `test`, 1 `ci`, plus 6 non-conventional product
+commits, with the remaining 153 board, releng, foreman, QA, dogfood and
+gitreins bookkeeping commits summarized here rather than listed). No
+`BREAKING CHANGE` footer and no `!` type token in the range; semver minor.
+
+### Added
+
+- **Observability (OBS series)** — minimal viable Prometheus set: scrape job,
+  build info, gateway gauge and the `/metrics` exemption (`a642dbcc`); DB-backed
+  tree/node gauges exercised against real PG (`a483ce3e`, test commit).
+- Transport and relay metrics exposed to Prometheus (`164ebe74`).
+- Duration histograms for upstream proxy, context compile and card export
+  (`d9bf88f5`, OBS-4).
+- Data-growth and relay cert metrics (`c9acd4d0`).
+- Stall saturation metrics (`da544fe0`).
+- Tree membership PATCH/DELETE routes (`8cdf3bce`, SPEC-API-06 §10–§11,
+  CAN-MEM-02).
+- Share dialog reads the real membership API; the mock is deleted
+  (`d17b0485`, CAN-MEM-03).
+- Wails v3 desktop packaging contract (`da98b0f0`, FTR-06).
+- `canopyd config check` — SQLite config is verifiable without booting the
+  server (`3e07215c`).
+- `canopyd token` — mint and verify dev JWTs from the CLI (`d1a5c45c`).
+- Profile ids exposed for MLS group creation (`3d6d7d05`,
+  RVW2-CANOPY-104).
+
+### Fixed
+
+- Gateway: the documented single 202 envelope is returned for
+  `POST /api/v1/gateway/runs` (`0850433f`).
+- Gateway: a 30s client timeout no longer kills long gateway runs; dropped
+  streams are reconciled (`7999ba51`).
+- Health: `/health` reports database outage (`387b22d2`, CAN-OPS-01).
+- Health: `/health` checks the dependencies map, with a DB-container
+  watchdog (`a3fa6ee3`, CAN-OPS-01 r2).
+- Cards: the includeCards compile path is unblocked and the cards-surface
+  wedge is gone (`fc527c30`).
+- Tree detail populates the members roster via `include_members`
+  (`950937a2`, CAN-DB-01).
+- Metrics: catch-all resolution counted as unmatched in the live-wire fix
+  (`d1fe1b92`, CAN-MET-01).
+- Frontend: author display name resolved from the payload with UUIDs treated
+  as opaque (`2b7cd01e`).
+- Frontend: fresh build and bundle budget made explicit (`01f8631b`,
+  REVIEW-CANOPY-2026-10-27-FRONTEND).
+- Frontend: deprecated service worker bundle option replaced (`355cb914`,
+  REVIEW-CANOPY-2026-10-27-SW-BUILD-DEPRECATION).
+- Composer: reply goes to the selected node (`b8b422ed`, DF-HERMES-CANOPY-93).
+- API: tree-scoped node method errors are enveloped (`f16fa535`,
+  DF-HERMES-CANOPY-95).
+- API: flat `/nodes` MethodNotAllowed wrapped in the standard error envelope
+  (`b21f37ac`, DF-HERMES-CANOPY-92).
+- API: `INVALID_BODY` messages differentiate valid JSON with a wrong schema
+  (`2b2bc573`, DF-94).
+- Wails: explicit backend paths are validated (`4d81b30c`, INT-CI-007).
+- Go modules: `prometheus/client_model` promoted to a direct require so
+  `go mod tidy` stops breaking the build (`e8c4fa43`, INT-CI-010).
+- SQLite: live exports are snapshot-consistent (`864db455`,
+  DF-HERMES-CANOPY-97).
+- docs-check: false negatives closed (`0d6b1da7`, DF-HERMES-CANOPY-96).
+- docs-check: false-negative coverage completed (`47f0ee9b`,
+  DF-HERMES-CANOPY-96).
+- docs-check: command-path validation tightened (`f33e0ec4`,
+  DF-HERMES-CANOPY-96).
+- docs: README docs drift check added (`c6686a5c`, README-11).
+- docs: blockquoted ghost-env docs drift closed (`26a93e45`).
+- docs: ENV.md read-site citations updated to current HEAD (DOC-9), landed
+  across four passes (`91054029`, `80bb6d74`, `3a3a7f9d`, `252d0af9`).
+- Deploy: the checker's own board ledger is ignored by the deploy safety
+  gate (`edb31d2f`, DEPLOY-STALE-1).
+- Deploy: other tracked hourly bookkeeping ignored by the deploy gate
+  (`401253a4`).
+- Deploy: untracked non-deployable debris (wave manifests, lane dumps) no
+  longer trips the gate (`cf9d62b5`).
+- Canary: `mcp_sdk_canary.py` adapted to the current MCP SDK arity with a
+  version gate (`68489afd`).
+
+### Notes
+
+- CI on the candidate tip `d3113afe` is green (27/27 steps on the recorded
+  tag-candidate run).
+- Release tooling is workflow-only (`.github/workflows/release.yml` on `v*`
+  tags); there is no `make release` target. The release path, including the
+  `RELEASE_SIGNING_KEY` refusal-to-publish-unsigned rule, is documented in
+  `docs/releases/README.md`.
+- The deployed `/home/kara/bin/canopyd` is NOT part of this cut; redeploying
+  it is a separate step.
+
 ## [v0.2.0] - 2026-10-21
 
 Range: `v0.1.0`..`v0.2.0` — 368 non-merge commits (22 `feat`, 56 `fix`,

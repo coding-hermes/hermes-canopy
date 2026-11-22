@@ -22,3 +22,7 @@ This index is the canonical starting point for the repository's top-level docume
 - [SQLITE-RUNTIME.md](SQLITE-RUNTIME.md) — SQLite runtime self-check, export command, and refusal behavior for incomplete serving support.
 - [scope-honesty.md](scope-honesty.md) — Measured decision record reconciling shipped subsystems with deferred-scope documentation.
 - [traceability-doctrine.md](traceability-doctrine.md) — Traceability doctrine defining evidence links from prompts and specs through delivery verification.
+
+## Subdirectories
+
+- Release path: [releases/README.md](releases/README.md) — the measured release workflow (`v*` tag trigger, five platform build targets, nfpm packaging, signed manifest gate, gh-pages publication, release assets) and the current blockers for the next tag cut.
