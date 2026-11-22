@@ -4533,3 +4533,18 @@ tasks:
   status: complete
   created_at: '2026-11-21T12:47:50.951273+00:00'
   completed_at: '2026-11-21T12:54:49.176653+00:00'
+- id: RELEASE-CANOPY-2026-11-21
+  title: 'v0.3.0 release prep: CHANGELOG promotion + release-path doc (no tag, no
+    code)'
+  criteria:
+  - CHANGELOG.md gains an [Unreleased] heading above a new [v0.3.0] section naming
+    range v0.2.0..d3113afe with >=11 feat and >=20 fix entries whose cited SHAs all
+    resolve inside the range and are ancestors of HEAD; docs/releases/README.md documents
+    the v* tag trigger, the five make build-embed-* targets, nfpm deb/rpm packaging,
+    the RELEASE_SIGNING_KEY refusal-to-publish-unsigned rule, gh-pages latest.json
+    publication, GitHub Release asset upload, and that no make release target exists;
+    bash scripts/docs-check.sh exits 0; git tag -l 'v0.3*' stays empty; no product
+    code outside CHANGELOG.md and docs/ changes
+  status: complete
+  created_at: '2026-11-21T19:24:14.198451+00:00'
+  completed_at: '2026-11-22T11:00:24.181698+00:00'

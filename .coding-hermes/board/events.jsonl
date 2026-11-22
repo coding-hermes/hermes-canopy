@@ -1572,3 +1572,4 @@
 {"id":20261408,"timestamp":"2026-11-21T12:59:06Z","actor":"foreman","event_type":"task_updated","task_id":"QA-HERMES-CANOPY-061","detail":"{\"status\":\"pending\"}"}
 {"id":20261409,"timestamp":"2026-11-21T12:59:57Z","actor":"foreman","event_type":"task_updated","task_id":"QA-HERMES-CANOPY-061","detail":"{\"status\":\"pending\"}"}
 {"id":20261410,"timestamp":"2026-11-21T20:20:33Z","actor":"foreman","event_type":"task_created","task_id":"README-020","detail":"{\"id\":\"README-020\",\"status\":\"pending\"}"}
+{"id":20261411,"timestamp":"2026-11-22T10:59:51Z","actor":"foreman","event_type":"task_completed","task_id":"RELEASE-CANOPY-2026-11-21","detail":"{\"status\":\"complete\"}"}
