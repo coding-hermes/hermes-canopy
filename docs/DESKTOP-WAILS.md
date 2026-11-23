@@ -19,6 +19,7 @@ here and why.
 | `cmd/canopy-desktop/go.mod` / `go.sum` | Nested module: pins `wailsapp/wails/v3 v3.0.0-beta.34`, `replace ../..` |
 | `wails.json` | Wails project config (name, product identity, dev-mode tasks) |
 | `internal/wailsbridge/` | Repository-owned contract code (canopy module, no Wails imports): release-feed adapter, backend supervisor, IPC service |
+| `frontend/wailsjs/` | **Generated** Wails v3 bindings for the `DesktopService` IPC surface (see `frontend/wailsjs/README.md`) |
 | `scripts/validate-wails-desktop.py` | Offline source-level contract validation |
 
 ## Why a nested module
@@ -78,6 +79,12 @@ bytes (SHA-256 digest + Ed25519 signature over the digest — exactly what
 - The shared feed passes the production signing path end-to-end in tests
   (`internal/wailsbridge` uses `internal/dist.GenerateManifest` +
   `SignManifest` + `SignArtifact` to build its fixtures).
+- The Wails v3 bindings CLI (`wails3 generate bindings`, v3.0.0-beta.34,
+  CGO_ENABLED=0) runs on this host and emits the real `DesktopService`
+  bindings into `frontend/wailsjs/`. The CLI emits warnings from the Wails
+  library's own linux webview sources (the missing GTK4/WebKitGTK SDKs) but
+  completes; see `frontend/wailsjs/README.md` for the provenance and the
+  exact regeneration command.
 
 ## What is NOT produced here (host/CI-gated)
 
