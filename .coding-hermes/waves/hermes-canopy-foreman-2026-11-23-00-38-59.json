@@ -1,0 +1,29 @@
+{
+  "scheduler_tick_id": "hermes-canopy-foreman-2026-11-23-00-38-59",
+  "created_at_utc": "2026-11-23T00:45:00Z",
+  "wave_budget": 4,
+  "wave_size": 1,
+  "composition_note": "Only one mutually independent dispatchable task existed this tick. CAN-HON-01 (P0) is owner-gated (demo-vs-back decision required, worker must not choose); INT-CI-005 is owner-gated (repo secret); QA-060 arm 3 has no post-fix battery yet; QA-061 needs a next-collect verification run; QA-DOCS-1/QA-README-3 need a fresh collect pass. README-020 was trivial one-file docs and taken foreman-direct in the canonical tree. Single-worker dispatch == serial fallback per the foreman skill.",
+  "workers": [
+    {
+      "task_id": "QA-HERMES-CANOPY-059",
+      "repo": "coding-hermes-tools",
+      "worktree": "/home/kara/worktrees/coding-hermes-tools-QA-HERMES-CANOPY-059",
+      "branch": "wt/QA-HERMES-CANOPY-059",
+      "base_sha": "45c3134",
+      "brief": "/tmp/canopy-foreman-20261123-003859-qa59-brief.txt",
+      "log": "/tmp/canopy-foreman-20261123-003859-qa59-worker.log",
+      "proc_pid": 3092186,
+      "model": "glm-5.3-flash",
+      "provider": "opencode-go",
+      "gitreins_task": "QA-HERMES-CANOPY-059 (created+started in coding-hermes-tools)"
+    }
+  ],
+  "foreman_direct": [
+    {
+      "task_id": "README-020",
+      "commit": "2f42e4a1",
+      "status": "landed-pushed; gitreins judge PASS 5390d36b (history 7398aa8b); gitreins task complete PASS verdict 6c72dae5"
+    }
+  ]
+}

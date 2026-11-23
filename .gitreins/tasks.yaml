@@ -4560,3 +4560,11 @@ tasks:
   status: complete
   created_at: '2026-11-22T19:41:48.945183+00:00'
   completed_at: '2026-11-22T20:16:31.853911+00:00'
+- id: README-020
+  title: README Makefile Targets table must document ci-pin-check (28th target)
+  criteria:
+  - AC1 README table documents ci-pin-check so table rows match Makefile target count;
+    AC2 bash scripts/docs-check.sh exits 0 after the edit
+  status: complete
+  created_at: '2026-11-23T00:47:58.500300+00:00'
+  completed_at: '2026-11-23T00:50:23.564765+00:00'
