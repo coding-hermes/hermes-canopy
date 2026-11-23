@@ -1177,6 +1177,7 @@ systemctl --user enable --dry-run "$tmp/canopy-deploy-check.timer"   # rc 0 requ
 | `lint` | Run golangci-lint |
 | `tidy` | Run `go mod tidy` |
 | `validate-release-manifest-publication` | Offline release-publication contract check (updater defaults, workflow paths, gh-pages byte copy) |
+| `ci-pin-check` | CI pin guard for the MCP SDK canary (INT-CI-006) — verifies `mcp_sdk_canary.py`'s supported version window against the `pip install mcp` specifier in `.github/workflows/build.yml`, offline, ~1s (`scripts/test-mcp-canary-pin.sh`) |
 | `validate-wails-desktop` | Offline Wails desktop packaging contract check (source-level, no Wails download) |
 | `test-wails-desktop-contract` | Build + test the nested desktop module in server mode (no WebView SDKs needed) |
 | `build-wails` | Wails desktop build with fail-loud prerequisite checks (WebView SDKs, wails3 CLI); native output needs a provisioned host — see `docs/DESKTOP-WAILS.md` |
