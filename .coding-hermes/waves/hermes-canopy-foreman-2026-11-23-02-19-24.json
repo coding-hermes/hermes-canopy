@@ -1,0 +1,26 @@
+{
+  "tick_id": "hermes-canopy-foreman-2026-11-23-02-19-24",
+  "project": "hermes-canopy",
+  "mode": "serial-fallback (1 dispatchable in-repo task; owner-gated/cross-repo rows excluded)",
+  "wave_budget": 3,
+  "workers": [
+    {
+      "task_id": "FTR-06",
+      "phase": "P5 Wails v3 desktop shell scaffold",
+      "worktree": "/home/kara/worktrees/hermes-canopy-FTR-06-P5",
+      "branch": "wt/FTR-06-P5",
+      "base_sha": "36689b80",
+      "model": "glm-5.3-flash",
+      "provider": "opencode-go",
+      "gitreins_task": "FTR-06 (recreated fresh; stale PM-repair complete artifact deleted 2026-11-23)",
+      "dispatched_at": null
+    }
+  ],
+  "excluded": {
+    "CAN-HON-01": "P0 owner decision required (demo-vs-back per surface; Bane gate)",
+    "INT-CI-005": "owner-side credential blocker (RELEASE_SIGNING_KEY secret), must not be dispatched",
+    "QA-HERMES-CANOPY-061/-060": "harness fixes land in coding-hermes-tools repo (cross-repo); 060 additionally gated on CHT-189 reconciliation",
+    "TRACE-001": "lane-prompt config change, foreman-direct (scheduler API), no worker",
+    "RELEASE-READINESS-2026-10-27": "NO-GO / no cut authorization stands"
+  }
+}
