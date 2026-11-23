@@ -13,7 +13,10 @@
       "model": "glm-5.3-flash",
       "provider": "opencode-go",
       "gitreins_task": "FTR-06 (recreated fresh; stale PM-repair complete artifact deleted 2026-11-23)",
-      "dispatched_at": null
+      "dispatched_at": null,
+      "merge": "merged@73dd67fe (product 7bc72a06); CI GREEN run 45101295183 on 73dd67fe",
+      "judge": "gitreins tier2 PASS verdict 97705a0a (history ec791b9f) on 73dd67fe; verdict 1 FAIL 16906a3f disclosed criterion-shape artifact",
+      "board": "FTR-06 status=complete worker_status=complete commit_hash=73dd67fe"
     }
   ],
   "excluded": {
@@ -22,5 +25,17 @@
     "QA-HERMES-CANOPY-061/-060": "harness fixes land in coding-hermes-tools repo (cross-repo); 060 additionally gated on CHT-189 reconciliation",
     "TRACE-001": "lane-prompt config change, foreman-direct (scheduler API), no worker",
     "RELEASE-READINESS-2026-10-27": "NO-GO / no cut authorization stands"
-  }
+  },
+  "recovery": {
+    "recovered_by": "hermes-canopy-foreman-2026-11-23-03-13-09",
+    "verified": [
+      "merge-base --is-ancestor 7bc72a06 master OK",
+      "branch wt/FTR-06-P5 deleted",
+      "worktree reaped",
+      "origin/master..master=0 (pushed)",
+      "board row complete w/ evidence"
+    ],
+    "notes": "Recovery found the wave ALREADY landed by the 02-19-24 tick itself (merge+board+CI all committed 03:0x-03:13Z); this recovery pass re-verified evidence and closed the manifest."
+  },
+  "finished_at": "2026-11-23T03:15:13Z"
 }
