@@ -4573,3 +4573,11 @@ tasks:
   status: complete
   created_at: '2026-11-23T02:45:34.349197+00:00'
   completed_at: '2026-11-23T02:50:29.725326+00:00'
+- id: CAN-OPS-005
+  title: canopy-pg postmaster SIGKILL loop - :8091 dead
+  criteria:
+  - 'Restore canopy-pg and canopyd: pg_isready accepting, :8091 /health 200 with database
+    ready, restart counts stable, load/pressure evidence before+after'
+  status: complete
+  created_at: '2026-11-23T22:37:49.251482+00:00'
+  completed_at: '2026-11-23T22:42:54.459514+00:00'
