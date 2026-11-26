@@ -4,10 +4,10 @@ Target
 - Repository: coding-hermes/hermes-canopy
 - Canonical remote: git@github.com:coding-hermes/hermes-canopy.git
 - Default branch: master
-- Candidate SHA: e26777cacb97e040b271dab8d47717b0189e6be1
+- Candidate SHA: edebec762f9959fb641d98a80a95aba35f2dd950 (supersession chain: e26777ca → 40b687d1f99ea3979247f5d79d43798ef00793b8 on 2026-11-21 → edebec762f9959fb641d98a80a95aba35f2dd950 on 2026-11-26; each pass's readings live in its delta section below)
 - git ls-remote, GitHub branch API, and origin/master agree on this SHA.
 - Existing release tag: v0.2.0, remote peeled commit 65663f2c9551528f6fa2d32bc849da0bc6c1ff15.
-- Release range: v0.2.0..e26777cacb97e040b271dab8d47717b0189e6be1, 157 commits.
+- Release range: v0.2.0..edebec762f9959fb641d98a80a95aba35f2dd950, 293 non-merge commits (2026-11-26 fire; was 157 at the 2026-11-01 fire).
 
 Commit census
 - feat: 4
@@ -228,4 +228,60 @@ Decision
 - RELEASE-CANOPY-2026-11-21 still owns the only worker-executable gap (CHANGELOG v0.3.0 promotion +
   release-path doc). Wave budget 2 carried unused again: every remaining arm is owner-gated or belongs
   to that row.
+
+## Delta 2026-11-26 (tick hermes-canopy-releng-2026-11-26-06-11-29)
+
+Third fire of this artifact's lineage; earlier fires left no ledger keys — this fire's decision is
+mirrored to the ledger under `/project/hermes-canopy/release/2026-11-26-0611` (namespace hermes-canopy).
+
+Surfaces that moved since the 2026-11-21 re-fire (prior reading → current):
+
+- Candidate: 40b687d1 → edebec762f9959fb641d98a80a95aba35f2dd950 (= origin/master = local HEAD;
+  rev-list left-right 0 0 on origin; gitlab/master is 1 bookkeeping commit behind — the 2026-11-26
+  pm-tick board commit had not been mirrored at measure time). Product-path delta 40b687d1..HEAD is
+  13 paths across 4 commits (e1d3be5c release-prep docs, 85d0bc34 SPEC-023 port, 2f42e4a1 README
+  targets doc, 7bc72a06 Wails desktop-shell spec + generated wailsjs bindings): all CHANGELOG /
+  README / docs / specs / generated-frontend-bindings. Go-path delta d3113afe..HEAD (`*.go`, cmd/,
+  internal/, pkg/, go.mod, go.sum): 0 paths. No shipped-behaviour change since the prior candidate;
+  the census extension is bookkeeping-class.
+- Census: strict census v0.2.0..HEAD = 293 non-merge commits, sum_check 293 OK (was 255 non-merge).
+  feat 11, fix 29, docs 24, chore 33, test 3, ci 1, non-conventional 14, other-conventional 178
+  (board 152, foreman 6, releng 6, ops 3, qa 3, spec 2, dogfood 2, evidence 1). feat/fix unchanged
+  from the prior fire; breaking_subjects 0, breaking_footers 0. Semver proposal unchanged: v0.3.0
+  (minor), not authorized. The CHANGELOG v0.3.0 section (dated 2026-11-22) documents the prep range
+  to d3113afe; the 44 non-merge commits added since are board/spec/docs bookkeeping with no new
+  feat/fix, so the section needs no material update.
+- CI: exact-SHA edebec76 Build check-run 139726317889 "build (ubuntu-latest, 1.25)" completed
+  success, attempt 1, 1 annotation. Tag-triggered release workflow unchanged; its last executed run
+  is still 39539678215 (failed at signed manifest, 2026-10-21).
+- Gate arms: arm 2 FAIL → PASS (e1d3be5c promoted the v0.3.0 CHANGELOG section and added a fresh
+  empty Unreleased section, plus docs/releases/README.md release-path doc); arm 4 re-measured PASS
+  (make validate-release-manifest-publication rc=0); arm 6 re-measured PASS (git describe
+  --tags --always --dirty = v0.2.0-320-gedebec76, no dirty marker; tree carries only untracked
+  .gitreins/review-state.json and .coding-hermes/evidence/qa-20261121T124324Z/). Arms 1/3/5: arm 1
+  deployed canopyd now runs under NEW pid 433553 (supersedes prior note's pid 418864) serving the
+  SAME build (commit d3113afe, build_time 2026-11-21T12:43:24Z, /healthz ok, schema_version 49);
+  its version string v0.2.0-274-gd3113afe-dirty carries a build-checkout dirty marker, not a
+  candidate defect — Go-path delta deployed→HEAD is 0 paths, so the deployment remains
+  candidate-equivalent in shipped behaviour. Arm 3 still FAIL (gh secret list empty —
+  RELEASE_SIGNING_KEY still absent, INT-CI-005 premise re-verified live 2026-11-26). Arm 5 still
+  FAIL (gh release list shows only v0.1.0; v0.2.0 still has no Release object).
+- GitReins: re-probed — no verdict.json in .gitreins/history names edebec76 or 40b687d1. No
+  candidate-bound verdict; CI remains the authority. Dogfood: no new dogfood evidence committed
+  since the prior fire; PROMISING-BUT-ROUGH reading carried with its provenance.
+
+Decision: NO-GO / NO-CUT carried to candidate edebec762f9959fb641d98a80a95aba35f2dd950. No tag
+created, no tag moved, no Release published, no worker dispatched. Remaining blockers, in the
+release path's own gate order (per docs/releases/README.md): (1) RELEASE_SIGNING_KEY absent —
+release.yml aborts at the signed-manifest step BEFORE any publication, so a v0.3.0 tag pushed today
+dies as an orphan tag with zero Release assets (owner credential, INT-CI-005); (2) no owner
+authorization names a v0.3.0 cut — this scheduled sweep is not authorization; (3) v0.2.0 Release
+backfill decision (owner). The worker-executable gap closed on 2026-11-22 (RELEASE-CANOPY-2026-11-21
+complete: CHANGELOG promotion + release-path doc). WAVE_BUDGET 1 carried unused: every remaining
+blocker is an owner decision or owner credential, and dispatching a worker at any of them would be
+duplicate work the owner already holds. Unblock path: set RELEASE_SIGNING_KEY (or gate the signing
+step explicitly), obtain owner authorization naming the version and baseline SHA, then cut via the
+tag push described in docs/releases/README.md — the tag push IS the publication action; do not run
+gh release create beside it.
+
 
