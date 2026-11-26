@@ -24,7 +24,12 @@ func RegisterPionAdapterFromEnv(cm *ConnectionManager, signaling SignalingChanne
 
 // PionPeerConnectionFactory is the production implementation of the
 // dependency-neutral WebRTC factory used by WebRTCAdapter.
-type PionPeerConnectionFactory struct{}
+type PionPeerConnectionFactory struct {
+	// SettingEngine, when non-nil, is applied to every peer connection this
+	// factory creates (used by tests to bound ICE gathering to a single
+	// interface). Production leaves it nil for default pion behavior.
+	SettingEngine *pion.SettingEngine
+}
 
 func NewPionPeerConnectionFactory() PeerConnectionFactory { return &PionPeerConnectionFactory{} }
 
@@ -33,7 +38,13 @@ func (f *PionPeerConnectionFactory) NewPeerConnection(_ context.Context, cfg Web
 	for _, server := range cfg.ICEServers {
 		ice = append(ice, pion.ICEServer{URLs: append([]string(nil), server.URLs...), Username: server.Username, Credential: server.Credential})
 	}
-	pc, err := pion.NewPeerConnection(pion.Configuration{ICEServers: ice})
+	// SettingEngine, when set, bounds ICE gathering (e.g. to one interface).
+	// Nil keeps the default pion configuration used in production.
+	api := pion.NewAPI()
+	if f.SettingEngine != nil {
+		api = pion.NewAPI(pion.WithSettingEngine(*f.SettingEngine))
+	}
+	pc, err := api.NewPeerConnection(pion.Configuration{ICEServers: ice})
 	if err != nil {
 		return nil, err
 	}

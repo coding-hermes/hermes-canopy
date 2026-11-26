@@ -7,6 +7,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	pion "github.com/pion/webrtc/v4"
 )
 
 func TestPionFactoryMapsICEServers(t *testing.T) {
@@ -32,30 +34,65 @@ func TestPionStateMapping(t *testing.T) {
 	}
 }
 
-// roundTripOnce performs one full connect+send+receive attempt. ICE between
-// two local pion agents is occasionally flaky on this host (UDP candidate
-// churn on quick consecutive runs — predates the relay work, verified via
-// stash-test on clean HEAD), so the test retries with fresh peers instead of
-// failing the suite on a single unlucky exchange.
+// firstNonLoopbackIPv4 returns the address of the first interface that is up,
+// non-loopback, and has an IPv4 address. Pion ICE excludes loopback
+// candidates entirely, so the exchange must run on a real interface.
+func firstNonLoopbackIPv4() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := ifi.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
+				return ipn.IP.String(), nil
+			}
+		}
+	}
+	return "", errors.New("no up, non-loopback IPv4 interface found")
+}
+
+// TestPionDataChannelRoundTrip exercises the pion adapter end to end: two
+// local peer connections exchange trickle ICE over the adapter's candidate
+// mapping, connect, and send one message over the negotiated DataChannel.
+//
+// ICE is deliberately pinned to a single non-loopback interface. Pion gathers
+// one host candidate per interface, so an unpinned agent on a host with many
+// interfaces (container bridges, veths, VPNs) gathers dozens of candidates,
+// needs tens of seconds of gathering alone, and O(N^2) connectivity checks
+// that never converge within a test budget — REVIEW-CANOPY-005: the unpinned
+// test failed 100% of attempts on a host with ~90 interfaces. Both peers share
+// the same host, so one pinned interface yields a single candidate pair that
+// connects in seconds (verified with an unfiltered control on a host with a
+// normal interface count, where the unpinned path connects as before).
 func TestPionDataChannelRoundTrip(t *testing.T) {
 	probe, err := net.ListenPacket("udp4", "127.0.0.1:0")
 	if err != nil {
 		t.Skipf("loopback unavailable in sandbox: %v", err)
 	}
 	_ = probe.Close()
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		if err = roundTripOnce(t, 20*time.Second); err == nil {
-			return
-		}
-		lastErr = err
-		t.Logf("round-trip attempt %d failed: %v", attempt+1, err)
-		time.Sleep(250 * time.Millisecond)
+	pin, err := firstNonLoopbackIPv4()
+	if err != nil {
+		// pion cannot gather loopback candidates, so with no real interface
+		// the exchange is unsupported on this host — skip with proof.
+		t.Skipf("no non-loopback IPv4 interface for ICE pin (%v): pion cannot gather loopback candidates, two-peer exchange unsupported", err)
 	}
-	t.Fatalf("Pion round trip failed after 3 attempts: %v", lastErr)
+	var se pion.SettingEngine
+	se.SetIPFilter(func(ip net.IP) bool { return ip.String() == pin })
+	factory := &PionPeerConnectionFactory{SettingEngine: &se}
+	if err := roundTripOnce(t, factory, 20*time.Second); err != nil {
+		t.Fatalf("Pion round trip failed: %v", err)
+	}
 }
 
-func roundTripOnce(t *testing.T, budget time.Duration) (err error) {
+func roundTripOnce(t *testing.T, f PeerConnectionFactory, budget time.Duration) (err error) {
 	// recover pion panics from closed-peer races on retry
 	defer func() {
 		if r := recover(); r != nil {
@@ -64,7 +101,6 @@ func roundTripOnce(t *testing.T, budget time.Duration) (err error) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
-	f := NewPionPeerConnectionFactory()
 	a, err := f.NewPeerConnection(ctx, WebRTCConfig{})
 	if err != nil {
 		return err
