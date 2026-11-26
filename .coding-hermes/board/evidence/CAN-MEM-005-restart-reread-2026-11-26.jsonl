@@ -1,0 +1,4 @@
+{"step":"health-before-reread","commit":"d3113afe","build_time":"2026-11-21T12:43:24Z","service":"canopyd","status":"ok","captured_at":"2026-11-26T15:56:45Z"}
+{"step":"restart-reread","tree_id":"ee380e90-48a6-44fe-9f49-16bd38f223bc","member_id":"01a20f38-1fd9-7a28-b080-85e692e10000","user_id":"00000000-0000-0000-0000-0000000000aa","role":"member","auto_approved":true,"joined_at":"2026-11-24T15:21:06.121387-05:00","display_name":"Hermes user 00000000-0000-0000-0000-0000000000aa","captured_at":"2026-11-26T15:56:45Z"}
+{"step":"auth-get-status","http_status":200,"expected":200,"roster_total":2,"captured_at":"2026-11-26T15:56:45Z"}
+{"step":"joined_at-check","recorded_at_write":"2026-11-24T15:21:06.121387-05:00","reread_joined_at":"2026-11-24T15:21:06.121387-05:00","unchanged":true,"captured_at":"2026-11-26T15:56:45Z"}
