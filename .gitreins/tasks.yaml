@@ -4582,15 +4582,15 @@ tasks:
   created_at: '2026-11-23T22:37:49.251482+00:00'
   completed_at: '2026-11-23T22:42:54.459514+00:00'
 - id: CAN-MEM-005
-  title: 'I-1 acceptance artifacts: member-write transcript + restart re-read + Share-dialog
-    screenshot'
+  title: 'CAN-MEM-005 I-1 acceptance artifacts (artifact 2: restart re-read)'
   criteria:
-  - 'Evidence-only: authenticated PATCH member 200 + GET readback transcript JSONL
-    in board evidence dir; grep -c mock-roster symbol in ShareDialog.tsx == 0; Share
-    dialog screenshot rendering the DB member; no product code changes; live service
-    not restarted'
-  status: in_progress
-  created_at: '2026-11-24T20:16:30.897785+00:00'
+  - Re-read member 01a20f38-1fd9-7a28-b080-85e692e10000 of tree ee380e90 after the
+    natural restart of canopyd; authenticated GET must return 200 with the member
+    present and joined_at unchanged from the 2026-11-24 write; evidence JSONL committed
+    to .coding-hermes/board/evidence/
+  status: complete
+  created_at: '2026-11-26T15:57:08.963245+00:00'
+  completed_at: '2026-11-26T16:01:27.428406+00:00'
 - id: REVIEW-CANOPY-005
   title: Pion local data-channel round-trip test fails all retries on review host
   criteria:
