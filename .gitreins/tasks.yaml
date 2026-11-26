@@ -4591,3 +4591,14 @@ tasks:
     not restarted'
   status: in_progress
   created_at: '2026-11-24T20:16:30.897785+00:00'
+- id: REVIEW-CANOPY-005
+  title: Pion local data-channel round-trip test fails all retries on review host
+  criteria:
+  - Reproduce TestPionDataChannelRoundTrip with candidate and ICE diagnostics plus
+    a real two-peer positive control; classify host networking versus product/test
+    defect; make go test -count=1 -run TestPionDataChannelRoundTrip ./internal/transport
+    deterministic or explicitly skip with a demonstrated unsupported condition; document
+    the environment
+  status: complete
+  created_at: '2026-11-26T15:06:43.862908+00:00'
+  completed_at: '2026-11-26T15:30:30.658371+00:00'
