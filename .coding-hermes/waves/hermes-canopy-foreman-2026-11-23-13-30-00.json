@@ -1,0 +1,54 @@
+{
+  "tick_id": "hermes-canopy-foreman-2026-11-23-13-30-00",
+  "project": "hermes-canopy",
+  "mode": "serial-fallback (WAVE_BUDGET=1; single pick CHT-189 P1 cross-repo tools reconciliation)",
+  "wave_budget": 1,
+  "cos_review": "RUN IT with 4 changes (serialize judge after merge+gates; gate deploy on no live battery; AC additions DOCKER_CONTEXT>=7 + qa_cleanup_orphan_agents>=3 + cmp both files; co-author via -F). Reviewer: fresh hermes -z --skills coding-hermes-cos,coding-hermes-writing.",
+  "workers": [
+    {
+      "task_id": "CHT-189",
+      "board": "CHT-189 status=in_progress",
+      "row_priority": "P1",
+      "worktree": "/home/kara/worktrees/coding-hermes-tools-CHT-189",
+      "branch": "wt/CHT-189",
+      "base_sha": "4a80be2",
+      "model": "glm-5.3-flash",
+      "provider": "opencode-go",
+      "gitreins_task": "CHT-189 (created+started in tools repo, 2026-11-23)",
+      "brief_file": "/tmp/brief-cht189-hermes-canopy-foreman-2026-11-23-13-30-00.txt",
+      "dispatched_at": "2026-11-23T13:47:00Z",
+      "merge": "merged@06e9d4a (product 311dd8f) on tools master; merged-tree gates: bash -n OK, classifier PASS, sentinels 2/3/8, DOCKER_CONTEXT 7",
+      "judge": "gitreins judge CHT-189 launched on merged tip (pid 2546281, log /tmp/judge-cht189-20261123.log) — COMPLETED: verdict history dir coding-hermes-tools .gitreins/history/2026-11-23/bd947c10/, graded commit 06e9d4a94b227002cb83d629c348f7c301f0fe9b; tier1 PASS, tier2 FAIL (INCOMPLETE) on the final conjunct ONLY (foreman deploy of the canonical copies to ~/.hermes/scripts + cmp both files) — every in-repo arm measured PASS in the merged tree (QA-060 x2 cd-wrapped finds, GUARD-008=3, MUSTER-13-R2=8, QA-MUSTER-046-R2 watchdog, DOCKER_CONTEXT=7, bash -n clean, classifier suite exit 0)",
+      "worker_pid": 2155871,
+      "dispatch_note": "3 dispatch attempts killed externally rc=130 (~4min, zero diagnostics, correct seat glm-5.3-flash@opencode-go); attempt 3 left partial port; foreman-direct salvage per two-silent-workers doctrine; foreman committed 311dd8f"
+    }
+  ],
+  "excluded": {
+    "INT-CI-005": "owner-side credential blocker (RELEASE_SIGNING_KEY secret), must not be dispatched",
+    "CAN-HON-01": "P0 owner decision required (demo-vs-back per surface; Bane gate)",
+    "QA-HERMES-CANOPY-44-R2": "closes on QA-55-class battery rerun evidence, not statics (QA-058 landed the code)",
+    "QA-HERMES-CANOPY-060": "static arms live on deployed copy; arm-3 END-TO-END needs first post-2026-11-22 battery; reconciliation via CHT-189 this tick",
+    "QA-HERMES-CANOPY-45/-50": "dedi-2 remote-host ops (bunker-ops lane)",
+    "QA-HERMES-CANOPY-56/-57": "controller-side root/sudo + journal perms (ops lane; sudo consent-gated on api_server)",
+    "QA-HERMES-CANOPY-46/-48/-52/-53": "bunker-qa.sh rows \u2014 serial after reconciled base; same file as CHT-189",
+    "QA-HERMES-CANOPY-061": "handoff-named next dispatchable; queued NEXT tick on reconciled base (same file as CHT-189)",
+    "QA-HERMES-CANOPY-DOCS-1/-README-3": "qa-lane collect passes (gate note requires bunker-qa.sh battery measurement)",
+    "TRACE-001": "prompt arm landed 02-19-24 tick; row stays pending by design until first new row cites a kanban card id"
+  },
+  "finished_at": "2026-11-26T02:15:08Z",
+  "recovery": {
+    "closed_by_tick": "hermes-canopy-foreman-2026-11-26-02-07-14",
+    "classification": "wave-recovery bookkeeping (owning tick died at 14:11Z on a gateway POST failure after merge+judge launch; work itself landed)",
+    "disposition": {
+      "merge": "VERIFIED 2026-11-26: git merge-base --is-ancestor 06e9d4a94b227002cb83d629c348f7c301f0fe9b master (coding-hermes-tools) exits 0; master tip now 30369c7",
+      "judge": "verdict bd947c10 read back 2026-11-26: tier1 PASS, tier2 FAIL (INCOMPLETE) — the single failing conjunct is the owning tick's own post-merge step (deploy canonical copies to ~/.hermes/scripts + cmp), not the ported content",
+      "residual": "DOES NOT TRANSFER to this wave as complete: as of 2026-11-26 the deployed classifier copy parity is RESTORED (sha 8011dba2805919b7f393d3546826cb9564117abac8fe72d0394108c63c3b5f30 canonical == deployed, deployed mtime 2026-11-25 07:54) but the deployed bunker-qa.sh (sha 7230a96b, mtime 2026-11-25 17:48) still differs from canonical (f86a51fbc405b77675248a44aef181977ea8a1287431299990cfc00a931e2cb2); canonical has since moved further (QA-ASCE-11 96296dc). Residual owned by the coding-hermes-tools lane — row CHT-189 status=in_progress on the tools board; this canopy wave deliberately does NOT touch the cron-deployed harness to avoid a sibling-lane collision",
+      "handoff": "tools-lane CHT-189 in_progress is the live owner of the remaining deploy+cmp arm; tools foreman ticks will drive it. QA-HERMES-CANOPY-060 (canopy board) depends on the same reconciliation and stays pending until arm-3 sees a post-fix battery"
+    },
+    "evidence": [
+      "coding-hermes-tools .gitreins/history/2026-11-23/bd947c10/verdict.json (task CHT-189, commit 06e9d4a94b227002cb83d629c348f7c301f0fe9b)",
+      "merge ancestry probe + sha256 census of bunker-qa.sh / test_bunker_qa_classifier.sh canonical vs ~/.hermes/scripts copies, run 2026-11-26T02:12Z",
+      "cos card-manager state note on tools board CHT-189 (owning tick TERMINAL, gateway POST failure 14:11Z)"
+    ]
+  }
+}
