@@ -75,6 +75,13 @@ dagger.db-wal
 .gitreins/logs/
 .gitreins/*.lock
 .gitreins/rescued-*/
+# GitReins judge/review runtime state — rewritten by every judge/task-complete
+# run, and an untracked copy here makes the scheduler's recovery probe read the
+# worktree as recovery_available, so every foreman tick finalises dry as
+# "repair-eligible" even when there is genuinely nothing to harvest.
+.gitreins/review-state.json
+.gitreins/.corrupt-*
+.gitreins/recovery-required
 .coding-hermes/board/.lock
 
 # Hilo graph runtime state (rebuildable by `hilo graph warm`) — the warm/reconcile
